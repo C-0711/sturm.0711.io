@@ -1,228 +1,378 @@
-# 0711-STURM — Workflow Template Guide
+# Einen Workflow in 0711-STURM bauen
 
-> **Zweck**: Dieses Dokument ist eine **Spec-Vorlage**. Du füllst sie aus, gibst sie Claude Code, und Claude baut daraus einen neuen Workflow in `src/workflows/<workflow-id>/`.
+Dieser Guide zeigt dir, wie du einen neuen Workflow von null nach laufend bringst. Alle Code-Schnipsel sind echt — sie zeigen die tatsächlichen APIs der Engine, nicht Spekulation.
+
+**Am Ende dieses Guides** hast du entweder
+- selbst einen Workflow geschrieben und registriert, oder
+- einen Spec-Text, den du an Claude Code gibst und der dir den Workflow baut.
+
+---
+
+## 0 · Was ist ein Workflow in STURM
+
+Ein Workflow ist ein **gerichteter azyklischer Graph aus Stages**. Stages sind Funktionen mit typisierten Inputs und Outputs. Die Engine übernimmt:
+
+- Topologische Ausführungsreihenfolge (parallele Stages laufen nebenläufig)
+- Input-Auflösung via `${stageId.field}`
+- SSE-Events an den Browser (`stage_start`, `stage_done`, …)
+- Artefakt-Persistenz pro Run unter `runs/<workflow>/<runId>/<stage>/output.json`
+- Abbruch bei erstem Fehler — alle nachfolgenden Stages werden als `skipped` markiert
+
+**Du schreibst also nur Stages + eine Workflow-Definition.** Keine HTTP-Handler, kein SSE-Code, kein UI-Code.
+
+---
+
+## 1 · Das Minimal-Beispiel verstehen
+
+`src/workflows/hello-ocr/index.ts` ist 38 Zeilen und läuft durch:
+
+```ts
+import { defineWorkflow } from '../../core/workflow.ts';
+
+export const helloOcrWorkflow = defineWorkflow({
+  id: 'hello-ocr',
+  name: 'Hello OCR',
+  description: 'Lädt Bild/PDF, macht Mistral OCR, gibt Plain-Text-Stats zurück.',
+  input: {
+    type: 'file',
+    accept: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+    maxSizeMb: 20,
+  },
+  stages: {
+    ocr: {
+      uses: 'mistral-ocr',
+      inputs: {
+        filePath: '${input.filePath}',
+        filename: '${input.filename}',
+      },
+    },
+    stats: {
+      uses: 'text-stats',
+      inputs: { text: '${ocr.text}' },
+    },
+  },
+  edges: [
+    ['ocr', 'stats'],
+  ],
+});
+```
+
+**Zu lesen als:**
+
+- Input ist eine hochgeladene Datei. Der Server macht daraus ein Objekt `{ filePath, filename, size, mime }` und reicht es als `input` an die Stages.
+- Stage `ocr` ruft die generische Stage `mistral-ocr` auf (aus `src/stages/`) mit `filePath` und `filename` aus dem Workflow-Input.
+- Stage `stats` ruft `text-stats` auf mit dem `text`-Feld aus dem Output von `ocr`.
+- Kanten definieren Reihenfolge. `ocr` läuft zuerst, `stats` danach.
+
+Das ist der ganze Workflow. Der Rest — SSE-Stream, UI-Graph, Artefakte — kommt gratis.
+
+---
+
+## 2 · Schritt für Schritt: ein neuer Workflow
+
+### 2.1 Spec entwerfen
+
+Bevor du Code schreibst, beantworte diese fünf Fragen als Text:
+
+1. **Was ist der Input?** Datei (welche Formate?), Text, JSON?
+2. **Was ist der Output?** JSON-Shape — Liste? Objekt mit Feldern? Score?
+3. **Welche Stages braucht es?** Liste in Reihenfolge. Pro Stage: Name, was sie tut, was rein/raus geht.
+4. **Gibt es parallele Pfade?** Zwei Dinge, die gleichzeitig laufen können?
+5. **Gibt es Daten-Assets?** Kataloge, Lookups, Schemas — woher kommen sie?
+
+### 2.2 Ordner anlegen
+
+```
+src/workflows/mein-workflow/
+  index.ts          # defineWorkflow() + Registrierung der lokalen Stages
+  stages/           # Workflow-eigene Stages
+    foo.ts
+    bar.ts
+  data/             # Kataloge, Schemas (nur wenn nötig)
+  lib/              # Shared Helpers zwischen den Stages (nur wenn nötig)
+```
+
+### 2.3 Eine Stage schreiben
+
+Jede Stage ist eine Funktion, in `defineStage()` eingewickelt. Shape:
+
+```ts
+// src/workflows/mein-workflow/stages/foo.ts
+import { defineStage } from '../../../core/stage.ts';
+
+interface FooInput {
+  text: string;
+}
+
+interface FooOutput {
+  woerter: string[];
+  anzahl: number;
+}
+
+interface FooConfig {
+  minLength?: number;
+}
+
+export const fooStage = defineStage<FooInput, FooOutput, FooConfig>({
+  id: 'mein-workflow/foo',     // global eindeutig; "/" als Namespace-Konvention
+  name: 'Foo-Stage',
+  description: 'Zerlegt Text in Wörter und zählt.',
+
+  async run(input, ctx) {
+    const minLen = ctx.config.minLength ?? 0;
+
+    const woerter = input.text
+      .split(/\s+/)
+      .filter(w => w.length >= minLen);
+
+    ctx.emit('foo_count', { n: woerter.length });
+    await ctx.artifacts.write('woerter.json', woerter);
+
+    return { woerter, anzahl: woerter.length };
+  },
+});
+```
+
+**Was dir `ctx` gibt** (aus `src/core/types.ts`):
+
+| Feld | Zweck |
+|---|---|
+| `ctx.config` | Die `config` aus der Workflow-Definition (stage-spezifisch) |
+| `ctx.emit(name, payload)` | Custom-SSE-Event an den Browser |
+| `ctx.logger.{debug,info,warn,error}(msg, data)` | Logs, erscheinen auch im SSE-Stream |
+| `ctx.artifacts.{write,read,readBuffer,writeBuffer,exists,absolutePath}` | Dateisystem pro Run |
+| `ctx.signal` | `AbortSignal` — lange `fetch`-Calls damit abbrechbar machen |
+| `ctx.runId`, `ctx.workflowId`, `ctx.stageId` | Identifier |
+
+**Was du NICHT tust:**
+- `fs.writeFileSync('/tmp/...')` — nutze `ctx.artifacts`
+- Globale Variablen zwischen Runs teilen — jeder Run ist isoliert
+- Andere Stages direkt aufrufen — Orchestrierung ist Engine-Sache
+- Fehler still schlucken — wirf sie. Der Runner macht daraus `stage_error`.
+
+### 2.4 Workflow-Definition schreiben
+
+```ts
+// src/workflows/mein-workflow/index.ts
+import { registerStage } from '../../core/registry.ts';
+import { defineWorkflow } from '../../core/workflow.ts';
+import { fooStage } from './stages/foo.ts';
+
+export function registerMeinWorkflowStages(): void {
+  registerStage(fooStage);
+}
+
+export const meinWorkflow = defineWorkflow({
+  id: 'mein-workflow-v1',
+  name: 'Mein Workflow',
+  description: 'Was er macht, in einem Satz.',
+  input: { type: 'file', accept: ['pdf'], maxSizeMb: 20 },
+  stages: {
+    ocr: {
+      uses: 'mistral-ocr',
+      inputs: {
+        filePath: '${input.filePath}',
+        filename: '${input.filename}',
+      },
+    },
+    foo: {
+      uses: 'mein-workflow/foo',
+      config: { minLength: 3 },
+      inputs: { text: '${ocr.text}' },
+    },
+  },
+  edges: [
+    ['ocr', 'foo'],
+  ],
+});
+```
+
+### 2.5 Workflow registrieren
+
+In `src/workflows/index.ts`:
+
+```ts
+import { registerWorkflow } from '../core/registry.ts';
+import { helloOcrWorkflow } from './hello-ocr/index.ts';
+import { registerElsterStages, buildElsterWorkflowWithSchema } from './elster/index.ts';
+import { registerMeinWorkflowStages, meinWorkflow } from './mein-workflow/index.ts';
+
+export function registerAllWorkflows(): void {
+  registerWorkflow(helloOcrWorkflow);
+  registerElsterStages();
+  registerWorkflow(buildElsterWorkflowWithSchema());
+  registerMeinWorkflowStages();
+  registerWorkflow(meinWorkflow);
+}
+```
+
+### 2.6 Laufen lassen
+
+```bash
+npx tsc --noEmit        # Typecheck muss grün sein
+pm2 restart sturm       # Engine neu laden
+pm2 logs sturm --lines 20
+
+# Browser
+open https://sturm.0711.io/pipeline.html?workflow=mein-workflow-v1
+```
+
+Der Workflow erscheint im Sidebar-Selector. Graph zeichnet sich automatisch aus `stages` und `edges`. Upload + Start → SSE streamt Events in den rechten Drawer.
+
+---
+
+## 3 · Input-Mapping-Syntax
+
+Das ist der einzige „magische" Teil. Die Engine löst diese Templates auf, bevor eine Stage ihren Input bekommt:
+
+| Ausdruck | Löst auf zu |
+|---|---|
+| `${input.filePath}` | Das `filePath`-Feld des Workflow-Inputs |
+| `${input}` | Kompletter Input — nur wenn du alles brauchst |
+| `${ocr.text}` | `text`-Feld des Outputs der Stage `ocr` |
+| `${ocr.pages.0.markdown}` | Tiefer Zugriff via Punkt-Notation und Array-Index |
+| `"literal-wert"` | Wird durchgereicht als String |
+
+**Regel**: Nur Input-Mappings werden aufgelöst, nicht Config-Werte. Config ist statisch, Inputs sind dynamisch.
+
+Spezialfall Multi-Output-Stage: deine Stage-Output-Keys werden mit `.` angesprochen. Wenn Stage `a` `{foo: 1, bar: [2,3]}` liefert, dann funktionieren `${a.foo}`, `${a.bar}`, `${a.bar.0}`.
+
+---
+
+## 4 · Schon verfügbare generische Stages
+
+Aus `src/stages/`:
+
+### `mistral-ocr`
+
+Mistral OCR-API-Call, liefert Markdown + optionale JSON-Annotation.
+
+**Input:** `{ filePath: string, filename: string, schema?: object, schemaName?: string }`
+**Output:** `{ model, pages[], text, chars, annotation, ms }`
+**Config:** `{ schema?, schemaName?, model? }`
+
+`schema` kannst du entweder statisch in `config` setzen oder dynamisch über `inputs` reinziehen (z. B. aus einer `schema-bau`-Stage).
+
+### `text-stats`
+
+Triviale Textstatistik.
+
+**Input:** `{ text: string }`
+**Output:** `{ chars, words, lines, preview }`
+
+**Braucht du eine, die fehlt?** Bau sie entweder workflow-lokal unter `stages/` oder als generische unter `src/stages/` + `src/stages/index.ts` registrieren. Generisch wird sie erst, wenn mindestens zwei Workflows sie nutzen.
+
+---
+
+## 5 · Prompt für Claude Code
+
+Wenn du einen Workflow lieber nicht selbst tippen willst, gib Claude Code die ausgefüllte Spec unten plus diesen Prompt:
+
+> Ich will einen neuen Workflow für 0711-STURM bauen. Die Spec steht unten.
 >
-> **Philosophie**: Workflows sind Daten + Stages. Die Engine (Runner, SSE, UI) ist fertig — du beschreibst nur, *was* passieren soll, nicht *wie* die Infrastruktur tickt.
+> Bitte:
+> 1. Lies `src/core/workflow.ts`, `src/core/types.ts`, `src/workflows/hello-ocr/index.ts` und `src/workflows/elster/stages/regel-engine.ts` einmal — das ist das Vokabular.
+> 2. Scaffolde `src/workflows/<id>/` mit `index.ts`, `stages/`, ggf. `lib/` und `data/`.
+> 3. Implementiere jede Stage gemäß der Spec. Generische Bausteine aus `src/stages/` bevorzugen. Nur wirklich workflow-spezifische Logik lokal.
+> 4. Registriere den Workflow in `src/workflows/index.ts`.
+> 5. Typecheck grün halten: `npx tsc --noEmit`.
+> 6. Ergänze einen Smoke-Test-Absatz in der Stage-Definition-Docstring: mit welchem Input-Beispiel wird das Ergebnis so-und-so aussehen.
+> 7. Starte neu: `pm2 restart sturm`. Im Browser `https://sturm.0711.io/pipeline.html?workflow=<id>` — der Graph muss erscheinen.
+>
+> **Nicht ändern:** `src/core/*`, bestehende `src/stages/*`. Wenn ein generischer Baustein fehlt, frag mich vorher.
+>
+> **Regeln:** Deutsche Benennung (siehe CLAUDE.md). Keine Case-Daten hartcodieren. Keine Modellnamen in User-facing Strings.
 
----
-
-## 0 · Vor dem Ausfüllen
-
-Lies diese drei Dateien einmal, damit du Vokabular und verfügbare Bausteine kennst:
-
-- `src/core/workflow.ts` — `defineWorkflow()`-Shape
-- `src/core/stage.ts` — `Stage<TIn, TOut>`-Interface
-- `src/stages/README.md` — Liste der generischen Stages (`mistral-ocr`, `claude-chat`, `ollama-chat`, `json-schema-validate`, `regex-label-match`, `merge`, `persist`)
-
-Wenn eine Stage fehlt, die du brauchst, baust du sie workflow-lokal (`src/workflows/<id>/stages/`) — und wenn sie sich später als wiederverwendbar zeigt, promotest du sie nach `src/stages/`.
-
----
-
-## 1 · Spec-Template (kopieren & ausfüllen)
+### Spec-Template (ausfüllen, dann an Claude Code)
 
 ```markdown
-# Workflow: <human-lesbarer Name>
+# Workflow: <menschlicher Name>
 
 ## Meta
-- **id**: <kebab-case>-v1              # wird URL-Slug
-- **version**: 1.0.0
-- **owner**: <email>
-- **tags**: [ocr, extract, …]
+- id: <kebab-case>-v1
+- owner: <email>
 
-## Ziel (1–2 Sätze)
-<Was macht der Workflow? Wofür ist das Ergebnis?>
+## Ziel
+<ein bis zwei Sätze — was geht rein, was kommt raus, warum>
 
 ## Input
-- **type**: file | text | json | url
-- **accept**: [pdf, png, …]             # nur bei file
-- **max_size_mb**: 20
-- **schema**:                           # nur bei json
-  ```json
-  { "type": "object", "properties": { … } }
-  ```
+- type: file | text | json
+- accept: [<ext1>, <ext2>, …]         # nur bei file
+- maxSizeMb: 20                       # nur bei file
+- schema: <JSON-Schema>               # nur bei json
 
 ## Output
-- **type**: json
-- **schema**:
+- type: json
+- shape:
   ```json
-  { "type": "object", "properties": { … } }
+  { "ergebnis": "...", "score": 0.0 }
   ```
-- **Was ist "erfolgreich"?**
-  <Kriterium, z.B. "alle Pflichtfelder belegt, Bewertung > 0.8">
+- Erfolgs-Kriterium: <wann ist ein Run "ok"?>
 
 ## Stages
 
 ### stage-1-id
-- **uses**: mistral-ocr                 # generisch, oder workflow-lokal via ./stages/foo
-- **config**:
-  ```ts
-  { schema: 'permissiv', model: 'mistral-ocr-latest' }
-  ```
-- **inputs**:
-  - `file`: `${input.file}`
-- **output**: `{ text: string, annotation: object, pages: number }`
-- **events**: `stage_start`, `stage_done` (automatisch), `ocr_progress` (optional)
-- **fehlerverhalten**: fail-fast | skip | default-value
+- uses: <generische-stage-id oder ./stages/<name>>
+- config: { ... }
+- inputs:
+    feld: ${input.xxx}
+- output (erwartet): { ... }
+- Warum diese Stage: <Einordnung>
 
 ### stage-2-id
-- **uses**: ./stages/meine-regel-engine
-- **inputs**:
-  - `text`: `${stage-1-id.text}`
-- **output**: `{ eindeutig: [], konflikte: [] }`
-
-### stage-n-id
 …
 
-## Edges (Reihenfolge + Parallelität)
+## Edges
 ```
 stage-1 → stage-2 → stage-3
-stage-1 → stage-4          # parallel zu 2
-stage-3, stage-4 → stage-5 # join
+stage-1 → stage-4                 # parallel zu 2
+stage-3, stage-4 → stage-5        # join
 ```
 
-## Daten-Assets
-- **kataloge**: `data/xxx.json` (1.2 MB, aus <Quelle> via `scripts/build_xxx.py`)
-- **lookups**: `data/aliase.json`
-- **prompts**: inline in Stage-Config oder `prompts/<stage>.md`
+## Daten-Assets (falls vorhanden)
+- <pfad>: <quelle, warum nötig>
 
-## Validierung / Bewertung (optional)
-- **strategie**: workflow-lokale Funktion `evaluate(output) → { score, reasons }`
-- **schwelle_ok**: 0.8
-- **metriken**: vollständigkeit, konsistenz, bmf-pflichterfüllung, …
-
-## UI-Hinweise (optional — nur falls vom Default abweichend)
-- **stage-farben**: default (wartet=grau, läuft=blau, ok=grün, fehler=rot)
-- **custom-details-view**: `ui/stage-views/<stage-id>.tsx` (falls JSON-Dump nicht reicht)
-
-## Test-Fälle
-Mind. 2 Test-Fälle unter `test-data/<workflow-id>/`:
-1. **happy-path**: <Beschreibung + Erwartung>
-2. **edge-case**: <z.B. leeres Dokument, fehlende Seiten, Rotation>
+## Testfälle
+1. <happy path>: <Eingabebeispiel> → <erwartete Ausgabe>
+2. <edge case>: <Eingabebeispiel> → <erwartetes Verhalten>
 ```
 
 ---
 
-## 2 · Prompt an Claude Code
+## 6 · Checkliste vor Go-Live
 
-Nachdem das Template ausgefüllt ist, nutze diesen Prompt:
-
-> Ich will einen neuen Workflow für 0711-STURM bauen. Die Spec liegt unter `docs/specs/<workflow-id>.md`.
->
-> Bitte:
-> 1. Lies die Spec **und** `src/core/workflow.ts`, `src/core/stage.ts`, `src/stages/README.md` sowie einen existierenden Workflow (`src/workflows/hello-ocr/`) als Referenz.
-> 2. Scaffolde `src/workflows/<workflow-id>/` mit `index.ts`, `stages/` (falls workflow-lokale Stages), `data/`, `README.md`.
-> 3. Implementiere alle Stages. Generische Bausteine aus `src/stages/` bevorzugen — nur wirklich workflow-spezifische Logik lokal.
-> 4. Registriere den Workflow in `src/workflows/index.ts`.
-> 5. Lege Test-Fälle unter `test-data/<workflow-id>/` an (kopieren aus Spec-Beispielen) und schreibe einen Smoke-Test, der den Workflow end-to-end durchläuft.
-> 6. Starte den Server neu (`pm2 restart sturm`) und verifiziere im Browser, dass der neue Workflow in pipeline.html im Selector erscheint und durchläuft.
->
-> **Nicht ändern**: `src/core/*`, `src/stages/*` (außer mit explizitem Okay). Stages nur hinzufügen, nicht bestehende anfassen.
->
-> **Stil**: Deutsche Benennung gemäß cb-ctax-`KODIERRICHTLINIE.md`. Keine Modellnamen in User-facing Strings.
+- [ ] `npx tsc --noEmit` → exit 0
+- [ ] Workflow in `src/workflows/index.ts` registriert
+- [ ] `pm2 restart sturm && pm2 logs sturm` zeigt neuen Workflow in der Startup-Zeile
+- [ ] `curl https://sturm.0711.io/api/workflows/<id>` liefert die Definition
+- [ ] `https://sturm.0711.io/pipeline.html?workflow=<id>` zeigt den Graph mit allen Stages im `wartet`-Status
+- [ ] Upload + „Workflow starten" → SSE-Events kommen an, Stages laufen durch
+- [ ] Artefakte liegen unter `runs/<id>/<runId>/` — `_result.json` mit `state: "ok"`
+- [ ] Keine Case-Daten im Code oder in Prompts
+- [ ] Keine Modellnamen (Opus, Claude, Mistral) in User-facing Strings
 
 ---
 
-## 3 · Stage-Contract (für workflow-lokale Stages)
+## 7 · Anti-Patterns — nicht machen
 
-Jede Stage ist eine Funktion mit festem Shape:
-
-```ts
-import { Stage } from '../../../core/stage'
-
-export const meineStage: Stage<{ text: string }, { treffer: string[] }> = {
-  id: 'meine-stage',
-  name: 'Meine Stage',
-  description: 'Was sie tut, ein Satz',
-
-  async run(input, ctx) {
-    ctx.emit('custom_event', { info: '…' })
-    ctx.logger.debug('…')
-
-    const treffer = …
-
-    await ctx.artifacts.write('treffer.json', treffer)
-
-    return { treffer }
-  }
-}
-```
-
-**Der Context (`ctx`) gibt dir:**
-- `emit(event, payload)` → SSE an den Browser
-- `logger` → strukturierte Logs, landen im Run-Ordner
-- `artifacts` → `read(path)`, `write(path, data)` pro Run persistent
-- `config` → die Stage-Config aus der Workflow-Definition
-- `runId`, `workflowId`, `stageId` → Kontext-IDs
-- `signal` → AbortSignal für Cancellation
-
-**Regeln:**
-- Stages sind **pure bezüglich externer Seiten-Effekte außer**: SSE (via `ctx.emit`), Artefakte (via `ctx.artifacts`), Logs. Kein direkter `fs.writeFileSync` oder DB-Write.
-- Input wird von der Engine aus den `inputs`-Mappings gefüllt — Stages lesen ihn als fertiges Objekt.
-- Fehler werden **geworfen**, nicht stumm zurückgegeben. Der Runner fängt sie und emittet `stage_error`.
-- Stages dürfen **keine anderen Stages aufrufen** — Orchestrierung ist Engine-Sache.
+| Nicht tun | Stattdessen |
+|---|---|
+| Stage ruft andere Stages auf | Neue Stage oder Workflow-Edge |
+| `console.log` in Stages | `ctx.logger.debug/info/warn/error` |
+| `fs.writeFileSync('/tmp/…')` | `ctx.artifacts.write(relPath, data)` |
+| State zwischen Runs in Modul-Variable | Artefakte oder separater Service |
+| Lange Sync-Schleife über alle Items | Stage parallelisiert über mehrere Stages, Engine macht den Rest |
+| Harter Retry in der Stage | Stage wirft, User re-triggert den Run (MVP-Pragma) |
+| Prompts/Kataloge mit echten Personen-Daten | Nur zur Laufzeit aus Input/Artefakten |
 
 ---
 
-## 4 · Mini-Beispiel: "hello-ocr"
+## 8 · Wenn was klemmt
 
-Kleinstmöglicher Workflow, der als Template und Smoke-Test dient:
+- **Typecheck bricht**: meist fehlender Import oder falsche Stage-ID in der Workflow-Def. Die Registry wirft beim Laden eine klare Fehlermeldung mit Stage-ID.
+- **Stage startet nicht**: Liste der registrierten Stages steht in `pm2 logs sturm` kurz nach Start. Nicht da? Dann fehlt die `registerStage(...)`-Zeile.
+- **Input ist `undefined` in der Stage**: Mapping-Template stimmt nicht — vorherige Stage hat das Feld nicht im Output. Check `runs/<id>/<runId>/<prev-stage>/output.json`.
+- **Workflow hängt**: Pipeline hat einen Zyklus. Der Runner wirft beim Start mit Liste der unresolved Stages.
+- **Browser zeigt alten Stand**: Hard-Reload (Cmd+Shift+R), Engine nicht restartet oder Browser-Cache.
 
-```ts
-// src/workflows/hello-ocr/index.ts
-import { defineWorkflow } from '../../core/workflow'
-
-export default defineWorkflow({
-  id: 'hello-ocr',
-  name: 'Hello OCR',
-  description: 'Lädt Bild/PDF, macht Mistral OCR, gibt Plain-Text zurück.',
-  input: { type: 'file', accept: ['pdf', 'png', 'jpg'] },
-  output: { type: 'json', schema: { type: 'object', properties: { text: { type: 'string' }, chars: { type: 'number' } } } },
-  stages: {
-    'ocr': {
-      uses: 'mistral-ocr',
-      config: { schema: 'text-only' },
-      inputs: { file: '${input.file}' }
-    },
-    'stats': {
-      uses: 'text-stats',
-      inputs: { text: '${ocr.text}' }
-    }
-  },
-  edges: [['ocr', 'stats']]
-})
-```
-
-Das ist **der ganze Workflow**. Der Graph in der UI, der SSE-Stream, das Artefakt-Pro-Run-Verzeichnis, der Event-Log — alles gratis aus der Engine.
-
----
-
-## 5 · Checkliste vor dem Go-Live eines Workflows
-
-- [ ] `src/workflows/<id>/index.ts` registriert in `src/workflows/index.ts`
-- [ ] `README.md` im Workflow-Ordner erklärt Input/Output/Stages
-- [ ] Test-Fälle in `test-data/<id>/` mit mindestens happy-path + 1 edge-case
-- [ ] Smoke-Test lief lokal durch, Artefakte sehen gut aus
-- [ ] pipeline.html zeigt den Workflow im Selector, Graph rendert, Events kommen an
-- [ ] Kein Hartcoding von Case-Daten, API-Keys nur via `.env`
-- [ ] Kein Modellname in User-facing Strings
-- [ ] Bei Elster-verwandten Workflows: ELSTER-Codes aus Katalog, nicht erfunden
-
----
-
-## 6 · Was NICHT in einen Workflow gehört
-
-- **State über Runs hinweg**: Workflows sind zustandslos. Wenn du was merken musst, ist das ein separater Service.
-- **Lange Hintergrund-Jobs**: Ein Workflow-Run soll in Minuten laufen, nicht Stunden. Für Stunden-Jobs: eigener Job-Runner, Workflow triggert ihn nur.
-- **User-Management, Billing, Auth**: alles außerhalb der Engine.
-- **Geheimnisse in der Spec**: keine API-Keys, keine User-Daten in der Markdown-Spec. Nur Referenzen auf `.env`-Variablen.
-
----
-
-## 7 · Nächster Schritt
-
-Wenn du bereit bist:
-
-1. Kopiere Abschnitt 1 in `docs/specs/<mein-workflow>.md`
-2. Fülle die Spec aus
-3. Sende den Prompt aus Abschnitt 2 an Claude Code
-4. Review den Diff, starte den Smoke-Test, merge
+Alles andere: `pm2 logs sturm --lines 50` + `runs/<workflow>/<latest>/_result.json`.
