@@ -3,8 +3,8 @@ module.exports = {
     {
       name: 'sturm',
       cwd: __dirname,
-      script: 'npx',
-      args: 'tsx src/server.ts',
+      script: './start.sh',
+      interpreter: 'bash',
       env: {
         NODE_ENV: 'production',
         PORT: 7800,
@@ -14,8 +14,8 @@ module.exports = {
       error_file: './logs/sturm.err.log',
       merge_logs: true,
       time: true,
-      // .env wird via start.sh gesourced; wenn direkt über PM2 gestartet,
-      // setze MISTRAL_API_KEY / ANTHROPIC_API_KEY über `pm2 set` oder hier.
+      // start.sh sourced .env (lokal oder Fallback aus cb-ctax), damit
+      // MISTRAL_API_KEY / ANTHROPIC_API_KEY automatisch gesetzt sind.
     },
   ],
 };
