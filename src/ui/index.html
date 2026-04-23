@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>STURM · Workflow-Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="sturm-app">
+
+    <!-- ============ Sidebar ============ -->
+    <aside class="sturm-sidebar" id="sidebar">
+      <div class="sturm-sb-head">
+        <div class="sturm-sb-brand">
+          <span class="sturm-mark">S</span>
+          <span class="sturm-brand-word">STURM</span>
+        </div>
+        <button class="sturm-sb-toggle" aria-label="Sidebar umschalten" onclick="toggleSidebar()">
+          <i data-lucide="panel-left"></i>
+        </button>
+      </div>
+
+      <button class="sturm-sb-new" onclick="location.href='/pipeline.html'">
+        <i data-lucide="play"></i><span>Workflow starten</span>
+        <span class="sturm-kbd">⌘N</span>
+      </button>
+
+      <div class="sturm-sb-search">
+        <i data-lucide="search"></i>
+        <input placeholder="Suchen">
+        <span class="sturm-kbd">⌘K</span>
+      </div>
+
+      <div class="sturm-sb-section">
+        <span>Workflows</span>
+        <span class="sturm-kbd" style="margin-left:0;">2</span>
+      </div>
+      <nav class="sturm-sb-nav">
+        <button class="sturm-sb-item is-active">
+          <i data-lucide="git-branch"></i>
+          <span>ELSTER</span>
+          <span class="sturm-sb-item-meta">v1</span>
+        </button>
+        <button class="sturm-sb-item">
+          <i data-lucide="sparkles"></i>
+          <span>Hello OCR</span>
+          <span class="sturm-sb-item-meta">v1</span>
+        </button>
+      </nav>
+
+      <div class="sturm-sb-section"><span>Runs</span></div>
+      <div class="sturm-sb-nav sturm-sb-nav-scroll">
+        <button class="sturm-sb-item">
+          <i data-lucide="check-circle-2"></i>
+          <span>Stricker 2023</span>
+          <span class="sturm-sb-item-meta">heute</span>
+        </button>
+        <button class="sturm-sb-item">
+          <i data-lucide="check-circle-2"></i>
+          <span>Gymnastik-Beleg</span>
+          <span class="sturm-sb-item-meta">gestern</span>
+        </button>
+        <button class="sturm-sb-item">
+          <i data-lucide="circle-slash"></i>
+          <span>Tape-Foto</span>
+          <span class="sturm-sb-item-meta">-3d</span>
+        </button>
+      </div>
+
+      <div class="sturm-sb-foot">
+        <div class="sturm-avatar">C</div>
+        <div>
+          <div class="sturm-sb-user-name">Christoph</div>
+          <div class="sturm-sb-user-plan">0711 Intelligence</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <div class="sturm-main">
+      <header class="sturm-topbar">
+        <div class="sturm-topbar-l">
+          <span class="sturm-topbar-title">Workflow-Engine</span>
+        </div>
+        <div class="sturm-topbar-r">
+          <button class="sturm-icon-btn" aria-label="Theme umschalten" onclick="toggleTheme()">
+            <i data-lucide="sun" id="theme-icon"></i>
+          </button>
+          <button class="sturm-icon-btn" aria-label="Einstellungen">
+            <i data-lucide="settings"></i>
+          </button>
+        </div>
+      </header>
+
+      <div style="flex:1; overflow-y: auto; display: flex; flex-direction: column; align-items: center;">
+        <div class="sturm-welcome">
+          <div class="sturm-welcome-glyph">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/>
+              <path d="M19 3l.6 1.7L21 5.3l-1.4.6L19 7.5l-.6-1.6L17 5.3l1.4-.6L19 3z"/>
+            </svg>
+          </div>
+          <h1 class="sturm-welcome-title">Workflow-Engine</h1>
+          <p class="sturm-welcome-sub">
+            Jeder Workflow ist ein Graph aus Stages — von OCR bis Bewertung. Dokument rein, Ergebnis raus, jeder Schritt nachvollziehbar.
+          </p>
+        </div>
+
+        <div class="sturm-grid">
+          <a class="sturm-card" href="/pipeline.html?workflow=elster-v1">
+            <div class="sturm-card-head">
+              <h3 class="sturm-card-title">ELSTER Feldextraktion</h3>
+              <span class="sturm-card-id">elster-v1</span>
+            </div>
+            <p class="sturm-card-sub">
+              Steuer-Dokument rein — strukturierte ELSTER-Felder raus. Sechs Phasen: permissive OCR, Regel-Engine, Schema-Bau, kuratierte OCR, Merge, Bewertung.
+            </p>
+            <div class="sturm-card-meta">
+              <span class="sturm-card-meta-item">
+                <i data-lucide="layers"></i><span>9 Stages</span>
+              </span>
+              <span class="sturm-card-meta-item">
+                <i data-lucide="clock"></i><span>~45 s</span>
+              </span>
+              <span class="sturm-card-meta-item">
+                <i data-lucide="file"></i><span>PDF · JPG · PNG</span>
+              </span>
+            </div>
+          </a>
+
+          <a class="sturm-card" href="/pipeline.html?workflow=hello-ocr">
+            <div class="sturm-card-head">
+              <h3 class="sturm-card-title">Hello OCR</h3>
+              <span class="sturm-card-id">hello-ocr</span>
+            </div>
+            <p class="sturm-card-sub">
+              Minimalbeispiel — Mistral OCR, dann Textstatistik. Dient als Vorlage und Smoke-Test für neue Workflows.
+            </p>
+            <div class="sturm-card-meta">
+              <span class="sturm-card-meta-item">
+                <i data-lucide="layers"></i><span>2 Stages</span>
+              </span>
+              <span class="sturm-card-meta-item">
+                <i data-lucide="clock"></i><span>~5 s</span>
+              </span>
+              <span class="sturm-card-meta-item">
+                <i data-lucide="file"></i><span>PDF · PNG · JPG</span>
+              </span>
+            </div>
+          </a>
+
+          <a class="sturm-card" href="/docs/WORKFLOW_TEMPLATE.md" style="background: transparent; border-style: dashed;">
+            <div class="sturm-card-head">
+              <h3 class="sturm-card-title" style="color: var(--color-text-secondary);">Neuer Workflow</h3>
+              <span class="sturm-card-id">+</span>
+            </div>
+            <p class="sturm-card-sub">
+              Spec ausfüllen, an Claude Code geben — neuer Workflow in <code>src/workflows/</code>. Guide unter <code>docs/WORKFLOW_TEMPLATE.md</code>.
+            </p>
+            <div class="sturm-card-meta">
+              <span class="sturm-card-meta-item">
+                <i data-lucide="plus"></i><span>Vorlage öffnen</span>
+              </span>
+            </div>
+          </a>
+        </div>
+
+        <p style="font-size: 11.5px; color: var(--color-text-tertiary); margin: 8px 0 24px;">
+          STURM ist experimentell. Antworten können Fehler enthalten — Pflichtfelder immer gegen BMF-Katalog prüfen.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('is-collapsed');
+    }
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      const icon = document.getElementById('theme-icon');
+      icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+      window.lucide && window.lucide.createIcons();
+      localStorage.setItem('sturm-theme', isDark ? 'dark' : 'light');
+    }
+    // Restore theme preference
+    (function () {
+      const saved = localStorage.getItem('sturm-theme');
+      if (saved === 'light') document.documentElement.classList.remove('dark');
+    })();
+    window.addEventListener('DOMContentLoaded', () => window.lucide && window.lucide.createIcons());
+  </script>
+</body>
+</html>
