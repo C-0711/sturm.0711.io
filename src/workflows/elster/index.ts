@@ -1,170 +1,75 @@
 import { registerStage } from '../../core/registry.ts';
 import { defineWorkflow } from '../../core/workflow.ts';
-import { regelEngineStage } from './stages/regel-engine.ts';
-import { schemaBauStage } from './stages/schema-bau.ts';
-import { baselineMergeStage } from './stages/baseline-merge.ts';
-import { bewertungStage } from './stages/bewertung.ts';
-import { crossCheckStage } from './stages/cross-check.ts';
-import { anlagenFilterStage, anlagenDetectorSchema } from './stages/anlagen-filter.ts';
+import { klassifizierungStage } from './stages/klassifizierung.ts';
+import { extraktionStage } from './stages/extraktion.ts';
 
+/**
+ * Registriert die workflow-lokalen Stages. Die generische Stage `mistral-ocr`
+ * liegt in src/stages/ und wird zentral beim Engine-Start registriert.
+ *
+ * Export-Name bleibt identisch zum Vorgänger, damit src/workflows/index.ts
+ * nicht angepasst werden muss.
+ */
 export function registerElsterStages(): void {
-  registerStage(regelEngineStage);
-  registerStage(schemaBauStage);
-  registerStage(baselineMergeStage);
-  registerStage(bewertungStage);
-  registerStage(crossCheckStage);
-  registerStage(anlagenFilterStage);
+  registerStage(klassifizierungStage);
+  registerStage(extraktionStage);
 }
 
 /**
- * ELSTER-Feldextraktion — sechsphasige Pipeline nach BMF-Katalog.
+ * Baut den ELSTER-Workflow. Heißt historisch `buildElsterWorkflowWithSchema`
+ * (der Vorgänger hat dynamisch ein Schema gegen die Mistral-OCR-Annotation
+ * gebaut). Wir brauchen das hier nicht mehr — Klassifizierung läuft über
+ * Regex+LLM-Fallback gegen den OCR-Volltext, Extraktion pro Anlage gegen die
+ * lokal gepflegten Feld-Kataloge unter data/felder/.
  *
- * Haupt-Pfad:
- *   ocr-permissiv → regel-engine → schema-bau → ocr-kuratiert
- *                                            → baseline-merge → bewertung → cross-check
- *
- * Anlagen-Pfad (parallel ab upload):
- *   ocr-enum → anlagen-filter ──────────────────────────────↓
- *                                              (in regel-engine als gewaehlteAnlagen)
+ * Export-Name erhalten, damit src/workflows/index.ts unverändert bleibt.
  */
-export function buildElsterWorkflow() {
+export function buildElsterWorkflowWithSchema() {
   return defineWorkflow({
     id: 'elster-v1',
-    name: 'ELSTER Feldextraktion',
-    description: 'Steuer-Dokumente auf ELSTER-Felder mappen, validieren, bewerten.',
+    name: 'ELSTER — Anlagen-Erkennung & Feldextraktion',
+    description:
+      'OCR auf hochgeladenem Steuerdokument → Hybrid-Klassifizierung der ELSTER-Anlagen (Regex + LLM-Fallback gegen 35-Anlagen-Enum) → parallele Feldextraktion pro erkannter Anlage gegen den gepflegten Feld-Katalog (eCode, Drucktext, Vordruckzeile).',
     input: {
       type: 'file',
-      accept: ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
-      maxSizeMb: 20,
+      accept: ['pdf', 'png', 'jpg', 'jpeg'],
+      maxSizeMb: 50,
     },
     stages: {
-      // Haupt-Pfad
-      'ocr-permissiv': {
+      ocr: {
         uses: 'mistral-ocr',
-        name: 'Mistral OCR · permissiv',
-        description: 'Markdown + freie JSON-Annotation in einem Call',
-        config: { model: 'mistral-ocr-latest' },
         inputs: {
           filePath: '${input.filePath}',
           filename: '${input.filename}',
         },
       },
-      'regel-engine': {
-        uses: 'elster-regel-engine',
-        name: 'Regel-Engine',
-        description: 'Deterministisches Label-Matching gegen BMF-Katalog',
-        inputs: {
-          mistralText: '${ocr-permissiv.text}',
-          visionAnnotation: '${ocr-permissiv.annotation}',
-          gewaehlteAnlagen: '${anlagen-filter.erkannte_anlagen}',
-        },
-      },
-      'schema-bau': {
-        uses: 'elster-schema-bau',
-        name: 'Schema-Bau',
-        description: 'Tight JSON-Schema aus belegten ELSTER-Codes',
-        inputs: {
-          finalCodes: '${regel-engine.eindeutig}',
-        },
-      },
-      'ocr-kuratiert': {
-        uses: 'mistral-ocr',
-        name: 'Mistral kuratiert',
-        description: 'Zweiter OCR-Pass mit tight Schema',
-        config: { schemaName: 'ElsterTight' },
-        inputs: {
-          filePath: '${input.filePath}',
-          filename: '${input.filename}',
-          schema: '${schema-bau.basisSchema}',
-        },
-      },
-      'baseline-merge': {
-        uses: 'elster-baseline-merge',
-        name: 'Baseline-Merge',
-        description: 'Mistral-kuratiert + Regel-Engine → finale Annotation',
-        inputs: {
-          mistralKuratiertAnno: '${ocr-kuratiert.annotation}',
-          regelEindeutig: '${regel-engine.eindeutig}',
-        },
-      },
-      'bewertung': {
-        uses: 'elster-bewertung',
-        name: 'Bewertung',
-        description: 'Pflichtfelder, Dichte, Konsistenz, Opus-Vision',
-        config: { ohneOpus: false },
-        inputs: {
-          annotation: '${baseline-merge.finalAnnotation}',
-          jsonSchema: '${schema-bau.basisSchema}',
-          filePath: '${input.filePath}',
-          filename: '${input.filename}',
-          gewaehlteAnlagen: '${anlagen-filter.erkannte_anlagen}',
-        },
-      },
-      'cross-check': {
-        uses: 'elster-cross-check',
-        name: 'Cross-Check',
-        description: 'Anlagen-Abgleich gegen gefundene Codes',
-        inputs: {
-          annotation: '${baseline-merge.finalAnnotation}',
-          gewaehlteAnlagen: '${anlagen-filter.erkannte_anlagen}',
-          erkannteAnlagen: '${anlagen-filter.erkannte_anlagen}',
-        },
-      },
-
-      // Anlagen-Pfad (parallel)
-      'ocr-enum': {
-        uses: 'mistral-ocr',
-        name: 'Mistral OCR · Enum',
-        description: 'Minimal-Schema, nur Anlagen-Klassifizierung',
+      klassifizierung: {
+        uses: 'elster/klassifizierung',
         config: {
-          schemaName: 'AnlagenDetector',
-          // schema wird zur Laufzeit aus Katalog gebaut — wir nutzen eine Stage-Funktion
-          // als Initializer beim Registrieren (siehe registerElsterWorkflow unten).
+          llmFallbackWhen: 'zero-or-one',
+          model: 'mistral-small-latest',
         },
         inputs: {
-          filePath: '${input.filePath}',
-          filename: '${input.filename}',
+          text: '${ocr.text}',
         },
       },
-      'anlagen-filter': {
-        uses: 'elster-anlagen-filter',
-        name: 'Katalog-Filter',
-        description: 'Gefundene Codes gegen ELSTER-Katalog validieren',
+      extraktion: {
+        uses: 'elster/extraktion',
+        config: {
+          concurrency: 3,
+          model: 'mistral-small-latest',
+          maxFieldsPerAnlage: 200,
+          maxTextChars: 60_000,
+        },
         inputs: {
-          rawAnnotation: '${ocr-enum.annotation}',
+          text: '${ocr.text}',
+          anlagen: '${klassifizierung.erkannte_anlagen}',
         },
       },
     },
     edges: [
-      // Haupt-Pfad
-      ['ocr-permissiv', 'regel-engine'],
-      ['regel-engine', 'schema-bau'],
-      ['schema-bau', 'ocr-kuratiert'],
-      ['ocr-kuratiert', 'baseline-merge'],
-      ['regel-engine', 'baseline-merge'],
-      ['baseline-merge', 'bewertung'],
-      ['schema-bau', 'bewertung'],
-      ['baseline-merge', 'cross-check'],
-      // Anlagen-Pfad
-      ['ocr-enum', 'anlagen-filter'],
-      // Querverbindung: anlagen-filter → regel-engine (gewählte Anlagen)
-      ['anlagen-filter', 'regel-engine'],
-      // ... und → bewertung, cross-check
-      ['anlagen-filter', 'bewertung'],
-      ['anlagen-filter', 'cross-check'],
+      ['ocr', 'klassifizierung'],
+      ['klassifizierung', 'extraktion'],
     ],
   });
-}
-
-/**
- * Separate Register-Funktion, die den Workflow baut UND das Enum-Schema
- * für ocr-enum zur Laufzeit nachträgt — weil das Enum die Anlagen-Codes
- * aus dem Katalog braucht, der erst bei erstem `getIndices()`-Zugriff lädt.
- */
-export function buildElsterWorkflowWithSchema() {
-  const wf = buildElsterWorkflow();
-  // Enum-Schema erst hier bauen (Katalog wird geladen)
-  const schema = anlagenDetectorSchema();
-  (wf.stages['ocr-enum'].config as Record<string, unknown>).schema = schema;
-  return wf;
 }
