@@ -20,65 +20,56 @@
 
   <script type="text/babel" data-presets="react">
 /* global React, ReactDOM, ReactFlow */
-const { useState, useEffect, useCallback, useMemo, useRef } = React;
+const { useState, useEffect, useMemo, useRef } = React;
 const RF = window.ReactFlow;
 
 /* ------------------------------------------------------------
-   Placeholder workflow definition (wird später aus Engine geladen)
+   Topo-Layout: aus stages + edges x/y-Positionen berechnen.
+   Spalten = Topo-Layer; parallele Stages stapeln sich vertikal.
    ------------------------------------------------------------ */
-const ELSTER_WORKFLOW = {
-  id: 'elster-v1',
-  name: 'ELSTER Feldextraktion',
-  description: 'Steuer-Dokumente auf ELSTER-Felder mappen, bewerten, kreuzprüfen.',
-  stages: [
-    { id: 'upload',              name: 'Upload',              sub: 'Datei-Ablage',                  x: 20,    y: 100 },
-    { id: 'mistral-raw',         name: 'Mistral OCR',         sub: 'permissiv, Markdown + JSON',    x: 220,   y: 100 },
-    { id: 'regel-engine',        name: 'Regel-Engine',        sub: 'deterministisches Label-Match', x: 440,   y: 100 },
-    { id: 'schema',              name: 'Schema-Bau',          sub: 'aus Eindeutigkeiten',           x: 660,   y: 100 },
-    { id: 'mistral-kuratiert',   name: 'Mistral kuratiert',   sub: 'tight Schema',                  x: 880,   y: 100 },
-    { id: 'baseline',            name: 'Baseline-Merge',      sub: 'Mistral + Regel + Kurator',     x: 1100,  y: 100 },
-    { id: 'bewertung',           name: 'Bewertung',           sub: 'BMF · Dichte · Kons',           x: 1320,  y: 100 },
-    { id: 'cross-check',         name: 'Cross-Check',         sub: 'Anlagen-Abgleich',              x: 1540,  y: 100 },
-    { id: 'final',               name: 'Ergebnis',            sub: 'Final-Annotation',              x: 1760,  y: 100 },
-    { id: 'anlagen-mistral',     name: 'Mistral OCR · Enum',  sub: 'Anlagen-Erkennung',             x: 220,   y: 260 },
-    { id: 'anlagen-filter',      name: 'Katalog-Filter',      sub: '',                              x: 440,   y: 260 },
-    { id: 'anlagen-persist',     name: 'Persistenz',          sub: '',                              x: 660,   y: 260 },
-    { id: 'anlagen-erkannt',     name: 'Erkannte Anlagen',    sub: '',                              x: 880,   y: 260 },
-  ],
-  edges: [
-    ['upload', 'mistral-raw'],
-    ['mistral-raw', 'regel-engine'],
-    ['regel-engine', 'schema'],
-    ['schema', 'mistral-kuratiert'],
-    ['mistral-kuratiert', 'baseline'],
-    ['baseline', 'bewertung'],
-    ['bewertung', 'cross-check'],
-    ['cross-check', 'final'],
-    ['upload', 'anlagen-mistral'],
-    ['anlagen-mistral', 'anlagen-filter'],
-    ['anlagen-filter', 'anlagen-persist'],
-    ['anlagen-persist', 'anlagen-erkannt'],
-  ]
-};
+function layoutWorkflow(wf) {
+  const stageIds = wf.stages.map(s => s.id);
+  const inDeg = new Map(stageIds.map(id => [id, 0]));
+  const adj = new Map(stageIds.map(id => [id, []]));
+  for (const [a, b] of wf.edges) {
+    adj.get(a).push(b);
+    inDeg.set(b, (inDeg.get(b) || 0) + 1);
+  }
+  const layers = [];
+  let frontier = stageIds.filter(id => inDeg.get(id) === 0);
+  const seen = new Set();
+  while (frontier.length) {
+    layers.push(frontier);
+    frontier.forEach(id => seen.add(id));
+    const next = [];
+    for (const id of frontier) {
+      for (const to of adj.get(id)) {
+        const d = inDeg.get(to) - 1;
+        inDeg.set(to, d);
+        if (d === 0) next.push(to);
+      }
+    }
+    frontier = next;
+  }
+  // Stages ohne Topo-Ordnung (z.B. isoliert) einfach hinten ranhängen
+  for (const id of stageIds) if (!seen.has(id)) layers[layers.length - 1 || 0]?.push(id);
 
-const INITIAL_ISSUES = [
-  { id: 1, title: 'Anlage-Aliase als Daten-Datei (VOR, SA)',            tag: 'Daten',        done: false },
-  { id: 2, title: '"Kirchstraße" wird als Adresse Person B gemappt',    tag: 'Regel-Engine', done: false },
-  { id: 3, title: 'AN-Krankenversicherung matcht nicht auf BMF-Text',   tag: 'Regel-Engine', done: false },
-  { id: 4, title: 'Person B · KAP überschreibt Person A',               tag: 'Merge',        done: false },
-  { id: 5, title: 'Log-Panel schneidet lange Payloads ab',              tag: 'UI',           done: false },
-];
+  const COL_W = 240, ROW_H = 140;
+  const positions = {};
+  layers.forEach((layer, col) => {
+    layer.forEach((id, row) => {
+      positions[id] = { x: 20 + col * COL_W, y: 60 + row * ROW_H };
+    });
+  });
+  return { positions, layers };
+}
 
 /* ------------------------------------------------------------
    Stage-Node (Neo-styled)
    ------------------------------------------------------------ */
 function StageNode({ data, selected }) {
   const stateLabel = {
-    idle:    'wartet',
-    running: 'läuft',
-    ok:      'fertig',
-    error:   'fehler',
-    skipped: 'übersprungen',
+    idle: 'wartet', running: 'läuft', ok: 'fertig', error: 'fehler', skipped: 'übersprungen',
   }[data.state || 'idle'];
 
   return (
@@ -92,13 +83,12 @@ function StageNode({ data, selected }) {
     </div>
   );
 }
-
 const nodeTypes = { stage: StageNode };
 
 /* ------------------------------------------------------------
-   Sidebar
+   Sidebar + TopBar + Composer + Drawer (wie vorher, nur kleinere Tweaks)
    ------------------------------------------------------------ */
-function Sidebar({ collapsed, onToggle, onGoHome }) {
+function Sidebar({ collapsed, onToggle, workflows, activeId }) {
   if (collapsed) {
     return (
       <aside className="sturm-sidebar is-collapsed">
@@ -120,36 +110,34 @@ function Sidebar({ collapsed, onToggle, onGoHome }) {
         </button>
       </div>
 
-      <button className="sturm-sb-new" onClick={onGoHome}>
+      <button className="sturm-sb-new" onClick={() => location.href = '/'}>
         <i data-lucide="arrow-left"></i><span>Zur Übersicht</span>
       </button>
 
-      <div className="sturm-sb-section"><span>Workflow</span></div>
+      <div className="sturm-sb-section"><span>Workflows</span></div>
       <nav className="sturm-sb-nav">
-        <button className="sturm-sb-item is-active">
-          <i data-lucide="git-branch"></i>
-          <span>ELSTER</span>
-          <span className="sturm-sb-item-meta">v1</span>
-        </button>
+        {workflows.length === 0 && (
+          <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>keine geladen</div>
+        )}
+        {workflows.map(w => (
+          <a
+            key={w.id}
+            href={`/pipeline.html?workflow=${encodeURIComponent(w.id)}`}
+            className={`sturm-sb-item ${w.id === activeId ? 'is-active' : ''}`}
+            style={{ textDecoration: 'none' }}
+          >
+            <i data-lucide="git-branch"></i>
+            <span>{w.name}</span>
+            <span className="sturm-sb-item-meta">{w.id}</span>
+          </a>
+        ))}
       </nav>
 
       <div className="sturm-sb-section"><span>Letzte Runs</span></div>
       <div className="sturm-sb-nav sturm-sb-nav-scroll">
-        <button className="sturm-sb-item">
-          <i data-lucide="check-circle-2"></i>
-          <span>Stricker 2023</span>
-          <span className="sturm-sb-item-meta">jetzt</span>
-        </button>
-        <button className="sturm-sb-item">
-          <i data-lucide="check-circle-2"></i>
-          <span>Gymnastik-Beleg</span>
-          <span className="sturm-sb-item-meta">-1h</span>
-        </button>
-        <button className="sturm-sb-item">
-          <i data-lucide="circle-slash"></i>
-          <span>Tape-Foto</span>
-          <span className="sturm-sb-item-meta">-3h</span>
-        </button>
+        <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+          folgen nach erstem Lauf
+        </div>
       </div>
 
       <div className="sturm-sb-foot">
@@ -163,10 +151,8 @@ function Sidebar({ collapsed, onToggle, onGoHome }) {
   );
 }
 
-/* ------------------------------------------------------------
-   TopBar
-   ------------------------------------------------------------ */
 function TopBar({ workflow, status, runId, collapsedSidebar, onOpenSidebar, theme, onToggleTheme }) {
+  const statusLabel = { idle: 'bereit', running: 'läuft', ok: 'fertig', error: 'fehler' }[status];
   return (
     <header className="sturm-topbar">
       <div className="sturm-topbar-l">
@@ -176,23 +162,18 @@ function TopBar({ workflow, status, runId, collapsedSidebar, onOpenSidebar, them
           </button>
         )}
         <span className="sturm-topbar-title">
-          <strong>{workflow.name}</strong>
-          <span className="sturm-topbar-sep">·</span>
-          <button className="sturm-wf-chip">
-            <span>{workflow.id}</span>
-            <i data-lucide="chevron-down"></i>
-          </button>
+          <strong>{workflow?.name || '…'}</strong>
+          {workflow && <>
+            <span className="sturm-topbar-sep">·</span>
+            <span className="sturm-wf-chip"><span>{workflow.id}</span></span>
+          </>}
           {runId && <span className="sturm-run-id">{runId}</span>}
         </span>
       </div>
       <div className="sturm-topbar-r">
         <span className={`sturm-status ${status === 'running' ? 'is-running' : status === 'ok' ? 'is-ok' : status === 'error' ? 'is-error' : ''}`}>
-          {status === 'idle' && 'bereit'}
-          {status === 'running' && 'läuft'}
-          {status === 'ok' && 'fertig'}
-          {status === 'error' && 'fehler'}
+          {statusLabel}
         </span>
-        <button className="sturm-icon-btn" aria-label="Teilen"><i data-lucide="share-2"></i></button>
         <button className="sturm-icon-btn" onClick={onToggleTheme} aria-label="Theme umschalten">
           <i data-lucide={theme === 'dark' ? 'sun' : 'moon'}></i>
         </button>
@@ -201,76 +182,58 @@ function TopBar({ workflow, status, runId, collapsedSidebar, onOpenSidebar, them
   );
 }
 
-/* ------------------------------------------------------------
-   Composer (File-Drop)
-   ------------------------------------------------------------ */
-function Composer({ file, onFile, onStart, running, noCache, setNoCache, noKurator, setNoKurator }) {
+function Composer({ workflow, file, onFile, onStart, running }) {
   const inputRef = useRef(null);
   const [dragover, setDragover] = useState(false);
+  const accept = workflow?.input?.accept?.map(x => '.' + x).join(',') || '.pdf,.jpg,.jpeg,.png';
+  const maxMb = workflow?.input?.maxSizeMb ?? 20;
 
   function onDrop(e) {
-    e.preventDefault();
-    setDragover(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) onFile(f);
+    e.preventDefault(); setDragover(false);
+    const f = e.dataTransfer.files?.[0]; if (f) onFile(f);
   }
+
+  const isFileInput = workflow?.input?.type === 'file';
 
   return (
     <div className="sturm-composer-wrap">
       <div
         className={`sturm-composer ${dragover ? 'is-dragover' : ''}`}
-        onDragOver={e => { e.preventDefault(); setDragover(true); }}
+        onDragOver={e => { if (!isFileInput) return; e.preventDefault(); setDragover(true); }}
         onDragLeave={() => setDragover(false)}
         onDrop={onDrop}
       >
-        <div className="sturm-dropzone" onClick={() => inputRef.current?.click()}>
-          <i data-lucide={file ? 'file-check-2' : 'upload'}></i>
-          <div>{file ? file.name : 'Datei ablegen oder klicken, um auszuwählen'}</div>
-          <div className="sturm-dropzone-sub">PDF · JPG · PNG, bis 20 MB</div>
-          <input
-            ref={inputRef}
-            type="file"
-            style={{ display: 'none' }}
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }}
-          />
-        </div>
+        {isFileInput && (
+          <div className="sturm-dropzone" onClick={() => inputRef.current?.click()}>
+            <i data-lucide={file ? 'file-check-2' : 'upload'}></i>
+            <div>{file ? file.name : 'Datei ablegen oder klicken, um auszuwählen'}</div>
+            <div className="sturm-dropzone-sub">
+              {(workflow?.input?.accept || []).map(x => x.toUpperCase()).join(' · ')} · bis {maxMb} MB
+            </div>
+            <input
+              ref={inputRef}
+              type="file"
+              style={{ display: 'none' }}
+              accept={accept}
+              onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+            />
+          </div>
+        )}
 
         <div className="sturm-composer-row">
-          <label className="sturm-toggle-row">
-            <span
-              className={`sturm-toggle ${noCache ? 'is-on' : ''}`}
-              onClick={() => setNoCache(v => !v)}
-              role="switch"
-              aria-checked={noCache}
-            ><span className="sturm-toggle-knob"></span></span>
-            <span className="sturm-toggle-lbl">ohne Cache</span>
-          </label>
-          <label className="sturm-toggle-row">
-            <span
-              className={`sturm-toggle ${noKurator ? 'is-on' : ''}`}
-              onClick={() => setNoKurator(v => !v)}
-              role="switch"
-              aria-checked={noKurator}
-            ><span className="sturm-toggle-knob"></span></span>
-            <span className="sturm-toggle-lbl">ohne Kurator</span>
-          </label>
           <div className="sturm-composer-row-spacer"></div>
-          <button className="sturm-btn sturm-btn-primary" disabled={!file || running} onClick={onStart}>
+          <button className="sturm-btn sturm-btn-primary" disabled={!file || running || !workflow} onClick={onStart}>
             <i data-lucide={running ? 'loader' : 'play'}></i>
             <span>{running ? 'läuft …' : 'Workflow starten'}</span>
           </button>
         </div>
       </div>
-      <p className="sturm-composer-note">Echte Ergebnisse hängen vom Eingabedokument ab — Pflichtfelder immer gegen BMF-Katalog prüfen.</p>
+      <p className="sturm-composer-note">Echte Ergebnisse hängen vom Eingabedokument ab.</p>
     </div>
   );
 }
 
-/* ------------------------------------------------------------
-   Right Drawer (Events / Issues)
-   ------------------------------------------------------------ */
-function Drawer({ events, issues, setIssues }) {
+function Drawer({ events, issues, setIssues, workflowId, selectedStage }) {
   const [tab, setTab] = useState('events');
   const [newIssue, setNewIssue] = useState('');
 
@@ -301,13 +264,20 @@ function Drawer({ events, issues, setIssues }) {
               Events erscheinen hier, sobald der Lauf startet.
             </div>
           )}
-          {events.map((e, i) => (
-            <div className="sturm-event" key={i}>
-              <div className="sturm-event-time">{e.t}</div>
-              <div className="sturm-event-name">{e.name}</div>
-              {e.payload && <div className="sturm-event-payload">{e.payload}</div>}
-            </div>
-          ))}
+          {events.map((e, i) => {
+            const payloadStr = e.payload != null
+              ? (typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload, null, 2))
+              : null;
+            return (
+              <div className="sturm-event" key={i}>
+                <div className="sturm-event-time">{e.t}</div>
+                <div className="sturm-event-name">
+                  {e.stageId ? `${e.stageId} · ${e.name}` : e.name}
+                </div>
+                {payloadStr && <div className="sturm-event-payload">{payloadStr}</div>}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -322,6 +292,11 @@ function Drawer({ events, issues, setIssues }) {
             />
             <button onClick={addIssue} disabled={!newIssue.trim()}>+</button>
           </div>
+          {issues.length === 0 && (
+            <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
+              Noch keine Issues für {workflowId}.
+            </div>
+          )}
           {issues.map(iss => (
             <div className={`sturm-issue ${iss.done ? 'is-done' : ''}`} key={iss.id}>
               <button
@@ -346,30 +321,81 @@ function Drawer({ events, issues, setIssues }) {
 }
 
 /* ------------------------------------------------------------
+   Run-Streamer — liest SSE von POST /api/workflows/:id/run
+   ------------------------------------------------------------ */
+async function streamRun(workflowId, file, onEvent) {
+  const form = new FormData();
+  form.append('file', file);
+  const resp = await fetch(`/api/workflows/${encodeURIComponent(workflowId)}/run`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!resp.ok || !resp.body) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`run HTTP ${resp.status}: ${text.slice(0, 300)}`);
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop() ?? '';
+    for (const part of parts) {
+      const lines = part.split('\n');
+      let name = 'message';
+      let dataRaw = '';
+      for (const ln of lines) {
+        if (ln.startsWith('event: ')) name = ln.slice(7).trim();
+        else if (ln.startsWith('data: ')) dataRaw += ln.slice(6);
+      }
+      if (!dataRaw) continue;
+      let env;
+      try { env = JSON.parse(dataRaw); } catch { env = { raw: dataRaw }; }
+      onEvent(name, env);
+    }
+  }
+}
+
+/* ------------------------------------------------------------
    App
    ------------------------------------------------------------ */
 function App() {
-  const workflow = ELSTER_WORKFLOW;
   const [theme, setTheme] = useState(() => (document.documentElement.classList.contains('dark') ? 'dark' : 'light'));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [workflows, setWorkflows] = useState([]);
+  const [workflow, setWorkflow] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [file, setFile] = useState(null);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('idle');
   const [runId, setRunId] = useState(null);
-  const [noCache, setNoCache] = useState(true);
-  const [noKurator, setNoKurator] = useState(false);
   const [events, setEvents] = useState([]);
   const [stageStates, setStageStates] = useState({});
-  const [issues, setIssues] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('sturm-issues:elster-v1') || 'null');
-      return saved || INITIAL_ISSUES;
-    } catch { return INITIAL_ISSUES; }
-  });
+  const [selectedStage, setSelectedStage] = useState(null);
 
+  // Workflow-ID aus URL
+  const wfIdFromUrl = useMemo(() => {
+    const p = new URLSearchParams(location.search);
+    return p.get('workflow') || 'hello-ocr';
+  }, []);
+
+  const [issues, setIssues] = useState([]);
+
+  // Issues pro Workflow persistieren
   useEffect(() => {
-    localStorage.setItem('sturm-issues:elster-v1', JSON.stringify(issues));
-  }, [issues]);
+    if (!workflow) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`sturm-issues:${workflow.id}`) || '[]');
+      setIssues(saved);
+    } catch { setIssues([]); }
+  }, [workflow?.id]);
+  useEffect(() => {
+    if (!workflow) return;
+    localStorage.setItem(`sturm-issues:${workflow.id}`, JSON.stringify(issues));
+  }, [issues, workflow?.id]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -378,54 +404,92 @@ function App() {
 
   useEffect(() => { window.lucide && window.lucide.createIcons(); });
 
-  const nodes = useMemo(() => workflow.stages.map(s => ({
-    id: s.id,
-    type: 'stage',
-    position: { x: s.x, y: s.y },
-    data: { label: s.name, sub: s.sub, state: stageStates[s.id]?.state, ms: stageStates[s.id]?.ms },
-    draggable: false,
-  })), [stageStates]);
+  // Workflows laden
+  useEffect(() => {
+    (async () => {
+      try {
+        const [listResp, wfResp] = await Promise.all([
+          fetch('/api/workflows').then(r => r.json()),
+          fetch(`/api/workflows/${encodeURIComponent(wfIdFromUrl)}`).then(r => r.ok ? r.json() : null),
+        ]);
+        setWorkflows(listResp || []);
+        if (!wfResp) {
+          setLoadError(`Workflow "${wfIdFromUrl}" nicht gefunden.`);
+          // Falls ein anderer existiert, den ersten laden
+          if (listResp?.[0]) setWorkflow(listResp[0]);
+        } else {
+          setWorkflow(wfResp);
+        }
+      } catch (e) {
+        setLoadError(`API nicht erreichbar: ${e.message}`);
+      }
+    })();
+  }, [wfIdFromUrl]);
 
-  const edges = useMemo(() => workflow.edges.map(([a, b]) => ({
-    id: `${a}-${b}`,
-    source: a, target: b,
-    animated: stageStates[a]?.state === 'running' || stageStates[b]?.state === 'running',
-    style: { stroke: 'var(--color-border)', strokeWidth: 1.5 },
-    markerEnd: { type: 'arrowclosed', color: 'var(--color-border)' }
-  })), [stageStates]);
+  const layout = useMemo(() => workflow ? layoutWorkflow(workflow) : null, [workflow]);
 
-  function simulate() {
-    setRunning(true);
-    setStatus('running');
-    setRunId(`run-${Date.now().toString(36)}`);
-    setEvents([]);
-    setStageStates({});
+  const nodes = useMemo(() => {
+    if (!workflow || !layout) return [];
+    return workflow.stages.map(s => ({
+      id: s.id,
+      type: 'stage',
+      position: layout.positions[s.id] || { x: 0, y: 0 },
+      data: {
+        label: s.name,
+        sub: s.description || s.uses,
+        state: stageStates[s.id]?.state,
+        ms: stageStates[s.id]?.ms,
+      },
+      draggable: false,
+    }));
+  }, [workflow, layout, stageStates]);
 
-    const order = workflow.stages.map(s => s.id);
-    let t = 0;
-    order.forEach((id, i) => {
-      const startMs = t;
-      const dur = 400 + Math.random() * 600;
-      t += dur;
-      setTimeout(() => {
-        setStageStates(prev => ({ ...prev, [id]: { state: 'running' } }));
-        setEvents(prev => [...prev, { t: new Date().toLocaleTimeString(), name: `${id} · start`, payload: null }]);
-      }, startMs);
-      setTimeout(() => {
-        setStageStates(prev => ({ ...prev, [id]: { state: 'ok', ms: Math.round(dur) } }));
-        setEvents(prev => [...prev, {
-          t: new Date().toLocaleTimeString(),
-          name: `${id} · done`,
-          payload: i === 1 ? 'chars=4213  pages=3  annotation_bytes=18402' :
-                   i === 6 ? '{ score: 0.82, pflicht_ok: true, dichte: 0.71 }' : null
-        }]);
-      }, startMs + dur);
-    });
-    setTimeout(() => {
+  const edges = useMemo(() => {
+    if (!workflow) return [];
+    return workflow.edges.map(([a, b]) => ({
+      id: `${a}-${b}`,
+      source: a, target: b,
+      animated: stageStates[a]?.state === 'running' || stageStates[b]?.state === 'running',
+      style: { stroke: 'var(--color-border)', strokeWidth: 1.5 },
+      markerEnd: { type: 'arrowclosed', color: 'var(--color-border)' },
+    }));
+  }, [workflow, stageStates]);
+
+  async function start() {
+    if (!workflow || !file) return;
+    setRunning(true); setStatus('running');
+    setRunId(null); setEvents([]); setStageStates({});
+
+    const onEvent = (name, env) => {
+      const t = new Date().toLocaleTimeString();
+      setEvents(prev => [...prev, { t, name, stageId: env.stageId, payload: env.payload }]);
+      if (name === 'run_meta') {
+        setRunId(env.runId);
+      } else if (name === 'stage_start') {
+        setStageStates(prev => ({ ...prev, [env.stageId]: { state: 'running' } }));
+      } else if (name === 'stage_done') {
+        setStageStates(prev => ({ ...prev, [env.stageId]: { state: 'ok', ms: env.payload?.ms } }));
+      } else if (name === 'stage_error') {
+        setStageStates(prev => ({ ...prev, [env.stageId]: { state: 'error', ms: env.payload?.ms } }));
+      } else if (name === 'stage_skipped') {
+        setStageStates(prev => ({ ...prev, [env.stageId]: { state: 'skipped' } }));
+      } else if (name === 'run_done') {
+        setStatus('ok');
+      } else if (name === 'run_error') {
+        setStatus('error');
+      }
+    };
+
+    try {
+      await streamRun(workflow.id, file, onEvent);
+    } catch (e) {
+      setStatus('error');
+      setEvents(prev => [...prev, {
+        t: new Date().toLocaleTimeString(), name: 'client_error', payload: e.message,
+      }]);
+    } finally {
       setRunning(false);
-      setStatus('ok');
-      setEvents(prev => [...prev, { t: new Date().toLocaleTimeString(), name: 'workflow · done', payload: null }]);
-    }, t + 50);
+    }
   }
 
   return (
@@ -433,7 +497,8 @@ function App() {
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(c => !c)}
-        onGoHome={() => location.href = '/'}
+        workflows={workflows}
+        activeId={workflow?.id}
       />
 
       <div className="sturm-main">
@@ -447,47 +512,63 @@ function App() {
           onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
         />
 
+        {loadError && (
+          <div style={{
+            margin: '10px 14px', padding: '10px 14px',
+            background: 'rgba(212, 160, 160, 0.15)',
+            border: '1px solid rgba(212, 160, 160, 0.5)',
+            borderRadius: 'var(--radius-lg)', color: 'var(--color-danger)',
+            fontSize: 13,
+          }}>{loadError}</div>
+        )}
+
         <div className="sturm-canvas" style={{ flex: 1 }}>
-          <RF.ReactFlowProvider>
-            <RF.ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable
-              proOptions={{ hideAttribution: false }}
-            >
-              <RF.Background color="var(--color-border-light)" gap={22} size={1} />
-              <RF.Controls />
-              <RF.MiniMap
-                nodeColor={(n) => {
-                  const s = n.data?.state;
-                  if (s === 'running') return 'var(--color-accent)';
-                  if (s === 'ok')      return 'var(--color-success)';
-                  if (s === 'error')   return 'var(--color-danger)';
-                  return 'var(--color-bg-tertiary)';
-                }}
-                maskColor="rgba(26, 24, 22, 0.6)"
-                style={{ background: 'var(--color-bg-secondary)' }}
-              />
-            </RF.ReactFlow>
-          </RF.ReactFlowProvider>
+          {workflow ? (
+            <RF.ReactFlowProvider>
+              <RF.ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                fitView
+                fitViewOptions={{ padding: 0.2 }}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                elementsSelectable
+                onNodeClick={(_e, n) => setSelectedStage(n.id)}
+                proOptions={{ hideAttribution: false }}
+              >
+                <RF.Background color="var(--color-border-light)" gap={22} size={1} />
+                <RF.Controls />
+                <RF.MiniMap
+                  nodeColor={(n) => {
+                    const s = n.data?.state;
+                    if (s === 'running') return 'var(--color-accent)';
+                    if (s === 'ok')      return 'var(--color-success)';
+                    if (s === 'error')   return 'var(--color-danger)';
+                    return 'var(--color-bg-tertiary)';
+                  }}
+                  maskColor="rgba(26, 24, 22, 0.6)"
+                  style={{ background: 'var(--color-bg-secondary)' }}
+                />
+              </RF.ReactFlow>
+            </RF.ReactFlowProvider>
+          ) : (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+              {loadError ? loadError : 'Workflow wird geladen …'}
+            </div>
+          )}
         </div>
 
-        <Composer
-          file={file}
-          onFile={setFile}
-          onStart={simulate}
-          running={running}
-          noCache={noCache} setNoCache={setNoCache}
-          noKurator={noKurator} setNoKurator={setNoKurator}
-        />
+        <Composer workflow={workflow} file={file} onFile={setFile} onStart={start} running={running} />
       </div>
 
-      <Drawer events={events} issues={issues} setIssues={setIssues} />
+      <Drawer
+        events={events}
+        issues={issues}
+        setIssues={setIssues}
+        workflowId={workflow?.id}
+        selectedStage={selectedStage}
+      />
     </div>
   );
 }
