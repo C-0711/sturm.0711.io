@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mistral OCR Playground</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #0f1115; color: #e3e6eb; line-height: 1.5;
+  }
+  h1 { font-size: 22px; margin: 0 0 24px 0; font-weight: 600; letter-spacing: -0.01em; }
+  h2 { font-size: 14px; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.06em; color: #8a93a0; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1400px; margin: 0 auto; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: #181b22; border: 1px solid #262a33; border-radius: 10px; padding: 16px; }
+  .drop {
+    border: 2px dashed #3a4050; border-radius: 10px; padding: 40px 20px; text-align: center;
+    cursor: pointer; transition: all 0.15s; background: #181b22;
+  }
+  .drop:hover, .drop.over { border-color: #6a8cff; background: #1d2230; }
+  .drop p { margin: 6px 0; color: #8a93a0; }
+  .drop strong { color: #e3e6eb; }
+  pre {
+    background: #0b0d12; border: 1px solid #1f232b; border-radius: 8px; padding: 12px;
+    margin: 0; overflow: auto; max-height: 360px; font-size: 12px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  textarea, select, input[type=text] {
+    width: 100%; background: #0b0d12; border: 1px solid #262a33; color: #e3e6eb;
+    padding: 10px 12px; border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+  textarea { min-height: 100px; resize: vertical; }
+  button {
+    background: #3156ff; color: white; border: none; padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.1s;
+  }
+  button:hover { background: #4568ff; }
+  button:disabled { background: #2a3142; color: #6a7280; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > select { flex: 1; }
+  .meta { font-size: 11px; color: #6a7280; display: flex; gap: 12px; flex-wrap: wrap; }
+  .meta span { padding: 2px 6px; background: #0b0d12; border-radius: 4px; }
+  .err { color: #ff6b7a; font-size: 12px; margin-top: 8px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pill.ok { background: #13381f; color: #7dd39c; }
+  .pill.miss { background: #3a1a1a; color: #ff8089; }
+  a { color: #7aa0ff; }
+  hr { border: none; border-top: 1px solid #262a33; margin: 12px 0; }
+  .filelist a { display: block; font-size: 12px; padding: 4px 0; color: #8a93a0; text-decoration: none; }
+  .filelist a:hover { color: #e3e6eb; }
+  .tab-row { display: flex; gap: 4px; border-bottom: 1px solid #262a33; align-items: center; }
+  .tab { background: none; border: none; padding: 6px 12px; color: #6a7280; font-size: 12px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; border-radius: 0; }
+  .tab:hover { color: #e3e6eb; background: none; }
+  .tab.active { color: #e3e6eb; border-bottom-color: #3156ff; }
+  .mode-tab { flex: 1; background: none; border: none; padding: 10px 16px; color: #6a7280; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 6px; }
+  .mode-tab:hover { color: #e3e6eb; background: #1d2230; }
+  .mode-tab.active { color: #e3e6eb; background: #1d2230; }
+  table.stats { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.stats th, table.stats td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #1f232b; }
+  table.stats th { color: #8a93a0; font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; }
+  table.stats td.num { text-align: right; font-variant-numeric: tabular-nums; color: #8a93a0; }
+  .bar { height: 4px; background: #1f232b; border-radius: 2px; overflow: hidden; width: 60px; display: inline-block; vertical-align: middle; }
+  .bar > div { height: 100%; background: #3156ff; }
+  .req-pill { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+  .req-pill.req { background: #13381f; color: #7dd39c; }
+  .req-pill.opt { background: #1f232b; color: #8a93a0; }
+  .batch-item { padding: 8px; border-bottom: 1px solid #1f232b; font-size: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+  .batch-item:last-child { border-bottom: none; }
+  .batch-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e3e6eb; }
+  .batch-item .status { color: #8a93a0; font-size: 11px; }
+  .batch-item.ok .status { color: #7dd39c; }
+  .batch-item.err .status { color: #ff6b7a; }
+</style>
+</head>
+<body>
+<h1>Mistral OCR Playground <span style="color:#6a7280;font-weight:400;font-size:14px;">· drop → extract → (optional) LLM → result</span>
+<a href="/pipeline.html" style="float:right;font-size:13px;font-weight:500;color:#9bb8ff;text-decoration:none;padding:6px 12px;border:1px solid #3156ff;border-radius:6px;background:#16223d;">🔀 Live-Pipeline →</a></h1>
+
+<div class="tab-row" style="max-width:1400px;margin:0 auto 20px auto;border:1px solid #262a33;border-radius:8px;padding:4px;">
+  <button class="mode-tab active" data-mode="single" type="button">🗎 Single Document</button>
+  <button class="mode-tab" data-mode="batch" type="button">🗂 Schema Induction (Batch)</button>
+</div>
+
+<div id="mode-single">
+
+<div class="grid">
+  <!-- Left: Upload + OCR -->
+  <div class="col">
+    <div class="panel">
+      <h2>1 · Datei hochladen</h2>
+      <div id="drop" class="drop">
+        <p><strong>Datei hier ablegen</strong> oder klicken zum Auswählen</p>
+        <p>PDF · JPG · PNG · WEBP · TIFF · BMP &mdash; max. 50 MB</p>
+        <input id="fileInput" type="file" style="display:none"
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff,image/*,application/pdf">
+      </div>
+      <div id="uploadStatus" class="meta" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>2 · Mistral OCR Ergebnis</h2>
+      <div id="ocrMeta" class="meta" style="margin-bottom:8px">noch keine Extraktion</div>
+      <pre id="ocrText">—</pre>
+    </div>
+
+    <div class="panel">
+      <h2>2b · Strukturierte Extraktion (Annotation)</h2>
+      <div id="annoMeta" class="meta" style="margin-bottom:8px">noch kein Schema angewendet</div>
+      <pre id="annoText">—</pre>
+    </div>
+
+    <div class="panel">
+      <h2>Bisherige Uploads</h2>
+      <div id="fileList" class="filelist"></div>
+    </div>
+  </div>
+
+  <!-- Right: LLM chain -->
+  <div class="col">
+    <div class="panel">
+      <h2>2a · Schema definieren (Pydantic + JSON-Schema)</h2>
+      <div class="tab-row" style="margin-bottom:12px">
+        <button class="src-tab active" data-src="elster" type="button">📐 ELSTER XSD (deterministisch)</button>
+        <button class="src-tab" data-src="ai" type="button">🧠 AI Builder</button>
+        <button id="runWithSchema" type="button" disabled style="margin-left:auto">OCR mit Schema</button>
+      </div>
+
+      <!-- ───────── ELSTER XSD Tab ───────── -->
+      <div id="src-elster">
+        <div id="elsterAnlagenGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px;max-height:260px;overflow:auto;padding:8px;background:#0b0d12;border:1px solid #1f232b;border-radius:6px;margin-bottom:8px">
+          <span style="color:#6a7280;font-size:12px">lade Anlagen…</span>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <button id="loadElster" type="button">Schema aus Anlagen bauen</button>
+          <button id="elsterClear" type="button" style="background:#2a3142;color:#8a93a0">Auswahl löschen</button>
+          <span id="elsterSelCount" style="font-size:11px;color:#6a7280;margin-left:auto">0 Anlagen</span>
+        </div>
+        <div id="elsterStatus" class="meta"></div>
+      </div>
+
+      <!-- ───────── AI Builder Tab ───────── -->
+      <div id="src-ai" style="display:none">
+        <div class="row" style="margin-bottom:8px">
+          <select id="presetSel">
+            <option value="">Preset laden…</option>
+          </select>
+          <button id="buildSchema" type="button">Schema generieren</button>
+        </div>
+        <textarea id="schemaPrompt" placeholder="Beschreibe was extrahiert werden soll. z.B.&#10;• Lohnsteuerbescheinigung mit allen nummerierten Feldern&#10;• Rechnung mit Positionsliste und MwSt-Aufschlüsselung&#10;• Nur IBAN, Empfänger und Betrag"></textarea>
+        <label class="row" style="margin-top:8px;font-size:12px;color:#8a93a0">
+          <input type="checkbox" id="useOcrContext" checked style="width:auto;margin:0">
+          &nbsp;OCR-Text des aktuellen Dokuments als Kontext mitschicken
+        </label>
+        <div id="schemaStatus" class="meta" style="margin-top:8px"></div>
+      </div>
+
+      <!-- ───────── Preview (fuer beide Tabs) ───────── -->
+      <div class="tab-row" style="margin-top:12px">
+        <button class="tab active" data-tab="pydantic" type="button">Pydantic</button>
+        <button class="tab" data-tab="json" type="button">JSON-Schema</button>
+        <button id="copySchema" type="button" style="margin-left:auto;font-size:11px;padding:4px 10px">Copy</button>
+      </div>
+      <pre id="schemaPydantic" style="display:block;max-height:420px">—</pre>
+      <pre id="schemaJson" style="display:none;max-height:420px">—</pre>
+    </div>
+
+    <div class="panel">
+      <h2>2c · Refinement-Loop (Mistral ↔ Opus)</h2>
+      <p style="font-size:12px;color:#8a93a0;margin:0 0 10px 0">
+        Läuft Mistral OCR mit aktuellem ELSTER-Schema, lässt Opus die Annotation gegen das Dokument prüfen,
+        reichert das Schema mit Hinweisen an und versucht's nochmal — max 3 Iterationen. Coverage Pflichtfelder
+        + Konsistenz + Opus-Urteil ergeben einen Gesamt-Score; Abbruch bei ≥ 85 %.
+      </p>
+      <div class="row" style="margin-bottom:8px">
+        <button id="runRefine" type="button" disabled>🔄 Refinement-Loop starten</button>
+        <label style="font-size:11px;color:#8a93a0">
+          <input type="checkbox" id="refineNoOpus" style="width:auto;margin:0"> ohne Opus (nur Coverage/Konsistenz)
+        </label>
+        <label style="font-size:11px;color:#8a93a0">
+          <input type="checkbox" id="refineNoCache" style="width:auto;margin:0"> Cache umgehen
+        </label>
+        <span id="refineMeta" style="margin-left:auto;font-size:11px;color:#6a7280">Schema + Datei wählen</span>
+      </div>
+      <div id="refineIterations"></div>
+      <div id="refineCrossCheck" style="margin-top:10px"></div>
+      <pre id="refineFinal" style="display:none;max-height:360px;margin-top:10px">—</pre>
+    </div>
+
+    <div class="panel">
+      <h2>3 · (Optional) LLM über die Extraktion laufen lassen</h2>
+      <div class="row" style="margin-bottom:8px">
+        <select id="modelSelect"><option>lade Modelle…</option></select>
+        <button id="runLlm" disabled>Chain starten</button>
+      </div>
+      <textarea id="prompt" placeholder="Prompt z.B.&#10;• Fasse die Rechnung in 3 Sätzen zusammen&#10;• Extrahiere alle Beträge als JSON&#10;• Ist dieser Beleg steuerlich relevant?"></textarea>
+      <div id="llmStatus" class="meta" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>4 · Endergebnis der Chain</h2>
+      <div id="resultMeta" class="meta" style="margin-bottom:8px">noch kein Ergebnis</div>
+      <pre id="resultText">—</pre>
+    </div>
+
+    <div class="panel">
+      <h2>Konfiguration</h2>
+      <div id="config" class="meta">lade…</div>
+    </div>
+  </div>
+</div>
+
+</div> <!-- /mode-single -->
+
+<!-- ═════════════════════════════════════════════════════════════ -->
+<!-- MODE: Schema Induction (Batch)                                 -->
+<!-- ═════════════════════════════════════════════════════════════ -->
+<div id="mode-batch" style="display:none">
+<div class="grid">
+  <div class="col">
+    <div class="panel">
+      <h2>1 · Viele Belege desselben Typs hochladen</h2>
+      <div id="batchDrop" class="drop">
+        <p><strong>Mehrere Dateien hier ablegen</strong> oder klicken</p>
+        <p>z.B. 10-50 Lohnsteuerbescheinigungen, Rechnungen, Bescheide…</p>
+        <input id="batchInput" type="file" multiple style="display:none"
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff,image/*,application/pdf">
+      </div>
+      <div style="margin-top:12px">
+        <label style="display:block;font-size:12px;color:#8a93a0;margin-bottom:4px">Thema / Kontext (optional aber empfohlen)</label>
+        <input type="text" id="batchTopic" placeholder="z.B. Lohnsteuerbescheinigungen 2023-2025, Kinesio-Tape-Rechnungen, Steuerbescheide RLP">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <select id="batchModel" style="max-width:260px">
+          <option value="claude-opus-4-7" selected>Claude Opus (gründlich)</option>
+          <option value="claude-sonnet-4-6">Claude Sonnet (balanced)</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku (schnell)</option>
+        </select>
+        <button id="runBatch" type="button" disabled>OCR + Schema induzieren</button>
+      </div>
+      <div id="batchStatus" class="meta" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>2 · Batch-Fortschritt</h2>
+      <div id="batchList" style="max-height:360px;overflow:auto"><span style="color:#6a7280;font-size:12px">Noch nichts geladen.</span></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="panel">
+      <h2>3 · Canonical Schema</h2>
+      <div id="inducedMeta" class="meta" style="margin-bottom:8px">warte auf Batch-Run</div>
+      <div class="tab-row" style="margin-bottom:8px">
+        <button class="tab active" data-btab="stats" type="button">Häufigkeit</button>
+        <button class="tab" data-btab="pydantic" type="button">Pydantic</button>
+        <button class="tab" data-btab="json" type="button">JSON-Schema</button>
+        <button id="copyInduced" type="button" style="margin-left:auto;font-size:11px;padding:4px 10px">Copy</button>
+      </div>
+      <div id="inducedStats" style="display:block">
+        <div style="color:#6a7280;font-size:12px">—</div>
+      </div>
+      <pre id="inducedPydantic" style="display:none;max-height:420px">—</pre>
+      <pre id="inducedJson" style="display:none;max-height:420px">—</pre>
+    </div>
+
+    <div class="panel">
+      <h2>4 · Alle Belege strukturiert extrahieren</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button id="runInducedAll" type="button" disabled>Mistral OCR mit canonical Schema auf alle</button>
+      </div>
+      <div id="extractAllStatus" class="meta" style="margin-bottom:8px"></div>
+      <pre id="extractAllResult" style="max-height:400px">—</pre>
+    </div>
+  </div>
+</div>
+</div> <!-- /mode-batch -->
+
+<script>
+let lastOcrText = "";
+
+const $ = (id) => document.getElementById(id);
+
+// ─── File upload ──────────────────────────────────────────────
+const drop = $("drop");
+const fi = $("fileInput");
+drop.addEventListener("click", () => fi.click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault(); drop.classList.remove("over");
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener("change", () => { if (fi.files[0]) handleFile(fi.files[0]); });
+
+async function handleFile(file) {
+  $("uploadStatus").innerHTML = `<span>📄 ${file.name}</span><span>${(file.size/1024).toFixed(1)} KB</span><span>OCR läuft…</span>`;
+  $("ocrText").textContent = "…";
+  $("ocrMeta").textContent = "OCR läuft";
+  $("runLlm").disabled = true;
+
+  const fd = new FormData();
+  fd.append("file", file);
+
+  try {
+    const r = await fetch("/api/ocr", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "OCR failed");
+    lastOcrText = j.ocr.text || "";
+    $("ocrText").textContent = lastOcrText || "(leer)";
+    $("ocrMeta").innerHTML = `
+      <span>📄 <a href="${j.file.url}" target="_blank">${j.file.name}</a></span>
+      <span>🧠 ${j.ocr.model}</span>
+      <span>📑 ${j.ocr.pages.length} Seite(n)</span>
+      <span>✍️ ${j.ocr.chars} Zeichen</span>
+      <span>⏱ ${j.ocr.ms} ms</span>
+    `;
+    $("uploadStatus").innerHTML = `<span>✅ hochgeladen</span><span>${file.name}</span>`;
+    $("runLlm").disabled = !lastOcrText;
+    refreshFileList();
+  } catch (e) {
+    $("ocrText").textContent = "";
+    $("ocrMeta").innerHTML = `<span class="err">${e.message}</span>`;
+    $("uploadStatus").innerHTML = `<span class="err">${e.message}</span>`;
+  }
+}
+
+// ─── Models + config ──────────────────────────────────────────
+async function loadConfig() {
+  const r = await fetch("/api/models");
+  const j = await r.json();
+  const sel = $("modelSelect");
+  sel.innerHTML = "";
+  j.models.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = JSON.stringify({ provider: m.provider, model: m.id });
+    opt.textContent = m.label;
+    sel.appendChild(opt);
+  });
+  $("config").innerHTML = `
+    <span>Mistral key <span class="pill ${j.keys.mistral?"ok":"miss"}">${j.keys.mistral?"set":"missing"}</span></span>
+    <span>Anthropic key <span class="pill ${j.keys.anthropic?"ok":"miss"}">${j.keys.anthropic?"set":"missing"}</span></span>
+    <span>Ollama <a href="${j.keys.ollama_url}" target="_blank">${j.keys.ollama_url}</a></span>
+  `;
+}
+loadConfig();
+
+// ─── LLM chain ────────────────────────────────────────────────
+$("runLlm").addEventListener("click", async () => {
+  const { provider, model } = JSON.parse($("modelSelect").value);
+  const prompt = $("prompt").value.trim();
+  $("runLlm").disabled = true;
+  $("resultText").textContent = "…";
+  $("resultMeta").textContent = `läuft · ${provider} · ${model}`;
+  $("llmStatus").textContent = "";
+
+  try {
+    const r = await fetch("/api/llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: lastOcrText, prompt, provider, model }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "LLM failed");
+    $("resultText").textContent = j.output || "(leer)";
+    const usage = j.usage
+      ? Object.entries(j.usage).map(([k,v]) => `${k}=${v}`).join(" · ")
+      : "";
+    $("resultMeta").innerHTML = `
+      <span>🧠 ${j.provider} · ${j.model}</span>
+      <span>⏱ ${j.ms} ms</span>
+      ${usage ? `<span>${usage}</span>` : ""}
+    `;
+  } catch (e) {
+    $("resultText").textContent = "";
+    $("resultMeta").innerHTML = `<span class="err">${e.message}</span>`;
+  } finally {
+    $("runLlm").disabled = !lastOcrText;
+  }
+});
+
+// ─── File list ────────────────────────────────────────────────
+async function refreshFileList() {
+  const r = await fetch("/api/uploads");
+  const j = await r.json();
+  $("fileList").innerHTML = j.files.slice(0, 15).map(f =>
+    `<a href="/uploads/${encodeURIComponent(f.name)}" target="_blank">📄 ${f.name} · ${(f.size/1024).toFixed(1)} KB</a>`
+  ).join("") || "<span style='color:#6a7280;font-size:12px'>(noch nichts)</span>";
+}
+refreshFileList();
+
+// ─── Schema source tab switcher ────────────────────────────────
+document.querySelectorAll(".src-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".src-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const src = btn.dataset.src;
+    $("src-elster").style.display = src === "elster" ? "" : "none";
+    $("src-ai").style.display     = src === "ai"     ? "" : "none";
+  });
+});
+
+// ─── ELSTER XSD Anlagen-Auswahl ────────────────────────────────
+const elsterSelected = new Set();
+
+async function loadElsterAnlagen() {
+  try {
+    const r = await fetch("/api/elster/anlagen");
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Katalog nicht verfügbar");
+    const grid = $("elsterAnlagenGrid");
+    grid.innerHTML = "";
+    for (const a of j.anlagen) {
+      const id = `anl_${a.code}`;
+      const wrap = document.createElement("label");
+      wrap.style.cssText = "display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:12px;line-height:1.3";
+      wrap.addEventListener("mouseenter", () => wrap.style.background = "#1d2230");
+      wrap.addEventListener("mouseleave", () => wrap.style.background = "");
+      wrap.innerHTML = `
+        <input type="checkbox" id="${id}" value="${a.code}" style="width:auto;margin:0">
+        <span style="flex:1">
+          <strong style="color:#e3e6eb">${a.code}</strong>
+          <span style="color:#8a93a0"> · ${a.leaf_count}F</span>
+          <div style="color:#6a7280;font-size:10px">${a.label.replace(/^Anlage\s+[A-Z_0-9]+\s*[—-]\s*/, "").replace(/^Hauptvordruck\s*[—-]\s*/, "Hauptvordruck: ")}</div>
+        </span>
+      `;
+      const cb = wrap.querySelector("input");
+      cb.addEventListener("change", () => {
+        if (cb.checked) elsterSelected.add(a.code); else elsterSelected.delete(a.code);
+        $("elsterSelCount").textContent = `${elsterSelected.size} Anlage${elsterSelected.size !== 1 ? "n" : ""} · ${Array.from(elsterSelected).reduce((s,c) => s + (j.anlagen.find(x => x.code === c)?.leaf_count || 0), 0)} Felder gesamt`;
+      });
+      grid.appendChild(wrap);
+    }
+    $("elsterStatus").innerHTML = `<span>📐 ${j.count} Anlagen aus ELSTER ${j.year} geladen</span>`;
+  } catch (e) {
+    $("elsterAnlagenGrid").innerHTML = `<span class="err">${e.message}</span>`;
+  }
+}
+loadElsterAnlagen();
+
+$("elsterClear").addEventListener("click", () => {
+  elsterSelected.clear();
+  document.querySelectorAll("#elsterAnlagenGrid input[type=checkbox]").forEach(cb => cb.checked = false);
+  $("elsterSelCount").textContent = "0 Anlagen";
+});
+
+$("loadElster").addEventListener("click", async () => {
+  if (elsterSelected.size === 0) {
+    $("elsterStatus").innerHTML = '<span class="err">Mindestens eine Anlage auswählen</span>';
+    return;
+  }
+  const codes = Array.from(elsterSelected).join(",");
+  $("elsterStatus").textContent = `Schema wird gebaut für ${codes}…`;
+  $("loadElster").disabled = true;
+  try {
+    const r = await fetch(`/api/elster/schema?anlage=${encodeURIComponent(codes)}`);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Schema-Load fehlgeschlagen");
+    currentSchema = { pydantic_code: j.pydantic_code, json_schema: j.json_schema, title: j.title };
+    $("schemaPydantic").textContent = j.pydantic_code || "(leer)";
+    $("schemaJson").textContent = JSON.stringify(j.json_schema, null, 2);
+    $("elsterStatus").innerHTML = `
+      <span>✅ ${j.title}</span>
+      <span>🌳 ${j.leaf_count} Blätter</span>
+      <span>🏷️ ${j.elster_code_count} ELSTER-Codes</span>
+      <span>📦 ${(JSON.stringify(j.json_schema).length / 1024).toFixed(1)} KB Schema</span>
+    `;
+    $("runWithSchema").disabled = !currentFile;
+  } catch (e) {
+    $("elsterStatus").innerHTML = `<span class="err">${e.message}</span>`;
+  } finally {
+    $("loadElster").disabled = false;
+  }
+});
+
+// ─── Schema builder ────────────────────────────────────────────
+let currentSchema = null;        // { pydantic_code, json_schema, title }
+let currentFile = null;          // { stored, name }
+
+// Hook into handleFile to remember file + enable schema buttons
+const _origHandleFile = handleFile;
+handleFile = async function(file) {
+  await _origHandleFile(file);
+  // currentFile set via last upload response — grab it from fileList
+  // We already have the stored name from uploadStatus; easier: fetch list
+  const r = await fetch("/api/uploads");
+  const j = await r.json();
+  if (j.files && j.files[0]) {
+    currentFile = { stored: j.files[0].name, name: file.name };
+  }
+  $("runWithSchema").disabled = !(currentSchema && currentFile);
+};
+
+// Presets
+(async () => {
+  const r = await fetch("/api/schema/presets");
+  const j = await r.json();
+  const sel = $("presetSel");
+  j.presets.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.id; o.textContent = p.label; o.dataset.prompt = p.prompt;
+    sel.appendChild(o);
+  });
+  sel.addEventListener("change", () => {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt && opt.dataset.prompt) $("schemaPrompt").value = opt.dataset.prompt;
+  });
+})();
+
+// Tabs
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    const which = tab.dataset.tab;
+    $("schemaPydantic").style.display = which === "pydantic" ? "block" : "none";
+    $("schemaJson").style.display = which === "json" ? "block" : "none";
+  });
+});
+
+// Generate schema
+$("buildSchema").addEventListener("click", async () => {
+  const prompt = $("schemaPrompt").value.trim();
+  if (!prompt) { $("schemaStatus").innerHTML = '<span class="err">Bitte eine Beschreibung eingeben</span>'; return; }
+  $("buildSchema").disabled = true;
+  $("schemaStatus").textContent = "Schema wird generiert…";
+  $("schemaPydantic").textContent = "…";
+  $("schemaJson").textContent = "…";
+  try {
+    const body = { prompt };
+    if ($("useOcrContext").checked && lastOcrText) body.ocrText = lastOcrText;
+    const r = await fetch("/api/schema/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Schema-Build fehlgeschlagen");
+    currentSchema = { pydantic_code: j.pydantic_code, json_schema: j.json_schema, title: j.title || "Extraction" };
+    $("schemaPydantic").textContent = j.pydantic_code || "(leer)";
+    $("schemaJson").textContent = JSON.stringify(j.json_schema, null, 2);
+    $("schemaStatus").innerHTML = `<span>✅ ${j.title || "Schema"}</span><span>⏱ ${j.ms} ms</span><span>${j.kurz || ""}</span>`;
+    $("runWithSchema").disabled = !currentFile;
+  } catch (e) {
+    $("schemaStatus").innerHTML = `<span class="err">${e.message}</span>`;
+  } finally {
+    $("buildSchema").disabled = false;
+  }
+});
+
+// Run OCR with current schema on current file
+$("runWithSchema").addEventListener("click", async () => {
+  if (!currentSchema || !currentFile) return;
+  $("runWithSchema").disabled = true;
+  $("annoText").textContent = "…";
+  $("annoMeta").textContent = "Mistral OCR läuft mit Schema…";
+  try {
+    const r = await fetch("/api/ocr-rerun", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storedFilename: currentFile.stored,
+        originalName: currentFile.name,
+        schema: currentSchema.json_schema,
+        schemaName: currentSchema.title,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Rerun failed");
+    const ocr = j.ocr;
+    if (ocr.annotation) {
+      $("annoText").textContent = typeof ocr.annotation === "string"
+        ? ocr.annotation
+        : JSON.stringify(ocr.annotation, null, 2);
+      $("annoMeta").innerHTML = `<span>🏷️ ${currentSchema.title}</span><span>⏱ ${ocr.ms} ms</span><span>${Object.keys(ocr.annotation || {}).length} Felder</span>`;
+    } else {
+      $("annoText").textContent = "(keine Annotation zurückgegeben — Schema evtl. nicht passend)";
+      $("annoMeta").innerHTML = `<span class="err">Mistral hat keine document_annotation geliefert</span>`;
+    }
+    // Also refresh raw text
+    lastOcrText = ocr.text || lastOcrText;
+    $("ocrText").textContent = lastOcrText || "(leer)";
+    $("ocrMeta").innerHTML = `<span>🧠 ${ocr.model}</span><span>📑 ${ocr.pages.length} Seite(n)</span><span>⏱ ${ocr.ms} ms · mit Schema</span>`;
+  } catch (e) {
+    $("annoText").textContent = "";
+    $("annoMeta").innerHTML = `<span class="err">${e.message}</span>`;
+  } finally {
+    $("runWithSchema").disabled = false;
+  }
+});
+
+// ─── Refinement-Loop ───────────────────────────────────────────
+function updateRefineBtn() {
+  const btn = $("runRefine");
+  if (!btn) return;
+  const hasFile = !!currentFile;
+  const hasAnlagen = elsterSelected.size > 0;
+  btn.disabled = !(hasFile && hasAnlagen);
+  $("refineMeta").textContent = !hasFile ? "Datei wählen"
+    : !hasAnlagen ? "Anlagen wählen"
+    : `${elsterSelected.size} Anlage${elsterSelected.size !== 1 ? "n" : ""} + ${currentFile.name}`;
+}
+
+// Hook in die bestehenden Update-Punkte:
+const _origHandleFile2 = handleFile;
+handleFile = async function(file) {
+  await _origHandleFile2(file);
+  updateRefineBtn();
+};
+
+// Nach Anlagen-Änderung den Button-Status updaten (der existing change-Handler
+// sieht elsterSelected, aber wir verdrahten noch unseren updateRefineBtn dran).
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.matches("#elsterAnlagenGrid input[type=checkbox]")) {
+    setTimeout(updateRefineBtn, 0);
+  }
+});
+$("elsterClear").addEventListener("click", () => setTimeout(updateRefineBtn, 0));
+
+function scoreBar(val, label) {
+  const pct = Math.max(0, Math.min(1, val));
+  const pctStr = (pct * 100).toFixed(0) + "%";
+  const col = pct >= 0.85 ? "#7dd39c" : pct >= 0.5 ? "#e0b060" : "#ff8089";
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#8a93a0;margin-right:12px">
+    <span>${label}</span>
+    <span class="bar"><div style="width:${pctStr};background:${col}"></div></span>
+    <strong style="color:${col};min-width:32px;text-align:right">${pctStr}</strong>
+  </span>`;
+}
+
+function renderIteration(it) {
+  const headerCol = it.ergebnis === "ok" ? "#7dd39c"
+    : it.ergebnis === "retry" ? "#e0b060"
+    : "#ff8089";
+  const hinweiseBlock = (it.opus_hinweise || []).length ? `
+    <div style="margin-top:6px">
+      <div style="font-size:11px;color:#8a93a0;margin-bottom:4px">${it.opus_hinweise.length} Opus-Hinweise für nächsten Lauf:</div>
+      ${it.opus_hinweise.map(h => `
+        <div style="font-size:11px;padding:4px 8px;background:#0b0d12;border-left:2px solid #3156ff;margin-bottom:3px;border-radius:3px">
+          ${h.elster_code ? `<span style="display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10px;background:#16223d;color:#9bb8ff;padding:1px 6px;border-radius:3px;margin-right:6px">${h.elster_code}</span>` : ""}
+          <strong style="color:#7aa0ff">${h.feld_pfad || "(allgemein)"}</strong>
+          <span style="color:#8a93a0"> · ${h.problem || ""}</span>
+          <div style="color:#c7cbd1;margin-top:2px">${h.anweisung}</div>
+        </div>`).join("")}
+    </div>` : "";
+  const begruendungBlock = it.opus_begruendung
+    ? `<div style="font-size:11px;color:#c7cbd1;margin-top:4px;font-style:italic">${it.opus_begruendung}</div>`
+    : "";
+  const kons_ok = (it.konsistenz_score === 1 || it.konsistenz_score === undefined);
+  const konsErr = !kons_ok && it.konsistenz ? it.konsistenz.filter(k => !k.ok).slice(0, 3).map(k => `<div style="color:#ff8089;font-size:10px">⚠ ${k.regel}: ${k.details}</div>`).join("") : "";
+  return `
+    <div style="background:#0b0d12;border:1px solid #262a33;border-radius:6px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <strong style="color:${headerCol}">Iteration #${it.nummer}</strong>
+        <span style="font-size:11px;color:#6a7280">${it.mistral_ms || 0} ms OCR · ${it.ms || 0} ms total</span>
+        <span style="margin-left:auto;font-size:11px;color:#6a7280">${(it.schema_bytes / 1024).toFixed(1)} KB Schema → ${(it.annotation_bytes / 1024).toFixed(1)} KB Annotation</span>
+      </div>
+      <div>
+        ${it.bmf_pflicht_gesamt !== undefined ? scoreBar(it.bmf_pflicht_gesamt > 0 ? it.bmf_pflicht_belegt / it.bmf_pflicht_gesamt : 1, `BMF-Pflicht ${it.bmf_pflicht_belegt}/${it.bmf_pflicht_gesamt}`) : ""}
+        ${it.dichte_score !== undefined ? scoreBar(it.dichte_score, `Dichte ${it.dichte_belegt}/${it.dichte_gesamt}`) : ""}
+        ${scoreBar(it.konsistenz_score ?? 1, "Konsistenz")}
+        ${it.opus_score !== null && it.opus_score !== undefined ? scoreBar(it.opus_score, "Opus") : ""}
+        ${scoreBar(it.gesamt_score || 0, "Gesamt")}
+      </div>
+      ${konsErr}
+      ${begruendungBlock}
+      ${hinweiseBlock}
+    </div>`;
+}
+
+function renderCrossCheck(cc) {
+  if (!cc) return "";
+  const col = cc.passt ? "#7dd39c" : cc.empfehlung === "neu_klassifizieren" ? "#ff8089" : "#e0b060";
+  const unerwartet = cc.unerwartet.length
+    ? `<div style="font-size:11px;color:#8a93a0;margin-top:4px">Unerwartet: ${cc.unerwartet.map(u => `${u.anlage}(${u.codes.length})`).join(", ")}</div>`
+    : "";
+  return `
+    <div style="background:#0b0d12;border:1px solid #262a33;border-radius:6px;padding:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <strong style="color:${col};text-transform:uppercase;font-size:11px">Cross-Check · ${cc.empfehlung}</strong>
+        <span style="font-size:11px;color:#6a7280">Konfidenz ${(cc.konfidenz * 100).toFixed(0)}%</span>
+        <span style="font-size:11px;color:#6a7280;margin-left:auto">${cc.gesamt_codes} ELSTER-Codes</span>
+      </div>
+      <div style="font-size:12px;color:#c7cbd1;margin-top:4px">${cc.begruendung}</div>
+      ${unerwartet}
+    </div>`;
+}
+
+$("runRefine").addEventListener("click", async () => {
+  if (!currentFile || elsterSelected.size === 0) return;
+  const btn = $("runRefine");
+  btn.disabled = true;
+  $("refineIterations").innerHTML = `<div style="color:#6a7280;font-size:12px;padding:8px">Mistral OCR läuft … das dauert mit voll geladenem Schema 30-60 s pro Iteration.</div>`;
+  $("refineCrossCheck").innerHTML = "";
+  $("refineFinal").style.display = "none";
+  const t0 = Date.now();
+  try {
+    const r = await fetch("/api/elster/refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storedFilename: currentFile.stored,
+        originalName: currentFile.name,
+        anlagen: Array.from(elsterSelected),
+        ohneOpus: $("refineNoOpus").checked,
+        ohneCache: $("refineNoCache").checked,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Refine failed");
+    const html = j.iterationen.map(renderIteration).join("");
+    const cacheTag = j.aus_cache ? `<span class="pill ok">Cache-Hit</span> ` : "";
+    const header = `
+      <div style="font-size:11px;color:#8a93a0;margin-bottom:8px">
+        ${cacheTag}${j.iterationen.length} Iteration${j.iterationen.length === 1 ? "" : "en"} ·
+        ${j.dauer_ms} ms · Schema ${(j.schema_meta.groesse_bytes / 1024).toFixed(1)} KB ·
+        ${j.schema_meta.elster_code_count} E-Codes
+      </div>`;
+    $("refineIterations").innerHTML = header + html;
+    $("refineCrossCheck").innerHTML = renderCrossCheck(j.cross_check);
+    $("refineFinal").textContent = j.final_annotation
+      ? JSON.stringify(j.final_annotation, null, 2)
+      : "(keine Annotation)";
+    $("refineFinal").style.display = "block";
+    // Auch die Annotation-Anzeige oben aktualisieren, damit sie konsistent ist
+    if (j.final_annotation) {
+      $("annoText").textContent = JSON.stringify(j.final_annotation, null, 2);
+      $("annoMeta").innerHTML = `<span>🔄 Refine-Loop · ${j.iterationen.length} Iter · ${j.dauer_ms} ms</span>`;
+    }
+  } catch (e) {
+    $("refineIterations").innerHTML = `<div class="err">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    updateRefineBtn();
+  }
+});
+
+// Copy button
+$("copySchema").addEventListener("click", () => {
+  const activeTab = document.querySelector("#mode-single .tab.active").dataset.tab;
+  const txt = activeTab === "pydantic" ? $("schemaPydantic").textContent : $("schemaJson").textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = $("copySchema");
+    const orig = btn.textContent;
+    btn.textContent = "✓ copied";
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// MODE SWITCHING
+// ═══════════════════════════════════════════════════════════════
+document.querySelectorAll(".mode-tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".mode-tab").forEach(m => m.classList.remove("active"));
+    t.classList.add("active");
+    const mode = t.dataset.mode;
+    $("mode-single").style.display = mode === "single" ? "" : "none";
+    $("mode-batch").style.display = mode === "batch" ? "" : "none";
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// BATCH MODE: Schema Induction
+// ═══════════════════════════════════════════════════════════════
+let batchFiles = [];          // FileList cached from input
+let batchOcrResults = [];     // [{name, stored, text, ...}]
+let inducedSchema = null;     // { pydantic_code, json_schema, title, felder_statistik, ... }
+
+const batchDrop = $("batchDrop");
+const batchInput = $("batchInput");
+batchDrop.addEventListener("click", () => batchInput.click());
+batchDrop.addEventListener("dragover", (e) => { e.preventDefault(); batchDrop.classList.add("over"); });
+batchDrop.addEventListener("dragleave", () => batchDrop.classList.remove("over"));
+batchDrop.addEventListener("drop", (e) => {
+  e.preventDefault(); batchDrop.classList.remove("over");
+  setBatchFiles(e.dataTransfer.files);
+});
+batchInput.addEventListener("change", () => setBatchFiles(batchInput.files));
+
+function setBatchFiles(fl) {
+  batchFiles = Array.from(fl || []);
+  $("batchStatus").innerHTML = batchFiles.length
+    ? `<span>${batchFiles.length} Datei(en) ausgewählt</span>`
+    : "";
+  $("runBatch").disabled = !batchFiles.length;
+  $("batchList").innerHTML = batchFiles.map(f =>
+    `<div class="batch-item"><span class="name">📄 ${f.name}</span><span class="status">${(f.size/1024).toFixed(1)} KB · wartet</span></div>`
+  ).join("");
+}
+
+$("runBatch").addEventListener("click", async () => {
+  if (!batchFiles.length) return;
+  $("runBatch").disabled = true;
+  $("batchStatus").textContent = `Step 1 · OCR läuft (${batchFiles.length} parallel, max 4)…`;
+
+  // Mark items as running
+  const items = $("batchList").querySelectorAll(".batch-item");
+  items.forEach((el, i) => el.querySelector(".status").textContent = "OCR läuft…");
+
+  const fd = new FormData();
+  batchFiles.forEach(f => fd.append("files", f));
+
+  let batchResp;
+  try {
+    const r = await fetch("/api/ocr-batch", { method: "POST", body: fd });
+    batchResp = await r.json();
+    if (!r.ok) throw new Error(batchResp.error || "batch OCR failed");
+  } catch (e) {
+    $("batchStatus").innerHTML = `<span class="err">${e.message}</span>`;
+    $("runBatch").disabled = false;
+    return;
+  }
+
+  batchOcrResults = batchResp.results;
+  items.forEach((el, i) => {
+    const r = batchResp.results[i];
+    if (r.error) {
+      el.classList.add("err");
+      el.querySelector(".status").textContent = `FEHLER: ${r.error}`;
+    } else {
+      el.classList.add("ok");
+      el.querySelector(".status").textContent = `${r.chars} Zeichen · ${r.pages} Seite(n) · ${r.ms}ms`;
+    }
+  });
+
+  const okCount = batchResp.results.filter(r => !r.error).length;
+  $("batchStatus").innerHTML = `
+    <span>✅ ${okCount}/${batchResp.count} OCR fertig · ${batchResp.total_ms}ms</span>
+    <span>Step 2 · AI induziert kanonisches Schema…</span>
+  `;
+
+  // Step 2: induce
+  try {
+    const r = await fetch("/api/schema/induce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: $("batchTopic").value.trim(),
+        ocrResults: batchOcrResults.filter(x => !x.error),
+        model: $("batchModel").value,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "induction failed");
+    inducedSchema = j;
+    renderInduced(j, okCount);
+    $("runInducedAll").disabled = false;
+    $("batchStatus").innerHTML = `
+      <span>✅ ${okCount}/${batchResp.count} OCR</span>
+      <span>✅ Schema induziert (${j.ms}ms, ${j.model})</span>
+    `;
+  } catch (e) {
+    $("batchStatus").innerHTML = `<span class="err">Induction: ${e.message}</span>`;
+  } finally {
+    $("runBatch").disabled = false;
+  }
+});
+
+function renderInduced(j, nDocs) {
+  $("inducedMeta").innerHTML = `
+    <span>🏷️ ${j.title}</span>
+    <span>📋 ${j.doc_type || "sonstiges"}</span>
+    <span>📦 ${j.anzahl_dokumente ?? nDocs} Belege</span>
+    <span>⏱ ${j.ms}ms</span>
+    <span>${j.kurz || ""}</span>
+  `;
+
+  // Stats table
+  const total = j.anzahl_dokumente || nDocs;
+  const rows = (j.felder_statistik || []).map(f => {
+    const pct = Math.round((f.seen_in / f.total) * 100);
+    const req = f.required ? '<span class="req-pill req">required</span>' : '<span class="req-pill opt">optional</span>';
+    const beispiele = (f.beispiel_werte || []).slice(0, 2).map(v => `<code style="font-size:11px;color:#8a93a0">${v}</code>`).join(" ");
+    return `<tr>
+      <td>${f.feld}</td>
+      <td>${f.typ || "-"}</td>
+      <td class="num">${f.seen_in}/${f.total}</td>
+      <td><span class="bar"><div style="width:${pct}%"></div></span> <span style="color:#8a93a0;font-size:11px">${pct}%</span></td>
+      <td>${req}</td>
+      <td>${beispiele}</td>
+    </tr>`;
+  }).join("");
+  $("inducedStats").innerHTML = `
+    <table class="stats">
+      <thead><tr><th>Feld</th><th>Typ</th><th>Deckung</th><th></th><th>Status</th><th>Beispiele</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
+  $("inducedPydantic").textContent = j.pydantic_code || "(leer)";
+  $("inducedJson").textContent = JSON.stringify(j.json_schema, null, 2);
+}
+
+// Batch tabs
+document.querySelectorAll("#mode-batch .tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#mode-batch .tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    const which = tab.dataset.btab;
+    $("inducedStats").style.display    = which === "stats" ? "block" : "none";
+    $("inducedPydantic").style.display = which === "pydantic" ? "block" : "none";
+    $("inducedJson").style.display     = which === "json" ? "block" : "none";
+  });
+});
+
+$("copyInduced").addEventListener("click", () => {
+  const active = document.querySelector("#mode-batch .tab.active").dataset.btab;
+  const txt = active === "pydantic" ? $("inducedPydantic").textContent
+            : active === "json"     ? $("inducedJson").textContent
+            : $("inducedStats").innerText;
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = $("copyInduced"); const o = btn.textContent;
+    btn.textContent = "✓ copied"; setTimeout(() => btn.textContent = o, 1200);
+  });
+});
+
+// Re-run all uploaded docs with the induced schema
+$("runInducedAll").addEventListener("click", async () => {
+  if (!inducedSchema) return;
+  $("runInducedAll").disabled = true;
+  const valid = batchOcrResults.filter(r => !r.error && r.stored);
+  $("extractAllStatus").textContent = `Mistral OCR mit Canonical Schema auf ${valid.length} Dokumenten…`;
+  const out = [];
+  for (let i = 0; i < valid.length; i++) {
+    const doc = valid[i];
+    $("extractAllStatus").textContent = `${i+1}/${valid.length} · ${doc.name}`;
+    try {
+      const r = await fetch("/api/ocr-rerun", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storedFilename: doc.stored,
+          originalName: doc.name,
+          schema: inducedSchema.json_schema,
+          schemaName: inducedSchema.title,
+        }),
+      });
+      const j = await r.json();
+      out.push({ file: doc.name, annotation: j?.ocr?.annotation ?? null, error: j?.error });
+    } catch (e) {
+      out.push({ file: doc.name, error: e.message });
+    }
+    $("extractAllResult").textContent = JSON.stringify(out, null, 2);
+  }
+  $("extractAllStatus").textContent = `✅ ${out.length} Belege strukturiert extrahiert`;
+  $("runInducedAll").disabled = false;
+});
+</script>
+</body>
+</html>

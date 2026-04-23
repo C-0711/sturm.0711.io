@@ -1,0 +1,18 @@
+node_modules/
+*.log
+.env
+.env.*
+!.env.example
+
+# Run-Artefakte (sensible Case-Daten)
+runs/
+uploads/
+
+# Legacy-MVP hat eigenen Lifecycle
+legacy/*/node_modules/
+legacy/*/uploads/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/

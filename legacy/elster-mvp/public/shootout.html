@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapper-Shootout · 5 Modelle parallel</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #0f1115; color: #e3e6eb; line-height: 1.5;
+  }
+  .topbar {
+    padding: 14px 20px; border-bottom: 1px solid #262a33;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  .topbar a { color: #9bb8ff; font-size: 12px; text-decoration: none; }
+  .topbar select, .topbar button {
+    background: #262a33; color: #e3e6eb; border: 1px solid #3a4050; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; font-family: inherit; cursor: pointer;
+  }
+  .topbar button.primary { background: #3156ff; border-color: #3156ff; color: #fff; font-weight: 500; }
+  .topbar button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .topbar .muted { color: #8a93a0; font-size: 12px; }
+  .topbar .state {
+    margin-left: auto; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    background: #262a33; color: #8a93a0; border: 1px solid #3a4050;
+  }
+  .topbar .state.running { background: #3a2e1a; color: #e0b060; border-color: #e0b06055; }
+  .topbar .state.done { background: #1a3a28; color: #7dd39c; border-color: #7dd39c55; }
+  .topbar .state.error { background: #3a1a1e; color: #ff8089; border-color: #ff808955; }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(5, minmax(320px, 1fr));
+    gap: 12px; padding: 16px;
+  }
+  .col {
+    background: #181b22; border: 1px solid #262a33; border-radius: 8px;
+    padding: 12px 14px; display: flex; flex-direction: column;
+  }
+  .col.running { border-color: #e0b060; box-shadow: 0 0 0 1px #e0b06033; }
+  .col.done { border-color: #7dd39c; }
+  .col.error { border-color: #ff8089; }
+  .col-head { margin-bottom: 8px; }
+  .col-head .label { font-size: 13px; font-weight: 600; color: #e3e6eb; }
+  .col-head .provider { font-size: 10px; color: #6a7280; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .col-head .id { font-size: 10px; color: #8a93a0; font-family: ui-monospace, Menlo, monospace; margin-top: 2px; word-break: break-all; }
+
+  .stat-row { display: flex; gap: 10px; font-size: 11px; margin-top: 8px; flex-wrap: wrap; }
+  .stat { background: #0b0d12; padding: 5px 9px; border-radius: 4px; }
+  .stat strong { color: #e3e6eb; display: block; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .stat span { color: #8a93a0; font-size: 10px; }
+  .stat.good strong { color: #7dd39c; }
+  .stat.bad strong { color: #ff8089; }
+  .stat.warn strong { color: #e0b060; }
+
+  .mappings-list {
+    margin-top: 10px; background: #0b0d12; border: 1px solid #262a33; border-radius: 5px;
+    padding: 6px 8px; max-height: 340px; overflow-y: auto; font-size: 11px;
+    font-family: ui-monospace, Menlo, monospace;
+  }
+  .mapping { padding: 3px 0; border-bottom: 1px solid #1a1e26; }
+  .mapping:last-child { border-bottom: none; }
+  .mapping .code { color: #9bb8ff; }
+  .mapping .konf { color: #6a7280; font-size: 10px; margin-left: 4px; }
+  .mapping.regex-fail .code { color: #ff8089; }
+  .mapping .pfad { color: #8a93a0; font-size: 10px; display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .err-box { background: #2a1a1e; color: #ff8089; padding: 8px; border-radius: 4px; font-size: 11px; margin-top: 6px; font-family: ui-monospace, Menlo, monospace; }
+
+  .consensus {
+    background: #181b22; border: 1px solid #262a33; border-radius: 8px;
+    padding: 14px 18px; margin: 0 16px 20px; font-size: 12px;
+  }
+  .consensus h3 { margin: 0 0 10px; font-size: 13px; color: #9bb8ff; }
+  .consensus table { width: 100%; border-collapse: collapse; font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+  .consensus th { text-align: left; padding: 4px 8px; background: #0b0d12; color: #8a93a0; font-weight: 500; }
+  .consensus td { padding: 4px 8px; border-bottom: 1px solid #1a1e26; vertical-align: top; }
+  .consensus .vote { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; margin-right: 3px; background: #16223d; color: #9bb8ff; }
+  .consensus .einig { color: #7dd39c; }
+  .consensus .uneinig { color: #e0b060; }
+
+  .log {
+    position: fixed; bottom: 0; left: 0; right: 0; max-height: 140px; overflow-y: auto;
+    background: #0b0d12ee; border-top: 1px solid #262a33; padding: 6px 16px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; backdrop-filter: blur(10px);
+  }
+  .log .t { color: #6a7280; }
+  .log .e { color: #9bb8ff; }
+  .log .d { color: #c7cbd1; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🥊 Mapper-Shootout</h1>
+  <a href="/">← Playground</a>
+  <a href="/pipeline.html">🔀 Pipeline</a>
+  <span class="muted">|</span>
+  <label class="muted">Datei:
+    <select id="fileSel" style="margin-left:6px"></select>
+  </label>
+  <input type="file" id="fileIn" accept=".pdf,.jpg,.jpeg,.png" style="font-size:12px">
+  <button id="startBtn" class="primary" disabled>▶ Shootout starten</button>
+  <div id="state" class="state">bereit</div>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<div id="consensus" class="consensus" style="display:none"></div>
+
+<div id="log" class="log"></div>
+
+<script>
+// Error-Safety: Script-Fehler sichtbar in der Seite anzeigen statt auf Konsole.
+window.addEventListener("error", (e) => {
+  const d = document.getElementById("errorbar") || (() => {
+    const x = document.createElement("div");
+    x.id = "errorbar";
+    x.style.cssText = "position:fixed;top:0;left:0;right:0;background:#3a1a1e;color:#ff8089;padding:10px 16px;font:12px ui-monospace,Menlo,monospace;z-index:9999;border-bottom:1px solid #ff8089";
+    document.body.appendChild(x);
+    return x;
+  })();
+  d.textContent = `JS-Error: ${e.message}  @  ${e.filename}:${e.lineno}:${e.colno}`;
+});
+
+const MODELLE = [
+  { key: "haiku",         label: "Claude Haiku 4.5",  provider: "Anthropic", id: "claude-haiku-4-5-20251001" },
+  { key: "sonnet",        label: "Claude Sonnet 4.6", provider: "Anthropic", id: "claude-sonnet-4-6" },
+  { key: "opus",          label: "Claude Opus 4.7",   provider: "Anthropic", id: "claude-opus-4-7" },
+  { key: "mistral_small", label: "Mistral Small",     provider: "Mistral",   id: "mistral-small-latest" },
+  { key: "mistral_large", label: "Mistral Large",     provider: "Mistral",   id: "mistral-large-latest" },
+];
+
+const $ = id => document.getElementById(id);
+const grid = $("grid"), consensus = $("consensus"), stateBadge = $("state"), log = $("log"), startBtn = $("startBtn"), fileSel = $("fileSel"), fileIn = $("fileIn");
+
+// Spalten initialisieren
+function renderInitial() {
+  grid.innerHTML = MODELLE.map(m => `
+    <div class="col" id="col-${m.key}" data-state="idle">
+      <div class="col-head">
+        <div class="label">${m.label}</div>
+        <div class="provider">${m.provider}</div>
+        <div class="id">${m.id}</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><strong id="${m.key}-ms">—</strong><span>ms</span></div>
+        <div class="stat"><strong id="${m.key}-gueltig">—</strong><span>valide E-Codes</span></div>
+        <div class="stat"><strong id="${m.key}-rpass">—</strong><span>BMF-Regex ok</span></div>
+        <div class="stat"><strong id="${m.key}-rfail">—</strong><span>Regex fail</span></div>
+      </div>
+      <div class="mappings-list" id="${m.key}-list"><em style="color:#6a7280">wartet...</em></div>
+    </div>
+  `).join("");
+}
+renderInitial();
+
+// State-Helper
+function setColState(key, state) {
+  const col = $(`col-${key}`);
+  if (!col) return;
+  col.classList.remove("running", "done", "error");
+  if (state) col.classList.add(state);
+  col.dataset.state = state;
+}
+function setStat(key, field, value, cls = "") {
+  const el = $(`${key}-${field}`);
+  if (!el) return;
+  el.textContent = value;
+  el.parentElement.className = "stat " + cls;
+}
+function setBadge(text, cls) {
+  stateBadge.textContent = text;
+  stateBadge.className = "state " + (cls || "");
+}
+function appendLog(evt, data) {
+  const t = new Date().toLocaleTimeString();
+  const line = document.createElement("div");
+  line.innerHTML = `<span class="t">${t}</span> <span class="e">${evt}</span> <span class="d">${JSON.stringify(data).slice(0, 250)}</span>`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+// Uploads laden
+async function ladeUploads() {
+  try {
+    const r = await fetch("/api/uploads"); const j = await r.json();
+    const files = (j.files || []).slice(0, 20);
+    fileSel.innerHTML = `<option value="">— wählen —</option>` + files.map(f => `<option value="${f.name}">${f.name} (${(f.size/1024/1024).toFixed(1)} MB)</option>`).join("");
+  } catch {}
+}
+ladeUploads();
+
+fileSel.addEventListener("change", () => { startBtn.disabled = !fileSel.value; });
+
+// Upload
+fileIn.addEventListener("change", async () => {
+  const f = fileIn.files?.[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  setBadge("lade hoch…", "running");
+  try {
+    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const j = await r.json();
+    if (j.stored) {
+      await ladeUploads();
+      fileSel.value = j.stored;
+      startBtn.disabled = false;
+      setBadge("bereit", "");
+    }
+  } catch (e) { setBadge("upload err: " + e.message, "error"); }
+});
+
+// Shootout starten
+startBtn.addEventListener("click", async () => {
+  const stored = fileSel.value;
+  if (!stored) return;
+  renderInitial();
+  consensus.style.display = "none";
+  startBtn.disabled = true;
+  setBadge("läuft…", "running");
+  log.innerHTML = "";
+  try {
+    const resp = await fetch("/api/elster/mapper-shootout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storedFilename: stored }),
+    });
+    if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
+    const reader = resp.body.getReader(); const dec = new TextDecoder();
+    let buf = "", fertig = false;
+    while (!fertig) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n"); buf = frames.pop() || "";
+      for (const f of frames) {
+        let event = "message", data = "";
+        for (const line of f.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (!data) continue;
+        let d; try { d = JSON.parse(data); } catch { continue; }
+        handle(event, d);
+        if (event === "final" || event === "error") { fertig = true; break; }
+      }
+    }
+    try { await reader.cancel(); } catch {}
+  } catch (e) {
+    setBadge("err: " + e.message, "error");
+    appendLog("error", { message: e.message });
+  } finally {
+    startBtn.disabled = false;
+  }
+});
+
+function handle(event, data) {
+  appendLog(event, data);
+  switch (event) {
+    case "start":
+      break;
+    case "mistral_start":
+      setBadge("Mistral extrahiert…", "running");
+      break;
+    case "mistral_done":
+      setBadge(`Mistral ok · ${data.ms} ms · ${((data.annotation_bytes||0)/1024).toFixed(1)} KB JSON · Mapper starten…`, "running");
+      break;
+    case "shootout_context_ready":
+      break;
+    case "mapper_start":
+      setColState(data.key, "running");
+      break;
+    case "mapper_done":
+      renderMapper(data);
+      break;
+    case "final":
+      setBadge(`fertig · Mistral ${data.mistral_ms} ms + Shootout ${data.shootout_ms} ms = ${data.gesamt_ms} ms`, "done");
+      renderKonsens(data.konsens);
+      break;
+    case "error":
+      setBadge("fehler: " + (data.message || ""), "error");
+      break;
+  }
+}
+
+function renderMapper(d) {
+  setColState(d.key, d.ok ? "done" : "error");
+  setStat(d.key, "ms", d.ms || "—");
+  if (d.error) {
+    $(`${d.key}-list`).innerHTML = `<div class="err-box">${d.error}</div>`;
+    return;
+  }
+  if (!d.ok) {
+    $(`${d.key}-list`).innerHTML = `<div class="err-box">Parse fehlgeschlagen${d.stop_reason ? ` · stop_reason=${d.stop_reason}` : ""}${d.raw_preview ? `<br><br>${d.raw_preview}` : ""}</div>`;
+    return;
+  }
+  const s = d.stats || {};
+  setStat(d.key, "gueltig", s.gueltig || 0, s.gueltig > 20 ? "good" : s.gueltig > 5 ? "warn" : "bad");
+  setStat(d.key, "rpass", s.regex_pass || 0, "good");
+  setStat(d.key, "rfail", s.regex_fail || 0, (s.regex_fail || 0) > 0 ? "warn" : "");
+  const mps = (d.mappings_gueltig || []).slice(0, 80);
+  $(`${d.key}-list`).innerHTML = mps.map(m => {
+    const failed = m.bmf_regex_ok === false;
+    return `<div class="mapping ${failed ? "regex-fail" : ""}">
+      <span class="code">${m.e_code}</span>
+      <span style="color:#c7cbd1">= ${String(m.dokument_wert ?? "").slice(0, 30)}</span>
+      ${m.person ? `<span class="konf">· ${m.person}</span>` : ""}
+      <span class="konf">· ${(m.konfidenz || 0).toFixed(2)}</span>
+      <span class="pfad">${m.dokument_pfad || ""}</span>
+    </div>`;
+  }).join("") + (d.mappings_gueltig.length > 80 ? `<div style="color:#6a7280;font-size:10px;margin-top:4px;text-align:center">+${d.mappings_gueltig.length - 80} weitere</div>` : "");
+}
+
+function renderKonsens(konsens) {
+  if (!konsens?.length) return;
+  const rows = konsens.slice(0, 60).map(k => `
+    <tr>
+      <td><span class="code">${k.e_code}</span></td>
+      <td>${k.anlage}</td>
+      <td>${k.n_stimmen}/${MODELLE.length}</td>
+      <td>${k.stimmen.map(s => `<span class="vote">${s.model}</span>`).join("")}</td>
+      <td class="${k.werte_einig ? "einig" : "uneinig"}">${k.werte.map(w => String(w).slice(0, 25)).join(" · ")}</td>
+    </tr>
+  `).join("");
+  consensus.style.display = "block";
+  consensus.innerHTML = `
+    <h3>🤝 Konsens-Analyse (${konsens.length} eindeutige E-Codes)</h3>
+    <table>
+      <thead><tr><th>E-Code</th><th>Anlage</th><th>Stimmen</th><th>Modelle</th><th>Werte</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+</script>
+</body>
+</html>

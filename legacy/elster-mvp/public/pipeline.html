@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELSTER-Pipeline — Live</title>
+<link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.10.2/dist/style.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body, #root { margin: 0; padding: 0; height: 100%; width: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #0f1115; color: #e3e6eb;
+  }
+  .topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    padding: 12px 20px; background: #181b22cc; backdrop-filter: blur(12px);
+    border-bottom: 1px solid #262a33;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .topbar .muted { color: #8a93a0; font-size: 12px; }
+  .topbar select, .topbar button, .topbar input[type=file]::file-selector-button {
+    background: #262a33; color: #e3e6eb; border: 1px solid #3a4050; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; font-family: inherit; cursor: pointer;
+  }
+  .topbar button.primary { background: #3156ff; border-color: #3156ff; color: #fff; font-weight: 500; }
+  .topbar button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .topbar a { color: #9bb8ff; font-size: 12px; text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
+  .anlagen-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    background: #262a33; border: 1px solid #3a4050; border-radius: 12px;
+    padding: 3px 10px; font-size: 11px; cursor: pointer; user-select: none;
+  }
+  .chip.active { background: #16223d; border-color: #3156ff; color: #9bb8ff; }
+
+  .react-flow { background: #0f1115 !important; }
+  .react-flow__controls button { background: #181b22; border-color: #262a33; color: #e3e6eb; }
+  .react-flow__controls button:hover { background: #262a33; }
+  .react-flow__minimap { background: #181b22 !important; border: 1px solid #262a33 !important; }
+  .react-flow__attribution { background: #181b22cc !important; }
+  .react-flow__attribution a { color: #8a93a0 !important; }
+
+  /* Custom node styles */
+  .node {
+    background: #181b22; border: 1px solid #262a33; border-radius: 10px;
+    padding: 10px 14px; min-width: 180px; font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .node.running { border-color: #e0b060; box-shadow: 0 0 0 2px #e0b06040, 0 2px 12px rgba(224,176,96,0.25); animation: pulse 1.4s ease-in-out infinite; }
+  .node.done { border-color: #7dd39c; }
+  .node.error { border-color: #ff8089; }
+  .node.idle { opacity: 0.6; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 2px #e0b06040, 0 2px 12px rgba(224,176,96,0.25); }
+    50%      { box-shadow: 0 0 0 4px #e0b06020, 0 2px 18px rgba(224,176,96,0.4); }
+  }
+  .node-header {
+    display: flex; align-items: center; gap: 8px; font-weight: 600;
+    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #8a93a0;
+    margin-bottom: 4px;
+  }
+  .node-header .dot { width: 7px; height: 7px; border-radius: 50%; background: #3a4050; }
+  .node.running .dot { background: #e0b060; animation: blink 0.8s ease-in-out infinite; }
+  .node.done .dot { background: #7dd39c; }
+  .node.error .dot { background: #ff8089; }
+  @keyframes blink { 50% { opacity: 0.4; } }
+  .node-title { font-size: 13px; font-weight: 600; color: #e3e6eb; }
+  .node-body { font-size: 11px; color: #c7cbd1; margin-top: 4px; line-height: 1.5; }
+  .node-body .metric { display: flex; justify-content: space-between; gap: 8px; }
+  .node-body .metric .k { color: #8a93a0; }
+  .node-body .metric .v { font-variant-numeric: tabular-nums; }
+  .score-bar { height: 4px; background: #262a33; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .score-bar .fill { height: 100%; background: #7dd39c; transition: width 0.3s; }
+  .score-bar .fill.low { background: #ff8089; }
+  .score-bar .fill.mid { background: #e0b060; }
+  .code-badge {
+    display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+    background: #16223d; color: #9bb8ff; padding: 1px 6px; border-radius: 3px; margin-right: 4px;
+  }
+
+  .logpanel {
+    position: absolute; bottom: 0; left: 0; right: 0; max-height: 180px; overflow-y: auto;
+    background: #0b0d12ee; border-top: 1px solid #262a33; padding: 8px 16px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5;
+    backdrop-filter: blur(12px);
+  }
+  .logpanel .log-evt { color: #9bb8ff; }
+  .logpanel .log-time { color: #6a7280; }
+  .logpanel .log-data { color: #c7cbd1; }
+
+  /* Upload-Drop */
+  .upload-drop {
+    border: 2px dashed #3a4050; border-radius: 8px; padding: 8px 16px;
+    cursor: pointer; font-size: 12px; color: #8a93a0; transition: all 0.15s;
+    background: #181b22;
+  }
+  .upload-drop:hover, .upload-drop.over { border-color: #6a8cff; color: #e3e6eb; background: #1d2230; }
+  .upload-drop.uploaded { border-color: #7dd39c; color: #7dd39c; border-style: solid; }
+  .upload-drop input[type=file] { display: none; }
+
+  /* Drawer */
+  .drawer-overlay { position: fixed; inset: 0; z-index: 100; background: transparent; pointer-events: none; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 90vw; z-index: 101;
+    background: #141720; border-left: 1px solid #262a33; overflow-y: auto;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.5); transform: translateX(100%); transition: transform 0.2s;
+    pointer-events: auto;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head { position: sticky; top: 0; background: #141720; padding: 16px 20px; border-bottom: 1px solid #262a33; display: flex; align-items: center; gap: 12px; }
+  .drawer-head h2 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; }
+  .drawer-head button { background: transparent; color: #8a93a0; border: 1px solid #3a4050; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  .drawer-head button:hover { color: #e3e6eb; border-color: #6a7280; }
+  .drawer-body { padding: 16px 20px; }
+  .drawer-section { margin-bottom: 20px; }
+  .drawer-section h3 { margin: 0 0 8px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8a93a0; font-weight: 600; }
+  .drawer-section pre {
+    background: #0b0d12; border: 1px solid #262a33; border-radius: 6px; padding: 10px 12px;
+    font-size: 11px; line-height: 1.55; font-family: ui-monospace, Menlo, monospace;
+    color: #c7cbd1; max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    margin: 0;
+  }
+  .drawer-section .empty { color: #6a7280; font-style: italic; font-size: 12px; }
+  .hinweis-item {
+    background: #0b0d12; border: 1px solid #262a33; border-left: 2px solid #3156ff;
+    border-radius: 4px; padding: 8px 12px; margin-bottom: 6px; font-size: 12px;
+  }
+  .hinweis-item .code { display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: 10px; background: #16223d; color: #9bb8ff; padding: 1px 6px; border-radius: 3px; margin-right: 6px; }
+  .hinweis-item .pfad { color: #7aa0ff; font-weight: 600; }
+  .hinweis-item .problem { color: #8a93a0; font-size: 11px; margin-top: 3px; }
+  .hinweis-item .anweisung { color: #c7cbd1; margin-top: 4px; }
+
+  /* Reconciliation-Report */
+  .rec-section { margin-bottom: 14px; }
+  .rec-header { font-size: 12px; font-weight: 600; color: #9bb8ff; margin-bottom: 6px; letter-spacing: 0.03em; }
+  .rec-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+  .rec-table th { text-align: left; padding: 4px 8px; background: #0b0d12; color: #8a93a0; font-weight: 500; border-bottom: 1px solid #262a33; }
+  .rec-table td { padding: 4px 8px; border-bottom: 1px solid #1a1e26; vertical-align: top; }
+  .rec-table tr:hover td { background: #161a22; }
+  .rec-code { font-family: ui-monospace, Menlo, monospace; font-size: 10px; background: #16223d; color: #9bb8ff; padding: 1px 5px; border-radius: 3px; }
+  .rec-quelle { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+  .rec-quelle.beide { background: #1a3a28; color: #7dd39c; }
+  .rec-quelle.mistral { background: #2d2a1a; color: #d4b97d; }
+  .rec-quelle.vision { background: #1a2d3a; color: #7db9d4; }
+  .rec-quelle.opus_konflikt { background: #2d1a3a; color: #c79bff; }
+  .rec-wert { color: #e3e6eb; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rec-grund { color: #8a93a0; font-style: italic; }
+  .rec-stats { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; }
+  .rec-stat { background: #0b0d12; padding: 8px 12px; border-radius: 6px; border: 1px solid #262a33; }
+  .rec-stat strong { color: #9bb8ff; font-size: 18px; display: block; }
+  .rec-stat span { color: #8a93a0; }
+
+  .node { cursor: pointer; }
+  .node:hover { border-color: #6a8cff; }
+
+  /* Issue-Drawer (links) */
+  .issue-drawer {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 460px; max-width: 85vw; z-index: 101;
+    background: #141720; border-right: 1px solid #262a33; overflow-y: auto;
+    box-shadow: 8px 0 24px rgba(0,0,0,0.5); transform: translateX(-100%); transition: transform 0.2s;
+  }
+  .issue-drawer.open { transform: translateX(0); }
+  .issue-drawer .drawer-head { position: sticky; top: 0; background: #141720; padding: 14px 18px; border-bottom: 1px solid #262a33; display: flex; align-items: center; gap: 10px; }
+  .issue-drawer .drawer-head h2 { margin: 0; font-size: 14px; font-weight: 600; flex: 1; }
+  .issue-count { font-size: 11px; color: #8a93a0; }
+
+  .issue-filters { display: flex; gap: 6px; padding: 10px 18px; border-bottom: 1px solid #262a33; flex-wrap: wrap; }
+  .issue-filter { background: transparent; border: 1px solid #3a4050; color: #8a93a0; border-radius: 4px; padding: 3px 9px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  .issue-filter.active { background: #16223d; border-color: #3156ff; color: #9bb8ff; }
+
+  .issue-add { padding: 10px 18px; border-bottom: 1px solid #262a33; display: flex; gap: 6px; }
+  .issue-add input {
+    flex: 1; background: #0b0d12; border: 1px solid #262a33; border-radius: 5px;
+    color: #e3e6eb; padding: 6px 10px; font-size: 12px; font-family: inherit;
+  }
+  .issue-add input:focus { outline: none; border-color: #3156ff; }
+  .issue-add button { background: #3156ff; color: #fff; border: none; border-radius: 5px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
+
+  .issue-list { padding: 10px 12px 40px; }
+  .issue-item {
+    display: flex; gap: 8px; padding: 8px 10px; border-radius: 5px;
+    border: 1px solid transparent; margin-bottom: 4px; font-size: 12px;
+  }
+  .issue-item:hover { background: #1a1e26; border-color: #262a33; }
+  .issue-item.done .issue-title { color: #6a7280; text-decoration: line-through; }
+  .issue-item.doing { border-color: #e0b06055; }
+  .issue-item.wontfix .issue-title { color: #6a7280; font-style: italic; }
+  .issue-status {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 4px; border: 1px solid #3a4050;
+    background: transparent; color: #8a93a0; cursor: pointer; font-size: 13px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0; font-family: inherit;
+  }
+  .issue-status:hover { border-color: #6a8cff; color: #e3e6eb; }
+  .issue-status.doing { background: #3a2e1a; color: #e0b060; border-color: #e0b060; }
+  .issue-status.done { background: #1a3a28; color: #7dd39c; border-color: #7dd39c; }
+  .issue-status.wontfix { background: #2a2a2a; color: #6a7280; border-color: #6a7280; }
+
+  .issue-body { flex: 1; min-width: 0; }
+  .issue-title { color: #e3e6eb; word-wrap: break-word; cursor: text; }
+  .issue-meta { font-size: 10px; color: #6a7280; margin-top: 3px; }
+  .issue-del { background: transparent; border: none; color: #6a7280; cursor: pointer; font-size: 14px; padding: 0 4px; font-family: inherit; }
+  .issue-del:hover { color: #ff8089; }
+
+  .btn-issues {
+    background: #262a33; color: #e3e6eb; border: 1px solid #3a4050; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-issues:hover { background: #3a4050; }
+  .btn-issues .badge {
+    background: #3156ff; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "https://esm.sh/react@19.2.0";
+import { createRoot } from "https://esm.sh/react-dom@19.2.0/client";
+import {
+  ReactFlow, Controls, MiniMap, Background, Handle, Position,
+  applyNodeChanges, applyEdgeChanges,
+} from "https://esm.sh/@xyflow/react@12.10.2?deps=react@19.2.0,react-dom@19.2.0";
+
+const h = React.createElement;
+
+// ───────── Pipeline-Definition (Knoten + Kanten) ─────────
+const INITIAL_NODES = [
+  // ── Workflow 1: Pipeline (unveraendert — identisch zu "Anfang des Chats") ──
+  mkNode("upload",        "Upload",                { x: 20,   y: 260 }, "idle", "Datei-Ablage"),
+  mkNode("mistral_raw",   "Mistral OCR · permissiv", { x: 260, y: 260 }, "idle", "liefert Markdown + freie JSON in einem Call"),
+  mkNode("regel_engine",  "Regel-Engine",          { x: 540,  y: 260 }, "idle", "deterministisches Label-Matching"),
+  mkNode("schema",            "Schema-Bau",          { x: 820,  y: 260 }, "idle", "aus Regel-Engine-Eindeutigkeiten"),
+  mkNode("mistral_kuratiert", "Mistral kuratiert",   { x: 1060, y: 260 }, "idle", "ein Pass mit tight Schema"),
+  mkNode("baseline",          "Baseline-Merge",      { x: 1300, y: 260 }, "idle", "Mistral + Regel-Engine + Opus"),
+  mkNode("bewertung",         "Bewertung",           { x: 1540, y: 260 }, "idle", "BMF · Dichte · Kons · Opus"),
+  mkNode("cross_check",       "Cross-Check",         { x: 1780, y: 260 }, "idle", "Anlagen-Abgleich"),
+  mkNode("final",             "Ergebnis",            { x: 2020, y: 260 }, "idle", "Final-Annotation"),
+  // ── Workflow 2: Anlagen-Detector (teilt nur den Upload-Knoten mit Pipeline) ─
+  mkNode("d_mistral",  "Mistral OCR · Enum",    { x: 260,  y: 560 }, "idle", "Minimal-Schema · enum 35 Anlagen-Codes"),
+  mkNode("d_filter",   "Katalog-Filter",        { x: 540,  y: 560 }, "idle", "validiert vs elster_schemas.json"),
+  mkNode("d_persist",  "Persistenz",            { x: 820,  y: 560 }, "idle", "schreibt uploads/<file>.anlagen.json"),
+  mkNode("d_anlagen",  "Erkannte Anlagen",      { x: 1060, y: 560 }, "idle", "Ergebnis · unabhaengig von Pipeline"),
+];
+
+function mkNode(id, title, pos, state, subtitle) {
+  return { id, type: "custom", position: pos, data: { title, state, subtitle, metrics: {}, io: { input: null, output: null } } };
+}
+
+const INITIAL_EDGES = [
+  // Workflow 1: Pipeline
+  e("upload", "mistral_raw"),
+  e("mistral_raw", "regel_engine"),
+  e("regel_engine", "schema"),
+  e("schema", "mistral_kuratiert"),
+  e("mistral_kuratiert", "baseline"),
+  e("baseline", "bewertung"),
+  e("bewertung", "cross_check"),
+  e("cross_check", "final"),
+  // Workflow 2: Detector — faechert sich ebenfalls vom gemeinsamen Upload-Knoten auf
+  e("upload",    "d_mistral"),
+  e("d_mistral", "d_filter"),
+  e("d_filter",  "d_persist"),
+  e("d_persist", "d_anlagen"),
+];
+
+function e(src, dst, label = "") {
+  return {
+    id: `${src}-${dst}`, source: src, target: dst, label,
+    type: "smoothstep",
+    style: { stroke: "#3a4050", strokeWidth: 1.5 },
+    labelStyle: { fill: "#8a93a0", fontSize: 10 },
+    labelBgStyle: { fill: "#181b22" },
+  };
+}
+
+// ───────── Custom Node Renderer ─────────
+function CustomNode({ data }) {
+  const cls = `node ${data.state || "idle"}`;
+  const metrics = data.metrics || {};
+  return h("div", { className: cls },
+    h(Handle, { type: "target", position: Position.Left, style: { background: "#3a4050" } }),
+    h("div", { className: "node-header" },
+      h("span", { className: "dot" }),
+      h("span", null, data.state === "running" ? "läuft" : data.state === "done" ? "fertig" : data.state === "error" ? "fehler" : "wartet"),
+      data.ms ? h("span", { style: { marginLeft: "auto", color: "#6a7280" } }, `${data.ms} ms`) : null,
+    ),
+    h("div", { className: "node-title" }, data.title),
+    data.subtitle ? h("div", { className: "node-body", style: { color: "#8a93a0", marginTop: 2 } }, data.subtitle) : null,
+    metrics.bmf ? metricRow("BMF-Pflicht", `${metrics.bmf.belegt}/${metrics.bmf.gesamt}`, metrics.bmf.quote) : null,
+    metrics.dichte ? metricRow("Dichte", `${metrics.dichte.belegt}/${metrics.dichte.gesamt}`, metrics.dichte.score) : null,
+    metrics.konsistenz ? metricRow("Konsistenz", `${metrics.konsistenz.bestanden}/${metrics.konsistenz.gesamt}`, metrics.konsistenz.score) : null,
+    metrics.opus ? metricRow("Opus", metrics.opus.score?.toFixed(2) || "—", metrics.opus.score) : null,
+    metrics.gesamt != null ? metricRow("Gesamt", Number(metrics.gesamt).toFixed(2), metrics.gesamt) : null,
+    metrics.hinweise_count !== undefined && metrics.hinweise_count > 0
+      ? h("div", { className: "node-body", style: { marginTop: 4 } }, `${metrics.hinweise_count} Hinweise`)
+      : null,
+    metrics.schema_bytes ? metricRow("Schema", `${(metrics.schema_bytes/1024).toFixed(1)} KB`) : null,
+    metrics.annotation_bytes !== undefined ? metricRow("Annotation", `${(metrics.annotation_bytes/1024).toFixed(1)} KB`) : null,
+    metrics.leaf_count ? metricRow("Felder", metrics.leaf_count) : null,
+    metrics.elster_code_count ? metricRow("E-Codes", metrics.elster_code_count) : null,
+    h(Handle, { type: "source", position: Position.Right, style: { background: "#3a4050" } }),
+  );
+}
+function metricRow(k, v, score) {
+  const cls = score === undefined ? "" : score < 0.5 ? "low" : score < 0.85 ? "mid" : "";
+  return h("div", { className: "node-body", style: { marginTop: 3 } },
+    h("div", { className: "metric" },
+      h("span", { className: "k" }, k),
+      h("span", { className: "v" }, v),
+    ),
+    score !== undefined ? h("div", { className: "score-bar" },
+      h("div", { className: `fill ${cls}`, style: { width: `${Math.round(Math.max(0, Math.min(1, score)) * 100)}%` } })
+    ) : null,
+  );
+}
+
+const NODE_TYPES = { custom: CustomNode };
+
+// ───────── Issue-Liste ─────────
+// Initial gefüllt aus offenen Punkten der Pipeline-Entwicklung. LocalStorage überschreibt beim ersten Laden.
+const STATUS_REIHE = ["open", "doing", "done", "wontfix"];
+const STATUS_NEXT = { open: "doing", doing: "done", done: "open", wontfix: "open" };
+const STATUS_ICON = { open: "☐", doing: "◐", done: "✓", wontfix: "—" };
+const STATUS_LABEL = { open: "offen", doing: "in Arbeit", done: "erledigt", wontfix: "zurück" };
+
+function neueId() { return Math.random().toString(36).slice(2, 10); }
+const INITIAL_ISSUES = [
+  { id: neueId(), status: "open", titel: "Anlage-Aliase als Daten-Datei (VOR/Vorsorgeaufwand, SA/Sonderausgaben)", meta: "Daten-Ebene — Katalog kennt keine langen deutschen Namen", created: Date.now() },
+  { id: neueId(), status: "open", titel: "Vision mappt 'Kirchstraße' fälschlich als Abweichende Anschrift Person B", meta: "Regel-Engine — person-B-Vision-Pfad hat eigene Adresse, Dokument nicht", created: Date.now() },
+  { id: neueId(), status: "open", titel: "'Arbeitnehmerbeiträge zu Krankenversicherungen' matcht nicht auf BMF-drucktext", meta: "Regel-Engine — Fuzzy-Match zu kurz, VOR-Felder landen in verworfen", created: Date.now() },
+  { id: neueId(), status: "open", titel: "Person-B-KAP-Block: gleicher Code wie Person A → wird überschrieben", meta: "Baseline-Builder — ohne Array-Struktur pro Anlage-Vorkommen kollidiert E1904701", created: Date.now() },
+  { id: neueId(), status: "open", titel: "'Finanzamt <Name>' wird als Person-A-Name gematcht (E0100201)", meta: "Regel-Engine — BMF-beschreibung 'Name' trifft zu generisch", created: Date.now() },
+  { id: neueId(), status: "open", titel: "Cache-Save und Cross-Check-Edge im V3-Flow grau", meta: "UI — V3 hat keinen Cache-Save mehr, Knoten sollten aus Graph verschwinden", created: Date.now() },
+  { id: neueId(), status: "open", titel: "Log-Panel cut-off bei langen Event-Payloads (nur 200 chars)", meta: "UI — z.B. final-Event wird abgeschnitten", created: Date.now() },
+  { id: neueId(), status: "done", titel: "Bug 1: Anlage-Header-Switch auf ##-Subsection (KAP-INV-Verweis)", meta: "Behoben — nur noch `# `-Header", created: Date.now() },
+  { id: neueId(), status: "done", titel: "Bug 2: IBAN mit Leerzeichen falsch geparst", meta: "Behoben — IBAN-Regex explizit", created: Date.now() },
+  { id: neueId(), status: "done", titel: "Bug 3: 'laut Nr.' — Label frisst Wert", meta: "Behoben — Label-Extension + letzte Zahl als Wert", created: Date.now() },
+  { id: neueId(), status: "done", titel: "Bug 4: Personen-Kontext im Match-Key (KAP Person A vs B)", meta: "Behoben — keyFuerCode mit personen_ctx", created: Date.now() },
+  { id: neueId(), status: "done", titel: "Anlagen-Header-Map aus Katalog statt hartkodiert", meta: "Behoben — baueAnlagenHeaderMap()", created: Date.now() },
+];
+
+function IssueDrawer({ open, onClose, issues, setIssues, filter, setFilter }) {
+  const [neuText, setNeuText] = useState("");
+  const gefiltert = issues.filter(i => {
+    if (filter === "alle") return true;
+    if (filter === "offen") return i.status === "open" || i.status === "doing";
+    return i.status === filter;
+  });
+  const zaehler = {
+    alle: issues.length,
+    offen: issues.filter(i => i.status === "open" || i.status === "doing").length,
+    done: issues.filter(i => i.status === "done").length,
+    wontfix: issues.filter(i => i.status === "wontfix").length,
+  };
+  const hinzufuegen = () => {
+    const t = neuText.trim();
+    if (!t) return;
+    setIssues(xs => [{ id: neueId(), status: "open", titel: t, meta: "", created: Date.now() }, ...xs]);
+    setNeuText("");
+  };
+  const statusWechseln = (id) => {
+    setIssues(xs => xs.map(i => i.id === id ? { ...i, status: STATUS_NEXT[i.status] || "open" } : i));
+  };
+  const statusSetzen = (id, status) => {
+    setIssues(xs => xs.map(i => i.id === id ? { ...i, status } : i));
+  };
+  const titelSetzen = (id, titel) => {
+    setIssues(xs => xs.map(i => i.id === id ? { ...i, titel } : i));
+  };
+  const loeschen = (id) => {
+    setIssues(xs => xs.filter(i => i.id !== id));
+  };
+  return h("div", { className: `issue-drawer ${open ? "open" : ""}` },
+    h("div", { className: "drawer-head" },
+      h("h2", null, "📋 Pipeline-Issues"),
+      h("span", { className: "issue-count" }, `${zaehler.offen} offen · ${zaehler.done} erledigt`),
+      h("button", { onClick: onClose, style: { background: "transparent", color: "#8a93a0", border: "1px solid #3a4050", borderRadius: 5, padding: "3px 9px", cursor: "pointer", fontFamily: "inherit", fontSize: 12 } }, "✕"),
+    ),
+    h("div", { className: "issue-filters" },
+      ["offen", "alle", "done", "wontfix"].map(f =>
+        h("button", {
+          key: f, className: `issue-filter ${filter === f ? "active" : ""}`,
+          onClick: () => setFilter(f),
+        }, `${f === "offen" ? "Offen" : f === "alle" ? "Alle" : f === "done" ? "Erledigt" : "Zurückgestellt"} (${zaehler[f] || 0})`)
+      ),
+    ),
+    h("div", { className: "issue-add" },
+      h("input", {
+        type: "text", placeholder: "Neuen Issue beschreiben — Enter oder Klick",
+        value: neuText,
+        onChange: (e) => setNeuText(e.target.value),
+        onKeyDown: (e) => { if (e.key === "Enter") hinzufuegen(); },
+      }),
+      h("button", { onClick: hinzufuegen, disabled: !neuText.trim() }, "+"),
+    ),
+    h("div", { className: "issue-list" },
+      gefiltert.length === 0
+        ? h("div", { style: { color: "#6a7280", textAlign: "center", padding: "24px 0", fontSize: 12, fontStyle: "italic" } }, "— keine Issues in dieser Ansicht —")
+        : gefiltert.map(issue => h(IssueZeile, {
+            key: issue.id, issue,
+            onToggle: () => statusWechseln(issue.id),
+            onSetStatus: (s) => statusSetzen(issue.id, s),
+            onSetTitel: (t) => titelSetzen(issue.id, t),
+            onDelete: () => loeschen(issue.id),
+          })),
+    ),
+  );
+}
+
+function IssueZeile({ issue, onToggle, onSetStatus, onSetTitel, onDelete }) {
+  const [bearbeiten, setBearbeiten] = useState(false);
+  const [lokalTitel, setLokalTitel] = useState(issue.titel);
+  useEffect(() => { setLokalTitel(issue.titel); }, [issue.titel]);
+  return h("div", { className: `issue-item ${issue.status}` },
+    h("button", {
+      className: `issue-status ${issue.status}`,
+      title: `Status: ${STATUS_LABEL[issue.status]} — Klick wechselt; Shift+Klick: zurückstellen`,
+      onClick: (e) => { if (e.shiftKey) onSetStatus("wontfix"); else onToggle(); },
+    }, STATUS_ICON[issue.status]),
+    h("div", { className: "issue-body" },
+      bearbeiten
+        ? h("input", {
+            value: lokalTitel,
+            onChange: (e) => setLokalTitel(e.target.value),
+            onBlur: () => { onSetTitel(lokalTitel); setBearbeiten(false); },
+            onKeyDown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setLokalTitel(issue.titel); setBearbeiten(false); } },
+            autoFocus: true,
+            style: { width: "100%", background: "#0b0d12", border: "1px solid #3156ff", borderRadius: 3, color: "#e3e6eb", padding: "2px 6px", fontSize: 12, fontFamily: "inherit" },
+          })
+        : h("div", { className: "issue-title", onDoubleClick: () => setBearbeiten(true) }, issue.titel),
+      issue.meta ? h("div", { className: "issue-meta" }, issue.meta) : null,
+    ),
+    h("button", { className: "issue-del", onClick: onDelete, title: "löschen" }, "×"),
+  );
+}
+
+// ───────── Main App ─────────
+function App() {
+  const [nodes, setNodes] = useState(INITIAL_NODES);
+  const [edges, setEdges] = useState(INITIAL_EDGES);
+  const [uploads, setUploads] = useState([]);
+  const [storedFilename, setStoredFilename] = useState("");
+  const [originalName, setOriginalName] = useState("");
+  const [anlagen, setAnlagen] = useState(["ESt1A", "N", "VOR"]);
+  const [verfuegbareAnlagen, setVerfuegbareAnlagen] = useState([]);
+  const [ohneCache, setOhneCache] = useState(true);
+  const [ohneOpus, setOhneOpus] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [log, setLog] = useState([]);
+  const [uploadStatus, setUploadStatus] = useState(""); // "", "uploading", "uploaded", "error"
+  const [uploadError, setUploadError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [pipelineState, setPipelineState] = useState({ phase: "idle", score: null, ms: null, message: "" });
+  // Standalone Detector-Anzeige — unabhaengig von der Pipeline.
+  // Polls /api/anlagen/:stored solange dort status=running steht.
+  const [detectorStatus, setDetectorStatus] = useState(null);
+  // Tick, um den Detector-Polling-Effect manuell neu anzuwerfen (nach Re-Trigger).
+  const [detectorReloadTick, setDetectorReloadTick] = useState(0);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const [issues, setIssues] = useState(() => {
+    try {
+      const raw = localStorage.getItem("ctax-pipeline-issues");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return INITIAL_ISSUES;
+  });
+  const [issueFilter, setIssueFilter] = useState("offen");
+  const logEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    try { localStorage.setItem("ctax-pipeline-issues", JSON.stringify(issues)); } catch {}
+  }, [issues]);
+
+  const onNodesChange = useCallback((chs) => setNodes(ns => applyNodeChanges(chs, ns)), []);
+  const onEdgesChange = useCallback((chs) => setEdges(es => applyEdgeChanges(chs, es)), []);
+
+  useEffect(() => {
+    fetch("/api/uploads").then(r => r.json()).then(j => {
+      const list = (j.files || j.uploads || []).map(f => ({
+        stored: f.name || f.stored,
+        original: f.original || f.name || f.stored,
+        size: f.size,
+      }));
+      setUploads(list);
+    }).catch(() => {});
+    fetch("/api/elster/anlagen").then(r => r.json()).then(j => setVerfuegbareAnlagen(j.anlagen || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (logEndRef.current) logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
+  }, [log]);
+
+  // Standalone Detector-Polling: laeuft unabhaengig von der Pipeline.
+  // Startet bei Upload-Wechsel oder bei Re-Trigger (Tick), pollt bei running alle 2s.
+  useEffect(() => {
+    if (!storedFilename) { setDetectorStatus(null); return; }
+    let cancelled = false;
+    let timer = null;
+    async function fetchOnce() {
+      try {
+        const r = await fetch(`/api/anlagen/${encodeURIComponent(storedFilename)}`);
+        if (cancelled) return;
+        if (r.status === 404) { setDetectorStatus({ status: "none" }); return; }
+        const j = await r.json();
+        if (cancelled) return;
+        setDetectorStatus(j);
+        if (j.status === "running") timer = setTimeout(fetchOnce, 2000);
+      } catch { if (!cancelled) setDetectorStatus({ status: "error", error: "fetch failed" }); }
+    }
+    fetchOnce();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [storedFilename, detectorReloadTick]);
+
+  const updateNode = useCallback((id, patch) => {
+    setNodes(ns => ns.map(n => {
+      if (n.id !== id) return n;
+      const nextIo = patch.io
+        ? { ...(n.data.io || { input: null, output: null }), ...patch.io }
+        : n.data.io;
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          ...patch,
+          metrics: { ...(n.data.metrics || {}), ...(patch.metrics || {}) },
+          io: nextIo,
+        },
+      };
+    }));
+  }, []);
+
+  const updateEdge = useCallback((src, dst, active) => {
+    setEdges(es => es.map(ed => ed.source === src && ed.target === dst
+      ? { ...ed, style: { stroke: active ? "#3156ff" : "#3a4050", strokeWidth: active ? 2.5 : 1.5 }, animated: !!active }
+      : ed));
+  }, []);
+
+  // Gemeinsamer Upload-Knoten: reflektiert die aktuell ausgewaehlte Datei,
+  // unabhaengig davon, ob die Pipeline bereits gestartet wurde.
+  useEffect(() => {
+    if (!storedFilename) {
+      updateNode("upload", { state: "idle", subtitle: "Datei-Ablage", io: { input: null, output: null } });
+      return;
+    }
+    const u = uploads.find(x => x.stored === storedFilename);
+    updateNode("upload", {
+      state: "done",
+      subtitle: originalName || storedFilename,
+      io: { output: { stored: storedFilename, original: originalName, size: u?.size, url: `/uploads/${storedFilename}` } },
+    });
+  }, [storedFilename, originalName, uploads, updateNode]);
+
+  // Detector-Workflow-Knoten anhand des Polling-Status aktualisieren.
+  // Komplett getrennt vom Pipeline-Event-Stream.
+  useEffect(() => {
+    const s = detectorStatus;
+    if (!s || s.status === "none") {
+      ["d_mistral","d_filter","d_persist","d_anlagen"].forEach(id =>
+        updateNode(id, { state: "idle", ms: null, subtitle: null, io: { input: null, output: null }, metrics: {} })
+      );
+      if (s?.status === "none" && storedFilename) {
+        updateNode("d_mistral", { state: "idle", subtitle: "keine anlagen.json fuer diese Datei" });
+      }
+      return;
+    }
+    if (s.status === "running") {
+      updateNode("d_mistral", { state: "running", subtitle: "Mistral OCR laeuft…" });
+      ["d_filter","d_persist","d_anlagen"].forEach(id => updateNode(id, { state: "idle" }));
+    } else if (s.status === "done") {
+      const erkannt = s.erkannte_anlagen || [];
+      const roh = s.erkannte_anlagen_roh || erkannt;
+      const verworfen = roh.filter(a => !erkannt.includes(a));
+      updateNode("d_mistral", {
+        state: "done", ms: s.ms,
+        subtitle: `${roh.length} Anlage(n) roh · ${s.model || "mistral-ocr"}`,
+        io: { output: { erkannte_anlagen_roh: roh, ms: s.ms, model: s.model } },
+      });
+      updateNode("d_filter", {
+        state: "done",
+        subtitle: verworfen.length ? `${verworfen.length} ungueltig verworfen` : "alle Codes gueltig",
+        metrics: { roh: roh.length, gueltig: erkannt.length, verworfen: verworfen.length },
+        io: { input: { roh }, output: { erkannt, verworfen } },
+      });
+      updateNode("d_persist", {
+        state: "done",
+        subtitle: `uploads/${storedFilename}.anlagen.json`,
+        io: { output: { pfad: `uploads/${storedFilename}.anlagen.json`, finished_at: s.finished_at } },
+      });
+      updateNode("d_anlagen", {
+        state: "done",
+        subtitle: erkannt.length ? erkannt.join(", ") : "keine Anlage erkannt",
+        metrics: { anlagen_count: erkannt.length },
+        io: { output: { erkannte_anlagen: erkannt } },
+      });
+    } else if (s.status === "error") {
+      updateNode("d_mistral", { state: "error", subtitle: (s.error || "Mistral-Fehler").slice(0, 80), io: { output: { error: s.error } } });
+      ["d_filter","d_persist","d_anlagen"].forEach(id => updateNode(id, { state: "idle" }));
+    }
+  }, [detectorStatus, storedFilename, updateNode]);
+
+  const appendLog = useCallback((evt, data) => {
+    setLog(l => [...l.slice(-200), { t: new Date().toLocaleTimeString(), evt, data }]);
+  }, []);
+
+  const resetGraph = useCallback(() => {
+    setNodes(INITIAL_NODES.map(n => ({ ...n, data: { ...n.data, state: "idle", ms: null, metrics: {}, io: { input: null, output: null } } })));
+    setEdges(INITIAL_EDGES.map(ed => ({ ...ed, style: { stroke: "#3a4050", strokeWidth: 1.5 }, animated: false })));
+    setLog([]);
+    setPipelineState({ phase: "idle", score: null, ms: null, message: "" });
+  }, []);
+
+  const handleUpload = useCallback(async (file) => {
+    if (!file) return;
+    setUploadStatus("uploading");
+    setUploadError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || `HTTP ${r.status}`);
+      }
+      const j = await r.json();
+      setStoredFilename(j.stored);
+      setOriginalName(j.original || file.name);
+      setUploads(us => {
+        const ohne = us.filter(u => u.stored !== j.stored);
+        return [{ stored: j.stored, original: j.original, size: j.size }, ...ohne];
+      });
+      setUploadStatus("uploaded");
+    } catch (e) {
+      setUploadStatus("error");
+      setUploadError(e.message);
+    }
+  }, []);
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) handleUpload(f);
+  }, [handleUpload]);
+
+  const onNodeClick = useCallback((_e, node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const start = useCallback(async () => {
+    if (!storedFilename || !anlagen.length) return;
+    resetGraph();
+    setRunning(true);
+    setPipelineState({ phase: "running", score: null, ms: null, message: "läuft…" });
+    const u = uploads.find(x => x.stored === storedFilename);
+    const startMs = { upload: Date.now() };
+    updateNode("upload", {
+      state: "done", ms: 0,
+      io: {
+        input: { von: "User", aktion: "drag & drop / file picker" },
+        output: { stored: storedFilename, original: originalName, size: u?.size, url: `/uploads/${storedFilename}` },
+      },
+    });
+    updateNode("schema", {
+      io: { input: { anlagen, anzahl: anlagen.length } },
+    });
+    updateEdge("upload", "schema", true);
+    updateEdge("upload", "d_mistral", true);
+
+    // Parallel zum Pipeline-Start: Anlagen-Detector neu triggern, damit beide
+    // Workflows gleichzeitig laufen. Tick erst NACH Trigger-Response bumpen,
+    // damit das Polling den frisch geschriebenen status=running sieht.
+    fetch(`/api/anlagen/${encodeURIComponent(storedFilename)}/trigger`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ original: originalName }),
+    })
+      .then(() => setDetectorReloadTick(t => t + 1))
+      .catch(() => {/* kein Hard-Fail — Detector ist eigenstaendig */});
+
+    try {
+      const resp = await fetch("/api/elster/refine-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storedFilename, originalName, anlagen, ohneCache, ohneOpus }),
+      });
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      let fertig = false;
+      while (!fertig) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() || "";
+        for (const frame of frames) {
+          const lines = frame.split("\n");
+          let event = "message"; let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) event = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+          }
+          if (!dataStr) continue;
+          let data; try { data = JSON.parse(dataStr); } catch { continue; }
+          handleEvent(event, data, startMs);
+          if (event === "final" || event === "error") { fertig = true; break; }
+        }
+      }
+      try { await reader.cancel(); } catch {}
+    } catch (e) {
+      appendLog("error", { message: e.message });
+    } finally {
+      setRunning(false);
+    }
+  }, [storedFilename, originalName, anlagen, ohneCache, ohneOpus, uploads, resetGraph, updateNode, updateEdge, appendLog]);
+
+  const handleEvent = useCallback((evt, data, startMs) => {
+    appendLog(evt, data);
+    switch (evt) {
+      case "start":
+        updateNode("mistral_raw", { state: "running", subtitle: "Mistral OCR mit permissivem Schema", io: { input: { datei: data.storedFilename, modus: "permissiv" } } });
+        updateEdge("upload", "mistral_raw", true);
+        startMs.mistral_raw = Date.now();
+        break;
+      case "mistral_raw_start":
+        break;
+      case "mistral_raw_done": {
+        const ms = Date.now() - (startMs.mistral_raw || Date.now());
+        const erkannte = Array.isArray(data.erkannte_anlagen) ? data.erkannte_anlagen : [];
+        const anlagenTeil = erkannte.length ? ` · Anlagen: ${erkannte.join(", ")}` : "";
+        updateNode("mistral_raw", {
+          state: data.error ? "error" : "done",
+          ms: data.ms || ms,
+          subtitle: data.error
+            ? data.error.slice(0, 80)
+            : `${data.pages_count} Seiten · ${data.chars} chars · ${((data.annotation_bytes || 0) / 1024).toFixed(1)} KB JSON${anlagenTeil}`,
+          metrics: { annotation_bytes: data.annotation_bytes || data.chars },
+          io: {
+            output: {
+              pages_count: data.pages_count,
+              chars: data.chars,
+              text_preview: data.text_preview,
+              full_text: data.text,
+              annotation: data.annotation,
+              annotation_bytes: data.annotation_bytes,
+              erkannte_anlagen: erkannte,
+              error: data.error,
+            },
+          },
+        });
+        updateEdge("mistral_raw", "regel_engine", true);
+        break;
+      }
+      case "parallel_done":  // behalten fuer Kompatibilitaet — Mistral-Permissive schickt es nach Abschluss
+        updateNode("regel_engine", { state: "running" });
+        startMs.regel_engine = Date.now();
+        break;
+      case "regel_engine_start":
+        break;
+      case "regel_engine_done": {
+        const ms = data.ms ?? (Date.now() - (startMs.regel_engine || Date.now()));
+        const s = data.stats || {};
+        const anlageVerworfen = s.verworfen_anlage_nicht_erkannt_count || 0;
+        updateNode("regel_engine", {
+          state: "done",
+          ms,
+          subtitle: `${s.eindeutig_count} eindeutig · ${s.konflikt_count} Konflikte · ${s.unklarheit_count} unklar · ${s.verworfen_mistral_count + s.verworfen_vision_count + anlageVerworfen} verworfen`,
+          metrics: {
+            eindeutig: s.eindeutig_count,
+            konflikte: s.konflikt_count,
+            unklarheiten: s.unklarheit_count,
+            verworfen: s.verworfen_mistral_count + s.verworfen_vision_count + anlageVerworfen,
+          },
+          io: {
+            input: {
+              mistral_fundstellen: s.fundstellen_mistral,
+              vision_fundstellen: s.fundstellen_vision,
+              user_anlagen: data.user_anlagen,
+              mistral_erkannte_anlagen: data.mistral_erkannte_anlagen,
+            },
+            output: {
+              anlagen: data.anlagen,
+              eindeutig: data.eindeutig,
+              konflikte: data.konflikte,
+              unklarheiten: data.unklarheiten,
+              verworfen_anlage_nicht_erkannt: data.verworfen_anlage_nicht_erkannt,
+              verworfen_mistral: data.verworfen_mistral,
+              verworfen_vision: data.verworfen_vision,
+            },
+          },
+        });
+        updateEdge("regel_engine", "schema", true);
+        updateNode("schema", { state: "running" });
+        startMs.schema = Date.now();
+        break;
+      }
+      case "schema_done": {
+        const ms = Date.now() - (startMs.schema || Date.now());
+        updateNode("schema", {
+          state: "done", ms, metrics: data.schemaMeta,
+          io: { output: { ...data.schemaMeta, schema: data.schema } },
+        });
+        updateEdge("schema", "cache", true);
+        updateNode("cache", { state: "running", io: { input: { schema_hash: null, anlagen } } });
+        startMs.cache = Date.now();
+        break;
+      }
+      case "cache_lookup": {
+        const ms = Date.now() - (startMs.cache || Date.now());
+        updateNode("cache", {
+          state: "done", ms,
+          subtitle: data.hit ? `Hit · ${data.hinweise_count} Hinweise` : "Miss — starte leer",
+          metrics: { hinweise_count: data.hinweise_count },
+          io: {
+            input: { schema_hash: data.schema_hash, ohneCache },
+            output: { hit: data.hit, hinweise_count: data.hinweise_count, schema_hash: data.schema_hash },
+          },
+        });
+        updateEdge("cache", "mistral_1", true);
+        break;
+      }
+      case "mistral_kuratiert_start":
+        updateNode("mistral_kuratiert", { state: "running" });
+        startMs.mistral_kuratiert = Date.now();
+        break;
+      case "mistral_kuratiert_done": {
+        const ms = Date.now() - (startMs.mistral_kuratiert || Date.now());
+        updateNode("mistral_kuratiert", {
+          state: data.error ? "error" : (data.has_annotation ? "done" : "error"),
+          ms: data.ms || ms,
+          subtitle: data.error ? data.error.slice(0, 80) : `${(data.annotation_bytes / 1024).toFixed(1)} KB Annotation`,
+          metrics: { annotation_bytes: data.annotation_bytes },
+          io: {
+            output: {
+              has_annotation: data.has_annotation,
+              annotation: data.annotation,
+              annotation_bytes: data.annotation_bytes,
+              schema_bytes: data.schema_bytes,
+              error: data.error,
+            },
+          },
+        });
+        updateEdge("mistral_kuratiert", "baseline", true);
+        break;
+      }
+      case "baseline_start":
+        updateNode("baseline", { state: "running" });
+        startMs.baseline = Date.now();
+        break;
+      case "baseline_done": {
+        const ms = Date.now() - (startMs.baseline || Date.now());
+        const m = data.merge_stats || {};
+        updateNode("baseline", {
+          state: "done",
+          ms,
+          subtitle: `${m.gesamt || 0} Codes (${m.mistral_codes || 0} Mistral · +${m.opus_ueberschrieben || 0} Opus · +${m.baseline_ergaenzt || 0} Regel)`,
+          metrics: { annotation_bytes: data.annotation_bytes, codes: m.gesamt || 0 },
+          io: {
+            output: {
+              annotation: data.annotation,
+              annotation_bytes: data.annotation_bytes,
+              merge_stats: m,
+              quellen: data.quellen,
+            },
+          },
+        });
+        updateEdge("baseline", "bewertung", true);
+        updateNode("bewertung", { state: "running", io: { input: { annotation: data.annotation, annotation_bytes: data.annotation_bytes } } });
+        startMs.bewertung = Date.now();
+        break;
+      }
+      case "bewertung_bmf":
+        updateNode("bewertung", { metrics: { bmf: { belegt: data.belegt, gesamt: data.gesamt, quote: data.quote } } });
+        break;
+      case "bewertung_dichte":
+        updateNode("bewertung", { metrics: { dichte: { belegt: data.belegt, gesamt: data.gesamt, score: data.score } } });
+        break;
+      case "bewertung_konsistenz":
+        updateNode("bewertung", { metrics: { konsistenz: { bestanden: data.bestanden, gesamt: data.gesamt, score: data.score } } });
+        break;
+      case "bewertung_opus_start":
+        updateNode("bewertung", { subtitle: "Opus bewertet…" });
+        break;
+      case "bewertung_opus_done":
+        updateNode("bewertung", {
+          metrics: { opus: { score: data.score, hinweise: data.hinweise_count } },
+          subtitle: `Opus ${data.score.toFixed(2)} · ${data.hinweise_count} Hinweise`,
+          io: { output_opus: { score: data.score, begruendung: data.begruendung, hinweise: data.hinweise, ms: data.ms } },
+        });
+        break;
+      case "iteration_done": {
+        const ms = Date.now() - (startMs.bewertung || Date.now());
+        updateNode("bewertung", {
+          state: "done",
+          ms: data.ms ?? ms,
+          metrics: { gesamt: data.gesamt_score },
+          io: { output: { ergebnis: data.ergebnis, gesamt_score: data.gesamt_score, opus_hinweise: data.opus_hinweise, opus_begruendung: data.opus_begruendung, modus: data.quelle } },
+        });
+        updateEdge("bewertung", "cross_check", true);
+        updateNode("cross_check", { state: "running" });
+        startMs.cross_check = Date.now();
+        break;
+      }
+      case "cross_check": {
+        const ms = Date.now() - (startMs.cross_check || Date.now());
+        updateNode("cross_check", {
+          state: data.passt ? "done" : "error",
+          ms,
+          subtitle: data.passt ? `${data.gesamt_codes} Codes passen` : `${data.ohne_zuordnung?.length || 0} ohne Zuordnung`,
+          io: { input: { anlagen }, output: data },
+        });
+        updateEdge("cross_check", "final", true);
+        break;
+      }
+      case "final": {
+        const bw = data.final_bewertung || {};
+        const score = bw.gesamt_score;
+        const letzteIter = (data.iterationen || []).slice(-1)[0];
+        const ergebnis = letzteIter?.ergebnis;
+        const abgeschlossen = score != null && score >= 0.85;
+        const gescheitert = !abgeschlossen && (ergebnis === "keine_annotation" || ergebnis === "mistral_fehler");
+
+        // Alle noch laufenden Knoten sauber abschliessen;
+        // alle verbliebenen idle-Knoten auf "skipped" setzen (heller, damit der Pfad sichtbar bleibt)
+        const istPfadRelevant = (id) => {
+          // cache_save nur relevant wenn Score >= 0.85
+          if (id === "cache_save" && !abgeschlossen) return false;
+          return true;
+        };
+        setNodes(ns => ns.map(n => {
+          if (n.id === "final") return n;
+          if (n.data.state === "running") {
+            return { ...n, data: { ...n.data, state: gescheitert ? "error" : "done", subtitle: "abgeschlossen" } };
+          }
+          if (n.data.state === "idle") {
+            return { ...n, data: { ...n.data, state: istPfadRelevant(n.id) ? "idle" : "done", subtitle: istPfadRelevant(n.id) ? n.data.subtitle : "übersprungen" } };
+          }
+          return n;
+        }));
+
+        // Final-Knoten deutlich setzen
+        updateNode("final", {
+          state: abgeschlossen ? "done" : "error",
+          ms: data.dauer_ms,
+          subtitle: abgeschlossen
+            ? `✓ Score ${score.toFixed(2)} · ${data.iterationen?.length || 0} Iter · ${(data.dauer_ms / 1000).toFixed(1)} s`
+            : gescheitert
+              ? `✗ Abbruch: ${ergebnis} · ${(data.dauer_ms / 1000).toFixed(1)} s`
+              : `Score ${score != null ? score.toFixed(2) : "—"} · ${data.iterationen?.length || 0} Iter · unter Schwelle`,
+          metrics: { gesamt: score },
+          io: {
+            output: {
+              gesamt_score: score,
+              iterationen_count: data.iterationen?.length || 0,
+              dauer_ms: data.dauer_ms,
+              modus: data.modus,
+              final_annotation: data.final_annotation,
+              cross_check: data.cross_check,
+              reconciliation: data.reconciliation,
+            },
+          },
+        });
+
+        // Edge immer aktivieren — egal wie der Weg dorthin war
+        setEdges(es => es.map(ed => ed.target === "final"
+          ? { ...ed, style: { stroke: abgeschlossen ? "#7dd39c" : "#ff8089", strokeWidth: 2.5 }, animated: false }
+          : ed));
+
+        setPipelineState({
+          phase: abgeschlossen ? "done" : "error",
+          score,
+          ms: data.dauer_ms,
+          message: abgeschlossen
+            ? `fertig in ${(data.dauer_ms / 1000).toFixed(1)} s · Score ${score.toFixed(2)}`
+            : gescheitert
+              ? `gescheitert (${ergebnis}) nach ${(data.dauer_ms / 1000).toFixed(1)} s`
+              : `unter Schwelle (${score != null ? score.toFixed(2) : "—"}) nach ${(data.dauer_ms / 1000).toFixed(1)} s`,
+        });
+        break;
+      }
+      case "error":
+        appendLog("error", data);
+        break;
+    }
+  }, [updateNode, updateEdge, appendLog]);
+
+  const toggleAnlage = useCallback((code) => {
+    setAnlagen(a => a.includes(code) ? a.filter(x => x !== code) : [...a, code]);
+  }, []);
+
+  const selectedNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) : null;
+
+  return h("div", {
+    style: { height: "100vh", position: "relative" },
+    onDragOver: (e) => { e.preventDefault(); setDragOver(true); },
+    onDragLeave: () => setDragOver(false),
+    onDrop,
+  },
+    h("div", { className: "topbar" },
+      h("h1", null, "🔀 ELSTER-Pipeline · Live"),
+      h("a", { href: "/" }, "← Playground"),
+      h("a", { href: "/shootout.html" }, "🥊 Shootout"),
+      h("button", {
+        className: "btn-issues", onClick: () => setIssuesOpen(v => !v),
+        title: "Issue-Liste anzeigen/verstecken",
+      },
+        "📋 Issues",
+        h("span", { className: "badge" }, issues.filter(i => i.status === "open" || i.status === "doing").length),
+      ),
+      h("span", { className: "muted" }, "|"),
+      h("label", {
+        className: `upload-drop ${uploadStatus === "uploaded" ? "uploaded" : ""} ${dragOver ? "over" : ""}`,
+        title: uploadError || "Datei reinziehen oder klicken",
+      },
+        h("input", {
+          ref: fileInputRef, type: "file",
+          accept: ".pdf,.jpg,.jpeg,.png,.webp,.tiff,.tif,.bmp",
+          onChange: (e) => handleUpload(e.target.files?.[0]),
+        }),
+        uploadStatus === "uploading" ? "⏳ lädt…" :
+        uploadStatus === "uploaded" ? `✅ ${originalName?.slice(0, 40) || "hochgeladen"}` :
+        uploadStatus === "error" ? `❌ ${uploadError?.slice(0, 30)}` :
+        "📎 Datei hier ablegen oder klicken",
+      ),
+      h("label", { className: "muted" }, "oder:",
+        h("select", {
+          value: storedFilename,
+          onChange: (e) => {
+            const u = uploads.find(x => x.stored === e.target.value);
+            setStoredFilename(e.target.value);
+            setOriginalName(u ? u.original : "");
+            setUploadStatus(u ? "uploaded" : "");
+          },
+          style: { marginLeft: 6 },
+        },
+          h("option", { value: "" }, "— früheren Upload wählen —"),
+          uploads.map(u => h("option", { key: u.stored, value: u.stored }, u.original || u.stored)),
+        ),
+      ),
+      h("span", { className: "muted" }, "Anlagen:"),
+      h("div", { className: "anlagen-chips" },
+        verfuegbareAnlagen.map(a =>
+          h("span", {
+            key: a.code,
+            className: `chip ${anlagen.includes(a.code) ? "active" : ""}`,
+            onClick: () => toggleAnlage(a.code),
+            title: a.label,
+          }, a.code),
+        ),
+      ),
+      h("label", { className: "muted" },
+        h("input", { type: "checkbox", checked: ohneCache, onChange: (e) => setOhneCache(e.target.checked) }),
+        " ohne Cache",
+      ),
+      h("label", { className: "muted" },
+        h("input", { type: "checkbox", checked: ohneOpus, onChange: (e) => setOhneOpus(e.target.checked) }),
+        " ohne Opus",
+      ),
+      h("button", {
+        className: "primary",
+        onClick: start,
+        disabled: running || !storedFilename || !anlagen.length,
+      }, running ? "läuft…" : "▶ Start"),
+      h("div", {
+        style: {
+          marginLeft: "auto",
+          padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 500,
+          background: pipelineState.phase === "done" ? "#1a3a28" :
+                      pipelineState.phase === "error" ? "#3a1a1e" :
+                      pipelineState.phase === "running" ? "#3a2e1a" : "#262a33",
+          color: pipelineState.phase === "done" ? "#7dd39c" :
+                 pipelineState.phase === "error" ? "#ff8089" :
+                 pipelineState.phase === "running" ? "#e0b060" : "#8a93a0",
+          border: "1px solid",
+          borderColor: pipelineState.phase === "done" ? "#7dd39c55" :
+                       pipelineState.phase === "error" ? "#ff808955" :
+                       pipelineState.phase === "running" ? "#e0b06055" : "#3a4050",
+        },
+      },
+        pipelineState.phase === "idle"    ? "⚪ bereit" :
+        pipelineState.phase === "running" ? "🟠 " + (pipelineState.message || "läuft…") :
+        pipelineState.phase === "done"    ? "🟢 " + pipelineState.message :
+        pipelineState.phase === "error"   ? "🔴 " + pipelineState.message : "—",
+      ),
+    ),
+    h(ReactFlow, {
+      nodes, edges, onNodesChange, onEdgesChange,
+      onNodeClick,
+      nodeTypes: NODE_TYPES,
+      fitView: true,
+      fitViewOptions: { padding: 0.2 },
+      proOptions: { hideAttribution: false },
+      style: { height: "100%" },
+    },
+      h(Background, { color: "#262a33", gap: 20, size: 1 }),
+      h(Controls, { style: { background: "#181b22", border: "1px solid #262a33" } }),
+      h(MiniMap, {
+        nodeColor: (n) => n.data?.state === "done" ? "#7dd39c" : n.data?.state === "running" ? "#e0b060" : n.data?.state === "error" ? "#ff8089" : "#3a4050",
+        maskColor: "#0f111588",
+      }),
+    ),
+    h("div", { className: "logpanel", ref: logEndRef },
+      log.length === 0
+        ? h("div", { style: { color: "#6a7280", textAlign: "center" } }, "Events erscheinen hier, sobald der Lauf startet")
+        : log.map((e, i) => h("div", { key: i },
+            h("span", { className: "log-time" }, e.t),
+            " ",
+            h("span", { className: "log-evt" }, e.evt),
+            " ",
+            h("span", { className: "log-data" }, JSON.stringify(e.data).slice(0, 200)),
+          )),
+    ),
+    h(NodeDrawer, { node: selectedNode, onClose: () => setSelectedNodeId(null) }),
+    h(IssueDrawer, {
+      open: issuesOpen,
+      onClose: () => setIssuesOpen(false),
+      issues, setIssues,
+      filter: issueFilter, setFilter: setIssueFilter,
+    }),
+  );
+}
+
+function NodeDrawer({ node, onClose }) {
+  if (!node) return null;
+  const io = node.data.io || {};
+  const metrics = node.data.metrics || {};
+  return h("div", { className: `drawer open` },
+    h("div", { className: "drawer-head" },
+      h("h2", null, node.data.title),
+      h("span", { className: `muted`, style: { fontSize: 11, color: "#8a93a0" } },
+        node.data.state === "running" ? "● läuft" :
+        node.data.state === "done" ? "✓ fertig" :
+        node.data.state === "error" ? "✗ fehler" : "○ wartet",
+        node.data.ms != null ? ` · ${node.data.ms} ms` : "",
+      ),
+      h("button", { onClick: onClose }, "✕"),
+    ),
+    h("div", { className: "drawer-body" },
+      Object.keys(metrics).length > 0 ? h("div", { className: "drawer-section" },
+        h("h3", null, "Metriken"),
+        h("pre", null, JSON.stringify(metrics, null, 2)),
+      ) : null,
+      h(IoBlock, { titel: "Input", data: io.input }),
+      io.output_opus ? h(IoBlock, { titel: "Opus-Output", data: io.output_opus, hinweiseKey: "hinweise" }) : null,
+      h(IoBlock, { titel: "Output", data: io.output, hinweiseKey: io.output?.opus_hinweise ? "opus_hinweise" : (io.output?.hinweise ? "hinweise" : null) }),
+    ),
+  );
+}
+
+function IoBlock({ titel, data, hinweiseKey }) {
+  if (!data) return h("div", { className: "drawer-section" },
+    h("h3", null, titel),
+    h("div", { className: "empty" }, "— noch leer —"),
+  );
+  const hinweise = hinweiseKey && Array.isArray(data[hinweiseKey]) ? data[hinweiseKey] : null;
+  let rest = hinweise ? { ...data, [hinweiseKey]: `→ ${hinweise.length} Hinweise unten` } : { ...data };
+  const annotationPretty = typeof rest.annotation === "object" ? rest.annotation : null;
+  if (annotationPretty) rest = { ...rest, annotation: "→ siehe Annotation unten" };
+  const reconciliation = rest.reconciliation && typeof rest.reconciliation === "object" ? rest.reconciliation : null;
+  if (reconciliation) rest = { ...rest, reconciliation: "→ siehe Reconciliation-Report unten" };
+  // Eigene Inline-Renders fuer verworfen_mistral/vision (falls direkt im Output)
+  const verworfenMistral = Array.isArray(rest.verworfen_mistral) ? rest.verworfen_mistral : null;
+  const verworfenVision = Array.isArray(rest.verworfen_vision) ? rest.verworfen_vision : null;
+  const eindeutigList = Array.isArray(rest.eindeutig) ? rest.eindeutig : null;
+  if (verworfenMistral) rest = { ...rest, verworfen_mistral: `→ ${verworfenMistral.length} Einträge unten` };
+  if (verworfenVision) rest = { ...rest, verworfen_vision: `→ ${verworfenVision.length} Einträge unten` };
+  if (eindeutigList) rest = { ...rest, eindeutig: `→ ${eindeutigList.length} Einträge unten` };
+  const schemaPretty = typeof rest.schema === "object" ? rest.schema : null;
+  if (schemaPretty) rest = { ...rest, schema: `→ siehe JSON-Schema unten (${JSON.stringify(schemaPretty).length} bytes)` };
+  const promptObj = rest.prompt && typeof rest.prompt === "object" ? rest.prompt : null;
+  if (promptObj) rest = { ...rest, prompt: "→ siehe Prompt unten" };
+  const mistralInputSchema = rest.document_annotation_format?.json_schema?.schema;
+  if (mistralInputSchema && typeof mistralInputSchema === "object") {
+    rest = {
+      ...rest,
+      document_annotation_format: {
+        ...rest.document_annotation_format,
+        json_schema: {
+          ...rest.document_annotation_format.json_schema,
+          schema: `→ siehe JSON-Schema unten (${JSON.stringify(mistralInputSchema).length} bytes)`,
+        },
+      },
+    };
+  }
+  const schemaAnzeige = schemaPretty || mistralInputSchema;
+  return h("div", { className: "drawer-section" },
+    h("h3", null, titel),
+    h("pre", null, JSON.stringify(rest, null, 2)),
+    promptObj ? h("div", { style: { marginTop: 10 } },
+      h("h3", null, "Prompt (System)"),
+      h("pre", null, String(promptObj.system || "")),
+      promptObj.user ? h("div", { style: { marginTop: 8 } },
+        h("h3", null, "Prompt (User)"),
+        h("pre", null, String(promptObj.user).slice(0, 20000)),
+      ) : null,
+      promptObj.user_text_trailing ? h("div", { style: { marginTop: 8 } },
+        h("h3", null, "User-Text (nach Dokument-Anhang)"),
+        h("pre", null, String(promptObj.user_text_trailing)),
+      ) : null,
+      promptObj.dokument_anhang ? h("div", { style: { marginTop: 6, fontSize: 11, color: "#8a93a0", fontStyle: "italic" } },
+        `+ Dokument-Anhang: ${promptObj.dokument_anhang}`,
+      ) : null,
+    ) : null,
+    schemaAnzeige ? h("div", { style: { marginTop: 10 } },
+      h("h3", null, "JSON-Schema"),
+      h("div", { style: { display: "flex", gap: 8, marginBottom: 6 } },
+        h("button", {
+          style: { background: "#262a33", color: "#e3e6eb", border: "1px solid #3a4050", borderRadius: 4, padding: "3px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
+          onClick: () => {
+            navigator.clipboard?.writeText(JSON.stringify(schemaAnzeige, null, 2));
+          },
+        }, "📋 kopieren"),
+        h("button", {
+          style: { background: "#262a33", color: "#e3e6eb", border: "1px solid #3a4050", borderRadius: 4, padding: "3px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
+          onClick: () => {
+            const blob = new Blob([JSON.stringify(schemaAnzeige, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `schema-${(schemaAnzeige && schemaAnzeige.title) || "elster"}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          },
+        }, "⬇ als .json"),
+      ),
+      h("pre", { style: { maxHeight: 500 } }, JSON.stringify(schemaAnzeige, null, 2)),
+    ) : null,
+    annotationPretty ? h("div", { style: { marginTop: 10 } },
+      h("h3", null, "Annotation (JSON)"),
+      h("pre", null, JSON.stringify(annotationPretty, null, 2)),
+    ) : null,
+    reconciliation ? h(ReconciliationReport, { data: reconciliation }) : null,
+    eindeutigList ? h(EindeutigTabelle, { eindeutig: eindeutigList }) : null,
+    verworfenMistral ? h(VerworfenTabelle, { titel: "Verworfen — Mistral-Fundstellen", liste: verworfenMistral, typ: "mistral" }) : null,
+    verworfenVision ? h(VerworfenTabelle, { titel: "Verworfen — Vision-Fundstellen", liste: verworfenVision, typ: "vision" }) : null,
+    hinweise ? h("div", { style: { marginTop: 10 } },
+      h("h3", null, `Hinweise (${hinweise.length})`),
+      hinweise.map((hn, i) => h("div", { key: i, className: "hinweis-item" },
+        hn.elster_code ? h("span", { className: "code" }, hn.elster_code) : null,
+        h("span", { className: "pfad" }, hn.feld_pfad || "(ohne Pfad)"),
+        hn.problem ? h("div", { className: "problem" }, hn.problem) : null,
+        hn.anweisung ? h("div", { className: "anweisung" }, hn.anweisung) : null,
+      )),
+    ) : null,
+  );
+}
+
+function ReconciliationReport({ data }) {
+  if (!data) return null;
+  const s = data.stats || {};
+  const finalCodes = data.final_codes || [];
+  const vMistral = data.verworfen_mistral || [];
+  const vVision = data.verworfen_vision || [];
+  const quellen = s.quellen_breakdown || {};
+  return h("div", { style: { marginTop: 16 } },
+    h("h3", null, "Reconciliation-Report"),
+    h("div", { className: "rec-stats" },
+      h("div", { className: "rec-stat" }, h("strong", null, s.mistral_fundstellen || 0), h("span", null, "Mistral-Fundstellen")),
+      h("div", { className: "rec-stat" }, h("strong", null, s.vision_fundstellen || 0), h("span", null, "Vision-Fundstellen")),
+      h("div", { className: "rec-stat", style: { borderColor: "#7dd39c" } }, h("strong", { style: { color: "#7dd39c" } }, s.final_codes || 0), h("span", null, "final gemappt")),
+      h("div", { className: "rec-stat", style: { borderColor: "#ff8089" } }, h("strong", { style: { color: "#ff8089" } }, (s.verworfen_mistral || 0) + (s.verworfen_vision || 0)), h("span", null, "verworfen")),
+    ),
+    h("div", { style: { fontSize: 11, color: "#8a93a0", marginBottom: 10 } },
+      "Quellen-Aufteilung: ",
+      Object.entries(quellen).map(([q, n]) =>
+        h("span", { key: q, className: `rec-quelle ${q}`, style: { marginLeft: 6 } }, `${q}: ${n}`)
+      ),
+    ),
+    h(EindeutigTabelle, { eindeutig: finalCodes }),
+    h(VerworfenTabelle, { titel: "Verworfen — Mistral", liste: vMistral, typ: "mistral" }),
+    h(VerworfenTabelle, { titel: "Verworfen — Vision", liste: vVision, typ: "vision" }),
+  );
+}
+
+function EindeutigTabelle({ eindeutig }) {
+  if (!eindeutig?.length) return null;
+  return h("div", { className: "rec-section" },
+    h("div", { className: "rec-header" }, `✓ Final gemappte Codes (${eindeutig.length})`),
+    h("table", { className: "rec-table" },
+      h("thead", null, h("tr", null,
+        h("th", { style: { width: 90 } }, "Code"),
+        h("th", { style: { width: 70 } }, "Anlage"),
+        h("th", { style: { width: 200 } }, "Wert"),
+        h("th", { style: { width: 90 } }, "Quelle"),
+        h("th", null, "Herkunft"),
+      )),
+      h("tbody", null,
+        eindeutig.map((c, i) => h("tr", { key: i },
+          h("td", null, h("span", { className: "rec-code" }, c.code || c.elster_code || "—")),
+          h("td", null, c.anlage || "—"),
+          h("td", { className: "rec-wert", title: String(c.wert ?? "") }, String(c.wert ?? "").slice(0, 60)),
+          h("td", null, h("span", { className: `rec-quelle ${c.quelle || "beide"}` }, c.quelle || "beide")),
+          h("td", { style: { fontSize: 10, color: "#8a93a0" } },
+            c.mistral_raw ? `mistral: ${String(c.mistral_raw).slice(0, 50)}` : "",
+            c.mistral_raw && c.vision_pfad ? " · " : "",
+            c.vision_pfad ? `vision: ${c.vision_pfad}` : "",
+            !c.mistral_raw && !c.vision_pfad ? (c.kontext || "—") : "",
+          ),
+        ))
+      ),
+    ),
+  );
+}
+
+function VerworfenTabelle({ titel, liste, typ }) {
+  if (!liste?.length) return null;
+  return h("div", { className: "rec-section" },
+    h("div", { className: "rec-header", style: { color: "#ff8089" } }, `✗ ${titel} (${liste.length})`),
+    h("table", { className: "rec-table" },
+      h("thead", null, h("tr", null,
+        h("th", { style: { width: typ === "vision" ? 200 : 80 } }, typ === "vision" ? "Pfad" : "Zeile · Anlage · Label"),
+        h("th", { style: { width: 200 } }, "Wert"),
+        h("th", null, "Grund"),
+      )),
+      h("tbody", null,
+        liste.slice(0, 80).map((e, i) => h("tr", { key: i },
+          h("td", { style: { fontSize: 10, color: "#9bb8ff" } },
+            typ === "vision"
+              ? (e.pfad || "—")
+              : `${e.zeile || "·"}  ${e.anlage || ""}  ${e.drucktext_cand || ""}`
+          ),
+          h("td", { className: "rec-wert", title: String(e.wert ?? "") }, String(e.wert ?? "").slice(0, 60)),
+          h("td", { className: "rec-grund" }, e.grund || "—"),
+        ))
+      ),
+      liste.length > 80 ? h("div", { style: { fontSize: 10, color: "#6a7280", marginTop: 4 } }, `... ${liste.length - 80} weitere`) : null,
+    ),
+  );
+}
+
+createRoot(document.getElementById("root")).render(h(App));
+</script>
+</body>
+</html>
