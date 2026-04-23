@@ -24,13 +24,22 @@ Workflow-Engine für LLM/OCR-Pipelines. Ein Workflow ist ein gerichteter Graph a
 
 ## Quick Start
 
-Engine-Scaffold noch nicht da. Bis dahin läuft der Legacy-MVP:
-
 ```bash
-cd legacy/elster-mvp
 npm install
-./start.sh   # Port 7800
+cp .env.example .env   # MISTRAL_API_KEY + ANTHROPIC_API_KEY eintragen
+./start.sh              # Port 7800
+
+# Oder via PM2 (Produktion):
+pm2 start ecosystem.config.cjs
+pm2 logs sturm
 ```
+
+UI erreichbar unter `http://localhost:7800` (bzw. `https://sturm.0711.io` hinter nginx).
+
+## Workflows
+
+- **hello-ocr** — Minimal-Referenz: Mistral OCR → Textstatistik. Dient als Vorlage für neue Workflows.
+- **elster-v1** — ELSTER Feldextraktion: OCR-permissiv → Regel-Engine → Schema-Bau → OCR-kuratiert → Baseline-Merge → Bewertung → Cross-Check, parallel Anlagen-Detektor.
 
 ## Dokumentation
 

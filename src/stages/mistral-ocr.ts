@@ -15,6 +15,14 @@ export interface MistralOcrInput {
   filePath: string;
   /** Ursprünglicher Dateiname — bestimmt MIME-Type über Extension. */
   filename: string;
+  /**
+   * Optionales dynamisches Schema-Override. Wenn gesetzt, überschreibt es
+   * `config.schema`. Nützlich wenn eine vorherige Stage das Schema baut
+   * (z.B. Schema-Bau → Mistral kuratiert).
+   */
+  schema?: Record<string, unknown>;
+  /** Optionaler Schema-Name-Override. */
+  schemaName?: string;
 }
 
 export interface MistralOcrConfig {
@@ -66,12 +74,14 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
       model: ctx.config.model ?? 'mistral-ocr-latest',
       document,
     };
-    if (ctx.config.schema) {
+    const schema = input.schema ?? ctx.config.schema;
+    const schemaName = input.schemaName ?? ctx.config.schemaName;
+    if (schema) {
       body.document_annotation_format = {
         type: 'json_schema',
         json_schema: {
-          name: ctx.config.schemaName ?? 'Extraction',
-          schema: ctx.config.schema,
+          name: schemaName ?? 'Extraction',
+          schema,
           strict: true,
         },
       };

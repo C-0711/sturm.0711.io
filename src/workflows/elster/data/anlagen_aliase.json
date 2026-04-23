@@ -1,0 +1,12 @@
+{
+  "_kommentar": "Zusätzliche deutsche Anlagen-Namen, die im ELSTER-Katalog-Label fehlen (weil Katalog dort keinen Langnamen nach em-dash listet). Der baueAnlagenHeaderMap-Builder liest diese Aliase zusätzlich zur Katalog-eigenen Ableitung. Erweitern wenn neue Formulare andere Schreibweisen benutzen.",
+  "_quelle": "BMF-Jahresdokumentation 2024, deutsche Formularnamen wie im elektronisch authentifizierten ESt-Ausdruck (WISO/ELSTER).",
+  "aliases": {
+    "VOR":      ["Vorsorgeaufwand", "Vorsorgeaufwendungen"],
+    "Mob":      ["Mobilitätsprämie", "Mobilitaetspraemie"],
+    "Corona":   ["Corona-Hilfen", "Corona Hilfen"],
+    "Vorsatz":  ["Vorsatzblatt"],
+    "V_FeWo":   ["V-FeWo", "Ferienwohnung", "V FeWo"],
+    "V_Sonstige": ["V-Sonstige", "V Sonstige"]
+  }
+}
