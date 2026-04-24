@@ -5,7 +5,6 @@ import { loadFelder, type FelderSchema } from '../lib/anlagen-katalog.ts';
 type Feld = FelderSchema['felder'][number];
 
 function extractableFelderLocal(all: Feld[]): Feld[] {
-  // Same predicate as extraktion.ts: only real eCodes (E + digits).
   return all.filter((f) => /^E\d+$/.test(f.Name));
 }
 
@@ -45,39 +44,40 @@ export interface QualitaetsgateErgaenzung {
 
 export interface QualitaetsgateOutput {
   vollstaendig: boolean;
+  status: 'ok_vollstaendig' | 'ok_ergaenzt' | 'unklar' | 'fehler';
   ergaenzt: QualitaetsgateErgaenzung[];
   alle_werte_merged: AnrWert[];
   summen: { werte_vorher: number; werte_nachher: number; ergaenzt: number };
+  verworfen: Array<{ eCode: string; anlage: string; grund: string }>;
   ms: number;
+  calls: number;
   error?: string;
 }
 
 export interface QualitaetsgateConfig {
   model?: string;
   maxCharsProSeite?: number;
-  maxAnlagen?: number;
+  maxFelderProAnlage?: number;
   temperature?: number;
   vz?: number | string;
+  chunkSchwelle?: number;
 }
 
 function resolveConfig(c: QualitaetsgateConfig): Required<QualitaetsgateConfig> {
   return {
     model: c.model ?? 'claude-haiku-4-5',
-    maxCharsProSeite: c.maxCharsProSeite ?? 5000,
-    maxAnlagen: c.maxAnlagen ?? 7,
+    maxCharsProSeite: c.maxCharsProSeite ?? 4000,
+    maxFelderProAnlage: c.maxFelderProAnlage ?? 60,
     temperature: c.temperature ?? 0,
     vz: (c as any).vz ?? '',
+    chunkSchwelle: c.chunkSchwelle ?? 3,
   };
 }
 
-/**
- * Baut pro Anlage einen kompakten eCode-Katalog-Auszug (eCode + Drucktext),
- * damit Haiku beim Nachmergen auf reale eCodes mappen kann.
- */
 async function buildFeldKatalogKompakt(
   anlagen: string[],
   vz: number | string | undefined,
-  maxFelderProAnlage = 80,
+  maxFelderProAnlage: number,
 ): Promise<Record<string, Array<{ eCode: string; drucktext: string; zeile?: string }>>> {
   const out: Record<string, Array<{ eCode: string; drucktext: string; zeile?: string }>> = {};
   for (const name of anlagen) {
@@ -97,65 +97,75 @@ async function buildFeldKatalogKompakt(
 }
 
 function buildGatePrompt(
-  anlagen: string[],
+  anlagenSubset: string[],
   pages: Array<{ index: number; markdown: string }>,
-  aktuelleWerte: AnrWert[],
+  aktuelleWerteAnlagen: AnrWert[],
   katalog: Record<string, Array<{ eCode: string; drucktext: string; zeile?: string }>>,
   maxCharsProSeite: number,
 ): string {
-  const werteKompakt = aktuelleWerte.map((w) => ({
+  const werteKompakt = aktuelleWerteAnlagen.map((w) => ({
     anlage: w.anlage,
     eCode: w.eCode,
     wert: w.wert,
     drucktext: (w.drucktext || w.beschreibung || '').slice(0, 80),
   }));
 
-  const katalogKompakt = Object.entries(katalog)
-    .map(([anlage, felder]) => {
+  const katalogKompakt = anlagenSubset
+    .map((a) => {
+      const felder = katalog[a] || [];
       const zeilen = felder
-        .map((f) => `  - ${f.eCode}${f.zeile ? ` (Z${f.zeile})` : ''}: ${f.drucktext}`)
+        .map((f) => `  ${f.eCode}${f.zeile ? ` (Z${f.zeile})` : ''}: ${f.drucktext}`)
         .join('\n');
-      return `${anlage}:\n${zeilen}`;
+      return `### ${a}\n${zeilen}`;
     })
     .join('\n\n');
 
   const seitenBlock = pages
     .map(
       (p) =>
-        `=== SEITE ${(p.index ?? 0) + 1} ===\n${(p.markdown || '').slice(0, maxCharsProSeite)}`,
+        `--- SEITE ${(p.index ?? 0) + 1} ---\n${(p.markdown || '').slice(0, maxCharsProSeite)}`,
     )
     .join('\n\n');
 
   return [
-    'Du bist Qualitätsprüfer für eine ELSTER-Steuerformular-Extraktion.',
+    'Du bist Qualitätsprüfer für ELSTER-Steuerformular-Extraktion.',
     '',
-    'ERKANNTE ANLAGEN: ' + anlagen.join(', '),
+    `ZU PRÜFENDE ANLAGEN: ${anlagenSubset.join(', ')}`,
     '',
-    'AKTUELL EXTRAHIERTE WERTE (JSON):',
-    JSON.stringify(werteKompakt, null, 2),
+    'SCHON EXTRAHIERT (JSON):',
+    JSON.stringify(werteKompakt),
     '',
-    'KATALOG DER MÖGLICHEN FELDER PRO ANLAGE (eCode + Beschreibung):',
+    'KATALOG — NUR DIESE eCODES SIND ERLAUBT:',
     katalogKompakt,
     '',
-    'SEITEN-ROHTEXT DES DOKUMENTS:',
+    'DOKUMENT-ROHTEXT:',
     seitenBlock,
     '',
     'AUFGABE:',
-    'Prüfe, ob im Seiten-Rohtext KONKRETE WERTE stehen (Zahlen, €-Beträge, Daten, Namen, IBANs, StNr),',
-    'die im EXTRAHIERTEN-WERTE-JSON fehlen, aber zu einem eCode aus dem Katalog passen.',
+    'Finde konkrete Werte (Zahlen, Beträge, Daten, Namen, IBANs, StNr, etc.),',
+    'die im Rohtext stehen, zu einer der ZU PRÜFENDEN ANLAGEN gehören,',
+    'einem eCode aus dem KATALOG entsprechen, und NICHT in SCHON EXTRAHIERT sind.',
     '',
-    'Für jede Lücke liefere:',
-    '  { "eCode": "<aus Katalog>", "anlage": "<Name>", "wert": "<exakter Wert aus Rohtext>", "quelle_seite": <1-basiert> }',
+    'REGELN:',
+    '1. NUR eCodes aus dem KATALOG (exakt mit E-Präfix abschreiben).',
+    '2. NUR Werte, die tatsächlich im Rohtext stehen (kein Raten).',
+    '3. Keine Dubletten zu SCHON EXTRAHIERT.',
+    '4. "quelle_seite" ist 1-basiert und entspricht SEITE X.',
     '',
-    'Regeln:',
-    '- NUR eCodes verwenden, die oben im Katalog stehen.',
-    '- NUR Werte vorschlagen, die tatsächlich im Seiten-Rohtext auftauchen.',
-    '- Keine Dubletten mit AKTUELL EXTRAHIERTEN WERTEN.',
-    '- Wenn alles vollständig extrahiert ist: ergaenzt = [] und vollstaendig=true.',
+    'Antwort STRIKT als JSON:',
+    '{"ergaenzt": [{"eCode":"E...","anlage":"...","wert":"...","quelle_seite":1}]}',
     '',
-    'Antwort STRIKT als JSON (nichts anderes):',
-    '{"vollstaendig": boolean, "ergaenzt": [{"eCode": "...", "anlage": "...", "wert": "...", "quelle_seite": 1}]}',
+    'Wenn nichts zu ergänzen ist: {"ergaenzt": []}',
   ].join('\n');
+}
+
+function chunkAnlagen(anlagen: string[], schwelle: number): string[][] {
+  if (anlagen.length <= schwelle) return [anlagen];
+  const chunks: string[][] = [];
+  for (let i = 0; i < anlagen.length; i += schwelle) {
+    chunks.push(anlagen.slice(i, i + schwelle));
+  }
+  return chunks;
 }
 
 export const qualitaetsgateStage = defineStage<
@@ -164,19 +174,16 @@ export const qualitaetsgateStage = defineStage<
   QualitaetsgateConfig
 >({
   id: 'elster/qualitaetsgate',
-  name: 'Qualitätsgate (Haiku-Repair)',
+  name: 'Qualitätsgate v2 (Haiku-Repair, chunked)',
   description:
-    'Haiku vergleicht die Seiten-Rohtexte mit den extrahierten Werten und ' +
-    'ergänzt fehlende eCode-Werte automatisch anhand des Felder-Katalogs. ' +
-    'Merged die neuen Werte in alle_werte_merged.',
+    'Haiku vergleicht Seiten-Rohtexte mit extrahierten Werten und ergänzt ' +
+    'fehlende eCode-Werte. Bei vielen Anlagen chunked. Persistiert raw LLM ' +
+    'responses und verworfene Vorschläge zum Debugging.',
   async run(input, ctx) {
     const config = resolveConfig(ctx.config ?? {});
     const t0 = Date.now();
 
-    const anlagen = (input.klassifizierung?.erkannte_anlagen || []).slice(
-      0,
-      config.maxAnlagen,
-    );
+    const anlagen = input.klassifizierung?.erkannte_anlagen || [];
     const aktuelleWerte: AnrWert[] = input.anreicherung?.alle_werte || [];
     const pages = input.pages || [];
 
@@ -189,73 +196,104 @@ export const qualitaetsgateStage = defineStage<
     if (anlagen.length === 0 || pages.length === 0) {
       const out: QualitaetsgateOutput = {
         vollstaendig: true,
+        status: 'ok_vollstaendig',
         ergaenzt: [],
         alle_werte_merged: aktuelleWerte,
-        summen: {
-          werte_vorher: aktuelleWerte.length,
-          werte_nachher: aktuelleWerte.length,
-          ergaenzt: 0,
-        },
+        summen: { werte_vorher: aktuelleWerte.length, werte_nachher: aktuelleWerte.length, ergaenzt: 0 },
+        verworfen: [],
+        calls: 0,
         ms: Date.now() - t0,
       };
-      ctx.emit('gate_done', out.summen);
+      ctx.emit('gate_done', { ...out.summen, status: out.status });
       return out;
     }
 
-    let ergaenzt: QualitaetsgateErgaenzung[] = [];
-    let vollstaendig = true;
+    const katalog = await buildFeldKatalogKompakt(
+      anlagen,
+      config.vz,
+      config.maxFelderProAnlage,
+    );
+
+    const chunks = chunkAnlagen(anlagen, config.chunkSchwelle);
+    const ergaenzt: QualitaetsgateErgaenzung[] = [];
+    const verworfen: Array<{ eCode: string; anlage: string; grund: string }> = [];
+    const bekannt = new Set(aktuelleWerte.map((w) => `${w.anlage}:${w.eCode}`));
+    const rawResponses: Array<{ chunk: string[]; raw: string }> = [];
     let error: string | undefined;
+    let calls = 0;
 
-    try {
-      const katalog = await buildFeldKatalogKompakt(anlagen, config.vz);
-      const prompt = buildGatePrompt(
-        anlagen,
-        pages,
-        aktuelleWerte,
-        katalog,
-        config.maxCharsProSeite,
-      );
+    // Parallelisierung: alle Chunks gleichzeitig zu Haiku schicken.
+    // Erspart bei 7 Anlagen / 3-er-Chunks etwa 2/3 der Gate-Zeit.
+    calls = chunks.length;
+    type ChunkRes = {
+      chunk: string[];
+      parsed: { ergaenzt?: Array<{ eCode?: string; anlage?: string; wert?: string; quelle_seite?: number }> };
+      raw: string;
+      err: string | null;
+    };
+    const chunkResults: ChunkRes[] = await Promise.all(
+      chunks.map(async (chunk): Promise<ChunkRes> => {
+        const werteFürChunk = aktuelleWerte.filter((w) => chunk.includes(w.anlage));
+        try {
+          const prompt = buildGatePrompt(chunk, pages, werteFürChunk, katalog, config.maxCharsProSeite);
+          const r = await chatJson<{
+            ergaenzt?: Array<{ eCode?: string; anlage?: string; wert?: string; quelle_seite?: number }>;
+          }>(prompt, {
+            model: config.model,
+            temperature: config.temperature,
+            signal: ctx.signal,
+            maxTokens: 3000,
+          });
+          return { chunk, parsed: r.parsed, raw: r.raw, err: null };
+        } catch (e: any) {
+          return { chunk, parsed: { ergaenzt: [] }, raw: '', err: String(e?.message ?? e) };
+        }
+      }),
+    );
 
-      const { parsed } = await chatJson<{
-        vollstaendig?: boolean;
-        ergaenzt?: Array<{ eCode?: string; anlage?: string; wert?: string; quelle_seite?: number }>;
-      }>(prompt, {
-        model: config.model,
-        temperature: config.temperature,
-        signal: ctx.signal,
-        maxTokens: 4000,
-      });
+    for (const r of chunkResults) {
+      const { chunk, parsed, raw, err } = r;
+      if (err) {
+        error = err;
+        ctx.emit('gate_error', { chunk, message: err });
+        continue;
+      }
+      rawResponses.push({ chunk, raw: raw.slice(0, 4000) });
 
-      vollstaendig = parsed.vollstaendig === true;
       const vorschlaege = Array.isArray(parsed.ergaenzt) ? parsed.ergaenzt : [];
-
-      // Validate + dedupe
-      const bekannt = new Set(aktuelleWerte.map((w) => `${w.anlage}:${w.eCode}`));
-      for (const v of vorschlaege) {
-        if (!v?.eCode || !v?.anlage || !v?.wert) continue;
-        const key = `${v.anlage}:${v.eCode}`;
-        if (bekannt.has(key)) continue;
-        bekannt.add(key);
-        const kat = katalog[v.anlage] || [];
-        const feld = kat.find((f) => f.eCode === v.eCode);
-        // only accept eCodes that live in the catalog
-        if (!feld) continue;
-        const e: QualitaetsgateErgaenzung = {
-          eCode: v.eCode,
-          anlage: v.anlage,
-          wert: String(v.wert),
-          quelle_seite: Number(v.quelle_seite) || 0,
-          drucktext: feld.drucktext,
-          vordruckzeile: feld.zeile,
-          beschreibung: feld.drucktext,
-        };
+        for (const v of vorschlaege) {
+          if (!v?.eCode || !v?.anlage || v?.wert == null) {
+            verworfen.push({ eCode: String(v?.eCode ?? '?'), anlage: String(v?.anlage ?? '?'), grund: 'unvollstaendig' });
+            continue;
+          }
+          if (!chunk.includes(v.anlage)) {
+            verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'anlage_nicht_im_chunk' });
+            continue;
+          }
+          const key = `${v.anlage}:${v.eCode}`;
+          if (bekannt.has(key)) {
+            verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'dublette' });
+            continue;
+          }
+          const kat = katalog[v.anlage] || [];
+          const feld = kat.find((f) => f.eCode === v.eCode);
+          if (!feld) {
+            verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'eCode_nicht_im_katalog' });
+            continue;
+          }
+          bekannt.add(key);
+          const e: QualitaetsgateErgaenzung = {
+            eCode: v.eCode,
+            anlage: v.anlage,
+            wert: String(v.wert),
+            quelle_seite: Number(v.quelle_seite) || 0,
+            drucktext: feld.drucktext,
+            vordruckzeile: feld.zeile,
+            beschreibung: feld.drucktext,
+          };
         ergaenzt.push(e);
         ctx.emit('gate_ergaenzung', e);
       }
-    } catch (e: any) {
-      error = String(e?.message ?? e);
-      vollstaendig = false;
-      ctx.emit('gate_error', { message: error });
     }
 
     // Merge
@@ -272,8 +310,23 @@ export const qualitaetsgateStage = defineStage<
       })),
     ];
 
+    // Status: klare Semantik
+    // Status-Ableitung mit klarer Semantik.
+    // - fehler: ein Chunk-Call hat einen Exception geworfen
+    // - ok_ergaenzt: mindestens eine echte Ergänzung durchgerutscht
+    // - ok_vollstaendig: kein Vorschlag, oder alle Vorschläge waren Dubletten (= Haiku bestätigt Vollständigkeit)
+    // - unklar: Haiku schlug Felder vor, die NICHT Dubletten sind, aber unser Validator hat sie verworfen
+    //           (eCode_nicht_im_katalog, anlage_nicht_im_chunk, unvollstaendig) — das sind echte Misses
+    const nichtDublettenVerworfen = verworfen.filter((v) => v.grund !== 'dublette').length;
+    let status: QualitaetsgateOutput['status'];
+    if (error) status = 'fehler';
+    else if (ergaenzt.length > 0) status = 'ok_ergaenzt';
+    else if (nichtDublettenVerworfen === 0) status = 'ok_vollstaendig';
+    else status = 'unklar';
+
     const out: QualitaetsgateOutput = {
-      vollstaendig: vollstaendig && ergaenzt.length === 0,
+      vollstaendig: status === 'ok_vollstaendig',
+      status,
       ergaenzt,
       alle_werte_merged: alleMerged,
       summen: {
@@ -281,17 +334,23 @@ export const qualitaetsgateStage = defineStage<
         werte_nachher: alleMerged.length,
         ergaenzt: ergaenzt.length,
       },
+      verworfen,
+      calls,
       ms: Date.now() - t0,
       ...(error ? { error } : {}),
     };
 
     ctx.emit('gate_done', {
       ...out.summen,
+      status: out.status,
       vollstaendig: out.vollstaendig,
+      calls,
+      verworfen: verworfen.length,
       ms: out.ms,
     });
 
     await ctx.artifacts.write('qualitaetsgate/result.json', out);
+    await ctx.artifacts.write('qualitaetsgate/raw_responses.json', rawResponses);
     return out;
   },
 });

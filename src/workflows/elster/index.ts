@@ -5,6 +5,7 @@ import { extraktionStage } from './stages/extraktion.ts';
 import { anreicherungStage } from './stages/anreicherung.ts';
 import { seitenChipsStage } from './stages/seitenChips.ts';
 import { qualitaetsgateStage } from './stages/qualitaetsgate.ts';
+import { fallSummaryStage } from './stages/fallSummary.ts';
 
 /**
  * Registriert die workflow-lokalen Stages. Die generische Stage `mistral-ocr`
@@ -19,6 +20,7 @@ export function registerElsterStages(): void {
   registerStage(anreicherungStage);
   registerStage(seitenChipsStage);
   registerStage(qualitaetsgateStage);
+  registerStage(fallSummaryStage);
 }
 
 /**
@@ -106,6 +108,17 @@ export function buildElsterWorkflowWithSchema() {
           klassifizierung: '${klassifizierung}',
         },
       },
+      fallSummary: {
+        uses: 'elster/fall-summary',
+        config: {
+          model: 'claude-haiku-4-5',
+        },
+        inputs: {
+          alle_werte_merged: '${qualitaetsgate.alle_werte_merged}',
+          anlagen: '${klassifizierung.erkannte_anlagen}',
+          pages: '${ocr.pages}',
+        },
+      },
     },
     edges: [
       ['ocr', 'klassifizierung'],
@@ -114,6 +127,7 @@ export function buildElsterWorkflowWithSchema() {
       ['extraktion', 'anreicherung'],
       ['anreicherung', 'qualitaetsgate'],
       ['seitenChips', 'qualitaetsgate'],
+      ['qualitaetsgate', 'fallSummary'],
     ],
   });
 }
