@@ -1,0 +1,1220 @@
+{
+  "version": 3,
+  "beschreibung": "Katalog privater Steuerbelege für die Einkommensteuererklärung. Pro Typ: Regex-Muster zur Klassifizierung, Ziel-Anlagen (ELSTER, kann mehrere sein), eCode-Hinweise pro Anlage für die Feldextraktion. Ein leeres anlagen-Array bedeutet: Beleg wird als Dokumentation gesammelt, aber nicht in eCodes extrahiert (z. B. Betriebsausgaben ohne EÜR). Die Reihenfolge der Typen spielt keine Rolle — die Klassifizierung rankt nach Regex-Trefferzahl.",
+  "typen": [
+    {
+      "id": "lohnsteuerbescheinigung",
+      "label": "Lohnsteuerbescheinigung",
+      "anlagen": [
+        "N",
+        "VOR"
+      ],
+      "patterns": [
+        "Lohnsteuerbescheinigung",
+        "elektronische\\s+Lohnsteuerbescheinigung",
+        "eTIN",
+        "Bruttoarbeitslohn"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0200204",
+          "E0200304",
+          "E0200404",
+          "E0200504",
+          "E0200002",
+          "E0202001",
+          "E0201401",
+          "E0201502"
+        ],
+        "VOR": [
+          "E2000401",
+          "E2000801",
+          "E2001203",
+          "E2001505",
+          "E2004403"
+        ]
+      }
+    },
+    {
+      "id": "arbeitsmittel",
+      "label": "Arbeitsmittel / Berufsbedarf (Werbungskosten)",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Arbeitsmittel",
+        "Fachliteratur",
+        "Berufsbekleidung",
+        "Arbeitskleidung",
+        "Werkzeug.*beruflich"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0204401",
+          "E0204402",
+          "E0204403"
+        ]
+      }
+    },
+    {
+      "id": "fortbildung",
+      "label": "Fortbildung / Seminar",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Fortbildung",
+        "Weiterbildung",
+        "Seminargeb[uü]hr",
+        "Lehrgangsgeb[uü]hr",
+        "Kursgeb[uü]hr"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0205405",
+          "E0205406",
+          "E0204803",
+          "E0205003",
+          "E0205004",
+          "E0206301",
+          "E0206302"
+        ]
+      }
+    },
+    {
+      "id": "reisekosten_arbeit",
+      "label": "Reisekosten / Dienstreise",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Reisekostenabrechnung",
+        "Dienstreise",
+        "Ausw[aä]rtst[aä]tigkeit",
+        "Verpflegungsmehraufwand"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0206301",
+          "E0205518"
+        ]
+      }
+    },
+    {
+      "id": "bewerbung",
+      "label": "Bewerbungskosten",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Bewerbungskosten",
+        "Bewerbungsunterlagen",
+        "Assessment[\\s-]?Center"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0205405",
+          "E0205406",
+          "E0204803"
+        ]
+      }
+    },
+    {
+      "id": "arbeitszimmer",
+      "label": "Häusliches Arbeitszimmer / Homeoffice",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "h[aä]usliches\\s+Arbeitszimmer",
+        "Arbeitszimmer",
+        "Homeoffice[\\s-]Pauschale",
+        "Tagespauschale.*h[aä]uslich"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0204507",
+          "E0206206"
+        ]
+      }
+    },
+    {
+      "id": "doppelte_haushaltsfuehrung",
+      "label": "Doppelte Haushaltsführung",
+      "anlagen": [
+        "N_DHH"
+      ],
+      "patterns": [
+        "doppelte\\s+Haushaltsf[uü]hrung",
+        "Zweitwohnung.*beruflich",
+        "Familienheimfahrt"
+      ],
+      "ecodeHintsProAnlage": {
+        "N_DHH": [
+          "E0206103",
+          "E0206304",
+          "E0206404",
+          "E0206403",
+          "E0206405",
+          "E0206602",
+          "E0206704",
+          "E0207117",
+          "E0207304",
+          "E0207702",
+          "E0208107"
+        ]
+      }
+    },
+    {
+      "id": "fahrtenbuch",
+      "label": "Fahrtenbuch / Entfernungspauschale",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Fahrtenbuch",
+        "Entfernungspauschale",
+        "Kilometerpauschale",
+        "Fahrten\\s+zwischen\\s+Wohnung\\s+und\\s+(Arbeit|erster\\s+T[aä]tigkeit)"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0203003",
+          "E0203501",
+          "E0203101",
+          "E0203508",
+          "E0203509",
+          "E0203507",
+          "E0203503",
+          "E0203504",
+          "E0203505",
+          "E0203510",
+          "E0203506",
+          "E0203611",
+          "E0204103",
+          "E0203901",
+          "E0204004"
+        ]
+      }
+    },
+    {
+      "id": "werbungskosten_n",
+      "label": "Sonstige Werbungskosten (Sammelkategorie)",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Werbungskosten",
+        "beruflich\\s+veranlasst"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0204801",
+          "E0204802",
+          "E0205405",
+          "E0205406",
+          "E0204803",
+          "E0205518"
+        ]
+      }
+    },
+    {
+      "id": "kapitalertrag_jahressteuerbescheinigung",
+      "label": "Jahressteuerbescheinigung Kapitalerträge",
+      "anlagen": [
+        "KAP",
+        "AUS"
+      ],
+      "patterns": [
+        "Jahressteuerbescheinigung",
+        "Steuerbescheinigung.*Kapitalertr",
+        "Kapitalertragsteuer",
+        "H[oö]he\\s+der\\s+Kapitalertr[aä]ge"
+      ],
+      "ecodeHintsProAnlage": {
+        "KAP": [
+          "E1900701",
+          "E1901501",
+          "E1901702",
+          "E1904701",
+          "E1904901",
+          "E1904801",
+          "E1901401",
+          "E1900401"
+        ],
+        "AUS": [
+          "E0600920",
+          "E0601002",
+          "E0602001",
+          "E0602201"
+        ]
+      }
+    },
+    {
+      "id": "nv_bescheinigung",
+      "label": "Nichtveranlagungsbescheinigung",
+      "anlagen": [
+        "KAP"
+      ],
+      "patterns": [
+        "Nichtveranlagungsbescheinigung",
+        "NV[\\s-]Bescheinigung"
+      ],
+      "ecodeHintsProAnlage": {
+        "KAP": [
+          "E1904701",
+          "E1904901",
+          "E1904801",
+          "E1905001",
+          "E1905101",
+          "E1905201"
+        ]
+      }
+    },
+    {
+      "id": "ertraegnisaufstellung",
+      "label": "Erträgnisaufstellung",
+      "anlagen": [
+        "KAP"
+      ],
+      "patterns": [
+        "Ertr[aä]gnisaufstellung",
+        "Einzelertr[aä]gnisaufstellung"
+      ],
+      "ecodeHintsProAnlage": {
+        "KAP": [
+          "E1900401",
+          "E1900501",
+          "E1900601",
+          "E1900701",
+          "E1900901",
+          "E1900804",
+          "E1900702",
+          "E1900902",
+          "E1900805",
+          "E1901401",
+          "E1901402",
+          "E1901501",
+          "E1901702",
+          "E1901701",
+          "E1902201",
+          "E1902302",
+          "E1902601",
+          "E1904701",
+          "E1904801",
+          "E1905502",
+          "E1905702",
+          "E1905603"
+        ]
+      }
+    },
+    {
+      "id": "freistellungsauftrag",
+      "label": "Freistellungsauftrag / Mitteilung freigestellte Kapitalerträge",
+      "anlagen": [
+        "KAP"
+      ],
+      "patterns": [
+        "Freistellungsauftrag",
+        "Sparer[\\s-]Pauschbetrag",
+        "freigestellte\\s+Kapitalertr[aä]ge",
+        "Mitteilung.*freigestellte"
+      ],
+      "ecodeHintsProAnlage": {
+        "KAP": [
+          "E1900701",
+          "E1901501",
+          "E1901401",
+          "E1901402"
+        ]
+      }
+    },
+    {
+      "id": "auslaendische_quellensteuer",
+      "label": "Ausländische Quellensteuer",
+      "anlagen": [
+        "AUS"
+      ],
+      "patterns": [
+        "ausl[aä]ndische\\s+Quellensteuer",
+        "Quellensteuerbescheinigung",
+        "anrechenbare\\s+ausl[aä]ndische\\s+Steuer"
+      ],
+      "ecodeHintsProAnlage": {
+        "AUS": [
+          "E0600920",
+          "E0601002",
+          "E0602001",
+          "E0602201",
+          "E0601912",
+          "E0602010",
+          "E0602701",
+          "E0602604"
+        ]
+      }
+    },
+    {
+      "id": "rentenbezug",
+      "label": "Rentenbezugsmitteilung",
+      "anlagen": [
+        "R",
+        "VOR"
+      ],
+      "patterns": [
+        "Rentenbezugsmitteilung",
+        "Leistungsmitteilung.*Rente",
+        "Deutsche\\s+Rentenversicherung",
+        "Jahresbetrag\\s+der\\s+Rente"
+      ],
+      "ecodeHintsProAnlage": {
+        "R": [
+          "E1800301",
+          "E1800606",
+          "E1800501",
+          "E1800601"
+        ],
+        "VOR": [
+          "E2001805",
+          "E2002105",
+          "E2002402"
+        ]
+      }
+    },
+    {
+      "id": "pension_versorgung",
+      "label": "Versorgungsbezüge / Pension / bAV-Leistung",
+      "anlagen": [
+        "N"
+      ],
+      "patterns": [
+        "Versorgungsbez[uü]ge",
+        "Pensionsbescheinigung",
+        "betriebliche\\s+Altersversorgung.*Auszahlung",
+        "Versorgungsfreibetrag"
+      ],
+      "ecodeHintsProAnlage": {
+        "N": [
+          "E0200801",
+          "E0200902",
+          "E0201307",
+          "E0201003",
+          "E0201203",
+          "E0201205",
+          "E0200901",
+          "E0200804",
+          "E0200905",
+          "E0201310",
+          "E0201006",
+          "E0201208",
+          "E0201210",
+          "E0201305",
+          "E0201306"
+        ]
+      }
+    },
+    {
+      "id": "spendenquittung",
+      "label": "Zuwendungsbestätigung / Spendenquittung",
+      "anlagen": [
+        "SA"
+      ],
+      "patterns": [
+        "Zuwendungsbest[aä]tigung",
+        "Spendenquittung",
+        "Zuwendung.*§\\s*10b",
+        "gemeinn[uü]tzigen\\s+Zweck"
+      ],
+      "ecodeHintsProAnlage": {
+        "SA": [
+          "E0108405",
+          "E0105502",
+          "E0108701",
+          "E0108801"
+        ]
+      }
+    },
+    {
+      "id": "kirchensteuer_bescheid",
+      "label": "Kirchensteuer-Beleg (Zahlung / Erstattung)",
+      "anlagen": [
+        "SA"
+      ],
+      "patterns": [
+        "Kirchensteuerbescheid",
+        "Kirchensteuer\\s+gezahlt",
+        "Kirchensteuer\\s+erstattet",
+        "Kirchensteuer.*\\d{4}"
+      ],
+      "ecodeHintsProAnlage": {
+        "SA": [
+          "E0108003",
+          "E0108004",
+          "E0107601",
+          "E0107602"
+        ]
+      }
+    },
+    {
+      "id": "steuerbescheid_vorjahr",
+      "label": "Steuerbescheid Vorjahr (Erstattung / Vorauszahlung)",
+      "anlagen": [
+        "SA"
+      ],
+      "patterns": [
+        "Bescheid\\s+f[uü]r\\s+\\d{4}\\s+[uü]ber\\s+Einkommensteuer",
+        "Finanzamt.*Steuerbescheid",
+        "festgesetzte\\s+Einkommensteuer",
+        "Vorauszahlungen.*\\d{4}"
+      ],
+      "ecodeHintsProAnlage": {
+        "SA": [
+          "E0107601",
+          "E0107602"
+        ]
+      }
+    },
+    {
+      "id": "unterhalt_expartner",
+      "label": "Unterhalt an Ex-Partner (Realsplitting)",
+      "anlagen": [
+        "SA"
+      ],
+      "patterns": [
+        "Unterhaltszahlung.*geschieden",
+        "Realsplitting",
+        "Unterhalt.*Ehegatt",
+        "Anlage\\s*U\\b"
+      ],
+      "ecodeHintsProAnlage": {
+        "SA": [
+          "E0183101",
+          "E0104305",
+          "E0183001",
+          "E0104408",
+          "E0104503",
+          "E0104504"
+        ]
+      }
+    },
+    {
+      "id": "schulgeld",
+      "label": "Schulgeld",
+      "anlagen": [
+        "Kind"
+      ],
+      "patterns": [
+        "Schulgeld",
+        "Privatschule.*Geb[uü]hr",
+        "Internat.*Geb[uü]hr"
+      ],
+      "ecodeHintsProAnlage": {
+        "Kind": [
+          "E0505606",
+          "E0504405",
+          "E0505607",
+          "E0504505"
+        ]
+      }
+    },
+    {
+      "id": "berufsausbildung_eigene",
+      "label": "Eigene Berufsausbildung",
+      "anlagen": [
+        "SA"
+      ],
+      "patterns": [
+        "eigene\\s+Berufsausbildung",
+        "Zweitstudium",
+        "Erstausbildung"
+      ],
+      "ecodeHintsProAnlage": {
+        "SA": [
+          "E0108201",
+          "E0108002",
+          "E0108202"
+        ]
+      }
+    },
+    {
+      "id": "versorgungsausgleich",
+      "label": "Versorgungsausgleich",
+      "anlagen": [
+        "SA"
+      ],
+      "patterns": [
+        "Versorgungsausgleich",
+        "schuldrechtlicher\\s+Versorgungsausgleich"
+      ],
+      "ecodeHintsProAnlage": {
+        "SA": [
+          "E0104306",
+          "E0104307",
+          "E0103904",
+          "E0103905",
+          "E0183901",
+          "E0104308",
+          "E0184201",
+          "E0103903",
+          "E0182301",
+          "E0184101",
+          "E0184001"
+        ]
+      }
+    },
+    {
+      "id": "kranken_pflege_beitrag",
+      "label": "Beitragsbescheinigung Kranken-/Pflegeversicherung",
+      "anlagen": [
+        "VOR"
+      ],
+      "patterns": [
+        "Beitragsbescheinigung",
+        "Krankenversicherung.*Beitr",
+        "Pflegeversicherung.*Beitr",
+        "Basiskranken"
+      ],
+      "ecodeHintsProAnlage": {
+        "VOR": [
+          "E2001203",
+          "E2001505",
+          "E2003104",
+          "E2003202",
+          "E2001605"
+        ]
+      }
+    },
+    {
+      "id": "arbeitslosen_vers",
+      "label": "Arbeitslosenversicherung (privater Beitrag)",
+      "anlagen": [
+        "VOR"
+      ],
+      "patterns": [
+        "Arbeitslosenversicherung",
+        "Beitrag.*Arbeitslosenversicherung"
+      ],
+      "ecodeHintsProAnlage": {
+        "VOR": [
+          "E2004403"
+        ]
+      }
+    },
+    {
+      "id": "unfallvers",
+      "label": "Private Unfallversicherung",
+      "anlagen": [
+        "VOR"
+      ],
+      "patterns": [
+        "Unfallversicherung.*privat",
+        "private\\s+Unfallversicherung"
+      ],
+      "ecodeHintsProAnlage": {
+        "VOR": [
+          "E2001801",
+          "E2001802",
+          "E2001803"
+        ]
+      }
+    },
+    {
+      "id": "haftpflicht",
+      "label": "Private Haftpflichtversicherung",
+      "anlagen": [
+        "VOR"
+      ],
+      "patterns": [
+        "Haftpflichtversicherung.*privat",
+        "private\\s+Haftpflicht"
+      ],
+      "ecodeHintsProAnlage": {
+        "VOR": [
+          "E2001801",
+          "E2001802",
+          "E2001803"
+        ]
+      }
+    },
+    {
+      "id": "ruerup",
+      "label": "Rürup-Basisrentenvertrag",
+      "anlagen": [
+        "VOR"
+      ],
+      "patterns": [
+        "R[uü]rup",
+        "Basisrentenvertrag",
+        "Basisrente"
+      ],
+      "ecodeHintsProAnlage": {
+        "VOR": [
+          "E2000701"
+        ]
+      }
+    },
+    {
+      "id": "arzt_agb",
+      "label": "Arzt / Heilbehandlung (außergewöhnliche Belastung)",
+      "anlagen": [
+        "AgB"
+      ],
+      "patterns": [
+        "Arztrechnung",
+        "Privatrechnung.*Arzt",
+        "Heilbehandlung",
+        "zahn[aä]rztlich"
+      ],
+      "ecodeHintsProAnlage": {
+        "AgB": [
+          "E0161301",
+          "E0161302",
+          "E0161303",
+          "E0161304",
+          "E0161305"
+        ]
+      }
+    },
+    {
+      "id": "apotheke",
+      "label": "Apotheke / Medikamente",
+      "anlagen": [
+        "AgB"
+      ],
+      "patterns": [
+        "Apotheke",
+        "Apothekenbeleg",
+        "Rezeptgeb[uü]hr",
+        "Medikament.*Eigenanteil"
+      ],
+      "ecodeHintsProAnlage": {
+        "AgB": [
+          "E0161301",
+          "E0161302",
+          "E0161303",
+          "E0161304",
+          "E0161305"
+        ]
+      }
+    },
+    {
+      "id": "kur",
+      "label": "Kur / Rehabilitation",
+      "anlagen": [
+        "AgB"
+      ],
+      "patterns": [
+        "Kurkosten",
+        "Rehabilitationsma[sß]nahme",
+        "Heilkur",
+        "ambulante\\s+Badekur"
+      ],
+      "ecodeHintsProAnlage": {
+        "AgB": [
+          "E0161301",
+          "E0161302",
+          "E0161303",
+          "E0161304",
+          "E0161305"
+        ]
+      }
+    },
+    {
+      "id": "pflege_angehoerige",
+      "label": "Pflegekosten Angehörige",
+      "anlagen": [
+        "AgB"
+      ],
+      "patterns": [
+        "Pflegeheim",
+        "Pflegekosten.*Angeh[oö]r",
+        "Altenheim",
+        "Pflegegrad\\s*\\d"
+      ],
+      "ecodeHintsProAnlage": {
+        "AgB": [
+          "E0106507",
+          "E0106603",
+          "E0110601",
+          "E0161506",
+          "E0161607",
+          "E0161606",
+          "E0161808",
+          "E0161401",
+          "E0161402",
+          "E0161403",
+          "E0161404",
+          "E0161405",
+          "E0106813",
+          "E0106906"
+        ]
+      }
+    },
+    {
+      "id": "behinderung_nachweis",
+      "label": "Behinderungs-Nachweis",
+      "anlagen": [
+        "AgB"
+      ],
+      "patterns": [
+        "Schwerbehindertenausweis",
+        "Grad\\s+der\\s+Behinderung",
+        "\\bGdB\\b",
+        "Merkzeichen"
+      ],
+      "ecodeHintsProAnlage": {
+        "AgB": [
+          "E0109708",
+          "E0109707",
+          "E0109706",
+          "E0161606",
+          "E0161808",
+          "E0161706",
+          "E0161806"
+        ]
+      }
+    },
+    {
+      "id": "bestattung",
+      "label": "Bestattungskosten",
+      "anlagen": [
+        "AgB"
+      ],
+      "patterns": [
+        "Bestattungskosten",
+        "Beerdigung",
+        "Grabstein",
+        "Traueranzeige"
+      ],
+      "ecodeHintsProAnlage": {
+        "AgB": [
+          "E0161701",
+          "E0161702",
+          "E0161703",
+          "E0161704",
+          "E0161705"
+        ]
+      }
+    },
+    {
+      "id": "handwerker_haushaltsnah",
+      "label": "Handwerker- / Nebenkostenabrechnung (§ 35a)",
+      "anlagen": [
+        "HA_35a"
+      ],
+      "patterns": [
+        "Handwerkerleistung",
+        "haushaltsnahe\\s+Dienstleistung",
+        "Nebenkostenabrechnung",
+        "§\\s*35\\s*a"
+      ],
+      "ecodeHintsProAnlage": {
+        "HA_35a": [
+          "E0111217",
+          "E0170601",
+          "E0111214",
+          "E0104206",
+          "E0104108",
+          "E0107206",
+          "E0107207"
+        ]
+      }
+    },
+    {
+      "id": "haushaltshilfe",
+      "label": "Haushaltshilfe / Reinigungskraft",
+      "anlagen": [
+        "HA_35a"
+      ],
+      "patterns": [
+        "Haushaltshilfe",
+        "Putzkraft",
+        "Reinigungskraft.*Haushalt"
+      ],
+      "ecodeHintsProAnlage": {
+        "HA_35a": [
+          "E0104206",
+          "E0107206",
+          "E0111217",
+          "E0107606",
+          "E0107605"
+        ]
+      }
+    },
+    {
+      "id": "gartenpflege",
+      "label": "Gartenpflege / Hausmeisterservice",
+      "anlagen": [
+        "HA_35a"
+      ],
+      "patterns": [
+        "Gartenpflege",
+        "Gartenarbeit",
+        "Hausmeisterservice",
+        "Hausmeister.*Rechnung"
+      ],
+      "ecodeHintsProAnlage": {
+        "HA_35a": [
+          "E0104206",
+          "E0107206",
+          "E0111217"
+        ]
+      }
+    },
+    {
+      "id": "kinderbetreuung",
+      "label": "Kinderbetreuung (Kita / Tagesmutter / Au-Pair)",
+      "anlagen": [
+        "Kind"
+      ],
+      "patterns": [
+        "Kinderbetreuungskosten",
+        "Kindertagesst[aä]tte",
+        "Kita[\\s-]Beitrag",
+        "Hortbeitrag",
+        "Tagesmutter",
+        "Au[\\s-]Pair"
+      ],
+      "ecodeHintsProAnlage": {
+        "Kind": [
+          "E0506101",
+          "E0508601"
+        ]
+      }
+    },
+    {
+      "id": "kindergeld_bescheid",
+      "label": "Kindergeld-Bescheid (Familienkasse)",
+      "anlagen": [
+        "Kind"
+      ],
+      "patterns": [
+        "Kindergeldbescheid",
+        "Familienkasse.*Festsetzung",
+        "Kindergeld.*monatlich"
+      ],
+      "ecodeHintsProAnlage": {
+        "Kind": [
+          "E0500702",
+          "E0500706",
+          "E0503802",
+          "E0503701",
+          "E0503821"
+        ]
+      }
+    },
+    {
+      "id": "schulbescheinigung",
+      "label": "Schulbescheinigung",
+      "anlagen": [
+        "Kind"
+      ],
+      "patterns": [
+        "Schulbescheinigung",
+        "Sch[uü]lerbescheinigung"
+      ],
+      "ecodeHintsProAnlage": {
+        "Kind": [
+          "E0502204",
+          "E0506202"
+        ]
+      }
+    },
+    {
+      "id": "immatrikulation_kind",
+      "label": "Immatrikulationsbescheinigung (Kind)",
+      "anlagen": [
+        "Kind"
+      ],
+      "patterns": [
+        "Immatrikulationsbescheinigung",
+        "Studienbescheinigung",
+        "Matrikelnummer"
+      ],
+      "ecodeHintsProAnlage": {
+        "Kind": [
+          "E0502204"
+        ]
+      }
+    },
+    {
+      "id": "altersvorsorge_av",
+      "label": "Riester-Bescheinigung",
+      "anlagen": [
+        "AV"
+      ],
+      "patterns": [
+        "Riester",
+        "zertifiziert.*Altersvorsorgevertrag",
+        "§\\s*92\\s*EStG",
+        "Altersvorsorgebeitr[aä]ge"
+      ],
+      "ecodeHintsProAnlage": {
+        "AV": [
+          "E2004001",
+          "E2023201",
+          "E2023202",
+          "E2023301",
+          "E2002103"
+        ]
+      }
+    },
+    {
+      "id": "mietvertrag",
+      "label": "Mietvertrag (Vermietung)",
+      "anlagen": [
+        "V"
+      ],
+      "patterns": [
+        "Mietvertrag",
+        "Wohnraummietvertrag",
+        "Mietverh[aä]ltnis"
+      ],
+      "ecodeHintsProAnlage": {
+        "V": [
+          "E0700201",
+          "E0700401",
+          "E0700701"
+        ]
+      }
+    },
+    {
+      "id": "nebenkosten_vermietung",
+      "label": "Betriebskosten-Abrechnung (Vermietung)",
+      "anlagen": [
+        "V"
+      ],
+      "patterns": [
+        "Betriebskostenabrechnung",
+        "Heiz.*Wasserkostenabrechnung",
+        "Nebenkostenabrechnung.*Vermiet"
+      ],
+      "ecodeHintsProAnlage": {
+        "V": [
+          "E0700501",
+          "E0700502",
+          "E0702404"
+        ]
+      }
+    },
+    {
+      "id": "darlehen_zins_privat",
+      "label": "Darlehenszins-Bescheinigung (Immobilie)",
+      "anlagen": [
+        "V"
+      ],
+      "patterns": [
+        "Darlehenszinsen",
+        "Zinsbescheinigung.*Immobilie",
+        "Hypothekenzins",
+        "Annuit[aä]tendarlehen"
+      ],
+      "ecodeHintsProAnlage": {
+        "V": [
+          "E0704507",
+          "E0704508",
+          "E0704610",
+          "E0704611",
+          "E0704612",
+          "E0704613",
+          "E0703406"
+        ]
+      }
+    },
+    {
+      "id": "energetisch_35c",
+      "label": "Energetische Sanierung (§ 35c)",
+      "anlagen": [
+        "EM_35c"
+      ],
+      "patterns": [
+        "energetische\\s+Sanierung",
+        "Bescheinigung.*§\\s*35\\s*c",
+        "Fachunternehmen.*Geb[aä]udesanierung",
+        "W[aä]rmed[aä]mmung"
+      ],
+      "ecodeHintsProAnlage": {
+        "EM_35c": [
+          "E0240803",
+          "E0240902",
+          "E0240901",
+          "E0241001",
+          "E0241101",
+          "E0241201",
+          "E0241301",
+          "E0241601",
+          "E0241801",
+          "E0241901",
+          "E0242501",
+          "E0243401",
+          "E0243402",
+          "E0243601",
+          "E0243701"
+        ]
+      }
+    },
+    {
+      "id": "personaldaten_hauptvordruck",
+      "label": "Hauptvordruck-Daten (Personaldaten, IBAN, Steuernummer)",
+      "anlagen": [
+        "ESt1A"
+      ],
+      "patterns": [
+        "Hauptvordruck",
+        "ESt\\s*1\\s*A\\b",
+        "Mantelbogen",
+        "Einkommensteuererkl[aä]rung\\s+\\d{4}"
+      ],
+      "ecodeHintsProAnlage": {
+        "ESt1A": [
+          "E0100081",
+          "E0100082",
+          "E0101201",
+          "E0102602",
+          "E0102102"
+        ]
+      }
+    },
+    {
+      "id": "religionszugehoerigkeit",
+      "label": "Religionszugehörigkeit (VaSt-Auszug)",
+      "anlagen": [
+        "ESt1A"
+      ],
+      "patterns": [
+        "Religionszugeh[oö]rigkeit",
+        "\\|\\s*Religion\\s*\\|"
+      ],
+      "ecodeHintsProAnlage": {
+        "ESt1A": [
+          "E0100081",
+          "E0100082",
+          "E0100402",
+          "E0101002"
+        ]
+      }
+    },
+    {
+      "id": "honorarnachweis",
+      "label": "Honorarnachweis / Ausgangsrechnung (Nebentätigkeit)",
+      "anlagen": [
+        "S"
+      ],
+      "patterns": [
+        "Honorar",
+        "Honorarabrechnung",
+        "Honorarnote",
+        "Rechnungsnummer.*Honorar",
+        "freiberuflich",
+        "selbst[aä]ndige\\s+T[aä]tigkeit"
+      ],
+      "ecodeHintsProAnlage": {
+        "S": [
+          "E0803101",
+          "E0820501",
+          "E0803202",
+          "E0803901",
+          "E0821703",
+          "E0803902",
+          "E0804002"
+        ]
+      }
+    },
+    {
+      "id": "uebungsleiter_ehrenamt",
+      "label": "Übungsleiter- / Ehrenamts-Aufwandsentschädigung (§ 3 Nr. 26 EStG)",
+      "anlagen": [
+        "S"
+      ],
+      "patterns": [
+        "[UÜ]bungsleiter",
+        "ehrenamtlich",
+        "§\\s*3\\s+Nr\\.\\s*26",
+        "§\\s*3\\s+Nr\\.\\s*26a",
+        "Aufwandsentsch[aä]digung",
+        "nebenberuflich"
+      ],
+      "ecodeHintsProAnlage": {
+        "S": [
+          "E0805301",
+          "E0805302",
+          "E0805303",
+          "E0805304"
+        ]
+      }
+    },
+    {
+      "id": "betriebsausgabe_material",
+      "label": "Betriebsausgabe: Büromaterial / Arbeitsmittel (Nebentätigkeit)",
+      "anlagen": [],
+      "patterns": [
+        "B[uü]romaterial",
+        "B[uü]robedarf",
+        "Druckerpatrone",
+        "Toner",
+        "Papier.*B[uü]ro"
+      ],
+      "ecodeHintsProAnlage": {}
+    },
+    {
+      "id": "betriebsausgabe_fachliteratur",
+      "label": "Betriebsausgabe: Fachliteratur (Nebentätigkeit)",
+      "anlagen": [],
+      "patterns": [
+        "Fachbuch",
+        "Fachzeitschrift",
+        "Abonnement.*Fach",
+        "Literatur.*beruflich"
+      ],
+      "ecodeHintsProAnlage": {}
+    },
+    {
+      "id": "betriebsausgabe_fortbildung",
+      "label": "Betriebsausgabe: Fortbildung (Nebentätigkeit)",
+      "anlagen": [],
+      "patterns": [
+        "Seminar.*selbst[aä]ndig",
+        "Fortbildung.*selbst[aä]ndig",
+        "Workshop.*freiberuflich",
+        "Konferenz.*beruflich"
+      ],
+      "ecodeHintsProAnlage": {}
+    },
+    {
+      "id": "betriebsausgabe_bewirtung",
+      "label": "Betriebsausgabe: Bewirtungskosten (Nebentätigkeit)",
+      "anlagen": [],
+      "patterns": [
+        "Bewirtungskosten",
+        "Bewirtung",
+        "Gesch[aä]ftsessen",
+        "Bewirtungsbeleg",
+        "Anlass.*Gesch[aä]ft"
+      ],
+      "ecodeHintsProAnlage": {}
+    },
+    {
+      "id": "betriebsausgabe_kfz",
+      "label": "Betriebsausgabe: KFZ / Geschäftsreise (Nebentätigkeit)",
+      "anlagen": [],
+      "patterns": [
+        "Tankbeleg",
+        "KFZ.*Gesch[aä]ft",
+        "Kilometergeld.*selbst[aä]ndig",
+        "Gesch[aä]ftsreise"
+      ],
+      "ecodeHintsProAnlage": {}
+    },
+    {
+      "id": "geschaeftskonto_auszug",
+      "label": "Geschäftskonto-Auszug (Nebentätigkeit)",
+      "anlagen": [],
+      "patterns": [
+        "Gesch[aä]ftskonto",
+        "Kontoauszug.*Gesch[aä]ft",
+        "Kontoauszug.*selbst[aä]ndig",
+        "Umsatz[uü]bersicht.*Gesch[aä]ft"
+      ],
+      "ecodeHintsProAnlage": {}
+    }
+  ]
+}
