@@ -2,6 +2,7 @@ import { registerStage } from '../../core/registry.ts';
 import { defineWorkflow } from '../../core/workflow.ts';
 import { klassifizierungStage } from './stages/klassifizierung.ts';
 import { extraktionStage } from './stages/extraktion.ts';
+import { anreicherungStage } from './stages/anreicherung.ts';
 
 /**
  * Registriert die workflow-lokalen Stages. Die generische Stage `mistral-ocr`
@@ -13,6 +14,7 @@ import { extraktionStage } from './stages/extraktion.ts';
 export function registerElsterStages(): void {
   registerStage(klassifizierungStage);
   registerStage(extraktionStage);
+  registerStage(anreicherungStage);
 }
 
 /**
@@ -51,25 +53,35 @@ export function buildElsterWorkflowWithSchema() {
         },
         inputs: {
           text: '${ocr.text}',
+          vz: '${input.vz}',
         },
       },
       extraktion: {
         uses: 'elster/extraktion',
         config: {
           concurrency: 3,
-          model: 'mistral-small-latest',
+          model: 'claude-haiku-4-5',
           maxFieldsPerAnlage: 200,
           maxTextChars: 60_000,
         },
         inputs: {
           text: '${ocr.text}',
           anlagen: '${klassifizierung.erkannte_anlagen}',
+          vz: '${input.vz}',
+        },
+      },
+      anreicherung: {
+        uses: 'elster/anreicherung',
+        inputs: {
+          per_anlage: '${extraktion.per_anlage}',
+          vz: '${input.vz}',
         },
       },
     },
     edges: [
       ['ocr', 'klassifizierung'],
       ['klassifizierung', 'extraktion'],
+      ['extraktion', 'anreicherung'],
     ],
   });
 }

@@ -1,10 +1,11 @@
 import { defineStage } from '../../../core/stage.ts';
-import { chatJson } from '../lib/mistral-chat.ts';
+import { chatJson } from '../lib/haiku-chat.ts';
 import { loadFelder, type FelderSchema } from '../lib/anlagen-katalog.ts';
 
 export interface ExtraktionInput {
   text: string;
   anlagen: string[];
+  vz?: number | string;
 }
 
 export interface AnlageResult {
@@ -96,10 +97,11 @@ async function extractOne(
   anlage: string,
   text: string,
   config: Required<ExtraktionConfig>,
+  vz: number | string | undefined,
   signal?: AbortSignal,
 ): Promise<AnlageResult> {
   const t0 = Date.now();
-  const raw = await loadFelder(anlage);
+  const raw = await loadFelder(anlage, vz);
   const felder = selectFields(extractableFelder(raw.felder), config.maxFieldsPerAnlage);
   if (felder.length === 0) {
     return {
@@ -142,7 +144,7 @@ async function extractOne(
 
 function resolveConfig(c: ExtraktionConfig): Required<ExtraktionConfig> {
   return {
-    model: c.model ?? 'mistral-small-latest',
+    model: c.model ?? 'claude-haiku-4-5',
     concurrency: c.concurrency ?? 3,
     maxFieldsPerAnlage: c.maxFieldsPerAnlage ?? 200,
     maxTextChars: c.maxTextChars ?? 60_000,
@@ -180,7 +182,7 @@ export const extraktionStage = defineStage<
         if (!anlage) break;
         ctx.emit('anlage_start', { anlage });
         try {
-          const r = await extractOne(anlage, input.text, config, ctx.signal);
+          const r = await extractOne(anlage, input.text, config, input.vz, ctx.signal);
           results[anlage] = r;
           await ctx.artifacts.write(`per_anlage/${anlage}.json`, r);
           done += 1;
