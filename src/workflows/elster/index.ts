@@ -3,6 +3,8 @@ import { defineWorkflow } from '../../core/workflow.ts';
 import { klassifizierungStage } from './stages/klassifizierung.ts';
 import { extraktionStage } from './stages/extraktion.ts';
 import { anreicherungStage } from './stages/anreicherung.ts';
+import { seitenChipsStage } from './stages/seitenChips.ts';
+import { qualitaetsgateStage } from './stages/qualitaetsgate.ts';
 
 /**
  * Registriert die workflow-lokalen Stages. Die generische Stage `mistral-ocr`
@@ -15,6 +17,8 @@ export function registerElsterStages(): void {
   registerStage(klassifizierungStage);
   registerStage(extraktionStage);
   registerStage(anreicherungStage);
+  registerStage(seitenChipsStage);
+  registerStage(qualitaetsgateStage);
 }
 
 /**
@@ -77,11 +81,39 @@ export function buildElsterWorkflowWithSchema() {
           vz: '${input.vz}',
         },
       },
+      seitenChips: {
+        uses: 'elster/seiten-chips',
+        config: {
+          model: 'claude-haiku-4-5',
+          concurrency: 4,
+          maxCharsPerPage: 8000,
+        },
+        inputs: {
+          pages: '${ocr.pages}',
+        },
+      },
+      qualitaetsgate: {
+        uses: 'elster/qualitaetsgate',
+        config: {
+          model: 'claude-haiku-4-5',
+          maxCharsProSeite: 5000,
+          maxAnlagen: 7,
+          vz: '${input.vz}',
+        },
+        inputs: {
+          pages: '${ocr.pages}',
+          anreicherung: '${anreicherung}',
+          klassifizierung: '${klassifizierung}',
+        },
+      },
     },
     edges: [
       ['ocr', 'klassifizierung'],
+      ['ocr', 'seitenChips'],
       ['klassifizierung', 'extraktion'],
       ['extraktion', 'anreicherung'],
+      ['anreicherung', 'qualitaetsgate'],
+      ['seitenChips', 'qualitaetsgate'],
     ],
   });
 }
