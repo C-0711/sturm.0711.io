@@ -6,7 +6,14 @@ export interface AnreicherungInput {
     anlage: string;
     fieldCount: number;
     filled: number;
+    /** Legacy: Werte für Person A */
     values: Record<string, string | null>;
+    /** Multi-Instanz: Person A + Person B bei Ehegatten-Veranlagung */
+    instances?: Array<{
+      person: 'A' | 'B' | string;
+      label?: string;
+      values: Record<string, string | null>;
+    }>;
     durationMs: number;
     error?: string;
   }>;
@@ -21,6 +28,10 @@ export interface AngereicherterWert {
   vordruckzeile: string | null;
   format: string | null;
   pflichtfeld: boolean;
+  /** 'A' = Ehemann/einzig; 'B' = Ehefrau. Für Einzelveranlagung immer 'A'. */
+  person?: 'A' | 'B' | string;
+  /** Label wie 'Ehemann' / 'Ehefrau' / 'Person A' / ... */
+  person_label?: string;
 }
 
 export interface AnreicherungOutput {
@@ -75,33 +86,48 @@ export const anreicherungStage = defineStage<
       }
 
       const belegte: AngereicherterWert[] = [];
-      const unbelegt: string[] = [];
+      const unbelegtSet = new Set<string>();
 
-      for (const [eCode, wert] of Object.entries(result.values)) {
-        const feld = feldLookup.get(eCode);
-        const beschreibung = feld?.Beschreibung || feld?.Drucktext || eCode;
-        const drucktext = feld?.Drucktext || feld?.Beschreibung || eCode;
-        const vordruckzeile = feld?.Vordruckzeile || null;
-        const format = feld?.Formatkennzeichen || feld?.Format || null;
-        const pflichtfeld = Boolean(feld?.pflicht);
+      // Instanzen-Liste ermitteln: bevorzugt result.instances, sonst legacy result.values als A
+      const instances = (Array.isArray(result.instances) && result.instances.length > 0)
+        ? result.instances
+        : [{ person: 'A' as const, label: undefined, values: result.values ?? {} }];
 
-        if (wert !== null && wert !== undefined && String(wert).trim() !== '') {
-          const angereichert: AngereicherterWert = {
-            eCode,
-            wert: String(wert),
-            beschreibung,
-            drucktext,
-            vordruckzeile,
-            format,
-            pflichtfeld,
-          };
-          belegte.push(angereichert);
-          alleWerte.push({ ...angereichert, anlage });
-          if (pflichtfeld) pflichtBelegt += 1;
-        } else {
-          unbelegt.push(eCode);
+      for (const inst of instances) {
+        const person = String(inst.person || 'A').toUpperCase();
+        const label = inst.label;
+        for (const [eCode, wert] of Object.entries(inst.values ?? {})) {
+          const feld = feldLookup.get(eCode);
+          const beschreibung = feld?.Beschreibung || feld?.Drucktext || eCode;
+          const drucktext = feld?.Drucktext || feld?.Beschreibung || eCode;
+          const vordruckzeile = feld?.Vordruckzeile || null;
+          const format = feld?.Formatkennzeichen || feld?.Format || null;
+          const pflichtfeld = Boolean(feld?.pflicht);
+
+          if (wert !== null && wert !== undefined && String(wert).trim() !== '') {
+            const angereichert: AngereicherterWert = {
+              eCode,
+              wert: String(wert),
+              beschreibung,
+              drucktext,
+              vordruckzeile,
+              format,
+              pflichtfeld,
+              person,
+              person_label: label,
+            };
+            belegte.push(angereichert);
+            alleWerte.push({ ...angereichert, anlage });
+            if (pflichtfeld) pflichtBelegt += 1;
+          } else {
+            unbelegtSet.add(eCode);
+          }
         }
       }
+
+      // eCode gilt als unbelegt nur wenn er in KEINER Instanz belegt war
+      const belegteCodes = new Set(belegte.map((b) => b.eCode));
+      const unbelegt = [...unbelegtSet].filter((e) => !belegteCodes.has(e));
 
       if (belegte.length > 0) anlagenBelegt += 1;
 
@@ -111,6 +137,7 @@ export const anreicherungStage = defineStage<
         anlage,
         werte: belegte.length,
         unbelegt: unbelegt.length,
+        instanzen: instances.length,
       });
     }
 

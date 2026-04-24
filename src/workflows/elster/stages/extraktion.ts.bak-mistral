@@ -1,5 +1,5 @@
 import { defineStage } from '../../../core/stage.ts';
-import { chatJson } from '../lib/haiku-chat.ts';
+import { chatJson } from '../lib/mistral-chat.ts';
 import { loadFelder, type FelderSchema } from '../lib/anlagen-katalog.ts';
 
 export interface ExtraktionInput {
@@ -12,19 +12,7 @@ export interface AnlageResult {
   anlage: string;
   fieldCount: number;
   filled: number;
-  /** Legacy: Werte für Person A / einzige Instanz. Bleibt für Backward-Compat. */
   values: Record<string, string | null>;
-  /**
-   * Multi-Instanz-Werte. Bei Ehegatten-Veranlagung kommen Anlagen wie KAP / N /
-   * AV / VOR zweimal vor (Person A + Person B). Jede Instanz hat ihre eigenen
-   * Werte. Wenn `instances` nur 1 Eintrag hat, ist das Dokument einzeln veranlagt
-   * oder die Anlage kommt nur einmal vor.
-   */
-  instances: Array<{
-    person: 'A' | 'B' | string;
-    label?: string;
-    values: Record<string, string | null>;
-  }>;
   durationMs: number;
   error?: string;
 }
@@ -88,36 +76,14 @@ function fieldSpec(f: Feld): FieldSpec {
 
 function buildPrompt(anlage: string, spec: FieldSpec[], text: string, maxChars: number): string {
   return [
-    'Du bekommst den OCR-Text einer deutschen Einkommensteuererklärung und eine Liste',
+    'Du bekommst den OCR-Text einer Einkommensteuererklärung und eine Liste',
     `von Feldern für die ELSTER-Anlage "${anlage}".`,
+    'Für jedes Feld: wenn du im Text einen passenden Wert findest, gib ihn zurück;',
+    'sonst null. Beträge als Zeichenkette mit Komma (z.B. "12345,67").',
+    '"drucktext" ist der Label-Text auf dem Formular, "vordruckzeile" die Zeilennummer.',
     '',
-    'WICHTIG — EHEGATTEN-VERANLAGUNG:',
-    `Bei einer Zusammenveranlagung kann die Anlage ${anlage} zweimal vorkommen:`,
-    '- Einmal für "Steuerpflichtige Person / Ehemann / Person A"',
-    '- Einmal für "Ehefrau / Person B"',
-    'Achte auf Überschriften / Marker wie:',
-    '  "Anlage KAP (Ehefrau / Person B)", "Anlage N (Person B)",',
-    '  "(Steuerpflichtige Person / Ehemann / Person A)", "Person A", "Person B", etc.',
-    '',
-    'Wenn du zwei Instanzen erkennst: liefere BEIDE in instances[].',
-    'Wenn nur eine Instanz da ist: liefere instances[] mit einem Eintrag (person="A").',
-    '',
-    'REGELN:',
-    '1. Jeder Wert als Zeichenkette (Beträge mit deutschem Komma z.B. "12345,67").',
-    '2. Fehlender Wert = null.',
-    '3. "drucktext" ist das Formular-Label, "vordruckzeile" die Zeilennummer.',
-    '4. Gib NUR die eCodes aus der untenstehenden Feldliste zurück.',
-    '',
-    'Antwort STRIKT als JSON:',
-    '{',
-    '  "instances": [',
-    '    {"person": "A", "label": "Ehemann", "values": {"E0200204": "63559,90", "E0200304": "6720,00"}},',
-    '    {"person": "B", "label": "Ehefrau", "values": {"E0200204": null, "E0200304": null}}',
-    '  ]',
-    '}',
-    '',
-    'Wenn nur eine Person da ist: {"instances": [{"person": "A", "values": {...}}]}.',
-    'KEIN Vorspann, KEIN Markdown, nur JSON.',
+    'Antworte ausschließlich mit JSON in dieser Form:',
+    '{"values": {"E0200204": "12345,67", "E0200304": null}}',
     '',
     'Felder:',
     JSON.stringify(spec, null, 2),
@@ -149,75 +115,36 @@ async function extractOne(
   const spec = felder.map(fieldSpec);
   const prompt = buildPrompt(anlage, spec, text, config.maxTextChars);
 
-  const { parsed } = await chatJson<{
-    instances?: Array<{
-      person?: string;
-      label?: string;
-      values?: Record<string, unknown>;
-    }>;
-    // Backward-compat: falls Haiku doch das alte Schema liefert
-    values?: Record<string, unknown>;
-  }>(prompt, {
+  const { parsed } = await chatJson<{ values?: Record<string, unknown> }>(prompt, {
     model: config.model,
     temperature: config.temperature,
     signal,
-    maxTokens: 8000,
   });
 
   const allowed = new Set(spec.map((s) => s.eCode));
-
-  // Normalisiere zu instances[] auch für Legacy-Responses
-  let rawInstances: Array<{ person?: string; label?: string; values?: Record<string, unknown> }>;
-  if (Array.isArray(parsed.instances) && parsed.instances.length > 0) {
-    rawInstances = parsed.instances;
-  } else if (parsed.values && typeof parsed.values === 'object') {
-    rawInstances = [{ person: 'A', values: parsed.values }];
-  } else {
-    rawInstances = [{ person: 'A', values: {} }];
-  }
-
-  const instances: AnlageResult['instances'] = [];
-  let totalFilled = 0;
-  // Legacy: values aus Person A
-  let legacyValues: Record<string, string | null> = {};
-
-  for (let idx = 0; idx < rawInstances.length; idx += 1) {
-    const ri = rawInstances[idx];
-    const person = (ri.person || (idx === 0 ? 'A' : 'B')).toUpperCase();
-    const values: Record<string, string | null> = {};
-    let filledInst = 0;
-    for (const [k, v] of Object.entries(ri.values ?? {})) {
-      if (!allowed.has(k)) continue;
-      if (v === null || v === '' || v === undefined) {
-        values[k] = null;
-      } else {
-        values[k] = String(v);
-        filledInst += 1;
-      }
+  const values: Record<string, string | null> = {};
+  let filled = 0;
+  for (const [k, v] of Object.entries(parsed.values ?? {})) {
+    if (!allowed.has(k)) continue;
+    if (v === null || v === '' || v === undefined) {
+      values[k] = null;
+    } else {
+      values[k] = String(v);
+      filled += 1;
     }
-    if (filledInst === 0 && idx > 0) continue; // leere B-Instanz skippen
-    instances.push({ person, label: ri.label, values });
-    totalFilled += filledInst;
-    if (idx === 0) legacyValues = values;
   }
-
-  if (instances.length === 0) {
-    instances.push({ person: 'A', values: {} });
-  }
-
   return {
     anlage,
     fieldCount: spec.length,
-    filled: totalFilled,
-    values: legacyValues,
-    instances,
+    filled,
+    values,
     durationMs: Date.now() - t0,
   };
 }
 
 function resolveConfig(c: ExtraktionConfig): Required<ExtraktionConfig> {
   return {
-    model: c.model ?? 'claude-haiku-4-5',
+    model: c.model ?? 'mistral-small-latest',
     concurrency: c.concurrency ?? 3,
     maxFieldsPerAnlage: c.maxFieldsPerAnlage ?? 200,
     maxTextChars: c.maxTextChars ?? 60_000,

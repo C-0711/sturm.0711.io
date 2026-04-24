@@ -4,6 +4,7 @@ import { loadKatalog } from '../lib/anlagen-katalog.ts';
 
 export interface KlassifizierungInput {
   text: string;
+  vz?: number | string;
 }
 
 export interface KlassifizierungOutput {
@@ -140,7 +141,7 @@ export const klassifizierungStage = defineStage<
 
   async run(input, ctx) {
     const t0 = Date.now();
-    const katalog = await loadKatalog();
+    const katalog = await loadKatalog(input.vz);
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
 

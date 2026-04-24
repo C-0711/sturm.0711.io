@@ -17,6 +17,8 @@ type AnrWert = {
   vordruckzeile?: string;
   pflichtfeld?: boolean;
   format?: string;
+  person?: 'A' | 'B' | string;
+  person_label?: string;
 };
 
 type AnrOutput = {
@@ -41,6 +43,7 @@ export interface QualitaetsgateErgaenzung {
   drucktext?: string;
   vordruckzeile?: string;
   pflichtfeld?: boolean;
+  person?: 'A' | 'B' | string;
 }
 
 export interface QualitaetsgateOutput {
@@ -106,6 +109,7 @@ function buildGatePrompt(
 ): string {
   const werteKompakt = aktuelleWerteAnlagen.map((w) => ({
     anlage: w.anlage,
+    person: w.person || 'A',
     eCode: w.eCode,
     wert: w.wert,
     drucktext: (w.drucktext || w.beschreibung || '').slice(0, 80),
@@ -160,7 +164,10 @@ function buildGatePrompt(
     '5. "quelle_seite" ist 1-basiert und entspricht SEITE X.',
     '',
     'Antwort STRIKT als JSON:',
-    '{"ergaenzt": [{"eCode":"E...","anlage":"...","wert":"...","quelle_seite":1}]}',
+    '{"ergaenzt": [{"eCode":"E...","anlage":"...","person":"A" oder "B","wert":"...","quelle_seite":1}]}',
+    '',
+    'person: "A" = Ehemann / Steuerpflichtige Person / einzig; "B" = Ehefrau.',
+    'Wenn nicht klar erkennbar, lass person weg (Default "A").',
     '',
     'Wenn nichts zu ergänzen ist: {"ergaenzt": []}',
   ].join('\n');
@@ -230,11 +237,22 @@ export const qualitaetsgateStage = defineStage<
     const chunks = chunkAnlagen(anlagen, config.chunkSchwelle);
     const ergaenzt: QualitaetsgateErgaenzung[] = [];
     const verworfen: Array<{ eCode: string; anlage: string; grund: string }> = [];
-    // Dubletten-Key: anlage + eCode + wert
-    // Grund: Anlagen wie KAP können zweimal vorkommen (Ehemann / Ehefrau = Person A / B).
-    // Gleicher eCode mit UNTERSCHIEDLICHEM Wert ist KEINE Dublette, sondern eine
-    // zweite Instanz. Der Wert als Teil des Keys erkennt das automatisch.
+    // Zwei Dubletten-Keys:
+    // 1. anlage + eCode + wert  (exakte Dublette)
+    // 2. anlage + zeile + wert  (Slot-Dublette: ELSTER hat oft mehrere eCodes
+    //    für dieselbe Vordruckzeile, z.B. E0200201 / E0200204 / E0200207 für
+    //    Z5 Bruttoarbeitslohn. Wenn Person A's Wert schon drin ist und Haiku
+    //    einen anderen eCode für dieselbe Zeile + denselben Wert vorschlägt,
+    //    ist das eine Slot-Redundanz.)
+    //
+    // Ehegatten-Veranlagung: Anlage KAP kommt zweimal vor. Gleiche Zeile,
+    // aber UNTERSCHIEDLICHER Wert = keine Dublette (Person B).
     const bekannt = new Set(aktuelleWerte.map((w) => `${w.anlage}:${w.eCode}:${w.wert}`));
+    const slotBelegt = new Set(
+      aktuelleWerte
+        .filter((w) => w.vordruckzeile)
+        .map((w) => `${w.anlage}:Z${w.vordruckzeile}:${w.wert}`),
+    );
     const rawResponses: Array<{ chunk: string[]; raw: string }> = [];
     let error: string | undefined;
     let calls = 0;
@@ -298,6 +316,15 @@ export const qualitaetsgateStage = defineStage<
             verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'eCode_nicht_im_katalog' });
             continue;
           }
+          // Slot-Redundanz: derselbe Wert steckt schon in einem anderen eCode derselben Zeile
+          if (feld.zeile) {
+            const slotKey = `${v.anlage}:Z${feld.zeile}:${v.wert}`;
+            if (slotBelegt.has(slotKey)) {
+              verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'slot_redundant' });
+              continue;
+            }
+            slotBelegt.add(slotKey);
+          }
           bekannt.add(key);
           const e: QualitaetsgateErgaenzung = {
             eCode: v.eCode,
@@ -307,6 +334,7 @@ export const qualitaetsgateStage = defineStage<
             drucktext: feld.drucktext,
             vordruckzeile: feld.zeile,
             beschreibung: feld.drucktext,
+            person: typeof (v as any).person === 'string' ? (v as any).person.toUpperCase() : undefined,
           };
         ergaenzt.push(e);
         ctx.emit('gate_ergaenzung', e);
@@ -324,6 +352,7 @@ export const qualitaetsgateStage = defineStage<
         drucktext: e.drucktext,
         vordruckzeile: e.vordruckzeile,
         pflichtfeld: e.pflichtfeld,
+        person: e.person,
       })),
     ];
 
