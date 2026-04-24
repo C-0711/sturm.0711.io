@@ -99,13 +99,14 @@ export function buildElsterWorkflowWithSchema() {
         config: {
           model: 'claude-haiku-4-5',
           maxCharsProSeite: 5000,
-          maxAnlagen: 7,
-          vz: '${input.vz}',
+          chunkSchwelle: 3,
+          maxFelderProAnlage: 200,
         },
         inputs: {
           pages: '${ocr.pages}',
           anreicherung: '${anreicherung}',
           klassifizierung: '${klassifizierung}',
+          vz: '${input.vz}',
         },
       },
       fallSummary: {

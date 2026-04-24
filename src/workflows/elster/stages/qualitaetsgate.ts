@@ -29,6 +29,7 @@ export interface QualitaetsgateInput {
   pages: Array<{ index: number; markdown: string; chars: number }>;
   anreicherung: AnrOutput;
   klassifizierung: { erkannte_anlagen: string[] };
+  vz?: number | string;
 }
 
 export interface QualitaetsgateErgaenzung {
@@ -59,7 +60,6 @@ export interface QualitaetsgateConfig {
   maxCharsProSeite?: number;
   maxFelderProAnlage?: number;
   temperature?: number;
-  vz?: number | string;
   chunkSchwelle?: number;
 }
 
@@ -67,9 +67,8 @@ function resolveConfig(c: QualitaetsgateConfig): Required<QualitaetsgateConfig> 
   return {
     model: c.model ?? 'claude-haiku-4-5',
     maxCharsProSeite: c.maxCharsProSeite ?? 4000,
-    maxFelderProAnlage: c.maxFelderProAnlage ?? 60,
+    maxFelderProAnlage: c.maxFelderProAnlage ?? 200,
     temperature: c.temperature ?? 0,
-    vz: (c as any).vz ?? '',
     chunkSchwelle: c.chunkSchwelle ?? 3,
   };
 }
@@ -89,7 +88,9 @@ async function buildFeldKatalogKompakt(
         drucktext: String(f.Drucktext || f.Beschreibung || '').slice(0, 100),
         zeile: f.Vordruckzeile ? String(f.Vordruckzeile) : undefined,
       }));
-    } catch {
+    } catch (e: any) {
+      // eslint-disable-next-line no-console
+      console.warn(`[qualitaetsgate] katalog-build fehlgeschlagen für ${name} (vz=${vz}): ${e?.message ?? e}`);
       out[name] = [];
     }
   }
@@ -149,8 +150,14 @@ function buildGatePrompt(
     'REGELN:',
     '1. NUR eCodes aus dem KATALOG (exakt mit E-Präfix abschreiben).',
     '2. NUR Werte, die tatsächlich im Rohtext stehen (kein Raten).',
-    '3. Keine Dubletten zu SCHON EXTRAHIERT.',
-    '4. "quelle_seite" ist 1-basiert und entspricht SEITE X.',
+    '3. Dublette = SELBER eCode UND SELBER Wert. Ein gleicher eCode mit einem ANDEREN Wert ist KEINE Dublette!',
+    '   Das passiert häufig bei Ehegatten-Veranlagung: Anlage KAP, Anlage N, Anlage AV etc.',
+    '   kommen in der Steuererklärung ZWEIMAL vor (Person A / Ehemann und Person B / Ehefrau).',
+    '   Beispiel: Person A hat E1904701 (Kapitalertragsteuer) = 26,69 €. Person B hat E1904701 = 1,99 €.',
+    '   BEIDE sind gültig und müssen ergänzt werden, wenn der Rohtext "Anlage KAP (Ehefrau / Person B)" enthält.',
+    '4. Achte auf Markierungen wie "(Ehefrau / Person B)", "(Ehemann / Person A)", "Person A", "Person B" im Rohtext.',
+    '   Wenn du siehst, dass eine Anlage zweimal vorkommt, ergänze die fehlenden Werte der zweiten Person.',
+    '5. "quelle_seite" ist 1-basiert und entspricht SEITE X.',
     '',
     'Antwort STRIKT als JSON:',
     '{"ergaenzt": [{"eCode":"E...","anlage":"...","wert":"...","quelle_seite":1}]}',
@@ -186,6 +193,7 @@ export const qualitaetsgateStage = defineStage<
     const anlagen = input.klassifizierung?.erkannte_anlagen || [];
     const aktuelleWerte: AnrWert[] = input.anreicherung?.alle_werte || [];
     const pages = input.pages || [];
+    const vz = input.vz;
 
     ctx.emit('gate_start', {
       werte_vorher: aktuelleWerte.length,
@@ -210,14 +218,23 @@ export const qualitaetsgateStage = defineStage<
 
     const katalog = await buildFeldKatalogKompakt(
       anlagen,
-      config.vz,
+      vz,
       config.maxFelderProAnlage,
     );
+
+    // Log katalog-size pro Anlage damit wir im Artefakt sehen, was Haiku zu sehen bekommt
+    const katalogSizes: Record<string, number> = {};
+    for (const [a, felder] of Object.entries(katalog)) katalogSizes[a] = felder.length;
+    ctx.emit('gate_katalog', { vz, sizes: katalogSizes });
 
     const chunks = chunkAnlagen(anlagen, config.chunkSchwelle);
     const ergaenzt: QualitaetsgateErgaenzung[] = [];
     const verworfen: Array<{ eCode: string; anlage: string; grund: string }> = [];
-    const bekannt = new Set(aktuelleWerte.map((w) => `${w.anlage}:${w.eCode}`));
+    // Dubletten-Key: anlage + eCode + wert
+    // Grund: Anlagen wie KAP können zweimal vorkommen (Ehemann / Ehefrau = Person A / B).
+    // Gleicher eCode mit UNTERSCHIEDLICHEM Wert ist KEINE Dublette, sondern eine
+    // zweite Instanz. Der Wert als Teil des Keys erkennt das automatisch.
+    const bekannt = new Set(aktuelleWerte.map((w) => `${w.anlage}:${w.eCode}:${w.wert}`));
     const rawResponses: Array<{ chunk: string[]; raw: string }> = [];
     let error: string | undefined;
     let calls = 0;
@@ -270,7 +287,7 @@ export const qualitaetsgateStage = defineStage<
             verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'anlage_nicht_im_chunk' });
             continue;
           }
-          const key = `${v.anlage}:${v.eCode}`;
+          const key = `${v.anlage}:${v.eCode}:${v.wert}`;
           if (bekannt.has(key)) {
             verworfen.push({ eCode: v.eCode, anlage: v.anlage, grund: 'dublette' });
             continue;
@@ -311,18 +328,11 @@ export const qualitaetsgateStage = defineStage<
     ];
 
     // Status: klare Semantik
-    // Status-Ableitung mit klarer Semantik.
-    // - fehler: ein Chunk-Call hat einen Exception geworfen
-    // - ok_ergaenzt: mindestens eine echte Ergänzung durchgerutscht
-    // - ok_vollstaendig: kein Vorschlag, oder alle Vorschläge waren Dubletten (= Haiku bestätigt Vollständigkeit)
-    // - unklar: Haiku schlug Felder vor, die NICHT Dubletten sind, aber unser Validator hat sie verworfen
-    //           (eCode_nicht_im_katalog, anlage_nicht_im_chunk, unvollstaendig) — das sind echte Misses
-    const nichtDublettenVerworfen = verworfen.filter((v) => v.grund !== 'dublette').length;
     let status: QualitaetsgateOutput['status'];
     if (error) status = 'fehler';
     else if (ergaenzt.length > 0) status = 'ok_ergaenzt';
-    else if (nichtDublettenVerworfen === 0) status = 'ok_vollstaendig';
-    else status = 'unklar';
+    else if (verworfen.length === 0) status = 'ok_vollstaendig';
+    else status = 'unklar'; // LLM schlug was vor, aber wir haben alles verworfen
 
     const out: QualitaetsgateOutput = {
       vollstaendig: status === 'ok_vollstaendig',
