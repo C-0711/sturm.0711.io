@@ -34,29 +34,20 @@ function resolveConfig(c: SeitenChipsConfig): Required<SeitenChipsConfig> {
   };
 }
 
-function buildPrompt(seite: number, gesamt: number, markdown: string): string {
+function buildPrompt(seite: number, gesamt: number, markdown: string, maxChars: number): string {
   return [
-    `Du bekommst den Roh-OCR-Text von Seite ${seite} von ${gesamt} einer deutschen Steuererklärung.`,
-    '',
-    'AUFGABE: Schreibe EINEN prägnanten deutschen Satz (max. 25 Wörter), der den Inhalt dieser Seite zusammenfasst.',
-    '',
-    'HARTE REGELN:',
-    '- NIEMALS beginnen mit "Seite X", "Auf Seite...", "Diese Seite...".',
-    '- IMMER beginnen mit dem ERKANNTEN FORMULARNAMEN/ANLAGE oder DOKUMENT-TYP.',
-    '- Wenn kein Formularname erkennbar: Dokumenttyp direkt benennen (z.B. "Steuerbescheinigung", "Lohnsteuerbescheinigung", "Ertragsaufstellung", "VaST-Abruf").',
-    '',
-    'Stil: "Formularname · 2-3 konkrete Werte/Namen/Beträge · kurze Beschreibung"',
+    `Seite ${seite}/${gesamt} einer deutschen Steuerunterlage. EIN deutscher Satz (max. 25 Wörter) mit Formularname/Dokumenttyp + 2-3 konkrete Werte.`,
+    'NIEMALS mit "Seite X..." / "Diese Seite..." beginnen. IMMER mit Formularname/Dokumenttyp.',
     '',
     'Beispiele:',
     '- "Hauptvordruck ESt 1 A · StNr 02/171/51864 · Rainer Stricker, Techniker"',
-    '- "Anlage N Zeile 6-9 · Arbeitslohn 52.431 € · Werbungskosten 2.102 €"',
-    '- "Anlage KAP · Kapitalerträge 109 € · KapESt 26,69 € · Solidaritätszuschlag 1,45 €"',
+    '- "Anlage N Z6-9 · Arbeitslohn 52.431 € · Werbungskosten 2.102 €"',
+    '- "Steuerbescheinigung LBS · Kapitalerträge 36 € · KapESt 8,80 €"',
     '',
-    'Antwort STRIKT als JSON: {"satz": "..."}',
-    'KEIN Vorspann, KEIN Markdown, nur JSON.',
+    'JSON NUR: {"satz": "..."}',
     '',
-    '=== SEITE ' + String(seite) + ' ===',
-    markdown.slice(0, 8000),
+    '=== SEITE ===',
+    markdown.slice(0, maxChars),
   ].join('\n');
 }
 
@@ -71,8 +62,8 @@ async function chipOnePage(
   const chars = markdown.length;
   try {
     const { parsed } = await chatJson<{ satz?: string }>(
-      buildPrompt(seite, gesamt, markdown),
-      { model: config.model, temperature: config.temperature, signal, maxTokens: 200 },
+      buildPrompt(seite, gesamt, markdown, config.maxCharsPerPage),
+      { model: config.model, temperature: config.temperature, signal, maxTokens: 180 },
     );
     const satz = (parsed.satz || '').trim();
     return {

@@ -65,10 +65,10 @@ export function buildElsterWorkflowWithSchema() {
       extraktion: {
         uses: 'elster/extraktion',
         config: {
-          concurrency: 3,
+          concurrency: 8,
           model: 'claude-haiku-4-5',
           maxFieldsPerAnlage: 200,
-          maxTextChars: 60_000,
+          maxTextChars: 40_000,
         },
         inputs: {
           text: '${ocr.text}',
@@ -87,8 +87,8 @@ export function buildElsterWorkflowWithSchema() {
         uses: 'elster/seiten-chips',
         config: {
           model: 'claude-haiku-4-5',
-          concurrency: 4,
-          maxCharsPerPage: 8000,
+          concurrency: 8,
+          maxCharsPerPage: 4000,
         },
         inputs: {
           pages: '${ocr.pages}',
@@ -98,7 +98,7 @@ export function buildElsterWorkflowWithSchema() {
         uses: 'elster/qualitaetsgate',
         config: {
           model: 'claude-haiku-4-5',
-          maxCharsProSeite: 5000,
+          maxCharsProSeite: 3500,
           chunkSchwelle: 3,
           maxFelderProAnlage: 200,
         },
@@ -127,7 +127,7 @@ export function buildElsterWorkflowWithSchema() {
       ['klassifizierung', 'extraktion'],
       ['extraktion', 'anreicherung'],
       ['anreicherung', 'qualitaetsgate'],
-      ['seitenChips', 'qualitaetsgate'],
+      // seitenChips ist UI-Feedback-Only, blockiert das Gate NICHT mehr
       ['qualitaetsgate', 'fallSummary'],
     ],
   });

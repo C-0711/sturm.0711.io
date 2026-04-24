@@ -42,39 +42,72 @@ function kompaktWerte(werte: AnrWert[], max = 80): AnrWert[] {
     .slice(0, max);
 }
 
+function renderMarkdownReport(
+  befund: { befund: string; hinweise: string[] },
+  werte: AnrWert[],
+  anlagen: string[],
+): string {
+  const byAnlagePerson = new Map<string, AnrWert[]>();
+  for (const w of werte) {
+    const p = (w as any).person || 'A';
+    const key = `${w.anlage}:${p}`;
+    if (!byAnlagePerson.has(key)) byAnlagePerson.set(key, []);
+    byAnlagePerson.get(key)!.push(w);
+  }
+
+  const lines: string[] = [];
+  lines.push('# STURM ELSTER-Report');
+  lines.push('');
+  lines.push('## Befund');
+  lines.push(befund.befund);
+  lines.push('');
+  if (befund.hinweise.length > 0) {
+    lines.push('## Hinweise');
+    for (const h of befund.hinweise) lines.push('- ⚠️ ' + h);
+    lines.push('');
+  }
+  lines.push(`## Erkannte Anlagen (${anlagen.length})`);
+  lines.push(anlagen.join(', '));
+  lines.push('');
+  lines.push(`## Extrahierte Werte (${werte.length})`);
+  lines.push('');
+  const sortedKeys = [...byAnlagePerson.keys()].sort();
+  for (const key of sortedKeys) {
+    const [anlage, person] = key.split(':');
+    const ws = byAnlagePerson.get(key)!;
+    lines.push(`### Anlage ${anlage} — Person ${person} (${ws.length} Werte)`);
+    for (const w of ws) {
+      const zeile = w.vordruckzeile ? `Z${w.vordruckzeile}` : '—';
+      const dt = (w.drucktext || w.beschreibung || '').slice(0, 80);
+      lines.push(`- **${w.eCode}** · ${zeile} · ${dt} = \`${w.wert}\``);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 function buildPrompt(werte: AnrWert[], anlagen: string[]): string {
-  const kompakt = kompaktWerte(werte);
+  const kompakt = kompaktWerte(werte, 60);
   const werteText = kompakt
     .map(
       (w) =>
-        `  [${w.anlage}] ${w.drucktext || w.beschreibung || w.eCode}: ${w.wert}`,
+        `[${w.anlage}${(w as any).person && (w as any).person !== 'A' ? '/' + (w as any).person : ''}] ${(w.drucktext || w.beschreibung || w.eCode).slice(0, 60)}: ${w.wert}`,
     )
     .join('\n');
 
   return [
-    'Du bist Steuerberater-Assistent. Du hast gerade ein Dokument gelesen.',
+    'Steuerberater-Assistent: Erstelle 1 Satz (max. 30 Wörter) für Mandanten-Chat + 0-3 Hinweise auf Lücken/Auffälligkeiten.',
     '',
-    `ERKANNTE ANLAGEN: ${anlagen.join(', ')}`,
-    '',
-    'EXTRAHIERTE WERTE:',
-    werteText,
-    '',
-    'AUFGABE:',
-    'Schreibe einen EINZIGEN Satz (max. 30 Wörter) für einen Mandanten-Chat, ',
-    'der den Befund dieses Dokuments zusammenfasst. Neutraler Steuerberater-Ton.',
-    '',
-    'Stil: "Erkannt: <DokumentTyp> für <Person(en)> mit <wichtigste Werte/Kennzahlen>."',
-    '',
+    'Stil: "Erkannt: <DokumentTyp> für <Person(en)>, <wichtigste 2-3 Werte>."',
     'Beispiele:',
     '- "Erkannt: ESt-Erklärung 2023 für Rainer und Ute Stricker (Zusammenveranlagung), Bruttoarbeitslohn 63.560 €, Kapitalerträge 117 €."',
-    '- "Erkannt: Steuerbescheinigung Westerwald Bank für Maria Ute Stricker, 11,25 € Kapitalerträge / 2,75 € KapESt."',
-    '- "Erkannt: Lohnsteuerbescheinigung 2024 Verbandsgemeindewerke, Steuerklasse 3, 63.559,90 € Brutto."',
+    '- "Erkannt: Steuerbescheinigung für Maria Ute Stricker, 11,25 € Kapitalerträge / 2,75 € KapESt."',
     '',
-    'ZUSÄTZLICH: Falls du auffällige Lücken oder plausible Weiterleitungen zu anderen Anlagen siehst, ',
-    'liefere 0-3 kurze Hinweise (z.B. "Anlage VOR-Beiträge fehlen", "Ehefrau hat eigene KAP-Felder").',
+    'JSON NUR: {"befund":"...","hinweise":["...","..."]}',
     '',
-    'Antwort STRIKT als JSON: {"befund": "...", "hinweise": ["...", "..."]}',
-    'KEIN Vorspann, KEIN Markdown, nur JSON.',
+    `ANLAGEN: ${anlagen.join(', ')}`,
+    'WERTE:',
+    werteText,
   ].join('\n');
 }
 
@@ -114,7 +147,7 @@ export const fallSummaryStage = defineStage<
         model: config.model,
         temperature: config.temperature,
         signal: ctx.signal,
-        maxTokens: 600,
+        maxTokens: 400,
       });
 
       const out: FallSummaryOutput = {
@@ -132,6 +165,11 @@ export const fallSummaryStage = defineStage<
         ms: out.ms,
       });
       await ctx.artifacts.write('fall_summary/befund.json', out);
+
+      // Zusätzlich ein User-lesbarer Markdown-Report
+      const md = renderMarkdownReport(out, werte, anlagen);
+      await ctx.artifacts.write('fall_summary/report.md', md);
+
       return out;
     } catch (e: any) {
       const out: FallSummaryOutput = {

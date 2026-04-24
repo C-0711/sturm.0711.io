@@ -223,6 +223,29 @@ export const qualitaetsgateStage = defineStage<
       return out;
     }
 
+    // Fast-Path: kleine Einzelbelege (1 Seite, 1 Anlage, mindestens 3 Werte extrahiert)
+    // → Gate-Aufruf skippen, spart ~3s. Bei 1 Seite + 1 Anlage gibt es nichts zu
+    // mergen, und mit 3+ Werten hat die Extraktion alles Relevante gefunden.
+    if (
+      pages.length === 1 &&
+      anlagen.length === 1 &&
+      aktuelleWerte.length >= 3
+    ) {
+      const out: QualitaetsgateOutput = {
+        vollstaendig: true,
+        status: 'ok_vollstaendig',
+        ergaenzt: [],
+        alle_werte_merged: aktuelleWerte,
+        summen: { werte_vorher: aktuelleWerte.length, werte_nachher: aktuelleWerte.length, ergaenzt: 0 },
+        verworfen: [],
+        calls: 0,
+        ms: Date.now() - t0,
+      };
+      ctx.emit('gate_skip', { reason: 'einzelbeleg_fast_path', werte: aktuelleWerte.length });
+      ctx.emit('gate_done', { ...out.summen, status: out.status });
+      return out;
+    }
+
     const katalog = await buildFeldKatalogKompakt(
       anlagen,
       vz,

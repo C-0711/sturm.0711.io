@@ -86,43 +86,34 @@ function fieldSpec(f: Feld): FieldSpec {
   };
 }
 
+function compactSpecLine(s: FieldSpec): string {
+  // Eine Zeile pro Feld, ca. 40-60% Tokens gespart vs. JSON-Formatting.
+  // Format: eCode | Z<zeile> | <drucktext>[ | PFLICHT]
+  const parts = [s.eCode];
+  if (s.vordruckzeile) parts.push('Z' + s.vordruckzeile);
+  if (s.drucktext) parts.push(s.drucktext.slice(0, 80));
+  if (s.pflicht) parts.push('PFLICHT');
+  return parts.join(' | ');
+}
+
 function buildPrompt(anlage: string, spec: FieldSpec[], text: string, maxChars: number): string {
+  const specText = spec.map(compactSpecLine).join('\n');
   return [
-    'Du bekommst den OCR-Text einer deutschen Einkommensteuererklärung und eine Liste',
-    `von Feldern für die ELSTER-Anlage "${anlage}".`,
+    `ELSTER-Anlage "${anlage}" aus deutschem Steuerdokument extrahieren.`,
     '',
-    'WICHTIG — EHEGATTEN-VERANLAGUNG:',
-    `Bei einer Zusammenveranlagung kann die Anlage ${anlage} zweimal vorkommen:`,
-    '- Einmal für "Steuerpflichtige Person / Ehemann / Person A"',
-    '- Einmal für "Ehefrau / Person B"',
-    'Achte auf Überschriften / Marker wie:',
-    '  "Anlage KAP (Ehefrau / Person B)", "Anlage N (Person B)",',
-    '  "(Steuerpflichtige Person / Ehemann / Person A)", "Person A", "Person B", etc.',
+    'EHEGATTEN: Bei Zusammenveranlagung kann die Anlage ZWEIMAL vorkommen (Person A = Ehemann / B = Ehefrau).',
+    'Marker im Text: "(Ehefrau / Person B)", "(Person A)", "(Ehemann)", "Steuerpflichtige Person". Liefere beide Instanzen.',
     '',
-    'Wenn du zwei Instanzen erkennst: liefere BEIDE in instances[].',
-    'Wenn nur eine Instanz da ist: liefere instances[] mit einem Eintrag (person="A").',
+    'REGELN: Beträge mit Komma ("12345,67"), fehlend=null, nur eCodes aus Liste.',
     '',
-    'REGELN:',
-    '1. Jeder Wert als Zeichenkette (Beträge mit deutschem Komma z.B. "12345,67").',
-    '2. Fehlender Wert = null.',
-    '3. "drucktext" ist das Formular-Label, "vordruckzeile" die Zeilennummer.',
-    '4. Gib NUR die eCodes aus der untenstehenden Feldliste zurück.',
+    'ANTWORT-JSON (keine Erklärung, kein Markdown):',
+    '{"instances":[{"person":"A","label":"Ehemann","values":{"E...":"...","E...":null}},{"person":"B","label":"Ehefrau","values":{...}}]}',
+    'Nur eine Person: {"instances":[{"person":"A","values":{...}}]}',
     '',
-    'Antwort STRIKT als JSON:',
-    '{',
-    '  "instances": [',
-    '    {"person": "A", "label": "Ehemann", "values": {"E0200204": "63559,90", "E0200304": "6720,00"}},',
-    '    {"person": "B", "label": "Ehefrau", "values": {"E0200204": null, "E0200304": null}}',
-    '  ]',
-    '}',
+    `FELDER (eCode | Zeile | Drucktext | [PFLICHT]), ${spec.length} Stück:`,
+    specText,
     '',
-    'Wenn nur eine Person da ist: {"instances": [{"person": "A", "values": {...}}]}.',
-    'KEIN Vorspann, KEIN Markdown, nur JSON.',
-    '',
-    'Felder:',
-    JSON.stringify(spec, null, 2),
-    '',
-    '--- OCR-Text ---',
+    '--- OCR-TEXT ---',
     text.slice(0, maxChars),
   ].join('\n');
 }
