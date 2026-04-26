@@ -7,16 +7,20 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx src/lib/gitchain-client.test.ts"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.20.0",
+    "simple-git": "^3.36.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.12",
     "@types/node": "^20.14.10",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
