@@ -134,6 +134,7 @@ async function extractOne(
       fieldCount: 0,
       filled: 0,
       values: {},
+      instances: [{ person: 'A', values: {} }],
       durationMs: Date.now() - t0,
     };
   }
@@ -265,6 +266,7 @@ export const extraktionStage = defineStage<
             fieldCount: 0,
             filled: 0,
             values: {},
+            instances: [{ person: 'A', values: {} }],
             durationMs: 0,
             error: msg,
           };
