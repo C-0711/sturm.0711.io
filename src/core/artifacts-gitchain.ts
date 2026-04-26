@@ -7,6 +7,7 @@ export interface GitChainArtifactStore extends ArtifactStore {
   readonly containerId: string;
   commitStage(stageId: string, summary: string): Promise<string>;
   finalCommit(state: 'ok' | 'error' | 'partial'): Promise<string>;
+  bindMandant(mandantId: string, tenantId: string): Promise<void>;
 }
 
 const GIT_AUTHOR = { name: 'STURM Engine', email: 'sturm@0711.io' };
@@ -55,6 +56,15 @@ export async function createGitChainArtifactStore(
 
     async finalCommit(state: 'ok' | 'error' | 'partial'): Promise<string> {
       return commitAndUpdate(`run/${state}: ${workflowId} ${runId}`);
+    },
+
+    async bindMandant(mandantId: string, tenantId: string): Promise<void> {
+      await client.setMandantId(containerId, mandantId, tenantId);
+      const mandantContainerId = `0711:mandant:ctax:${mandantId}`;
+      const exists = await client.getContainer(mandantContainerId);
+      if (exists) {
+        await client.addCitation(containerId, mandantContainerId, 'uses');
+      }
     },
   };
 }
