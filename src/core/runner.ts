@@ -2,12 +2,14 @@ import { topoLayers } from './workflow.ts';
 import { getStage } from './registry.ts';
 import { EventBus } from './events.ts';
 import { createArtifactStore } from './artifacts.ts';
+import { createGitChainArtifactStore, type GitChainArtifactStore } from './artifacts-gitchain.ts';
 import type {
   WorkflowDef,
   RunResult,
   StageResult,
   StageContext,
   StageLogger,
+  ArtifactStore,
 } from './types.ts';
 
 const RUN_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -84,7 +86,6 @@ export interface Run {
 export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
   const runId = makeRunId();
   const bus = new EventBus(runId, def.id);
-  const artifacts = createArtifactStore(opts.runsDir, def.id, runId);
   const signal = opts.abortSignal ?? new AbortController().signal;
 
   if (opts.onEvent) {
@@ -92,6 +93,23 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
   }
 
   const result = (async (): Promise<RunResult> => {
+    // Select artifact backend — GitChain if STURM_ARTIFACT_BACKEND=gitchain, otherwise filesystem
+    let artifacts: ArtifactStore;
+    let gitChainStore: GitChainArtifactStore | null = null;
+
+    if (process.env['STURM_ARTIFACT_BACKEND'] === 'gitchain') {
+      try {
+        gitChainStore = await createGitChainArtifactStore(opts.runsDir, def.id, runId);
+        artifacts = gitChainStore;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        bus.emit('log_warn', { msg: `GitChain init failed, falling back to filesystem: ${msg}` });
+        artifacts = createArtifactStore(opts.runsDir, def.id, runId);
+      }
+    } else {
+      artifacts = createArtifactStore(opts.runsDir, def.id, runId);
+    }
+
     const runStart = Date.now();
     bus.emit('run_start', { workflowId: def.id, input: sanitizeForLog(opts.input) });
 
@@ -141,6 +159,12 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           stageOutputs[stageId] = output;
           stageResults[stageId] = { stageId, state: 'ok', ms, output: sanitizeForLog(output) };
           await artifacts.write(`${stageId}/output.json`, output);
+          if (gitChainStore) {
+            const stageName = stageDef.name ?? stageId;
+            await gitChainStore.commitStage(stageId, `${stageName} OK (${ms}ms)`).catch(e => {
+              bus.emit('log_warn', { msg: `gitchain commit failed for ${stageId}: ${e instanceof Error ? e.message : e}` }, stageId);
+            });
+          }
           bus.emit('stage_done', { ms, output: sanitizeForLog(output) }, stageId);
         } catch (err: unknown) {
           const ms = Date.now() - t0;
@@ -160,6 +184,12 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     const totalMs = Date.now() - runStart;
     const runResult: RunResult = { runId, workflowId: def.id, state: overallState, ms: totalMs, stages: stageResults };
     await artifacts.write('_result.json', runResult);
+
+    if (gitChainStore) {
+      await gitChainStore.finalCommit(overallState).catch(e => {
+        bus.emit('log_warn', { msg: `gitchain final commit failed: ${e instanceof Error ? e.message : e}` });
+      });
+    }
 
     if (overallState === 'ok') {
       bus.emit('run_done', { ms: totalMs });
