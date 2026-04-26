@@ -9,6 +9,7 @@ import { registerAllWorkflows } from './workflows/index.ts';
 import { listWorkflows, getWorkflow } from './core/registry.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
+import { getGitChainClient } from './lib/gitchain-client.ts';
 import type { WorkflowDef } from './core/types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -132,6 +133,39 @@ app.get('/api/runs/:workflowId/:runId', async (req, res) => {
     res.type('application/json').send(raw);
   } catch {
     res.status(404).json({ error: 'run not found or still running' });
+  }
+});
+
+// ============ GitChain API ============
+
+app.post('/api/gitchain/promote', async (req, res) => {
+  if (process.env['STURM_ARTIFACT_BACKEND'] !== 'gitchain') {
+    return res.status(503).json({ error: 'STURM_ARTIFACT_BACKEND is not gitchain' });
+  }
+  const { run_id, workflow_id, tax_case_identifier, mandant_id, veranlagungsjahr, steuerart, display_name, finanzamt } = req.body ?? {};
+  if (!run_id || !tax_case_identifier || !mandant_id || !veranlagungsjahr || !steuerart || !display_name) {
+    return res.status(400).json({ error: 'missing required fields: run_id, tax_case_identifier, mandant_id, veranlagungsjahr, steuerart, display_name' });
+  }
+  const steuerartValues = ['ESt', 'USt', 'GewSt', 'KSt', 'LSt'];
+  if (!steuerartValues.includes(steuerart)) {
+    return res.status(400).json({ error: `steuerart must be one of: ${steuerartValues.join(', ')}` });
+  }
+  try {
+    const client = getGitChainClient();
+    const workspace_id = `0711:workspace:ctax:sturm-${run_id}`;
+    const result = await client.promoteWorkspaceToTaxCase({
+      workspace_id,
+      tax_case_identifier,
+      mandant_id,
+      veranlagungsjahr: Number(veranlagungsjahr),
+      steuerart,
+      display_name,
+      finanzamt: finanzamt ?? undefined,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: msg });
   }
 });
 

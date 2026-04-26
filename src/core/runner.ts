@@ -101,6 +101,14 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
       try {
         gitChainStore = await createGitChainArtifactStore(opts.runsDir, def.id, runId);
         artifacts = gitChainStore;
+        // Bind mandant if provided in run input
+        const inputRec = opts.input as Record<string, unknown>;
+        if (typeof inputRec?.mandant_id === 'string' && inputRec.mandant_id) {
+          const tenantId = process.env['GITCHAIN_DEFAULT_TENANT'] ?? 'ctax-0711';
+          await gitChainStore.bindMandant(inputRec.mandant_id, tenantId).catch(e => {
+            bus.emit('log_warn', { msg: `gitchain bindMandant failed: ${e instanceof Error ? e.message : e}` });
+          });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         bus.emit('log_warn', { msg: `GitChain init failed, falling back to filesystem: ${msg}` });
