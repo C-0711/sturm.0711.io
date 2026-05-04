@@ -5,6 +5,20 @@ import { loadKatalog } from '../lib/anlagen-katalog.ts';
 export interface KlassifizierungInput {
   text: string;
   vz?: number | string;
+  /**
+   * Wave 25 v2: vom Caller (cb-ctax) vorgeschlagenes Anlagen-Set, abgeleitet
+   * aus Mistral-Small-KPIs in Phase F. Wird in Kombination mit `skip=true`
+   * direkt als erkannte_anlagen uebernommen — Regex+LLM werden uebersprungen.
+   * Ohne `skip=true` wird der Hint nur als Subset-Filter benutzt
+   * (eigene Regex-Treffer + LLM-Treffer werden mit dem Hint geschnitten).
+   */
+  anlagen_hint?: string[];
+  /**
+   * Wave 25 v2: wenn true, wird die Klassifizierung komplett uebersprungen
+   * und das Hint-Set 1:1 als erkannte_anlagen zurueckgegeben. Setzt voraus
+   * dass anlagen_hint gegeben ist; sonst Fallback auf normale Klassifizierung.
+   */
+  skip?: boolean;
 }
 
 export interface KlassifizierungOutput {
@@ -144,6 +158,30 @@ export const klassifizierungStage = defineStage<
     const katalog = await loadKatalog(input.vz);
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
+
+    // ─── Wave 25 v2: skip_classification + anlagen_hint ─────────────────────
+    // cb-ctax hat aus Mistral-Small-KPIs schon ein konfidentes Anlagen-Set
+    // abgeleitet (siehe leiteProfilUndAnlagenAb.ts). Wenn `skip=true` und
+    // `anlagen_hint` nicht-leer: Klassifizierung kurzschliessen, Pass 3 laeuft
+    // direkt gegen das Hint-Set. Spart 1 Regex-Sweep + ggf. einen LLM-Call.
+    if (input.skip === true && Array.isArray(input.anlagen_hint) && input.anlagen_hint.length > 0) {
+      const hintSet = input.anlagen_hint.filter((n) => allowed.has(n)).sort();
+      ctx.emit('skip_classification', { anlagen: hintSet, reason: 'caller_hint' });
+      await ctx.artifacts.write('erkannte_anlagen.json', {
+        erkannte_anlagen: hintSet,
+        regex_hits: {},
+        llm_hits: [],
+        skipped: true,
+        hint_source: 'caller',
+      });
+      return {
+        erkannte_anlagen: hintSet,
+        regex_hits: {},
+        llm_hits: [],
+        used_llm: false,
+        ms: Date.now() - t0,
+      };
+    }
 
     const regexHits = runRegex(input.text, allowed);
     const regexNames = Object.keys(regexHits);

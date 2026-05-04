@@ -60,6 +60,12 @@ export function buildElsterWorkflowWithSchema() {
         inputs: {
           text: '${ocr.text}',
           vz: '${input.vz}',
+          // Wave 25 v2 (sprechender Import): cb-ctax sendet anlagen_hint
+          // (Mistral-Small-Heuristik aus Phase F) + skip_classification=true.
+          // Klassifizierungs-Stage uebernimmt dann das Hint-Set 1:1 ohne
+          // Regex/LLM-Lauf — Pass 3 wird damit ~3-5x schneller.
+          anlagen_hint: '${input.anlagen_hint}',
+          skip: '${input.skip_classification}',
         },
       },
       extraktion: {

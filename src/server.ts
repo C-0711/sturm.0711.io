@@ -11,11 +11,17 @@ import { registerAllWorkflows } from './workflows/index.ts';
 import { listWorkflows, getWorkflow } from './core/registry.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
-import { getGitChainClient } from './lib/gitchain-client.ts';
 import type { WorkflowDef } from './core/types.ts';
 import { createOcrPreviewRouter } from './server/ocr-preview.ts';
 import { createSchemaGenerateRouter } from './server/schema-generate.ts';
-import { createWorkspacesRouter } from './server/workspaces.ts';
+import { createWorkspacesRouter, createPipelinesRouter } from './server/workspaces.ts';
+import { createJobsRouter } from './server/jobs.ts';
+import { JobRunner } from './lib/job-runner.ts';
+import { registerJobHandlers } from './server/job-handlers.ts';
+import { resolveMasterKey } from './lib/master-signer.ts';
+import { createIntegrationsRouter } from './server/integrations.ts';
+import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
+import { createClassifyRouter } from './server/classify-route.ts';
 import {
   applyOverrides,
   deleteStageOverride,
@@ -38,6 +44,7 @@ const UPLOADS_DIR = path.join(ROOT, 'uploads');
 const RUNS_DIR = path.join(ROOT, 'runs');
 const WORKSPACES_DIR = path.join(ROOT, 'workspaces');
 const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
+const PIPELINES_DIR = path.join(__dirname, 'pipelines-seed');
 const UI_DIR = path.join(__dirname, 'ui');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -58,11 +65,14 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       'default-src': ["'self'"],
-      'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://unpkg.com'],
+      // Tesseract.js needs script + worker + WASM from unpkg/jsdelivr CDN
+      'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
+      'worker-src': ["'self'", 'blob:', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
       'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       'img-src': ["'self'", 'data:', 'blob:'],
       'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
-      'connect-src': ["'self'"],
+      // Tesseract fetches traineddata + wasm via XHR/fetch
+      'connect-src': ["'self'", 'https://unpkg.com', 'https://cdn.jsdelivr.net', 'https://tessdata.projectnaptha.com'],
       'frame-src': ["'self'", 'blob:'],
       'object-src': ["'none'"],
       'base-uri': ["'self'"],
@@ -165,7 +175,37 @@ app.use(
 
 // ============ Workspaces (Phase 1: filesystem-only, no GitChain yet) ============
 
-app.use('/api/workspaces', requireBearerToken, createWorkspacesRouter(WORKSPACES_DIR, CANONICALS_DIR));
+// ============ Jobs (Phase C: persistent long-running operations) ============
+const jobRunner = new JobRunner(WORKSPACES_DIR);
+const PORT_FOR_LOOPBACK = process.env.PORT ?? '7800';
+registerJobHandlers(jobRunner, {
+  selfBaseUrl: `http://localhost:${PORT_FOR_LOOPBACK}`,
+  selfAuthToken: process.env.STURM_BEARER_TOKEN ?? '',
+  workspacesDir: WORKSPACES_DIR,
+});
+// Boot-time recovery: mark in-flight as failed, re-enqueue queued.
+void jobRunner.recover();
+
+// ---------- Phase E: session cookie middleware (must run BEFORE protected routes) ----------
+const sessionsOpts = { workspacesDir: WORKSPACES_DIR, cookieName: 'sturm-session', secureCookie: true };
+app.use(sessionCookieMiddleware(sessionsOpts));
+
+// Session redeem is PUBLIC (no Bearer) — sessionId in body is the auth.
+app.use('/api/sessions', createSessionRedeemRouter(sessionsOpts));
+
+app.use('/api/jobs', requireBearerToken, createJobsRouter(jobRunner));
+app.use('/api/pipelines', requireBearerToken, createPipelinesRouter(PIPELINES_DIR));
+const masterKeyResolver = () => resolveMasterKey(ROOT);
+// Token-management requires admin Bearer (mounted FIRST under /api/workspaces).
+app.use('/api/workspaces', requireBearerToken, createTokensRouter(sessionsOpts));
+app.use('/api/workspaces', requireBearerToken, createWorkspacesRouter(WORKSPACES_DIR, CANONICALS_DIR, PIPELINES_DIR, jobRunner, masterKeyResolver));
+app.use('/api/integrations', requireBearerToken, createIntegrationsRouter({
+  workspacesDir: WORKSPACES_DIR, pipelinesDir: PIPELINES_DIR, jobRunner,
+}));
+
+// ============ Standalone classify (used by /studio-ocr.html on file drop) ============
+
+app.use('/api/classify', requireBearerToken, schemaGenerateLimiter, createClassifyRouter(UPLOADS_DIR));
 
 // ============ Studio templates (P2.6) ============
 
@@ -265,6 +305,29 @@ app.post('/api/workflows/:id/run', upload.single('file'), async (req, res) => {
     input = req.body?.input ?? {};
   }
 
+  // ─── Wave 25 v2: Hint-Parameter (cb-ctax → STURM elster-v1) ──────────────
+  // anlagen_hint=ESt1A,N,KAP,VOR,SA  → Pass 3 nur ueber diese Anlagen-Schemas
+  // skip_classification=true         → Pass 2 wird uebersprungen, erkannte_-
+  //                                    anlagen direkt aus anlagen_hint
+  // profil_hint=ARBEITNEHMER         → optionaler Kontext fuer LLM-Prompts
+  // Ziel: Pass 3 laeuft nicht ueber alle 35 Anlagen sondern nur ueber das
+  // tatsaechlich passende Set → 3-5x schneller bei einer Lohnsteuerbescheini-
+  // gung. Hints sind optional und aenderen das Verhalten von elster-v1
+  // ausschliesslich abwaerts-kompatibel (defaults bleiben).
+  const anlagenHintRaw = (req.query?.anlagen_hint as string | undefined) || '';
+  if (anlagenHintRaw) {
+    input.anlagen_hint = anlagenHintRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (req.query?.skip_classification === 'true' || req.query?.skip_classification === '1') {
+    input.skip_classification = true;
+  }
+  if (req.query?.profil_hint) {
+    input.profil_hint = String(req.query.profil_hint);
+  }
+
   // SSE-Header
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -317,39 +380,6 @@ app.get('/api/runs/:workflowId/:runId', async (req, res) => {
     res.type('application/json').send(raw);
   } catch {
     res.status(404).json({ error: 'run not found or still running' });
-  }
-});
-
-// ==== GitChain API ============
-
-app.post('/api/gitchain/promote', async (req, res) => {
-  if (process.env['STURM_ARTIFACT_BACKEND'] !== 'gitchain') {
-    return res.status(503).json({ error: 'STURM_ARTIFACT_BACKEND is not gitchain' });
-  }
-  const { run_id, workflow_id, tax_case_identifier, mandant_id, veranlagungsjahr, steuerart, display_name, finanzamt } = req.body ?? {};
-  if (!run_id || !tax_case_identifier || !mandant_id || !veranlagungsjahr || !steuerart || !display_name) {
-    return res.status(400).json({ error: 'missing required fields: run_id, tax_case_identifier, mandant_id, veranlagungsjahr, steuerart, display_name' });
-  }
-  const steuerartValues = ['ESt', 'USt', 'GewSt', 'KSt', 'LSt'];
-  if (!steuerartValues.includes(steuerart)) {
-    return res.status(400).json({ error: `steuerart must be one of: ${steuerartValues.join(', ')}` });
-  }
-  try {
-    const client = getGitChainClient();
-    const workspace_id = `0711:workspace:ctax:sturm-${run_id}`;
-    const result = await client.promoteWorkspaceToTaxCase({
-      workspace_id,
-      tax_case_identifier,
-      mandant_id,
-      veranlagungsjahr: Number(veranlagungsjahr),
-      steuerart,
-      display_name,
-      finanzamt: finanzamt ?? undefined,
-    });
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ ok: false, error: msg });
   }
 });
 
