@@ -77,6 +77,45 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   border-radius: var(--radius-sm);
 }
 
+.sturm-sb-upload {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px; margin-bottom: 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+}
+.sturm-sb-upload:hover,
+.sturm-sb-upload.is-dragover { border-color: var(--color-accent); background: var(--color-bg-tertiary); }
+.sturm-sb-upload-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--color-text-secondary);
+}
+.sturm-sb-upload-row svg { width: 14px; height: 14px; color: var(--color-accent); stroke-width: 1.5; }
+.sturm-sb-upload-name {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--color-text-primary); line-height: 1.3;
+  word-break: break-all;
+}
+.sturm-sb-upload-hint {
+  font-size: 10.5px; color: var(--color-text-tertiary);
+}
+.sturm-sb-upload-start {
+  width: 100%; padding: 8px 12px; border-radius: var(--radius-md);
+  background: var(--color-accent); color: var(--color-accent-light);
+  border: 0; cursor: pointer;
+  font-size: 13px; font-weight: 500; font-family: var(--font-inter);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+.sturm-sb-upload-start:hover:not(:disabled) { background: var(--color-accent-hover); }
+.sturm-sb-upload-start:disabled {
+  background: var(--color-bg-tertiary); color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+.sturm-sb-upload-start svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
 .sturm-sb-search {
   display: flex; align-items: center; gap: 8px;
   margin-top: 8px; padding: 6px 10px;
@@ -372,7 +411,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: 10px 14px;
-  min-width: 160px; max-width: 240px;
+  min-width: 200px; max-width: 280px;
   color: var(--color-text-primary);
   font-family: var(--font-inter);
   box-shadow: var(--shadow-sm);
@@ -416,6 +455,43 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   color: var(--color-text-tertiary); margin-top: 6px;
 }
 
+.sturm-node-kpis {
+  display: flex; flex-wrap: wrap; gap: 4px 6px;
+  margin-top: 8px;
+}
+.sturm-kpi-chip {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 2px 7px; border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  font-size: 10.5px; line-height: 1.35;
+  border: 1px solid var(--color-border-light, var(--color-border));
+}
+.sturm-kpi-chip-label {
+  color: var(--color-text-tertiary); text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+.sturm-kpi-chip-value {
+  color: var(--color-text-primary); font-weight: 500;
+  font-family: var(--font-mono); font-size: 10.5px;
+}
+.sturm-kpi-chip[data-tone="accent"] {
+  background: var(--color-accent-light); border-color: var(--color-accent);
+}
+.sturm-kpi-chip[data-tone="accent"] .sturm-kpi-chip-value { color: var(--color-accent); }
+.sturm-kpi-chip[data-tone="ok"]     { background: rgba(139, 168, 138, 0.14); border-color: rgba(139, 168, 138, 0.35); }
+.sturm-kpi-chip[data-tone="ok"] .sturm-kpi-chip-value { color: var(--color-success); }
+.sturm-kpi-chip[data-tone="warn"]   { background: rgba(212, 160, 160, 0.10); border-color: rgba(212, 160, 160, 0.35); }
+.sturm-kpi-chip[data-tone="warn"] .sturm-kpi-chip-value { color: var(--color-danger); }
+
+.sturm-node-progress {
+  margin-top: 8px; height: 3px; border-radius: 2px;
+  background: var(--color-bg-tertiary); overflow: hidden;
+}
+.sturm-node-progress-bar {
+  height: 100%; background: var(--color-accent);
+  transition: width var(--duration-fast) var(--ease-default);
+}
+
 @keyframes sturm-pulse { 50% { opacity: 0.35; } }
 
 /* ============ Right drawer (event log / issues) ============ */
@@ -442,6 +518,105 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 .sturm-drawer-tab.is-active { color: var(--color-text-primary); background: var(--color-bg-active); }
 
 .sturm-drawer-body { flex: 1; overflow-y: auto; padding: 8px 10px; }
+.sturm-drawer-body--bars { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+
+/* ---- Stage-Chip-Bar (Claude-Desktop-Stil) ---- */
+.sturm-stagebar {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  overflow: hidden;
+  transition: border-color var(--duration-fast) var(--ease-default);
+}
+.sturm-stagebar[data-state="running"] { border-color: var(--color-accent); box-shadow: var(--shadow-focus-accent); }
+.sturm-stagebar[data-state="ok"]      { border-color: rgba(139, 168, 138, 0.35); }
+.sturm-stagebar[data-state="error"]   { border-color: rgba(212, 160, 160, 0.45); }
+.sturm-stagebar[data-state="skipped"] { opacity: 0.55; }
+
+.sturm-stagebar-head {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--color-text-primary);
+  font-family: var(--font-inter); font-size: 12.5px;
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+.sturm-stagebar-head:hover { background: var(--color-bg-hover); }
+
+.sturm-stagebar-dot {
+  width: 7px; height: 7px; border-radius: 999px;
+  background: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.sturm-stagebar[data-state="running"] .sturm-stagebar-dot { background: var(--color-accent); animation: sturm-pulse 1.2s infinite; }
+.sturm-stagebar[data-state="ok"]      .sturm-stagebar-dot { background: var(--color-success); }
+.sturm-stagebar[data-state="error"]   .sturm-stagebar-dot { background: var(--color-danger); }
+
+.sturm-stagebar-name {
+  font-weight: 500; color: var(--color-text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 130px; flex-shrink: 0;
+}
+.sturm-stagebar-state {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.sturm-stagebar[data-state="running"] .sturm-stagebar-state { color: var(--color-accent); }
+.sturm-stagebar[data-state="ok"]      .sturm-stagebar-state { color: var(--color-success); }
+.sturm-stagebar[data-state="error"]   .sturm-stagebar-state { color: var(--color-danger); }
+
+.sturm-stagebar-kpis {
+  display: inline-flex; align-items: center; gap: 4px;
+  flex: 1; min-width: 0; overflow: hidden;
+}
+.sturm-stagebar-kpi {
+  display: inline-flex; align-items: baseline; gap: 3px;
+  padding: 1px 6px; border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  border: 1px solid transparent;
+  font-size: 10px; line-height: 1.4;
+  white-space: nowrap;
+}
+.sturm-stagebar-kpi-label { color: var(--color-text-tertiary); text-transform: lowercase; }
+.sturm-stagebar-kpi-value { color: var(--color-text-primary); font-weight: 500; font-family: var(--font-mono); font-size: 10px; }
+.sturm-stagebar-kpi[data-tone="accent"] { background: var(--color-accent-light); }
+.sturm-stagebar-kpi[data-tone="accent"] .sturm-stagebar-kpi-value { color: var(--color-accent); }
+.sturm-stagebar-kpi[data-tone="ok"]     { background: rgba(139, 168, 138, 0.14); }
+.sturm-stagebar-kpi[data-tone="ok"] .sturm-stagebar-kpi-value { color: var(--color-success); }
+.sturm-stagebar-kpi[data-tone="warn"]   { background: rgba(212, 160, 160, 0.12); }
+.sturm-stagebar-kpi[data-tone="warn"] .sturm-stagebar-kpi-value { color: var(--color-danger); }
+
+.sturm-stagebar-time {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.sturm-stagebar-count {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--color-text-tertiary);
+  padding: 1px 6px; border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  flex-shrink: 0;
+}
+.sturm-stagebar-chev {
+  width: 13px; height: 13px; stroke-width: 1.8;
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-default);
+  flex-shrink: 0;
+}
+.sturm-stagebar[data-open="true"] .sturm-stagebar-chev { transform: rotate(180deg); }
+
+.sturm-stagebar-body {
+  border-top: 1px solid var(--color-border-light);
+  padding: 4px 8px 6px;
+  background: var(--color-bg-secondary);
+}
+.sturm-stagebar-empty {
+  padding: 8px 6px; font-size: 11.5px; color: var(--color-text-tertiary); text-align: center;
+}
 
 .sturm-event {
   display: grid; grid-template-columns: auto 1fr;

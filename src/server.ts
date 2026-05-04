@@ -1,5 +1,7 @@
 import express from 'express';
 import multer from 'multer';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -11,24 +13,105 @@ import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import { getGitChainClient } from './lib/gitchain-client.ts';
 import type { WorkflowDef } from './core/types.ts';
+import { createOcrPreviewRouter } from './server/ocr-preview.ts';
+import { createSchemaGenerateRouter } from './server/schema-generate.ts';
+import { createWorkspacesRouter } from './server/workspaces.ts';
+import {
+  applyOverrides,
+  deleteStageOverride,
+  readOverrides,
+  writeStageOverride,
+} from './core/config-overrides.ts';
+import { startUploadSweep } from './server/upload-sweep.ts';
+import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
+import {
+  getSchemaIndex,
+  getSchemaVersion,
+  listSchemas,
+  putSchema,
+  SchemaRepoError,
+} from './core/schema-repo.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const UPLOADS_DIR = path.join(ROOT, 'uploads');
 const RUNS_DIR = path.join(ROOT, 'runs');
+const WORKSPACES_DIR = path.join(ROOT, 'workspaces');
+const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
 const UI_DIR = path.join(__dirname, 'ui');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(RUNS_DIR, { recursive: true });
+fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
 // Bootstrap-Registries
 registerAllStages();
 registerAllWorkflows();
 
 const app = express();
+
+// Security headers — CSP allows React + Babel-standalone from unpkg, plus inline
+// scripts (text/babel transform) and inline styles already in the studio markup.
+// Frame ancestors none + HSTS via helmet defaults.
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      'default-src': ["'self'"],
+      'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://unpkg.com'],
+      'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      'img-src': ["'self'", 'data:', 'blob:'],
+      'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
+      'connect-src': ["'self'"],
+      'frame-src': ["'self'", 'blob:'],
+      'object-src': ["'none'"],
+      'base-uri': ["'self'"],
+      'form-action': ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'same-site' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: false },
+  frameguard: { action: 'deny' },
+}));
+
 app.use(express.json({ limit: '2mb' }));
 
+// Auth: opt-in. No-op when STURM_BEARER_TOKEN is unset.
+warnIfDisabled();
+
 const upload = multer({ dest: UPLOADS_DIR, limits: { fileSize: 25 * 1024 * 1024 } });
+
+const ocrPreviewLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const rl = (req as unknown as { rateLimit?: { resetTime?: Date } }).rateLimit;
+    const retryAfterSec = rl?.resetTime
+      ? Math.ceil((rl.resetTime.getTime() - Date.now()) / 1000)
+      : 600;
+    res.status(429).json({ error: 'rate_limited', retryAfter: Math.max(1, retryAfterSec) });
+  },
+});
+
+// Schema-Generator: jeder Request macht 3-5 Chat-Calls → 10 req / 10 min / IP
+// (≤50 chat calls per IP per 10 min). Eigene Surface, daher separater Limiter.
+const schemaGenerateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const rl = (req as unknown as { rateLimit?: { resetTime?: Date } }).rateLimit;
+    const retryAfterSec = rl?.resetTime
+      ? Math.ceil((rl.resetTime.getTime() - Date.now()) / 1000)
+      : 600;
+    res.status(429).json({ error: 'rate_limited', retryAfter: Math.max(1, retryAfterSec) });
+  },
+});
 
 // ============ Workflow-Metadaten ============
 
@@ -67,11 +150,106 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   });
 });
 
+// ============ OCR Studio ============
+
+app.use('/api/ocr', requireBearerToken, ocrPreviewLimiter, createOcrPreviewRouter(UPLOADS_DIR));
+
+// ============ Schema Generator (LLM-driven; separate surface from /api/ocr) ============
+
+app.use(
+  '/api/schema',
+  requireBearerToken,
+  schemaGenerateLimiter,
+  createSchemaGenerateRouter(UPLOADS_DIR),
+);
+
+// ============ Workspaces (Phase 1: filesystem-only, no GitChain yet) ============
+
+app.use('/api/workspaces', requireBearerToken, createWorkspacesRouter(WORKSPACES_DIR, CANONICALS_DIR));
+
+// ============ Studio templates (P2.6) ============
+
+app.get('/api/studio/templates', requireBearerToken, async (_req, res) => {
+  try {
+    const raw = await fs.promises.readFile(path.join(UI_DIR, 'studio-templates.json'), 'utf8');
+    res.type('application/json').send(raw);
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// ============ Schema repo (P2.5) ============
+
+const SCHEMAS_DIR = path.join(ROOT);
+fs.mkdirSync(path.join(ROOT, 'schemas'), { recursive: true });
+
+app.get('/api/schemas', requireBearerToken, async (_req, res) => {
+  try {
+    res.json(await listSchemas(SCHEMAS_DIR));
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+app.get('/api/schemas/:id(*)', requireBearerToken, async (req, res, next) => {
+  const id = req.params.id;
+  // Match `:id/:version` form (last segment matches ^v\d+$).
+  const lastSlash = id.lastIndexOf('/');
+  const tail = lastSlash >= 0 ? id.slice(lastSlash + 1) : '';
+  const isVersion = /^v\d+$/.test(tail);
+  try {
+    if (isVersion) {
+      const realId = id.slice(0, lastSlash);
+      const rec = await getSchemaVersion(SCHEMAS_DIR, realId, tail);
+      res.json(rec);
+    } else {
+      const idx = await getSchemaIndex(SCHEMAS_DIR, id);
+      res.json({ id, current: idx.current, versions: idx.versions, hashes: idx.hashes, name: idx.name, defaultPrompt: idx.defaultPrompt });
+    }
+  } catch (e) {
+    if (e instanceof SchemaRepoError) {
+      const status = e.code === 'not_found' ? 404 : e.code === 'invalid_id' ? 400 : 500;
+      return res.status(status).json({ error: e.code, message: e.message });
+    }
+    next(e);
+  }
+});
+
+app.post('/api/schemas/:id(*)', requireBearerToken, async (req, res) => {
+  const id = req.params.id;
+  const body = req.body ?? {};
+  if (typeof body !== 'object' || body.schema === undefined) {
+    return res.status(400).json({ error: 'body must be { schema, name?, defaultPrompt? }' });
+  }
+  try {
+    const result = await putSchema(SCHEMAS_DIR, id, {
+      schema: body.schema,
+      name: typeof body.name === 'string' ? body.name : undefined,
+      defaultPrompt: typeof body.defaultPrompt === 'string' ? body.defaultPrompt : undefined,
+    });
+    res.status(201).json(result);
+  } catch (e) {
+    if (e instanceof SchemaRepoError) {
+      const status = e.code === 'invalid_id' ? 400 : 500;
+      return res.status(status).json({ error: e.code, message: e.message });
+    }
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// Versions are immutable; deletion is intentionally not supported until we
+// have run reference tracking (see findings).
+app.delete('/api/schemas/:id(*)', requireBearerToken, (_req, res) => {
+  res.status(405).json({ error: 'method_not_allowed', message: 'schema versions are immutable; delete is not supported (no run reference tracking yet)' });
+});
+
 // ============ Run (SSE) ============
 
 app.post('/api/workflows/:id/run', upload.single('file'), async (req, res) => {
-  const def = getWorkflow(req.params.id);
-  if (!def) { res.status(404).json({ error: `workflow not found: ${req.params.id}` }); return; }
+  const baseDef = getWorkflow(req.params.id);
+  if (!baseDef) { res.status(404).json({ error: `workflow not found: ${req.params.id}` }); return; }
+  // Merge any persisted overrides onto the canonical workflow.
+  const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
 
   // Input je nach input.type aus FormData oder Body bauen
   let input: Record<string, unknown> = {};
@@ -95,6 +273,12 @@ app.post('/api/workflows/:id/run', upload.single('file'), async (req, res) => {
   res.flushHeaders?.();
 
   const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+
+  // Persist input next to the run so the OCR Studio can deep-link back to it.
+  // Fire-and-forget; runs proceed regardless.
+  if (def.input.type === 'file' && req.file) {
+    void persistInputForRun(def.id, run.runId, req.file.path, req.file.originalname, req.file.size, req.file.mimetype);
+  }
 
   const unsub = run.bus.subscribe((env) => {
     res.write(formatSseEvent(env));
@@ -136,7 +320,7 @@ app.get('/api/runs/:workflowId/:runId', async (req, res) => {
   }
 });
 
-// ============ GitChain API ============
+// ==== GitChain API ============
 
 app.post('/api/gitchain/promote', async (req, res) => {
   if (process.env['STURM_ARTIFACT_BACKEND'] !== 'gitchain') {
@@ -169,12 +353,134 @@ app.post('/api/gitchain/promote', async (req, res) => {
   }
 });
 
+// Studio deep-link support: input metadata + the file itself.
+app.get('/api/runs/:workflowId/:runId/_input.json', requireBearerToken, async (req, res) => {
+  const p = path.join(RUNS_DIR, safeSeg(req.params.workflowId), safeSeg(req.params.runId), '_input.json');
+  try {
+    const raw = await fs.promises.readFile(p, 'utf8');
+    res.type('application/json').send(raw);
+  } catch {
+    res.status(404).json({ error: 'no input persisted for this run' });
+  }
+});
+
+app.get('/api/runs/:workflowId/:runId/_input/:filename', requireBearerToken, async (req, res) => {
+  const filename = safeSeg(req.params.filename);
+  if (!filename) { res.status(400).json({ error: 'invalid filename' }); return; }
+  const p = path.join(RUNS_DIR, safeSeg(req.params.workflowId), safeSeg(req.params.runId), '_input', filename);
+  res.sendFile(p, (err) => { if (err) res.status(404).end(); });
+});
+
+// Workflow stage config — used by the Studio to prefill from a stage.
+// Returns the effective config (source + override merged), plus split shapes
+// so the UI can show "you have an override" badges and revert intelligently.
+app.get('/api/workflows/:id/stages/:stageId/config', requireBearerToken, async (req, res) => {
+  const def = getWorkflow(req.params.id);
+  if (!def) { res.status(404).json({ error: `workflow not found: ${req.params.id}` }); return; }
+  const stage = def.stages[req.params.stageId];
+  if (!stage) { res.status(404).json({ error: `stage not found: ${req.params.stageId}` }); return; }
+  const overrides = await readOverrides(ROOT, def.id);
+  const override = overrides?.stages[req.params.stageId] ?? null;
+  const sourceConfig = (stage.config ?? {}) as Record<string, unknown>;
+  const effectiveConfig = override ? { ...sourceConfig, ...override } : sourceConfig;
+  res.json({
+    workflowId: def.id,
+    stageId: req.params.stageId,
+    uses: stage.uses,
+    name: stage.name ?? req.params.stageId,
+    description: stage.description ?? null,
+    config: effectiveConfig,
+    source: sourceConfig,
+    override,
+    hasOverride: override != null,
+  });
+});
+
+// Studio: write a stage override. Body = full effective config.
+app.post('/api/workflows/:id/stages/:stageId/config', requireBearerToken, async (req, res) => {
+  const def = getWorkflow(req.params.id);
+  if (!def) { res.status(404).json({ error: `workflow not found: ${req.params.id}` }); return; }
+  const stage = def.stages[req.params.stageId];
+  if (!stage) { res.status(404).json({ error: `stage not found: ${req.params.stageId}` }); return; }
+  const incoming = req.body?.config;
+  if (!incoming || typeof incoming !== 'object') {
+    res.status(400).json({ error: 'body must be { config: {...} }' });
+    return;
+  }
+  try {
+    const updated = await writeStageOverride(ROOT, def.id, req.params.stageId, incoming as Record<string, unknown>);
+    res.json({ ok: true, workflowId: def.id, stageId: req.params.stageId, override: updated.stages[req.params.stageId] });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// Studio: revert override → workflow source wins again.
+app.delete('/api/workflows/:id/stages/:stageId/config', requireBearerToken, async (req, res) => {
+  const def = getWorkflow(req.params.id);
+  if (!def) { res.status(404).json({ error: `workflow not found: ${req.params.id}` }); return; }
+  try {
+    await deleteStageOverride(ROOT, def.id, req.params.stageId);
+    res.json({ ok: true, workflowId: def.id, stageId: req.params.stageId });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// Studio: persisted output of a stage from a previous run, for diffing.
+app.get('/api/runs/:workflowId/:runId/stages/:stageId/output', requireBearerToken, async (req, res) => {
+  const wf = safeSeg(req.params.workflowId);
+  const run = safeSeg(req.params.runId);
+  const stage = safeSeg(req.params.stageId);
+  if (!wf || !run || !stage) { res.status(400).json({ error: 'invalid path segment' }); return; }
+  const p = path.join(RUNS_DIR, wf, run, stage, 'output.json');
+  try {
+    const raw = await fs.promises.readFile(p, 'utf8');
+    res.type('application/json').send(raw);
+  } catch {
+    res.status(404).json({ error: 'stage output not found' });
+  }
+});
+
+async function persistInputForRun(
+  workflowId: string,
+  runId: string,
+  uploadedPath: string,
+  originalFilename: string,
+  size: number,
+  mime: string,
+) {
+  try {
+    const safeName = sanitizeFilename(originalFilename);
+    const dir = path.join(RUNS_DIR, workflowId, runId, '_input');
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.copyFile(uploadedPath, path.join(dir, safeName));
+    await fs.promises.writeFile(
+      path.join(RUNS_DIR, workflowId, runId, '_input.json'),
+      JSON.stringify({ filename: safeName, originalFilename, size, mime, persistedAt: new Date().toISOString() }, null, 2),
+    );
+  } catch (e) {
+    console.warn(`[server] persistInputForRun failed for ${workflowId}/${runId}:`, (e as Error).message);
+  }
+}
+
+function sanitizeFilename(name: string): string {
+  // Keep extension; replace anything not safe with _.
+  const base = name.replace(/[^A-Za-z0-9._-]+/g, '_');
+  return base.length > 0 ? base : 'input.bin';
+}
+
+function safeSeg(seg: string): string {
+  return /^[A-Za-z0-9._-]+$/.test(seg) ? seg : '';
+}
+
 // ============ Static UI ============
 
 app.use('/design-system', express.static(path.join(UI_DIR, 'design-system')));
 app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/pipeline.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
+app.get('/studio-ocr.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.use(express.static(UI_DIR));
 
 // Docs: /docs/WORKFLOW_TEMPLATE.md direkt ausliefern (plain text)
@@ -191,4 +497,12 @@ const port = Number(process.env.PORT ?? 7800);
 app.listen(port, () => {
   console.log(`STURM · http://localhost:${port}`);
   console.log(`  Workflows: ${listWorkflows().map(w => w.id).join(', ') || '(keine)'}`);
+  console.log(`  Studio:    http://localhost:${port}/studio-ocr.html`);
+});
+
+// Janitor — runs in-process, sweeps uploads/ + run _input/ folders.
+startUploadSweep({
+  uploadsDir: UPLOADS_DIR,
+  runsDir: RUNS_DIR,
+  inputRetentionDays: Number(process.env.STURM_INPUT_RETENTION_DAYS ?? 7),
 });

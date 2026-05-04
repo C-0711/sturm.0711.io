@@ -1,39 +1,38 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import { defineStage } from '../core/stage.ts';
-
-const MIME: Record<string, string> = {
-  '.pdf': 'application/pdf',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-};
+import {
+  callMistralOcrWithFallback,
+  configToApiRequest,
+  getFileSignedUrl,
+  mimeFromFilename,
+  parseApiResponse,
+  uploadFile,
+  type DocumentChunk,
+  type JsonSchema,
+  type MistralOcrConfig as FullConfig,
+  type ParsedOcrResponse,
+} from '../lib/mistral-ocr/index.ts';
 
 export interface MistralOcrInput {
-  /** Absoluter Dateipfad (vom Workflow-Input durchgereicht). */
+  /** Absoluter Dateipfad. */
   filePath: string;
-  /** Ursprünglicher Dateiname — bestimmt MIME-Type über Extension. */
+  /** Ursprünglicher Dateiname — bestimmt MIME über Extension. */
   filename: string;
-  /**
-   * Optionales dynamisches Schema-Override. Wenn gesetzt, überschreibt es
-   * `config.schema`. Nützlich wenn eine vorherige Stage das Schema baut
-   * (z.B. Schema-Bau → Mistral kuratiert).
-   */
-  schema?: Record<string, unknown>;
+  /** Optionales dynamisches Schema-Override. Überschreibt config.documentAnnotation.schema. */
+  schema?: JsonSchema;
   /** Optionaler Schema-Name-Override. */
   schemaName?: string;
+  /** Optional: bereits hochgeladene Mistral file_id (wiederverwenden, kein erneuter Upload). */
+  fileId?: string;
 }
 
-export interface MistralOcrConfig {
-  /** Optionales JSON-Schema für strukturierte Annotation. */
-  schema?: Record<string, unknown>;
-  /** Name für die Schema-Annotation. */
-  schemaName?: string;
-  /** Modell-Override; default mistral-ocr-latest. */
-  model?: string;
-}
+/** Stage-Config = volle MistralOcrConfig. Backwards-compat schema/schemaName/model bleiben unterstützt. */
+export type MistralOcrConfig = FullConfig;
 
+/**
+ * Output bleibt rückwärtskompatibel zur vorherigen Stage:
+ *   { model, pages[{index,markdown,chars}], text, chars, annotation, ms }
+ * Zusätzlich liefert das volle ParsedOcrResponse unter `parsed`.
+ */
 export interface MistralOcrOutput {
   model: string;
   pages: Array<{ index: number; markdown: string; chars: number }>;
@@ -41,97 +40,68 @@ export interface MistralOcrOutput {
   chars: number;
   annotation: unknown | null;
   ms: number;
+  parsed: ParsedOcrResponse;
 }
 
-/**
- * Generische Mistral-OCR-Stage. Liefert Markdown + optional strukturierte JSON-Annotation.
- * Port aus legacy/elster-mvp/server.mjs:200-274.
- */
 export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, MistralOcrConfig>({
   id: 'mistral-ocr',
   name: 'Mistral OCR',
-  description: 'OCR via Mistral, optional mit JSON-Schema-Annotation',
+  description: 'OCR via Mistral mit voller API-Konfiguration (Header, Footer, Annotationen, Image-Filter, Confidence)',
 
   async run(input, ctx) {
-    const apiKey = process.env.MISTRAL_API_KEY;
-    if (!apiKey) throw new Error('MISTRAL_API_KEY nicht gesetzt');
     if (!input?.filePath) throw new Error('mistral-ocr: filePath fehlt');
     if (!input?.filename) throw new Error('mistral-ocr: filename fehlt');
 
-    const ext = path.extname(input.filename).toLowerCase();
-    const mime = MIME[ext] ?? 'application/octet-stream';
-    const isImage = mime.startsWith('image/');
-
-    const buf = await fs.readFile(input.filePath);
-    const dataUri = `data:${mime};base64,${buf.toString('base64')}`;
-    ctx.logger.debug(`OCR eingabe: ${input.filename} (${buf.length} Bytes, ${mime})`);
-
-    const document = isImage
-      ? { type: 'image_url', image_url: dataUri }
-      : { type: 'document_url', document_url: dataUri };
-
-    const body: Record<string, unknown> = {
-      model: ctx.config.model ?? 'mistral-ocr-latest',
-      document,
-    };
-    const schema = input.schema ?? ctx.config.schema;
-    const schemaName = input.schemaName ?? ctx.config.schemaName;
-    if (schema) {
-      body.document_annotation_format = {
-        type: 'json_schema',
-        json_schema: {
-          name: schemaName ?? 'Extraction',
-          schema,
-          strict: true,
-        },
+    // Input-Schema-Override gewinnt vor config (Legacy-Verhalten).
+    const cfg: MistralOcrConfig = { ...(ctx.config ?? {}) };
+    if (input.schema) {
+      cfg.documentAnnotation = {
+        schema: input.schema,
+        name: input.schemaName ?? cfg.documentAnnotation?.name,
+        prompt: cfg.documentAnnotation?.prompt,
       };
     }
 
+    // Upload via Files API (or reuse a pre-uploaded fileId), then resolve a
+    // presigned URL. Mirrors the playground's Run-call shape and avoids
+    // base64-encoding the bytes on every iteration.
+    const fileId = input.fileId
+      ?? (await uploadFile(input.filePath, input.filename, { signal: ctx.signal })).file_id;
+    const { url: signedUrl } = await getFileSignedUrl(fileId, { signal: ctx.signal });
+    const isImage = mimeFromFilename(input.filename).startsWith('image/');
+    const document: DocumentChunk = isImage
+      ? { type: 'image_url', image_url: signedUrl }
+      : { type: 'document_url', document_url: signedUrl, document_name: input.filename };
+    ctx.logger.debug(`OCR Eingabe: ${input.filename} (file_id=${fileId})`);
+
+    const req = configToApiRequest(cfg, document, { runId: ctx.runId, stageId: ctx.stageId });
     const t0 = Date.now();
-    const resp = await fetch('https://api.mistral.ai/v1/ocr', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: ctx.signal,
-    });
-    const ms = Date.now() - t0;
-    const raw = await resp.text();
+    const { response, degradation } = await callMistralOcrWithFallback(req, { signal: ctx.signal });
+    const parsed = parseApiResponse(response, cfg, t0, degradation);
 
-    if (!resp.ok) {
-      throw new Error(`Mistral OCR HTTP ${resp.status}: ${raw.slice(0, 400)}`);
+    if (degradation) ctx.emit('ocr_degraded', degradation);
+    ctx.emit('ocr_pages', { count: parsed.pages.length, chars: parsed.chars });
+    if (parsed.validation.documentAnnotation.length > 0) {
+      ctx.emit('ocr_validation', {
+        issues: parsed.validation.documentAnnotation.length,
+        sample: parsed.validation.documentAnnotation.slice(0, 5),
+      });
     }
-
-    let json: any;
-    try { json = JSON.parse(raw); } catch { throw new Error(`Mistral OCR: kein valides JSON (${raw.slice(0, 200)})`); }
-
-    const pages = (json.pages ?? []).map((p: any, i: number) => ({
-      index: p.index ?? i,
-      markdown: p.markdown ?? p.text ?? '',
-      chars: (p.markdown ?? p.text ?? '').length,
-    }));
-    const text = pages.map((p: any) => p.markdown).join('\n\n');
-
-    let annotation: unknown = null;
-    if (json.document_annotation) {
-      annotation = json.document_annotation;
-      // Mistral doppel-encodet manchmal; bis zu 3x parsen
-      for (let i = 0; i < 3 && typeof annotation === 'string'; i++) {
-        try { annotation = JSON.parse(annotation as string); } catch { break; }
-      }
+    if (parsed.hallucinations.length > 0) {
+      ctx.emit('ocr_hallucinations', {
+        count: parsed.hallucinations.length,
+        sample: parsed.hallucinations.slice(0, 5),
+      });
     }
-
-    ctx.emit('ocr_pages', { count: pages.length, chars: text.length });
 
     return {
-      model: json.model ?? 'mistral-ocr-latest',
-      pages,
-      text,
-      chars: text.length,
-      annotation,
-      ms,
+      model: parsed.model,
+      pages: parsed.pages.map((p) => ({ index: p.index, markdown: p.markdown, chars: p.chars })),
+      text: parsed.text,
+      chars: parsed.chars,
+      annotation: parsed.documentAnnotation,
+      ms: parsed.ms,
+      parsed,
     };
   },
 });

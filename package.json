@@ -8,10 +8,15 @@
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/lib/gitchain-client.test.ts"
+    "test:codec": "tsx src/lib/mistral-ocr/codec.test.ts",
+    "test:schema": "tsx src/server/schema-generate.test.ts",
+    "test:gitchain": "tsx src/lib/gitchain-client.test.ts",
+    "test": "npm run test:codec && npm run test:schema && npm run test:gitchain"
   },
   "dependencies": {
     "express": "^4.19.2",
+    "express-rate-limit": "^8.4.1",
+    "helmet": "^8.1.0",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.20.0",
     "simple-git": "^3.36.0"
