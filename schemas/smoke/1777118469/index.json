@@ -1,0 +1,11 @@
+{
+  "current": "v1",
+  "versions": [
+    "v1"
+  ],
+  "hashes": {
+    "v1": "sha256:42e71b50506f530935a5c40ba6402fd4f8ca1e3ae78966131493fad9d9b83826"
+  },
+  "name": "Smoke",
+  "defaultPrompt": "hi"
+}

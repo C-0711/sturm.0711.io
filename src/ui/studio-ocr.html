@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>STURM · OCR Studio</title>
+  <link rel="stylesheet" href="/colors_and_type.css" />
+  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <link rel="stylesheet" href="/studio-ocr.css" />
+  <link rel="stylesheet" href="/schema-builder.css" />
+  <link rel="stylesheet" href="/neo-tokens.css" />
+  <!-- Stages cascade — must load AFTER neo-tokens so [data-stage] hides win. -->
+  <link rel="stylesheet" href="/stages.css" />
+  <script src="/theme-toggle.js"></script>
+
+  <!-- React + Babel for the schema builder (mounted only inside the schema section). -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <!-- Lucide for the right-rail icons. JS falls back to single-letter labels if unavailable. -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="studio" data-stage="empty">
+  <header class="studio-header">
+    <div class="brand">
+      <a href="/" class="brand-link"><img src="/design-system/assets/logo-mark.svg" alt="STURM" /></a>
+      <h1 id="studio-title">OCR Studio</h1>
+      <span class="badge" id="studio-badge">MVP</span>
+    </div>
+    <div class="header-actions">
+      <span id="tuning-context" class="tuning-context hidden" aria-hidden="true"></span>
+      <span id="override-pill" class="override-pill hidden" aria-hidden="true" title="Diese Stage hat einen aktiven Override">Override aktiv</span>
+      <button id="apply-btn" type="button" class="btn-secondary hidden" aria-hidden="true" tabindex="-1" title="Aktuelle Konfiguration als Override für diese Stage speichern">Apply to workflow</button>
+      <button id="revert-btn" type="button" class="btn-secondary hidden" aria-hidden="true" tabindex="-1" title="Override entfernen, Workflow-Quelle gilt wieder">Revert</button>
+      <button id="rerun-btn" type="button" class="btn-secondary hidden" aria-hidden="true" tabindex="-1" title="Diese Eingabe mit aktiver Konfiguration neu ausführen">Re-run input</button>
+      <button id="add-variant-btn" type="button" class="btn-secondary" title="Variante zum Vergleich hinzufügen">+ Variant</button>
+      <button id="cmdk-open" type="button" class="btn-secondary" title="Befehlspalette (⌘K)" aria-label="Befehlspalette öffnen">⌘K</button>
+      <a href="/workspaces.html" class="link-secondary">Workspaces →</a>
+      <a id="back-to-pipeline" href="/pipeline.html" class="link-secondary">Pipelines →</a>
+      <button type="button" class="theme-toggle" data-theme-toggle title="Theme wechseln (Light/Dark)">
+        <span data-theme-icon aria-hidden="true">☾</span>
+        <span data-theme-label class="sr-only">Light</span>
+      </button>
+    </div>
+  </header>
+  <div id="toast-container" class="toast-container"></div>
+
+  <main class="studio-grid" id="studio-shell">
+    <!-- DRAFTING-ONLY — calm CTA card next to the document. CSS shows it only when [data-stage="drafting"]. -->
+    <aside class="draft-cta" id="draft-cta">
+      <div class="draft-cta-inner">
+        <h3 class="draft-cta-title" id="draft-cta-title">Bereit zur Extraktion</h3>
+        <p class="draft-cta-sub" id="draft-cta-sub">Wähle, wie es weitergehen soll.</p>
+        <button id="draft-cta-primary" type="button" class="btn-primary draft-cta-primary">Schema generieren &amp; extrahieren</button>
+        <button id="draft-cta-secondary" type="button" class="btn-ghost draft-cta-secondary">Manuelles Schema</button>
+        <div class="draft-cta-hint" id="draft-cta-hint">≈ €0.0009 · ~12&nbsp;s</div>
+      </div>
+    </aside>
+
+    <!-- LEFT — document -->
+    <section class="pane pane-doc">
+      <header class="pane-header">
+        <h2>Dokument</h2>
+        <div class="pane-header-right">
+          <span id="page-conf-pill" class="page-conf-pill hidden" aria-hidden="true" title="Durchschnittliche Seiten-Confidence">—</span>
+          <label class="file-picker">
+            <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" />
+            <span>Datei wählen…</span>
+          </label>
+        </div>
+      </header>
+      <div class="doc-meta" id="doc-meta">Keine Datei ausgewählt.</div>
+      <div class="doc-viewer" id="doc-viewer">
+        <div class="doc-empty" id="doc-empty">
+          <div class="empty-headline">Wähle einen Dokumenttyp — Schema wird vorgeladen.</div>
+          <div class="empty-cards">
+            <button class="empty-card" type="button" data-template-id="elster/steuerpflichtige-person">
+              <div class="empty-thumb empty-thumb-form" aria-hidden="true">
+                <span class="t-line t-w70"></span>
+                <span class="t-line t-w90"></span>
+                <span class="t-line t-w50"></span>
+                <span class="t-line t-w80"></span>
+                <span class="t-line t-w40"></span>
+              </div>
+              <div class="empty-card-title">ELSTER · Steuerpflichtige Person</div>
+              <div class="empty-card-sub">Stammdaten + Anschrift</div>
+              <span class="empty-card-cta">Schema laden →</span>
+            </button>
+            <button class="empty-card" type="button" data-template-id="belege/rechnung">
+              <div class="empty-thumb empty-thumb-invoice" aria-hidden="true">
+                <span class="t-block t-head"></span>
+                <span class="t-line t-w60"></span>
+                <span class="t-line t-w40"></span>
+                <span class="t-table">
+                  <span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </span>
+                <span class="t-line t-w30 t-right"></span>
+              </div>
+              <div class="empty-card-title">Rechnung</div>
+              <div class="empty-card-sub">Aussteller, Positionen, Summe</div>
+              <span class="empty-card-cta">Schema laden →</span>
+            </button>
+            <button class="empty-card" type="button" data-template-id="belege/spende">
+              <div class="empty-thumb empty-thumb-receipt" aria-hidden="true">
+                <span class="t-stamp"></span>
+                <span class="t-line t-w80"></span>
+                <span class="t-line t-w60"></span>
+                <span class="t-amount"></span>
+                <span class="t-line t-w50"></span>
+              </div>
+              <div class="empty-card-title">Spendenquittung</div>
+              <div class="empty-card-sub">Empfänger, Datum, Betrag</div>
+              <span class="empty-card-cta">Schema laden →</span>
+            </button>
+          </div>
+          <div class="empty-or">oder PDF / Bild hier ablegen</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MIDDLE — schema (the contract) -->
+    <section class="pane pane-schema">
+      <header class="pane-header">
+        <h2>Schema</h2>
+        <button id="schema-generate-btn" type="button" class="btn-secondary" title="Erst eine Datei wählen, dann hier klicken. 3 LLM-Kandidaten parallel via mistral-small-latest; Sieger wird in den Schema-Builder geladen.">
+          ✨ Aus Dokument generieren
+        </button>
+      </header>
+
+      <div class="schema-pane-body">
+        <div class="config-section schema-meta-section">
+          <label class="field">
+            <span>Vorlage laden…</span>
+            <select id="cfg-template">
+              <option value="">— keine —</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Schema-Name</span>
+            <input id="cfg-schema-name" type="text" placeholder="extraction" />
+          </label>
+          <details class="field-details">
+            <summary>Erweitert: Annotation-Prompt</summary>
+            <p class="field-help">Optional. Wenn leer, dienen die Schema-Beschreibungen als Anweisung.</p>
+            <textarea id="cfg-prompt" rows="3" placeholder="z.B.: Beträge in EUR. Komma als Dezimaltrennzeichen."></textarea>
+          </details>
+          <div id="schema-generate-progress" class="sg-progress hidden" aria-live="polite"></div>
+        </div>
+
+        <div class="schema-builder-wrap">
+          <!-- Schema builder mount: React component renders Visual + JSON tabs in here. -->
+          <div id="schema-builder-mount"></div>
+        </div>
+
+        <div class="schema-actions">
+          <button id="save-schema-btn" type="button" class="btn-secondary" title="Aktuelles Schema im Schema-Repo als neue Version speichern">Save schema as…</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT — run -->
+    <section class="pane pane-run">
+      <header class="pane-header">
+        <h2>Run</h2>
+        <div class="status-row">
+          <span id="status-pill" class="status-pill status-idle">Idle</span>
+          <span id="status-meta" class="status-meta"></span>
+        </div>
+      </header>
+      <nav class="run-tabs" role="tablist" aria-label="Run-Bereiche">
+        <button class="run-tab active" data-runtab="parameters" type="button">Parameters</button>
+        <button class="run-tab" data-runtab="result" type="button">Result</button>
+        <button id="tab-variants-stage" class="run-tab hidden" data-runtab="variants" type="button" aria-hidden="true" tabindex="-1">Variants</button>
+        <button class="run-tab" data-runtab="history" type="button">History</button>
+      </nav>
+
+      <!-- Parameters tab -->
+      <div class="run-tab-body" data-runbody="parameters">
+        <div class="parameters-actions">
+          <button id="run-btn" class="btn-primary" disabled>Preview ausführen</button>
+        </div>
+
+        <div class="config-section">
+          <h3>Modell &amp; Seiten</h3>
+          <label class="field">
+            <span>Modell</span>
+            <select id="cfg-model">
+              <option value="mistral-ocr-latest">mistral-ocr-latest</option>
+              <option value="mistral-ocr-2505">mistral-ocr-2505 (legacy)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Seiten <small>(z.B. <code>1-4,8</code>; leer = alle)</small></span>
+            <input id="cfg-pages" type="text" placeholder="alle" />
+            <small id="cfg-pages-error" class="error-text"></small>
+          </label>
+        </div>
+
+        <div class="config-section">
+          <h3>Layout</h3>
+          <label class="field-row">
+            <input type="checkbox" id="cfg-extract-header" />
+            <span>Header extrahieren</span>
+          </label>
+          <label class="field-row">
+            <input type="checkbox" id="cfg-extract-footer" />
+            <span>Footer extrahieren</span>
+          </label>
+          <label class="field">
+            <span>Tabellen-Format</span>
+            <select id="cfg-table-format">
+              <option value="markdown">Markdown</option>
+              <option value="html">HTML</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="config-section">
+          <h3>Bild-Filter</h3>
+          <label class="field-row">
+            <input type="checkbox" id="cfg-include-base64" />
+            <span>Bild-Base64 zurückgeben (Bandbreite!)</span>
+          </label>
+          <label class="field">
+            <span>Min. Pixelgröße <small>(<code>image_min_size</code>)</small></span>
+            <input id="cfg-image-min-size" type="number" min="0" placeholder="kein Limit" />
+          </label>
+          <label class="field">
+            <span>Max. Bilder pro Seite <small>(<code>image_limit</code>)</small></span>
+            <input id="cfg-image-limit" type="number" min="0" placeholder="kein Limit" />
+          </label>
+        </div>
+
+        <div class="config-section">
+          <h3>Confidence <span class="beta">beta</span></h3>
+          <label class="field">
+            <span>Granularität</span>
+            <select id="cfg-confidence">
+              <option value="none">aus</option>
+              <option value="page">page</option>
+              <option value="word">word</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <!-- Result tab -->
+      <div class="run-tab-body hidden" data-runbody="result" aria-hidden="true">
+        <nav class="tabs" role="tablist" aria-label="Result-Sicht">
+          <button id="tab-diff" type="button" class="tab hidden" aria-hidden="true" tabindex="-1" data-tab="diff">Diff vs. Original</button>
+          <button class="tab active" data-tab="annotation" type="button">Annotation</button>
+          <button class="tab" data-tab="markdown" type="button">Markdown</button>
+          <button class="tab" data-tab="links" type="button">Links</button>
+          <button class="tab" data-tab="quality" type="button">Qualität</button>
+          <button class="tab" data-tab="raw" type="button">Raw</button>
+        </nav>
+        <div class="tab-panel hidden" data-panel="diff" aria-hidden="true">
+          <div id="out-diff"><div class="muted">Noch keine Preview ausgeführt — kein Vergleich möglich.</div></div>
+        </div>
+        <div class="tab-panel" data-panel="annotation">
+          <div id="out-annotation-rich" class="annotation-rich"><div class="muted">Noch keine Annotation. Preview ausführen.</div></div>
+          <pre id="out-annotation" class="mono hidden">—</pre>
+        </div>
+        <div class="tab-panel hidden" data-panel="markdown">
+          <pre id="out-markdown" class="mono">—</pre>
+        </div>
+        <div class="tab-panel hidden" data-panel="links">
+          <ul id="out-links" class="link-list"><li class="muted">—</li></ul>
+        </div>
+        <div class="tab-panel hidden" data-panel="quality">
+          <div id="out-quality">—</div>
+        </div>
+        <div class="tab-panel hidden" data-panel="raw">
+          <pre id="out-raw" class="mono">—</pre>
+        </div>
+      </div>
+
+      <!-- Variants tab -->
+      <div class="run-tab-body hidden" data-runbody="variants" aria-hidden="true">
+        <!-- Legacy id retained for selectors -->
+        <div class="tab-panel" data-panel="variants" style="padding:0">
+          <div id="out-variants"><div class="muted">Keine Variant-Läufe.</div></div>
+        </div>
+      </div>
+
+      <!-- History tab -->
+      <div class="run-tab-body hidden" data-runbody="history" aria-hidden="true">
+        <div class="muted history-empty">Letzte Runs kommen hier rein. Aktuell: keine Persistenz im Studio.</div>
+      </div>
+
+      <!-- Sticky cost meter -->
+      <div id="cost-meter" class="cost-meter" title="Geschätzte Kosten der aktuellen Konfiguration">
+        <span class="cost-meter-label">≈</span>
+        <span id="cost-meter-value" class="cost-meter-value">€0.0000</span>
+      </div>
+    </section>
+
+    <!-- Right-rail: stage-driven sheet toggles. Shown only when [data-stage="reading"|"tuning"]. -->
+    <aside class="right-rail" id="right-rail" aria-label="Werkzeuge">
+      <button class="rr-btn" type="button" data-rail-action="schema" title="Schema (s)" aria-label="Schema bearbeiten">
+        <i data-lucide="file-cog" aria-hidden="true"></i><span class="rr-fallback">S</span>
+      </button>
+      <button class="rr-btn" type="button" data-rail-action="params" title="Parameter (p)" aria-label="Parameter">
+        <i data-lucide="sliders-horizontal" aria-hidden="true"></i><span class="rr-fallback">P</span>
+      </button>
+      <button class="rr-btn" type="button" data-rail-action="history" title="Verlauf (h)" aria-label="Verlauf">
+        <i data-lucide="history" aria-hidden="true"></i><span class="rr-fallback">H</span>
+      </button>
+      <button class="rr-btn" type="button" data-rail-action="detail" title="Detail (e)" aria-label="Detail-Ansichten">
+        <i data-lucide="layout-list" aria-hidden="true"></i><span class="rr-fallback">E</span>
+      </button>
+    </aside>
+  </main>
+
+  <!-- Variants side rail (hidden until +Variant pressed) -->
+  <aside id="variants-rail" class="variants-rail hidden" aria-hidden="true">
+    <header>
+      <h3>Variants</h3>
+      <button id="variants-close" type="button" class="link-secondary" aria-label="Schließen">×</button>
+    </header>
+    <ul id="variants-list" class="variants-list"></ul>
+    <div class="variants-actions">
+      <button id="variants-add" type="button" class="btn-secondary">+ Variante</button>
+      <button id="variants-run" type="button" class="btn-primary">Run all</button>
+    </div>
+  </aside>
+
+  <!-- Hidden legacy hook so studio-ocr.js's tab-variants reveal still works -->
+  <button id="tab-variants" class="hidden" aria-hidden="true" tabindex="-1" data-tab="variants" type="button"></button>
+
+  <!-- Cmd-K palette -->
+  <dialog id="cmdk-dialog" class="cmdk-dialog">
+    <form method="dialog" class="cmdk-form" id="cmdk-form" autocomplete="off">
+      <input id="cmdk-input" type="text" placeholder="Befehl suchen…" autocomplete="off" spellcheck="false" />
+      <ul id="cmdk-list" class="cmdk-list" role="listbox"></ul>
+      <div class="cmdk-hint">↑↓ navigieren · ↵ ausführen · Esc schließen</div>
+    </form>
+  </dialog>
+
+  <!-- Shortcut help -->
+  <button id="kbd-help-btn" type="button" class="kbd-help-btn" aria-label="Tastatur-Shortcuts" title="Tastatur-Shortcuts">?</button>
+  <div id="kbd-help-popover" class="kbd-help-popover" popover>
+    <h4>Shortcuts</h4>
+    <dl>
+      <dt><kbd>⌘</kbd>+<kbd>K</kbd></dt><dd>Befehlspalette</dd>
+      <dt><kbd>g</kbd></dt><dd>Schema aus Dokument generieren</dd>
+      <dt><kbd>r</kbd></dt><dd>Preview ausführen</dd>
+      <dt><kbd>d</kbd></dt><dd>Diff-Tab öffnen</dd>
+      <dt><kbd>s</kbd></dt><dd>Schema-Sheet umschalten</dd>
+      <dt><kbd>p</kbd></dt><dd>Parameter-Sheet umschalten</dd>
+      <dt><kbd>h</kbd></dt><dd>Verlauf-Sheet umschalten</dd>
+      <dt><kbd>e</kbd></dt><dd>Detail-Sheet umschalten</dd>
+      <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Schema-Reihen navigieren</dd>
+      <dt><kbd>1</kbd> / <kbd>2</kbd></dt><dd>Visual / JSON</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Sheet/Highlights schließen</dd>
+    </dl>
+  </div>
+
+  <!-- Schema builder loads first so window.__schemaBuilder is ready when studio-ocr.js queries it. -->
+  <script type="text/babel" data-presets="react" src="/schema-builder.jsx"></script>
+  <script type="module" src="/studio-ocr.js"></script>
+</body>
+</html>

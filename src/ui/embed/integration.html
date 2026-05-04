@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STURM · cb-chat Integration Guide</title>
+  <link rel="stylesheet" href="/colors_and_type.css?v=20260427g" />
+  <link rel="stylesheet" href="/workspaces.css?v=20260427g" />
+  <style>
+    body { max-width: 880px; margin: 0 auto; padding: 30px 24px; font-family: var(--font-sans, system-ui); line-height: 1.5; color: var(--color-text-primary, #2a2a2a); background: var(--color-bg, #fff); }
+    h1 { font-size: 24px; margin-top: 0; }
+    h2 { font-size: 18px; margin-top: 32px; padding-bottom: 6px; border-bottom: 1px solid var(--color-border-light, #e0e0e0); }
+    h3 { font-size: 14px; margin-top: 22px; }
+    code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; background: var(--color-surface-2, #f5f5f5); padding: 1px 5px; border-radius: 3px; }
+    pre { background: var(--color-surface-2, #fafafa); border: 1px solid var(--color-border-light, #ececec); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+    pre code { background: transparent; padding: 0; }
+    .note { background: rgba(74, 111, 165, 0.06); border-left: 3px solid var(--color-accent, #4a6fa5); padding: 10px 14px; margin: 12px 0; font-size: 13px; }
+    .warn { background: rgba(249, 156, 0, 0.08); border-left: 3px solid var(--color-amber, #d18c00); padding: 10px 14px; margin: 12px 0; font-size: 13px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+    th, td { border-bottom: 1px solid var(--color-border-light, #ececec); padding: 6px 10px; text-align: left; }
+    th { font-weight: 500; color: var(--color-text-secondary); font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<h1>STURM × cb-chat — Integration Guide</h1>
+
+<p>Dieses Dokument beschreibt die zwei Integrationspfade zwischen <code>cb-chat.0711.io</code> und <code>playground.0711.io</code>:</p>
+
+<ol>
+  <li><strong>Server-zu-Server Import</strong> — cb-chat-Backend ruft STURM auf, lädt Dokumente eines Falls als Workspace ein.</li>
+  <li><strong>Embed im iframe mit Session-Exchange</strong> — cb-chat-Frontend bettet einen STURM-Workspace als iframe ein, ohne Tokens in URLs zu exponieren.</li>
+</ol>
+
+<p>Beide Pfade erlauben zusätzlich <strong>Webhooks</strong> für Live-Notifications (siehe unten).</p>
+
+<h2>1. Token ausstellen (einmalig)</h2>
+
+<p>Vor allem anderen brauchst du ein <code>WorkspaceToken</code> mit <code>embed</code>-Scope. Das ist ein langlebiger Bearer-Token den cb-chat-Backend behält. Aussstellung via Admin-Bearer:</p>
+
+<pre><code>curl -X POST https://playground.0711.io/api/workspaces/&lt;wsId&gt;/tokens \
+  -H "Authorization: Bearer &lt;ADMIN_BEARER&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"scopes":["embed","read"], "label":"cb-chat-prod", "expiresInDays":365}'</code></pre>
+
+<p>Antwort enthält den <code>secret</code> <strong>einmalig</strong>:</p>
+
+<pre><code>{
+  "token": { "id": "wsk_…", "scopes":["embed","read"], "label":"cb-chat-prod", … },
+  "secret": "&lt;SECRET — speichern!&gt;",
+  "message": "Save this secret — it cannot be retrieved later."
+}</code></pre>
+
+<div class="warn">Der Secret wird <strong>nie wieder</strong> ausgespielt. cb-chat-Backend muss ihn sicher speichern (env-var oder Secret-Manager). Bei Verlust: Token revoken (DELETE), neuen ausstellen.</div>
+
+<h2>2. Embed-iframe mit Session-Exchange (sicher)</h2>
+
+<p>Drei Schritte: cb-chat-Backend erstellt eine kurzlebige Session, cb-chat-Frontend embedded den iframe und liefert die Session via <code>postMessage</code>, der iframe tauscht die Session gegen ein <code>HttpOnly</code>-Cookie.</p>
+
+<h3>Schritt A — cb-chat-Backend: Session erzeugen</h3>
+
+<pre><code>// Node-Beispiel
+const resp = await fetch(`https://playground.0711.io/api/workspaces/${wsId}/sessions`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${WSK_SECRET}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ ttlMs: 3600000 }),  // 1h
+});
+const { sessionId, expiresAt } = await resp.json();
+// → sessionId an Frontend weiterreichen (über deinen normalen Auth-Pfad)</code></pre>
+
+<h3>Schritt B — cb-chat-Frontend: iframe + postMessage</h3>
+
+<pre><code>&lt;iframe id="sturm-frame"
+  src="https://playground.0711.io/embed/workspace.html?ws=&lt;wsId&gt;"
+  style="width:100%; height:100vh; border:0"
+  allow="clipboard-write"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+const STURM_ORIGIN = 'https://playground.0711.io';
+const frame = document.getElementById('sturm-frame');
+
+// Wait for iframe to signal it's ready
+window.addEventListener('message', (ev) =&gt; {
+  if (ev.origin !== STURM_ORIGIN) return;
+  if (ev.data?.type === 'sturm:ready') {
+    // Send session — targetOrigin REQUIRED, never use '*'
+    frame.contentWindow.postMessage(
+      { type: 'sturm:auth', sessionId: '&lt;sessionId from Schritt A&gt;' },
+      STURM_ORIGIN
+    );
+  }
+});
+&lt;/script&gt;</code></pre>
+
+<p>Der iframe redirected dann automatisch in <code>/workspace.html?ws=…</code> mit gesetztem <code>sturm-session</code> Cookie.</p>
+
+<div class="note"><strong>Warum Session statt Token in der URL?</strong> Tokens in Query-Parametern landen in Server-Logs, Browser-History, Referrer-Headern. Eine kurzlebige Session-ID, die nur einmal benutzbar ist und sofort gegen ein HttpOnly-Cookie getauscht wird, ist isoliert vom URL-Bus.</div>
+
+<h2>3. Server-zu-Server Import (cb-chat → STURM)</h2>
+
+<p>Lädt alle Dokumente eines cb-chat Falls als Workspace ein. Im Hintergrund läuft ein Job (Phase C); fortschritt-trackbar.</p>
+
+<pre><code>curl -X POST https://playground.0711.io/api/integrations/cb-chat/import \
+  -H "Authorization: Bearer &lt;ADMIN_BEARER&gt;" \
+  -H "X-CBChat-Cookie: &lt;USER_SESSION_COOKIE&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"fallId":"886a96f8-…", "workspaceName":"Maerzhaeuser Madeleine"}'</code></pre>
+
+<pre><code>{
+  "jobId": "…",
+  "workspaceId": "maerzhaeuser-madeleine",
+  "workspaceUrl": "/workspace.html?ws=maerzhaeuser-madeleine",
+  "jobEventsUrl": "/api/jobs/&lt;jobId&gt;/events?live=true",
+  "status": "queued"
+}</code></pre>
+
+<p>Subscribe to <code>jobEventsUrl</code> via SSE für Live-Progress, oder polle <code>GET /api/jobs/&lt;jobId&gt;</code>.</p>
+
+<h2>4. Webhooks (Live-Notifications)</h2>
+
+<p>STURM emittiert pro Workspace-Mutation ein signiertes Event an alle registrierten Subscriber:</p>
+
+<table>
+  <thead><tr><th>Event-Type</th><th>Wann</th><th>Payload-Keys</th></tr></thead>
+  <tbody>
+    <tr><td><code>document.classified</code></td><td>nach Mistral-Small-Klassifikation</td><td>docUuid, label, confidence, kpiCount, displayName</td></tr>
+    <tr><td><code>document.extracted</code></td><td>nach Mistral-OCR-Extraktion</td><td>docUuid, templateId, pages, hallucinationCount</td></tr>
+    <tr><td><code>document.audited</code></td><td>nach Audit-Run</td><td>docUuid, auditKind, totals</td></tr>
+    <tr><td><code>document.approved</code></td><td>nach approve via PATCH</td><td>docUuid, approvedAt, templateId</td></tr>
+    <tr><td><code>master.updated</code></td><td>wenn neuer master.json-Snapshot persistiert wird</td><td>verlaufHash, approvedCount, signature</td></tr>
+  </tbody>
+</table>
+
+<h3>Subscriber registrieren</h3>
+
+<pre><code>curl -X POST https://playground.0711.io/api/workspaces/&lt;wsId&gt;/webhooks \
+  -H "Authorization: Bearer &lt;ADMIN_BEARER&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://cb-chat.0711.io/api/sturm-webhook",
+    "events": ["document.classified","master.updated"],
+    "label": "cb-chat-fall-listener"
+  }'</code></pre>
+
+<p>Antwort enthält den <code>secret</code> für Signatur-Verifikation:</p>
+
+<pre><code>{
+  "id": "sub_…",
+  "url": "https://cb-chat.0711.io/api/sturm-webhook",
+  "secret": "&lt;HMAC-SECRET&gt;",
+  …
+}</code></pre>
+
+<h3>Signatur verifizieren (Receiver-Seite)</h3>
+
+<p>Jede Webhook-Delivery hat den Header <code>X-Sturm-Signature: t=&lt;ms&gt;,v1=&lt;hex&gt;</code>. Verify so (Stripe-Style):</p>
+
+<pre><code>const crypto = require('node:crypto');
+
+function verifyWebhook(body, signatureHeader, secret) {
+  const [tPart, vPart] = signatureHeader.split(',');
+  const t = tPart.split('=')[1];
+  const v1 = vPart.split('=')[1];
+  const expected = crypto.createHmac('sha256', secret)
+    .update(`${t}.${body}`)
+    .digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(v1, 'hex'), Buffer.from(expected, 'hex'));
+}</code></pre>
+
+<h3>Replay (verpasste Events nachholen)</h3>
+
+<p>Jedes Event hat eine monotone <code>eventSequence</code> pro Workspace. Wenn cb-chat Events verpasst (Outage, Restart): <code>GET /api/workspaces/&lt;wsId&gt;/events?fromSeq=&lt;letzteBekannteSeq&gt;</code> liefert alle Events ab Cursor.</p>
+
+<h2>5. master.json verifizieren</h2>
+
+<p>Jeder <code>master.json</code> ist signiert. Receiver kann verifizieren ohne den Secret zu kennen — STURM bestätigt:</p>
+
+<pre><code>curl -X POST https://playground.0711.io/api/workspaces/&lt;wsId&gt;/master/verify \
+  -H "Content-Type: application/json" \
+  -d @master.json
+// → {"valid": true, "errors": []}</code></pre>
+
+<h2>Sicherheits-Checkliste für cb-chat-Backend</h2>
+
+<ul>
+  <li>WSK-Secrets nie an Frontend ausliefern (immer im Backend halten)</li>
+  <li>Sessions kurzlebig halten (TTL ≤ 1h)</li>
+  <li>postMessage-targetOrigin immer explizit setzen, nie <code>'*'</code></li>
+  <li>Webhook-Signatur per <code>timingSafeEqual</code> vergleichen, nicht per <code>===</code></li>
+  <li>Webhook-Replay mit <code>eventSequence</code>-Cursor implementieren statt Events vertrauen</li>
+  <li>master.json-Snapshots per <code>verlaufHash</code> in cb-chat cachen — bei mismatch verify-Endpoint nutzen</li>
+</ul>
+
+<p style="margin-top:40px; padding-top:16px; border-top:1px solid var(--color-border-light); color:var(--color-text-tertiary); font-size:12px;">
+STURM · pipeline-vertrag@v0 · Phase A-G live · 2026-04-27
+</p>
+
+</body>
+</html>

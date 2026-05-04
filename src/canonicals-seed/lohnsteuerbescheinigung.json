@@ -1,0 +1,85 @@
+{
+  "id": "0711/lohnsteuerbescheinigung",
+  "name": "Lohnsteuerbescheinigung",
+  "description": "Jährliche Lohnsteuerbescheinigung des Arbeitgebers (§ 41b EStG).",
+  "classificationHints": ["lohnsteuerbescheinigung", "lohnsteuer"],
+  "annotationPrompt": "Extrahiere die Werte einer deutschen Lohnsteuerbescheinigung. Beträge im Originalformat (z.B. \"7.532,00 €\"). Felder weglassen, die im Dokument nicht stehen.",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["jahr", "arbeitnehmer", "bezuege"],
+    "properties": {
+      "jahr": { "type": "integer", "minimum": 2000, "maximum": 2099, "description": "Bescheinigungsjahr" },
+      "steuer_id": { "type": "string", "pattern": "^[0-9]{11}$", "description": "11-stellige Steuer-Identifikationsnummer" },
+      "etin": { "type": "string", "description": "elektronische Transfer-Identifikationsnummer (eTIN), wenn vorhanden" },
+      "arbeitnehmer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nachname", "vorname"],
+        "properties": {
+          "nachname": { "type": "string" },
+          "vorname": { "type": "string" },
+          "geburtsdatum": { "type": "string", "format": "date" },
+          "anschrift": { "type": "string" },
+          "steuerklasse": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6"] },
+          "kirchensteuermerkmal": { "type": "string", "description": "z.B. \"ev\", \"rk\", \"--\" oder ausgeschriebene Konfession" }
+        }
+      },
+      "arbeitgeber": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "anschrift": { "type": "string" }
+        }
+      },
+      "beschaeftigung": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "von": { "type": "string", "format": "date" },
+          "bis": { "type": "string", "format": "date" }
+        }
+      },
+      "bezuege": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bruttoarbeitslohn"],
+        "properties": {
+          "bruttoarbeitslohn": { "type": "string", "description": "Bruttoarbeitslohn (Zeile 3) im Originalformat" },
+          "lohnsteuer": { "type": "string" },
+          "solidaritaetszuschlag": { "type": "string" },
+          "kirchensteuer_arbeitnehmer": { "type": "string" },
+          "kirchensteuer_partner": { "type": "string" }
+        }
+      },
+      "sozialversicherung": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rv_arbeitgeberanteil": { "type": "string" },
+          "rv_arbeitnehmeranteil": { "type": "string" },
+          "av_arbeitgeberanteil": { "type": "string" },
+          "av_arbeitnehmeranteil": { "type": "string" },
+          "kv_arbeitgeberanteil": { "type": "string" },
+          "kv_arbeitnehmeranteil": { "type": "string" },
+          "pv_arbeitgeberanteil": { "type": "string" },
+          "pv_arbeitnehmeranteil": { "type": "string" }
+        }
+      },
+      "freigestellte_kapitalertraege": {
+        "type": "array",
+        "description": "Mitteilungen über freigestellte Kapitalerträge (oft separater Anhang)",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["zahlstelle", "betrag"],
+          "properties": {
+            "zahlstelle": { "type": "string" },
+            "betrag": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

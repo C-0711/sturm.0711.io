@@ -1,0 +1,176 @@
+/* schema-builder.css — picks up Neos design tokens defined in
+   /design-system/colors_and_type.css. Keep in sync with .sb-* class names
+   used in src/ui/schema-builder.jsx. */
+
+.schema-builder { display: flex; flex-direction: column; gap: 12px; }
+
+.sb-tabs {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  border-bottom: 1px solid var(--border, #21262d);
+  padding-bottom: 8px;
+}
+.sb-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted, #8b949e);
+  padding: 6px 12px;
+  border-radius: 6px 6px 0 0;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sb-tab.active {
+  background: var(--surface-2, var(--surface-elevated, #161b22));
+  color: var(--text, #e6e8eb);
+  border-color: var(--border, #21262d);
+  border-bottom-color: var(--surface-2, var(--surface-elevated, #161b22));
+}
+.sb-tabs-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted, #8b949e);
+}
+
+.sb-banner-warn {
+  padding: 8px 10px;
+  background: rgba(245, 170, 40, 0.08);
+  border: 1px solid rgba(245, 170, 40, 0.3);
+  border-radius: 6px;
+  color: #f5aa28;
+  font-size: 12px;
+}
+
+.sb-tree { display: flex; flex-direction: column; gap: 6px; }
+.sb-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted, #8b949e);
+  font-size: 12px;
+}
+
+.sb-row {
+  background: var(--surface-2, var(--surface-elevated, #161b22));
+  border: 1px solid var(--border, #21262d);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-row.over {
+  border-color: var(--accent, #58a6ff);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+}
+.sb-row-head { display: flex; gap: 8px; align-items: center; }
+.sb-row-body { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-handle {
+  cursor: grab;
+  color: var(--text-muted, #8b949e);
+  user-select: none;
+  padding: 0 4px;
+}
+.sb-handle:active { cursor: grabbing; }
+.sb-name { flex: 1 1 160px; }
+.sb-required {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--text-muted, #8b949e);
+  font-size: 12px;
+}
+.sb-remove {
+  background: transparent;
+  border: 1px solid var(--border, #21262d);
+  color: var(--text-muted, #8b949e);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.sb-remove:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+.sb-desc { width: 100%; }
+.sb-config-row { display: flex; gap: 6px; flex: 1 1 100%; }
+.sb-config-row > * { flex: 1; }
+
+.sb-name,
+.sb-kind,
+.sb-binding,
+.sb-config,
+.sb-config-row input,
+.sb-desc,
+.sb-json {
+  background: var(--surface-1, var(--surface, #0e1117));
+  color: var(--text, #e6e8eb);
+  border: 1px solid var(--border, #21262d);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+.sb-name:focus,
+.sb-kind:focus,
+.sb-binding:focus,
+.sb-config:focus,
+.sb-config-row input:focus,
+.sb-desc:focus,
+.sb-json:focus {
+  outline: none;
+  border-color: var(--accent, #58a6ff);
+}
+
+.sb-json {
+  width: 100%;
+  min-height: 200px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.sb-add {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed var(--border, #21262d);
+  color: var(--text-muted, #8b949e);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.sb-add:hover {
+  border-color: var(--accent, #58a6ff);
+  color: var(--text, #e6e8eb);
+}
+.sb-add-nested { margin-left: 24px; }
+
+.sb-nested {
+  padding-left: 24px;
+  border-left: 2px solid var(--border, #21262d);
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-readonly {
+  padding-left: 16px;
+  color: var(--text-muted, #8b949e);
+  font-size: 12px;
+}
+.sb-readonly em {
+  color: var(--accent, #58a6ff);
+  font-style: normal;
+}
+.sb-readonly code {
+  background: var(--surface-1, var(--surface, #0e1117));
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}

@@ -1,0 +1,56 @@
+{
+  "id": "tax-de-2024",
+  "version": "v0",
+  "displayName": "Steuerveranlagung Deutschland 2024",
+  "description": "Pipeline für deutsche Einkommensteuererklärungen mit Anlagen, Belegen und Bescheinigungen. Klassifikations-Vokabular ist das {templateId, folderSlug, displayName}-Tripel des Reviewers — UI rendert displayName, Filesystem nutzt folderSlug, Identität durch die Pipeline ist templateId.",
+  "nodes": [
+    { "id": "ingest",   "displayName": "Eingang",        "kind": "ingest" },
+    { "id": "classify", "displayName": "Klassifikation", "kind": "classify", "model": "mistral-small-latest" },
+    { "id": "route",    "displayName": "Routing",        "kind": "route" },
+    { "id": "template", "displayName": "Vorlage",        "kind": "template", "optional": true },
+    { "id": "extract",  "displayName": "Extraktion",     "kind": "extract",  "optional": true, "model": "mistral-ocr-latest" },
+    { "id": "approve",  "displayName": "Freigabe",       "kind": "approve" }
+  ],
+  "classifications": [
+    {
+      "templateId": "0711/elster-haupt",
+      "folderSlug": "est-haupt",
+      "displayName": "Einkommensteuererklärung — Hauptvordruck",
+      "classificationHints": ["elster", "einkommensteuer", "est_1_a", "hauptvordruck", "einkommensteuererklaerung"],
+      "requiresExtract": true
+    },
+    {
+      "templateId": "0711/lohnsteuerbescheinigung",
+      "folderSlug": "lohnsteuerbescheinigung",
+      "displayName": "Lohnsteuerbescheinigung (Anlage N)",
+      "classificationHints": ["lohnsteuerbescheinigung", "lohnsteuer", "anlage_n"]
+    },
+    {
+      "templateId": "0711/invoice-standard",
+      "folderSlug": "rechnungen",
+      "displayName": "Rechnung / Beleg",
+      "classificationHints": ["rechnung", "invoice", "beleg", "faktura"]
+    },
+    {
+      "templateId": "etim/electronic-product",
+      "folderSlug": "produktdatenblaetter",
+      "displayName": "Produktdatenblatt (ETIM)",
+      "classificationHints": ["datenblatt", "etim", "produkt", "datasheet"]
+    }
+  ],
+  "completeness": {
+    "expects": [
+      { "templateId": "0711/elster-haupt", "min": 1, "label": "Hauptvordruck (erforderlich)" },
+      { "templateId": "0711/lohnsteuerbescheinigung", "min": 0, "label": "Lohnsteuerbescheinigung (Anlage N) — falls Arbeitnehmer-Einkünfte" },
+      { "templateId": "0711/invoice-standard", "min": 0, "label": "Werbungskosten-Belege — optional" }
+    ]
+  },
+  "caseFields": [
+    { "id": "year",        "displayName": "Steuerjahr",       "fromPath": "jahr" },
+    { "id": "type",        "displayName": "Art der Erklärung","fromPath": "art_der_erklaerung" },
+    { "id": "veranlagung", "displayName": "Veranlagung",      "fromPath": "veranlagungswahl" },
+    { "id": "persons",     "displayName": "Steuerpflichtige", "fromPaths": ["person_a", "person_b"] },
+    { "id": "address",     "displayName": "Anschrift",        "fromPath": "anschrift" },
+    { "id": "bank",        "displayName": "Bankverbindung",   "fromPath": "bankverbindung" }
+  ]
+}

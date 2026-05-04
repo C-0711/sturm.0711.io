@@ -17,3 +17,12 @@ legacy/*/uploads/
 .DS_Store
 .vscode/
 .idea/
+
+# Snapshot-Filter (running-state push 2026-05-04)
+.master-key.json
+*.bak
+*.bak.[0-9]*
+*.dummy/
+*.tmp/
+workspaces/
+_staging/

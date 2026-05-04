@@ -1,0 +1,104 @@
+{
+  "id": "etim/electronic-product",
+  "name": "ETIM Elektronisches Produkt",
+  "description": "ETIM-klassifiziertes Produktdatenblatt — Hersteller, Modell, EC-Klasse, Merkmale (EF-Codes) mit Werten + Einheit.",
+  "classificationHints": ["etim", "datenblatt", "produkt", "datasheet", "product", "spezifikation"],
+  "annotationPrompt": "Extrahiere die ETIM-strukturierten Produktdaten. Hersteller-Bezeichner, Modellnummer, ETIM-Klasse (EC + 6 Ziffern, z.B. EC012034). Jedes technische Merkmal als Eintrag in features[]: code (EF + 6 Ziffern, z.B. EF000008), name, value (im Originalformat), unit. Wert-Einheit-Kombinationen genau wie im Dokument.",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["manufacturer", "supplier_pid", "etim_class", "features"],
+    "properties": {
+      "manufacturer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "Herstellername (z.B. Bosch Thermotechnik, ABB)" },
+          "gln": { "type": "string", "pattern": "^\\d{13}$", "description": "Global Location Number (13-stellig)" }
+        }
+      },
+      "supplier_pid": {
+        "type": "string",
+        "description": "Hersteller-Artikelnummer (z.B. 7736606982)"
+      },
+      "ean": {
+        "type": "string",
+        "pattern": "^\\d{13}$",
+        "description": "13-stelliger EAN/GTIN, falls auf dem Dokument"
+      },
+      "product_name": {
+        "type": "string",
+        "description": "Vollständiger Produktname/Modellbezeichnung"
+      },
+      "product_family": {
+        "type": "string",
+        "description": "Produktfamilie/Baureihe (z.B. \"Logatherm WPL\", \"Compress 7000i\")"
+      },
+      "etim_class": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^EC\\d{6}$",
+            "description": "ETIM-Klassen-Code (EC gefolgt von 6 Ziffern, z.B. EC012034 = Wärmepumpe Luft/Wasser)"
+          },
+          "version": { "type": "string", "description": "ETIM-Major-Version (z.B. \"9.0\")" },
+          "name": { "type": "string", "description": "Klar-Name der ETIM-Klasse" }
+        }
+      },
+      "features": {
+        "type": "array",
+        "description": "Liste der technischen Merkmale gemäss ETIM. Jeder Eintrag entspricht einem ETIM-Feature (EF-Code).",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "value"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^EF\\d{6}$",
+              "description": "ETIM-Feature-Code (EF gefolgt von 6 Ziffern, z.B. EF000008 = Breite)"
+            },
+            "name": { "type": "string", "description": "Merkmal-Name (z.B. \"Breite\", \"COP bei A7/W35\", \"Schalldruckpegel\")" },
+            "value": { "type": "string", "description": "Wert im Originalformat des Dokuments" },
+            "unit": { "type": "string", "description": "Einheit (z.B. \"mm\", \"kg\", \"dB\", \"kW\", \"°C\")" }
+          }
+        }
+      },
+      "dimensions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "width_mm": { "type": "string", "description": "Breite in mm" },
+          "height_mm": { "type": "string", "description": "Höhe in mm" },
+          "depth_mm": { "type": "string", "description": "Tiefe in mm" },
+          "weight_kg": { "type": "string", "description": "Gewicht in kg" }
+        }
+      },
+      "energy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "energy_class": { "type": "string", "description": "Energieeffizienzklasse (z.B. A++, A+, B)" },
+          "power_consumption_kw": { "type": "string" },
+          "voltage_v": { "type": "string" }
+        }
+      },
+      "certifications": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string", "description": "Zertifizierungs- oder Prüfzeichen (z.B. CE, TÜV, EHPA)" },
+            "number": { "type": "string", "description": "Zertifikatsnummer falls angegeben" }
+          }
+        }
+      }
+    }
+  }
+}

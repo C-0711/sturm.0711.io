@@ -1,0 +1,13 @@
+{
+  "schema": {
+    "type": "object",
+    "properties": {
+      "foo": {
+        "type": "string"
+      }
+    }
+  },
+  "name": "smoke",
+  "defaultPrompt": "Test prompt",
+  "createdAt": "2026-04-25T11:58:22.223Z"
+}

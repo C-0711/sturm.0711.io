@@ -1,0 +1,14 @@
+{
+  "id": "default",
+  "version": "v0",
+  "displayName": "Default Pipeline",
+  "description": "Generic 6-step pipeline. Used as fallback for workspaces without an explicit binding. English labels match the pre-pipeline-contract behaviour.",
+  "nodes": [
+    { "id": "ingest",   "displayName": "Ingest",   "kind": "ingest" },
+    { "id": "classify", "displayName": "Classify", "kind": "classify", "model": "mistral-small-latest" },
+    { "id": "route",    "displayName": "Route",    "kind": "route" },
+    { "id": "template", "displayName": "Template", "kind": "template", "optional": true },
+    { "id": "extract",  "displayName": "Extract",  "kind": "extract",  "optional": true, "model": "mistral-ocr-latest" },
+    { "id": "approve",  "displayName": "Approve",  "kind": "approve" }
+  ]
+}

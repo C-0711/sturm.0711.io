@@ -1,0 +1,11 @@
+{
+  "current": "v1",
+  "versions": [
+    "v1"
+  ],
+  "hashes": {
+    "v1": "sha256:c2715d25926878ffb6fb0fb57402359ec89002ba29a77fb6a419efe5ca73363f"
+  },
+  "name": "smoke",
+  "defaultPrompt": "Test prompt"
+}

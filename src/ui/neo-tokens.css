@@ -1,0 +1,268 @@
+/* /static/css/neo-tokens.css — alias shim over the canonical Neo tokens.
+   MUST be loaded AFTER colors_and_type.css. The --neo-* names are
+   kept for backwards-compat with existing component CSS; values now
+   resolve from --color-* so day/night modes work uniformly.
+
+   Light is default. Add `data-theme="dark"` (or `class="dark"`) on
+   <html> to flip to the warm-dark palette. The toggle is wired in
+   theme-toggle.js. */
+
+:root, [data-theme="light"] {
+  /* surfaces — light mode pulls from the bundle's whites + warm-beige hovers */
+  --neo-bg:               var(--color-bg);
+  --neo-surface:          var(--color-bg-secondary);
+  --neo-surface-2:        var(--color-bg-tertiary);
+  --neo-border:           var(--color-border);
+  --neo-border-soft:      var(--color-border-light);
+
+  /* text */
+  --neo-text:             var(--color-text-primary);
+  --neo-text-muted:       var(--color-text-secondary);
+  --neo-text-dim:         var(--color-text-tertiary);
+  /* aliases used by my workspace CSS (Phase 1+) */
+  --neo-fg:               var(--color-text-primary);
+  --neo-muted:            var(--color-text-secondary);
+
+  /* the bronze (Neo signature) */
+  --neo-accent:           var(--color-accent);
+  --neo-accent-hover:     var(--color-accent-hover);
+  --neo-accent-tint:      rgba(133, 123, 97, 0.10);
+  --neo-accent-tint-2:    rgba(133, 123, 97, 0.20);
+
+  /* type */
+  --neo-font-sans:        var(--font-inter);
+  --neo-font-serif:       var(--font-playfair);
+  --neo-font-mono:        var(--font-mono);
+  --neo-font-body:        var(--font-inter);
+
+  /* radius — Neo uses exactly three (pill/button/card) plus a small */
+  --neo-radius-pill:      var(--radius-full);
+  --neo-radius-button:    var(--radius-xl);
+  --neo-radius-sm:        var(--radius-lg);
+  --neo-radius-card:      var(--radius-2xl);
+
+  /* spacing scale used in cards */
+  --neo-pad-card:         24px;
+  --neo-pad-button:       14px 28px;
+  --neo-pad-button-sm:    8px 20px;
+  --neo-pad-pill:         4px 12px;
+
+  /* Legacy tokens used by studio-ocr.css — previously had hardcoded dark
+     fallbacks (#0e1117, #161b22, #21262d, #e6e8eb, #58a6ff). Mapping them
+     here makes the studio theme-switch without touching its 700 lines. */
+  --surface:              var(--color-bg);
+  --surface-elevated:     var(--color-bg-secondary);
+  --surface-2:            var(--color-bg-tertiary);
+  --text:                 var(--color-text-primary);
+  --text-muted:           var(--color-text-secondary);
+  --text-dim:             var(--color-text-tertiary);
+  --border:               var(--color-border);
+  --border-strong:        var(--color-border);
+  --accent:               var(--color-accent);
+  --accent-soft:          var(--color-accent-light);
+  --font-sans:            var(--font-inter);
+}
+
+/* Dark mode: same alias set, but the underlying --color-* tokens have
+   already shifted (set in colors_and_type.css under .dark/[data-theme=dark]).
+   The accent tint moves to the cream variant for contrast. */
+.dark, [data-theme="dark"] {
+  --neo-accent-tint:      rgba(176, 166, 136, 0.12);
+  --neo-accent-tint-2:    rgba(176, 166, 136, 0.22);
+}
+
+html, body {
+  background: var(--neo-bg);
+  color: var(--neo-text);
+  font-family: var(--neo-font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── headlines: serif, sentence-case, never uppercase ─────────────── */
+h1, .neo-h1 { font-family: var(--neo-font-serif); font-weight: 400; font-size: 52px; line-height: 1.1; letter-spacing: -0.01em; text-transform: none; }
+h2, .neo-h2 { font-family: var(--neo-font-serif); font-weight: 400; font-size: 32px; line-height: 1.15; text-transform: none; letter-spacing: 0; }
+h3, .neo-h3 { font-family: var(--neo-font-sans);  font-weight: 600; font-size: 18px; line-height: 1.3; text-transform: none; letter-spacing: 0; }
+
+/* section label — replaces uppercase-tracked DOKUMENT/SCHEMA/RUN labels */
+.neo-section-label, .config-section h3, .pane-header h2 {
+  font-family: var(--neo-font-sans);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--neo-text);
+}
+.neo-section-label {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--neo-border-soft);
+  margin-bottom: 16px;
+}
+
+/* ── card ─────────────────────────────────────────────────────────── */
+.neo-card {
+  background: var(--neo-surface);
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-card);
+  padding: var(--neo-pad-card);
+  box-shadow: none;
+}
+
+/* ── buttons ──────────────────────────────────────────────────────── */
+.btn, .btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--neo-accent);
+  color: #fff;
+  border: 0;
+  border-radius: var(--neo-radius-button);
+  padding: var(--neo-pad-button);
+  font: 500 15px/1 var(--neo-font-sans);
+  cursor: pointer;
+  transition: background 120ms ease;
+  box-shadow: none;
+}
+.btn:hover, .btn-primary:hover { background: var(--neo-accent-hover); }
+.btn:disabled, .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-sm { padding: var(--neo-pad-button-sm); font-size: 14px; }
+
+/* Secondary: outline on black, bronze text. REPLACES the white blocks. */
+.btn-secondary {
+  background: transparent;
+  color: var(--neo-accent);
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-button);
+  padding: var(--neo-pad-button-sm);
+  font: 500 14px/1 var(--neo-font-sans);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  box-shadow: none;
+}
+.btn-secondary:hover {
+  background: rgba(133, 123, 97, 0.06);
+  border-color: rgba(133, 123, 97, 0.4);
+  color: var(--neo-accent);
+}
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--neo-text-muted);
+  border: 0;
+  border-radius: var(--neo-radius-button);
+  padding: var(--neo-pad-button-sm);
+  font: 500 14px var(--neo-font-sans);
+  cursor: pointer;
+}
+.btn-ghost:hover { color: var(--neo-text); }
+
+/* ── pill / badge ─────────────────────────────────────────────────── */
+.neo-pill, .badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--neo-accent-tint);
+  color: var(--neo-accent);
+  border: 1px solid var(--neo-accent-tint-2);
+  border-radius: var(--neo-radius-pill);
+  padding: var(--neo-pad-pill);
+  font: 500 12px var(--neo-font-sans);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.neo-pill::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--neo-accent);
+}
+
+/* ── inputs ──────────────────────────────────────────────────────── */
+.neo-input,
+input[type=text], input[type=number], input:not([type]),
+select, textarea {
+  background: var(--neo-surface-2);
+  color: var(--neo-text);
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-button);
+  padding: 10px 14px;
+  font: 500 14px var(--neo-font-sans);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.neo-input:focus, input:focus, select:focus, textarea:focus {
+  border-color: var(--neo-accent);
+}
+
+/* ── dropzone ────────────────────────────────────────────────────── */
+.neo-dropzone, .doc-empty, .file-picker {
+  background: var(--neo-surface-2);
+  border: 1px dashed var(--neo-border);
+  border-radius: var(--neo-radius-card);
+  color: var(--neo-text-muted);
+  text-align: center;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.neo-dropzone:hover, .neo-dropzone.is-dragover,
+.doc-empty:hover, .file-picker:hover {
+  border-color: var(--neo-accent);
+  background: rgba(133, 123, 97, 0.04);
+}
+
+/* ── tabs ─────────────────────────────────────────────────────────── */
+.neo-tabs, .run-tabs, .tabs {
+  display: inline-flex; gap: 2px;
+  background: var(--neo-surface-2);
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-button);
+  padding: 3px;
+}
+.neo-tab, .run-tab, .tab {
+  background: transparent;
+  color: var(--neo-text-muted);
+  border: 0;
+  border-radius: 9px;
+  padding: 6px 14px;
+  font: 500 13px var(--neo-font-sans);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.neo-tab[aria-selected="true"], .neo-tab.is-active,
+.run-tab.active, .tab.active {
+  background: var(--neo-surface);
+  color: var(--neo-text);
+}
+
+/* ── doctype chip (the empty-state cards) ────────────────────────── */
+.neo-doctype-card, .empty-card {
+  background: var(--neo-surface-2);
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-card);
+  padding: 16px 18px;
+  color: var(--neo-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.neo-doctype-card:hover, .empty-card:hover {
+  border-color: var(--neo-accent);
+  background: rgba(133, 123, 97, 0.04);
+}
+.neo-doctype-card .title  { font: 600 14px/1.3 var(--neo-font-sans); margin-bottom: 4px; }
+.neo-doctype-card .meta   { font: 500 12px/1.4 var(--neo-font-sans); color: var(--neo-text-muted); margin-bottom: 8px; }
+.neo-doctype-card .action { font: 500 12px var(--neo-font-sans); color: var(--neo-accent); }
+
+/* ── toast ───────────────────────────────────────────────────────── */
+.neo-toast, .toast {
+  position: fixed; right: 24px; bottom: 24px;
+  background: var(--neo-surface);
+  color: var(--neo-text);
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-button);
+  padding: 12px 18px;
+  font: 500 14px var(--neo-font-sans);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: neo-toast-in 180ms ease-out;
+}
+.neo-toast--error, .toast.toast-error { border-color: var(--neo-accent); color: var(--neo-accent); }
+.neo-toast--success, .toast.toast-success { border-color: var(--neo-accent-tint-2); }
+.neo-toast--warn, .toast.toast-warn { border-color: var(--neo-accent); color: var(--neo-accent); }
+@keyframes neo-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

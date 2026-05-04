@@ -1,0 +1,289 @@
+/* /static/css/stages.css — STURM OCR Studio progressive-disclosure shell.
+   Loaded AFTER neo-tokens.css so [data-stage] hides override the cascade.
+
+   Stages:
+     empty    — no document. Single dropzone + 3 doctype tiles.
+     drafting — file loaded, no extraction. Doc + single calm CTA card.
+     reading  — extraction complete. Doc + result tabs + right-rail icons.
+     tuning   — a right-rail sheet (schema/params/history/detail) is open.
+
+   Commit 1 of 3 — stage shell + right rail only. The chip component (commit 2)
+   and streaming partial JSON (commit 3) are not in this file.
+*/
+
+/* ── studio-grid: enable absolute positioning of right-rail / sheets ─── */
+.studio-grid { position: relative; }
+
+/* ── right-rail: 28 px icon strip, fixed to the right edge ───────────── */
+.right-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  display: none; /* shown via [data-stage] rules below */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  background: var(--neo-bg, #000);
+  border-left: 1px solid var(--neo-border, #2a2a2a);
+  z-index: 11;
+  padding: 8px 0;
+}
+.rr-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--neo-text-muted, #a0a0a0);
+  width: 28px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+  padding: 0;
+  font: 600 11px var(--neo-font-sans, system-ui, sans-serif);
+  letter-spacing: 0;
+}
+.rr-btn:hover { color: var(--neo-accent, #857b61); }
+.rr-btn:focus-visible {
+  outline: 1px solid var(--neo-accent, #857b61);
+  outline-offset: -2px;
+}
+.rr-btn[aria-pressed="true"] {
+  color: var(--neo-accent, #857b61);
+  background: rgba(133, 123, 97, 0.06);
+}
+.rr-btn i[data-lucide],
+.rr-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+/* Single-letter fallback shown only when Lucide failed to swap the <i> tag
+   for an <svg>. Lucide replaces <i data-lucide=...> with an <svg>, leaving
+   our .rr-fallback sibling in place; we hide the fallback whenever the
+   button contains an svg. */
+.rr-fallback { display: none; }
+.rr-btn:not(:has(svg)) i[data-lucide] { display: none; }
+.rr-btn:not(:has(svg)) .rr-fallback { display: inline-block; }
+
+/* ── draft-cta: calm card shown only in [data-stage="drafting"] ──────── */
+.draft-cta {
+  display: none; /* shown via [data-stage="drafting"] rule */
+  background: var(--neo-surface, #141414);
+  border: 1px solid var(--neo-border, #2a2a2a);
+  border-radius: var(--neo-radius-card, 16px);
+  padding: var(--neo-pad-card, 24px);
+  margin: 24px;
+  align-self: center;
+  justify-self: center;
+  max-width: 420px;
+  width: calc(100% - 48px);
+}
+.draft-cta-inner { display: flex; flex-direction: column; gap: 12px; }
+.draft-cta-title {
+  font: 400 22px/1.2 var(--neo-font-serif, Georgia, serif);
+  margin: 0;
+  color: var(--neo-text, #fff);
+}
+.draft-cta-sub {
+  font: 500 13px/1.4 var(--neo-font-sans, system-ui, sans-serif);
+  color: var(--neo-text-muted, #a0a0a0);
+  margin: 0 0 4px;
+}
+.draft-cta-primary { align-self: flex-start; }
+.draft-cta-secondary {
+  align-self: flex-start;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.draft-cta-hint {
+  font: 500 12px var(--neo-font-sans, system-ui, sans-serif);
+  color: var(--neo-text-dim, #6e6e6e);
+  margin-top: 4px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   STAGE: empty — only the doc pane (with its dropzone + tiles) is shown
+   ───────────────────────────────────────────────────────────────────── */
+body[data-stage="empty"] .pane-schema,
+body[data-stage="empty"] .pane-run,
+body[data-stage="empty"] .right-rail,
+body[data-stage="empty"] .draft-cta { display: none !important; }
+body[data-stage="empty"] .pane-doc {
+  grid-column: 1 / -1 !important;
+  grid-row: 1 / -1 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   STAGE: drafting — doc on the left, single CTA on the right
+   ───────────────────────────────────────────────────────────────────── */
+body[data-stage="drafting"] .pane-schema,
+body[data-stage="drafting"] .pane-run,
+body[data-stage="drafting"] .right-rail { display: none !important; }
+body[data-stage="drafting"] .studio-grid {
+  grid-template-columns: minmax(0, 7fr) minmax(280px, 3fr) !important;
+  grid-template-rows: 1fr !important;
+}
+body[data-stage="drafting"] .pane-doc {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+body[data-stage="drafting"] .draft-cta {
+  display: block;
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   STAGE: reading — doc + result tabs (placeholder for chips in commit 2)
+                    + right-rail icon strip
+   ───────────────────────────────────────────────────────────────────── */
+body[data-stage="reading"] .pane-schema,
+body[data-stage="reading"] .draft-cta { display: none !important; }
+body[data-stage="reading"] .right-rail { display: flex; }
+body[data-stage="reading"] .studio-grid {
+  /* leave 28 px clear on the right for the rail */
+  grid-template-columns: minmax(0, 6fr) minmax(0, 4fr) !important;
+  grid-template-rows: 1fr !important;
+  padding-right: 28px;
+}
+body[data-stage="reading"] .pane-doc {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+body[data-stage="reading"] .pane-run {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+/* In reading stage, the run column is anchored on the Result body. The
+   parameters/history bodies remain in the DOM (still toggleable via Cmd-K
+   or the run-tabs nav) but the user reaches them via the right-rail sheets. */
+body[data-stage="reading"] .pane-run .run-tabs {
+  /* keep the tabs reachable but de-emphasised */
+  opacity: 0.85;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   STAGE: tuning — same as reading, plus a sheet slides over the result
+                   area from the right-rail edge
+   ───────────────────────────────────────────────────────────────────── */
+body[data-stage="tuning"] .draft-cta { display: none !important; }
+body[data-stage="tuning"] .right-rail { display: flex; }
+body[data-stage="tuning"] .studio-grid {
+  grid-template-columns: minmax(0, 6fr) minmax(0, 4fr) !important;
+  grid-template-rows: 1fr !important;
+  padding-right: 28px;
+}
+body[data-stage="tuning"] .pane-doc {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+body[data-stage="tuning"] .pane-run {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* The active sheet slides in from the right-rail edge. Each sheet is
+   positioned absolutely against .studio-grid (which is position:relative). */
+body[data-stage="tuning"] .pane-schema,
+body[data-stage="tuning"][data-active-sheet="schema"] .pane-schema {
+  display: flex;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 28px; /* clear the rail */
+  width: min(520px, 44vw);
+  z-index: 10;
+  background: var(--neo-surface, #141414);
+  border-left: 1px solid var(--neo-border, #2a2a2a);
+  box-shadow: -16px 0 32px rgba(0, 0, 0, 0.45);
+  flex-direction: column;
+  animation: sheet-slide-in 180ms ease-out;
+}
+/* When tuning but a non-schema sheet is open, hide pane-schema */
+body[data-stage="tuning"]:not([data-active-sheet="schema"]) .pane-schema {
+  display: none !important;
+}
+
+/* Params sheet — re-uses the parameters tab body inside .pane-run, but
+   we surface it as a sheet by wrapping the pane-run un-dimmed when it's
+   the active sheet. Simpler approach: when active-sheet=params, show a
+   dedicated overlay on .pane-run instead of dimming it. */
+body[data-stage="tuning"][data-active-sheet="params"] .pane-run {
+  opacity: 1;
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 28px;
+  width: min(520px, 44vw);
+  z-index: 10;
+  background: var(--neo-surface, #141414);
+  border-left: 1px solid var(--neo-border, #2a2a2a);
+  box-shadow: -16px 0 32px rgba(0, 0, 0, 0.45);
+  animation: sheet-slide-in 180ms ease-out;
+}
+/* Force the parameters tab body visible when the params sheet is open. */
+body[data-stage="tuning"][data-active-sheet="params"] .pane-run .run-tab-body[data-runbody="parameters"] {
+  display: block !important;
+}
+body[data-stage="tuning"][data-active-sheet="params"] .pane-run .run-tab-body[data-runbody="parameters"][aria-hidden="true"] {
+  /* clear the legacy hidden flag's visual effect */
+  opacity: 1;
+}
+
+/* History sheet — placeholder; existing history tab body in .pane-run.
+   We treat it the same way as params (overlay .pane-run, force its tab body). */
+body[data-stage="tuning"][data-active-sheet="history"] .pane-run {
+  opacity: 1;
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 28px;
+  width: min(520px, 44vw);
+  z-index: 10;
+  background: var(--neo-surface, #141414);
+  border-left: 1px solid var(--neo-border, #2a2a2a);
+  box-shadow: -16px 0 32px rgba(0, 0, 0, 0.45);
+  animation: sheet-slide-in 180ms ease-out;
+}
+body[data-stage="tuning"][data-active-sheet="history"] .pane-run .run-tab-body[data-runbody="history"] {
+  display: block !important;
+}
+
+/* Detail sheet — exposes the inner Result tabs (Annotation / Markdown /
+   Links / Quality / Raw / Diff). The Result tab body lives inside .pane-run,
+   so the same overlay treatment works. */
+body[data-stage="tuning"][data-active-sheet="detail"] .pane-run {
+  opacity: 1;
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 28px;
+  width: min(560px, 48vw);
+  z-index: 10;
+  background: var(--neo-surface, #141414);
+  border-left: 1px solid var(--neo-border, #2a2a2a);
+  box-shadow: -16px 0 32px rgba(0, 0, 0, 0.45);
+  animation: sheet-slide-in 180ms ease-out;
+}
+body[data-stage="tuning"][data-active-sheet="detail"] .pane-run .run-tab-body[data-runbody="result"] {
+  display: block !important;
+}
+
+@keyframes sheet-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── On the Empty stage, drop the empty-state hint until the user picks
+      a doctype or drops a file — keep the existing .doc-empty content as is. */
+body[data-stage="empty"] .pane-doc { padding: 24px; }
+body[data-stage="empty"] .pane-doc .doc-empty { width: 100%; }

@@ -1,0 +1,64 @@
+{
+  "id": "0711/invoice-standard",
+  "name": "Standard-Rechnung",
+  "description": "Generische Rechnung mit Lieferant, Empfänger, Positionen, Summen und USt.",
+  "classificationHints": ["rechnung", "invoice", "faktura"],
+  "annotationPrompt": "Extrahiere die Rechnungsdaten. Beträge im Originalformat. Positionen als Array. Felder weglassen, die im Dokument nicht stehen.",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["rechnungsnummer", "rechnungsdatum", "lieferant", "summen"],
+    "properties": {
+      "rechnungsnummer": { "type": "string" },
+      "rechnungsdatum": { "type": "string", "format": "date" },
+      "leistungsdatum": { "type": "string", "format": "date" },
+      "faelligkeitsdatum": { "type": "string", "format": "date" },
+      "waehrung": { "type": "string", "default": "EUR" },
+      "lieferant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "anschrift": { "type": "string" },
+          "ust_id": { "type": "string", "description": "USt-IdNr. (z.B. DE123456789)" },
+          "iban": { "type": "string", "pattern": "^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$", "description": "IBAN" }
+        }
+      },
+      "empfaenger": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "anschrift": { "type": "string" }
+        }
+      },
+      "positionen": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["beschreibung", "betrag"],
+          "properties": {
+            "menge": { "type": "string" },
+            "einheit": { "type": "string" },
+            "beschreibung": { "type": "string" },
+            "einzelpreis": { "type": "string" },
+            "betrag": { "type": "string" },
+            "ust_satz": { "type": "string" }
+          }
+        }
+      },
+      "summen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["brutto"],
+        "properties": {
+          "netto": { "type": "string" },
+          "ust": { "type": "string" },
+          "brutto": { "type": "string" }
+        }
+      }
+    }
+  }
+}

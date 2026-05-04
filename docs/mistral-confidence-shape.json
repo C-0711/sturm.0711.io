@@ -1,0 +1,2551 @@
+{
+  "model": "mistral-ocr-latest",
+  "pageCount": 5,
+  "pages": [
+    {
+      "index": 0,
+      "confidence_scores": {
+        "word_confidence_scores": [
+          {
+            "text": "Transferticket:",
+            "confidence": 0.8973942854082255,
+            "start_index": 0
+          },
+          {
+            "text": " Steuer-Abruf",
+            "confidence": 0.9927848132749366,
+            "start_index": 15
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9989124455797107,
+            "start_index": 28
+          },
+          {
+            "text": "Zuletzt",
+            "confidence": 0.996951403190052,
+            "start_index": 29
+          },
+          {
+            "text": " abgerufen",
+            "confidence": 0.9999718677819686,
+            "start_index": 36
+          },
+          {
+            "text": " am:",
+            "confidence": 0.999971510122446,
+            "start_index": 46
+          },
+          {
+            "text": " 05.05.2025",
+            "confidence": 0.9999945815650819,
+            "start_index": 50
+          },
+          {
+            "text": " 11:25",
+            "confidence": 0.9999999403953629,
+            "start_index": 61
+          },
+          {
+            "text": " Uhr",
+            "confidence": 0.9999984502816872,
+            "start_index": 67
+          },
+          {
+            "text": "\n",
+            "confidence": 0.998297614215884,
+            "start_index": 71
+          },
+          {
+            "text": "Diese",
+            "confidence": 0.9996025950225329,
+            "start_index": 72
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9985363099053906,
+            "start_index": 77
+          },
+          {
+            "text": " wurde",
+            "confidence": 0.9999897481064004,
+            "start_index": 91
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999983310727032,
+            "start_index": 97
+          },
+          {
+            "text": " übernommen.",
+            "confidence": 0.9935781207877991,
+            "start_index": 103
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9874197855051154,
+            "start_index": 115
+          },
+          {
+            "text": "Seite",
+            "confidence": 0.9999837877990074,
+            "start_index": 116
+          },
+          {
+            "text": " 1",
+            "confidence": 0.9999999403953606,
+            "start_index": 121
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9997027803899773,
+            "start_index": 123
+          },
+          {
+            "text": "#",
+            "confidence": 0.973232591539018,
+            "start_index": 125
+          },
+          {
+            "text": " Religionszugehörigkeit",
+            "confidence": 0.9981449044717584,
+            "start_index": 126
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.6791785143226179,
+            "start_index": 149
+          },
+          {
+            "text": "Die",
+            "confidence": 0.9999941587791524,
+            "start_index": 151
+          },
+          {
+            "text": " folgende",
+            "confidence": 0.9982141020980769,
+            "start_index": 154
+          },
+          {
+            "text": " Daten",
+            "confidence": 0.9999867679437158,
+            "start_index": 163
+          },
+          {
+            "text": " wurden",
+            "confidence": 0.9999878408000585,
+            "start_index": 169
+          },
+          {
+            "text": " von",
+            "confidence": 0.9999969005680498,
+            "start_index": 176
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999990463265931,
+            "start_index": 180
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999929667192259,
+            "start_index": 184
+          },
+          {
+            "text": " abgerufen.",
+            "confidence": 0.9998292583341328,
+            "start_index": 201
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999246654044206,
+            "start_index": 212
+          },
+          {
+            "text": "Identifikationsnummer",
+            "confidence": 0.9999903812062434,
+            "start_index": 217
+          },
+          {
+            "text": "85236749007",
+            "confidence": 0.9999903812062434,
+            "start_index": 241
+          },
+          {
+            "text": "Religion",
+            "confidence": 0.9999903812062434,
+            "start_index": 273
+          },
+          {
+            "text": "Evangelisch",
+            "confidence": 0.9999903812062434,
+            "start_index": 284
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999899865198352,
+            "start_index": 298
+          },
+          {
+            "text": "Soweit",
+            "confidence": 0.9927883452706499,
+            "start_index": 300
+          },
+          {
+            "text": " im",
+            "confidence": 0.9999542257282243,
+            "start_index": 306
+          },
+          {
+            "text": " Einzelnen",
+            "confidence": 0.9995739665569098,
+            "start_index": 309
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999966621509202,
+            "start_index": 319
+          },
+          {
+            "text": " anders",
+            "confidence": 0.9999880792130387,
+            "start_index": 325
+          },
+          {
+            "text": " vermerkt,",
+            "confidence": 0.9999741720879726,
+            "start_index": 332
+          },
+          {
+            "text": " Betragsangaben",
+            "confidence": 0.9994325499684363,
+            "start_index": 342
+          },
+          {
+            "text": " in",
+            "confidence": 0.9999992847447459,
+            "start_index": 357
+          },
+          {
+            "text": " Euro.",
+            "confidence": 0.9999790198804963,
+            "start_index": 360
+          }
+        ],
+        "average_page_confidence_score": 0.9889601743345037,
+        "minimum_page_confidence_score": 0.6791785143226179
+      }
+    },
+    {
+      "index": 1,
+      "confidence_scores": {
+        "word_confidence_scores": [
+          {
+            "text": "Transferticket:",
+            "confidence": 0.8795804909009928,
+            "start_index": 0
+          },
+          {
+            "text": " Steuer-Abruf",
+            "confidence": 0.9881737085048679,
+            "start_index": 15
+          },
+          {
+            "text": "\n",
+            "confidence": 0.996252447864551,
+            "start_index": 28
+          },
+          {
+            "text": "Zuletzt",
+            "confidence": 0.984365356283161,
+            "start_index": 29
+          },
+          {
+            "text": " abgerufen",
+            "confidence": 0.999951068166731,
+            "start_index": 36
+          },
+          {
+            "text": " am:",
+            "confidence": 0.9999617954253501,
+            "start_index": 46
+          },
+          {
+            "text": " 05.05.2025",
+            "confidence": 0.999997474952089,
+            "start_index": 50
+          },
+          {
+            "text": " 11:25",
+            "confidence": 0.9999998211861065,
+            "start_index": 61
+          },
+          {
+            "text": " Uhr",
+            "confidence": 0.9999996423722521,
+            "start_index": 67
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9989583625359326,
+            "start_index": 71
+          },
+          {
+            "text": "Diese",
+            "confidence": 0.9998641198829178,
+            "start_index": 72
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9994596354160301,
+            "start_index": 77
+          },
+          {
+            "text": " wurde",
+            "confidence": 0.9999884368330701,
+            "start_index": 91
+          },
+          {
+            "text": " übernommen.",
+            "confidence": 0.9943508873018406,
+            "start_index": 97
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9906836661163776,
+            "start_index": 109
+          },
+          {
+            "text": "Seite",
+            "confidence": 0.9999904633477849,
+            "start_index": 110
+          },
+          {
+            "text": " 1",
+            "confidence": 0.9999999403953606,
+            "start_index": 115
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9997386423557733,
+            "start_index": 117
+          },
+          {
+            "text": "#",
+            "confidence": 0.9156598484863536,
+            "start_index": 119
+          },
+          {
+            "text": " Lohnsteuerbescheinigung",
+            "confidence": 0.9993235231742248,
+            "start_index": 120
+          },
+          {
+            "text": " Verbandsgemeindewerke",
+            "confidence": 0.9907539608079284,
+            "start_index": 144
+          },
+          {
+            "text": " Abwasser",
+            "confidence": 0.9999813441052908,
+            "start_index": 166
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9978171654913495,
+            "start_index": 175
+          },
+          {
+            "text": "Die",
+            "confidence": 0.9996335657597036,
+            "start_index": 177
+          },
+          {
+            "text": " folgende",
+            "confidence": 0.9999605432821229,
+            "start_index": 180
+          },
+          {
+            "text": " Daten",
+            "confidence": 0.9999896288992495,
+            "start_index": 189
+          },
+          {
+            "text": " wurden",
+            "confidence": 0.9999928474936721,
+            "start_index": 195
+          },
+          {
+            "text": " von",
+            "confidence": 0.9999860527077029,
+            "start_index": 202
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999990463265931,
+            "start_index": 206
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999909998121278,
+            "start_index": 210
+          },
+          {
+            "text": " abgerufen.",
+            "confidence": 0.9998844295290817,
+            "start_index": 227
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999779467683537,
+            "start_index": 238
+          },
+          {
+            "text": "Übermittlung",
+            "confidence": 0.9971051068435556,
+            "start_index": 246
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999996423722521,
+            "start_index": 258
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9999588359895886,
+            "start_index": 262
+          },
+          {
+            "text": " an",
+            "confidence": 0.9999990463265931,
+            "start_index": 276
+          },
+          {
+            "text": " die",
+            "confidence": 0.9999994039539004,
+            "start_index": 279
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999953930053318,
+            "start_index": 283
+          },
+          {
+            "text": "18.12.2024",
+            "confidence": 0.9999953930053318,
+            "start_index": 303
+          },
+          {
+            "text": " 11:50:41",
+            "confidence": 0.9999974707113393,
+            "start_index": 313
+          },
+          {
+            "text": "Name",
+            "confidence": 0.9999974707113393,
+            "start_index": 352
+          },
+          {
+            "text": " des",
+            "confidence": 1,
+            "start_index": 356
+          },
+          {
+            "text": " Arbeitgebers",
+            "confidence": 0.9997728362966012,
+            "start_index": 360
+          },
+          {
+            "text": "Verbandsgemeindewerke",
+            "confidence": 0.9997728362966012,
+            "start_index": 376
+          },
+          {
+            "text": " Abwasser",
+            "confidence": 0.9997703121505914,
+            "start_index": 397
+          },
+          {
+            "text": "Identifikationsnummer",
+            "confidence": 0.9997703121505914,
+            "start_index": 416
+          },
+          {
+            "text": "85236749007",
+            "confidence": 0.9997703121505914,
+            "start_index": 440
+          },
+          {
+            "text": "Nachname",
+            "confidence": 0.9997703121505914,
+            "start_index": 461
+          },
+          {
+            "text": "Stricker",
+            "confidence": 0.9997703121505914,
+            "start_index": 472
+          },
+          {
+            "text": "Vorname",
+            "confidence": 0.9997703121505914,
+            "start_index": 490
+          },
+          {
+            "text": "Rainer",
+            "confidence": 0.9997703121505914,
+            "start_index": 500
+          },
+          {
+            "text": "Besteuerungsmerkmale",
+            "confidence": 0.9997703121505914,
+            "start_index": 516
+          },
+          {
+            "text": " gültig",
+            "confidence": 0.9999377767277087,
+            "start_index": 536
+          },
+          {
+            "text": " ab",
+            "confidence": 0.9995204854021165,
+            "start_index": 543
+          },
+          {
+            "text": "01.01.2024",
+            "confidence": 0.9995204854021165,
+            "start_index": 549
+          },
+          {
+            "text": "Steuerklasse",
+            "confidence": 0.9995204854021165,
+            "start_index": 569
+          },
+          {
+            "text": "3",
+            "confidence": 0.9995204854021165,
+            "start_index": 584
+          },
+          {
+            "text": "Kirchensteuermerkmal",
+            "confidence": 0.9995204854021165,
+            "start_index": 595
+          },
+          {
+            "text": " (Konfession)",
+            "confidence": 0.9995086876753275,
+            "start_index": 615
+          },
+          {
+            "text": "Evangelisch",
+            "confidence": 0.9995086876753275,
+            "start_index": 631
+          },
+          {
+            "text": "Kirchensteuermerkmal",
+            "confidence": 0.9995086876753275,
+            "start_index": 652
+          },
+          {
+            "text": " (Konfession)",
+            "confidence": 0.9999639771042504,
+            "start_index": 672
+          },
+          {
+            "text": " des",
+            "confidence": 0.9999998807907247,
+            "start_index": 685
+          },
+          {
+            "text": " Ehegatten",
+            "confidence": 0.9992403505784391,
+            "start_index": 689
+          },
+          {
+            "text": "Römisch-Katholisch",
+            "confidence": 0.9992403505784391,
+            "start_index": 702
+          },
+          {
+            "text": "Beschäftigungsjahr",
+            "confidence": 0.9992403505784391,
+            "start_index": 730
+          },
+          {
+            "text": "2024",
+            "confidence": 0.9992403505784391,
+            "start_index": 751
+          },
+          {
+            "text": "1.",
+            "confidence": 0.9992403505784391,
+            "start_index": 762
+          },
+          {
+            "text": "Bescheinigungszeitraum:",
+            "confidence": 0.9992403505784391,
+            "start_index": 767
+          },
+          {
+            "text": " Von",
+            "confidence": 0.999995780714341,
+            "start_index": 790
+          },
+          {
+            "text": "01.01.2024",
+            "confidence": 0.999995780714341,
+            "start_index": 797
+          },
+          {
+            "text": "1.",
+            "confidence": 0.999995780714341,
+            "start_index": 814
+          },
+          {
+            "text": "Bescheinigungszeitraum:",
+            "confidence": 0.999995780714341,
+            "start_index": 819
+          },
+          {
+            "text": " Bis",
+            "confidence": 0.9999876077007035,
+            "start_index": 842
+          },
+          {
+            "text": "31.12.2024",
+            "confidence": 0.9999876077007035,
+            "start_index": 849
+          },
+          {
+            "text": "2.",
+            "confidence": 0.9999876077007035,
+            "start_index": 866
+          },
+          {
+            "text": "Anzahl",
+            "confidence": 0.9999876077007035,
+            "start_index": 871
+          },
+          {
+            "text": " U",
+            "confidence": 0.999926800626867,
+            "start_index": 877
+          },
+          {
+            "text": "0",
+            "confidence": 0.999926800626867,
+            "start_index": 882
+          },
+          {
+            "text": "3.",
+            "confidence": 0.999926800626867,
+            "start_index": 890
+          },
+          {
+            "text": "Bruttoarbeitslohn",
+            "confidence": 0.999926800626867,
+            "start_index": 895
+          },
+          {
+            "text": " (ohne",
+            "confidence": 0.9999882779756022,
+            "start_index": 912
+          },
+          {
+            "text": " 9.",
+            "confidence": 0.9999887944859709,
+            "start_index": 918
+          },
+          {
+            "text": " und",
+            "confidence": 0.9999868871505255,
+            "start_index": 921
+          },
+          {
+            "text": " 10.)",
+            "confidence": 0.9999976290913727,
+            "start_index": 925
+          },
+          {
+            "text": "69.291,80",
+            "confidence": 0.9999976290913727,
+            "start_index": 933
+          },
+          {
+            "text": " €",
+            "confidence": 0.9995911942975868,
+            "start_index": 942
+          },
+          {
+            "text": "4.",
+            "confidence": 0.9995911942975868,
+            "start_index": 951
+          },
+          {
+            "text": "Einbehaltene",
+            "confidence": 0.9995911942975868,
+            "start_index": 956
+          },
+          {
+            "text": " Lohnsteuer",
+            "confidence": 0.999977291368626,
+            "start_index": 968
+          },
+          {
+            "text": " (von",
+            "confidence": 0.999996483338963,
+            "start_index": 979
+          },
+          {
+            "text": " 3.)",
+            "confidence": 0.9999969080825994,
+            "start_index": 984
+          },
+          {
+            "text": "7.532,00",
+            "confidence": 0.9999969080825994,
+            "start_index": 991
+          },
+          {
+            "text": " €",
+            "confidence": 0.9998850042347265,
+            "start_index": 999
+          },
+          {
+            "text": "5.",
+            "confidence": 0.9998850042347265,
+            "start_index": 1008
+          },
+          {
+            "text": "Einbehaltener",
+            "confidence": 0.9998850042347265,
+            "start_index": 1013
+          },
+          {
+            "text": " Solidaritätszuschlag",
+            "confidence": 0.9993114225078775,
+            "start_index": 1026
+          },
+          {
+            "text": " (von",
+            "confidence": 0.9999980926559715,
+            "start_index": 1047
+          },
+          {
+            "text": " 3.)",
+            "confidence": 0.9999996324383904,
+            "start_index": 1052
+          },
+          {
+            "text": "0,00",
+            "confidence": 0.9999996324383904,
+            "start_index": 1059
+          },
+          {
+            "text": " €",
+            "confidence": 0.998966451658074,
+            "start_index": 1063
+          },
+          {
+            "text": "6.",
+            "confidence": 0.998966451658074,
+            "start_index": 1072
+          },
+          {
+            "text": "Einbehaltene",
+            "confidence": 0.998966451658074,
+            "start_index": 1077
+          },
+          {
+            "text": " Kirchensteuer",
+            "confidence": 0.9999416317245307,
+            "start_index": 1089
+          },
+          {
+            "text": " des",
+            "confidence": 0.9999959469005546,
+            "start_index": 1103
+          },
+          {
+            "text": " Arbeitnehmers",
+            "confidence": 0.9996675004867083,
+            "start_index": 1107
+          },
+          {
+            "text": " (von",
+            "confidence": 0.9999952912577913,
+            "start_index": 1121
+          },
+          {
+            "text": " 3.)",
+            "confidence": 0.999999531679237,
+            "start_index": 1126
+          },
+          {
+            "text": "338,94",
+            "confidence": 0.999999531679237,
+            "start_index": 1133
+          },
+          {
+            "text": " €",
+            "confidence": 0.9996159768579973,
+            "start_index": 1139
+          },
+          {
+            "text": "7.",
+            "confidence": 0.9996159768579973,
+            "start_index": 1148
+          },
+          {
+            "text": "Einbehaltene",
+            "confidence": 0.9996159768579973,
+            "start_index": 1153
+          },
+          {
+            "text": " Kirchensteuer",
+            "confidence": 0.9999907415477762,
+            "start_index": 1165
+          },
+          {
+            "text": " des",
+            "confidence": 0.9999939203633587,
+            "start_index": 1179
+          },
+          {
+            "text": " Partners",
+            "confidence": 0.999881162465012,
+            "start_index": 1183
+          },
+          {
+            "text": " (von",
+            "confidence": 0.99999618531956,
+            "start_index": 1192
+          },
+          {
+            "text": " 3.)",
+            "confidence": 0.9999997190072343,
+            "start_index": 1197
+          },
+          {
+            "text": "338,94",
+            "confidence": 0.9999997190072343,
+            "start_index": 1204
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999100316150663,
+            "start_index": 1210
+          },
+          {
+            "text": "19.",
+            "confidence": 0.9999100316150663,
+            "start_index": 1219
+          },
+          {
+            "text": "Entschädigungen",
+            "confidence": 0.9999100316150663,
+            "start_index": 1225
+          },
+          {
+            "text": " /",
+            "confidence": 0.9999996423722521,
+            "start_index": 1240
+          },
+          {
+            "text": " Arbeitslohn",
+            "confidence": 0.9997379466216564,
+            "start_index": 1242
+          },
+          {
+            "text": " für",
+            "confidence": 0.9999942779868433,
+            "start_index": 1254
+          },
+          {
+            "text": " mehrere",
+            "confidence": 0.9999811652878874,
+            "start_index": 1258
+          },
+          {
+            "text": " Kalenderjahre",
+            "confidence": 0.9999219251838515,
+            "start_index": 1266
+          },
+          {
+            "text": " (in",
+            "confidence": 0.9999777681564169,
+            "start_index": 1280
+          },
+          {
+            "text": " 3.",
+            "confidence": 0.9999783044963263,
+            "start_index": 1284
+          },
+          {
+            "text": " enthalten)",
+            "confidence": 0.9999818120305413,
+            "start_index": 1287
+          },
+          {
+            "text": "300,00",
+            "confidence": 0.9999818120305413,
+            "start_index": 1301
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999976848643579,
+            "start_index": 1307
+          },
+          {
+            "text": "22.",
+            "confidence": 0.9999976848643579,
+            "start_index": 1316
+          },
+          {
+            "text": "a)",
+            "confidence": 0.9999976848643579,
+            "start_index": 1322
+          },
+          {
+            "text": " Arbeitgeberanteil",
+            "confidence": 0.999690045626857,
+            "start_index": 1324
+          },
+          {
+            "text": " /",
+            "confidence": 0.999886406453068,
+            "start_index": 1342
+          },
+          {
+            "text": " -zuschuss",
+            "confidence": 0.9999249638504016,
+            "start_index": 1344
+          },
+          {
+            "text": " zur",
+            "confidence": 0.9999727018181879,
+            "start_index": 1354
+          },
+          {
+            "text": " gesetzlichen",
+            "confidence": 0.9999889136648282,
+            "start_index": 1358
+          },
+          {
+            "text": " Rentenversicherung",
+            "confidence": 0.9998284297941686,
+            "start_index": 1371
+          },
+          {
+            "text": "6.544,01",
+            "confidence": 0.9998284297941686,
+            "start_index": 1393
+          },
+          {
+            "text": " €",
+            "confidence": 0.999999391406522,
+            "start_index": 1401
+          },
+          {
+            "text": "22.",
+            "confidence": 0.999999391406522,
+            "start_index": 1410
+          },
+          {
+            "text": "b)",
+            "confidence": 0.999999391406522,
+            "start_index": 1416
+          },
+          {
+            "text": " Arbeitgeberanteil",
+            "confidence": 0.9999975562177941,
+            "start_index": 1418
+          },
+          {
+            "text": " /",
+            "confidence": 0.9999995231630692,
+            "start_index": 1436
+          },
+          {
+            "text": " -zuschuss",
+            "confidence": 0.9999935627592219,
+            "start_index": 1438
+          },
+          {
+            "text": " zu",
+            "confidence": 0.9999289563119074,
+            "start_index": 1448
+          },
+          {
+            "text": " berufsständischen",
+            "confidence": 0.9951244071400033,
+            "start_index": 1451
+          },
+          {
+            "text": " Versorgungseinrichtungen",
+            "confidence": 0.9999811559895451,
+            "start_index": 1469
+          },
+          {
+            "text": "0,00",
+            "confidence": 0.9999811559895451,
+            "start_index": 1497
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999994917932727,
+            "start_index": 1501
+          },
+          {
+            "text": "23.",
+            "confidence": 0.9999994917932727,
+            "start_index": 1510
+          },
+          {
+            "text": "a)",
+            "confidence": 0.9999994917932727,
+            "start_index": 1516
+          },
+          {
+            "text": " Arbeitnehmeranteil",
+            "confidence": 0.9998542581273439,
+            "start_index": 1518
+          },
+          {
+            "text": " zur",
+            "confidence": 0.9999235926822447,
+            "start_index": 1537
+          },
+          {
+            "text": " gesetzlichen",
+            "confidence": 0.9999989867222343,
+            "start_index": 1541
+          },
+          {
+            "text": " Rentenversicherung",
+            "confidence": 0.9999992987705403,
+            "start_index": 1554
+          },
+          {
+            "text": "6.544,01",
+            "confidence": 0.9999992987705403,
+            "start_index": 1576
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999993098428815,
+            "start_index": 1584
+          },
+          {
+            "text": "23.",
+            "confidence": 0.9999993098428815,
+            "start_index": 1593
+          },
+          {
+            "text": "b)",
+            "confidence": 0.9999993098428815,
+            "start_index": 1599
+          },
+          {
+            "text": " Arbeitnehmeranteil",
+            "confidence": 0.9999837282971215,
+            "start_index": 1601
+          },
+          {
+            "text": " zu",
+            "confidence": 0.9999914170043662,
+            "start_index": 1620
+          },
+          {
+            "text": " berufsständischen",
+            "confidence": 0.9995195359228515,
+            "start_index": 1623
+          },
+          {
+            "text": " Versorgungseinrichtungen",
+            "confidence": 0.9999696554631745,
+            "start_index": 1641
+          },
+          {
+            "text": "0,00",
+            "confidence": 0.9999696554631745,
+            "start_index": 1669
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999710362345918,
+            "start_index": 1673
+          },
+          {
+            "text": "25.",
+            "confidence": 0.9999710362345918,
+            "start_index": 1682
+          },
+          {
+            "text": "Arbeitnehmerbeiträge",
+            "confidence": 0.9999710362345918,
+            "start_index": 1688
+          },
+          {
+            "text": " zur",
+            "confidence": 0.9999970197767496,
+            "start_index": 1708
+          },
+          {
+            "text": " gesetzlichen",
+            "confidence": 0.9999985694914848,
+            "start_index": 1712
+          },
+          {
+            "text": " Krankenversicherung",
+            "confidence": 0.9999952764297443,
+            "start_index": 1725
+          },
+          {
+            "text": "4.901,83",
+            "confidence": 0.9999952764297443,
+            "start_index": 1748
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999908050141875,
+            "start_index": 1756
+          },
+          {
+            "text": "26.",
+            "confidence": 0.9999908050141875,
+            "start_index": 1765
+          },
+          {
+            "text": "Arbeitnehmerbeiträge",
+            "confidence": 0.9999908050141875,
+            "start_index": 1771
+          },
+          {
+            "text": " zur",
+            "confidence": 0.9999952316511552,
+            "start_index": 1791
+          },
+          {
+            "text": " sozialen",
+            "confidence": 0.9999437363807097,
+            "start_index": 1795
+          },
+          {
+            "text": " Pflegeversicherung",
+            "confidence": 0.9997980905757199,
+            "start_index": 1804
+          },
+          {
+            "text": "1.427,16",
+            "confidence": 0.9997980905757199,
+            "start_index": 1826
+          },
+          {
+            "text": " €",
+            "confidence": 0.9998398429474221,
+            "start_index": 1834
+          },
+          {
+            "text": "27.",
+            "confidence": 0.9998398429474221,
+            "start_index": 1843
+          },
+          {
+            "text": "Arbeitnehmerbeiträge",
+            "confidence": 0.9998398429474221,
+            "start_index": 1849
+          },
+          {
+            "text": " zur",
+            "confidence": 0.9999977350285647,
+            "start_index": 1869
+          },
+          {
+            "text": " gesetzlichen",
+            "confidence": 0.9999954104724668,
+            "start_index": 1873
+          },
+          {
+            "text": " Arbeitslosenversicherung",
+            "confidence": 0.9999095219657312,
+            "start_index": 1886
+          },
+          {
+            "text": "914,71",
+            "confidence": 0.9999095219657312,
+            "start_index": 1914
+          },
+          {
+            "text": " €",
+            "confidence": 0.9974605837354934,
+            "start_index": 1920
+          },
+          {
+            "text": "Steuerpflichtiger",
+            "confidence": 0.9974605837354934,
+            "start_index": 1932
+          },
+          {
+            "text": " Beitrag",
+            "confidence": 0.9999929667012066,
+            "start_index": 1949
+          },
+          {
+            "text": " zur",
+            "confidence": 0.9999992847447459,
+            "start_index": 1957
+          },
+          {
+            "text": " Zusatzversorgung",
+            "confidence": 0.9999244081032886,
+            "start_index": 1961
+          },
+          {
+            "text": "590,96",
+            "confidence": 0.9999244081032886,
+            "start_index": 1981
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999994188554578,
+            "start_index": 1987
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999979734461775,
+            "start_index": 1992
+          },
+          {
+            "text": "Soweit",
+            "confidence": 0.9735270981162719,
+            "start_index": 1994
+          },
+          {
+            "text": " im",
+            "confidence": 0.9999474314675137,
+            "start_index": 2000
+          },
+          {
+            "text": " Einzelnen",
+            "confidence": 0.9992084429816384,
+            "start_index": 2003
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999883176260755,
+            "start_index": 2013
+          },
+          {
+            "text": " anders",
+            "confidence": 0.9999922514562126,
+            "start_index": 2019
+          },
+          {
+            "text": " vermerkt,",
+            "confidence": 0.9999623716467627,
+            "start_index": 2026
+          },
+          {
+            "text": " Betragsangaben",
+            "confidence": 0.999546934463053,
+            "start_index": 2036
+          },
+          {
+            "text": " in",
+            "confidence": 0.9999994039539004,
+            "start_index": 2051
+          },
+          {
+            "text": " Euro.",
+            "confidence": 0.9999274512647512,
+            "start_index": 2054
+          }
+        ],
+        "average_page_confidence_score": 0.9983883039855574,
+        "minimum_page_confidence_score": 0.8795804909009928
+      }
+    },
+    {
+      "index": 2,
+      "confidence_scores": {
+        "word_confidence_scores": [
+          {
+            "text": "Transferticket:",
+            "confidence": 0.9068376181334594,
+            "start_index": 0
+          },
+          {
+            "text": " Steuer-Abruf",
+            "confidence": 0.99257360524049,
+            "start_index": 15
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9950632402899774,
+            "start_index": 28
+          },
+          {
+            "text": "Zuletzt",
+            "confidence": 0.9940494304130906,
+            "start_index": 29
+          },
+          {
+            "text": " abgerufen",
+            "confidence": 0.9999740133747052,
+            "start_index": 36
+          },
+          {
+            "text": " am:",
+            "confidence": 0.9999707353091092,
+            "start_index": 46
+          },
+          {
+            "text": " 05.05.2025",
+            "confidence": 0.9999990138185516,
+            "start_index": 50
+          },
+          {
+            "text": " 11:25",
+            "confidence": 0.9999999205271506,
+            "start_index": 61
+          },
+          {
+            "text": " Uhr",
+            "confidence": 0.9999994039539004,
+            "start_index": 67
+          },
+          {
+            "text": "\n",
+            "confidence": 0.998071819279915,
+            "start_index": 71
+          },
+          {
+            "text": "Diese",
+            "confidence": 0.999730421280595,
+            "start_index": 72
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9997969255570381,
+            "start_index": 77
+          },
+          {
+            "text": " wurde",
+            "confidence": 0.999991059383269,
+            "start_index": 91
+          },
+          {
+            "text": " übernommen.",
+            "confidence": 0.9900610809247377,
+            "start_index": 97
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9837846791681019,
+            "start_index": 109
+          },
+          {
+            "text": "Seite",
+            "confidence": 0.9999915362117302,
+            "start_index": 110
+          },
+          {
+            "text": " 1",
+            "confidence": 0.9999999403953606,
+            "start_index": 115
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9998202646983083,
+            "start_index": 117
+          },
+          {
+            "text": "#",
+            "confidence": 0.9956430125080605,
+            "start_index": 119
+          },
+          {
+            "text": " Mitteilung",
+            "confidence": 0.9999580401508348,
+            "start_index": 120
+          },
+          {
+            "text": " über",
+            "confidence": 0.9999980926550052,
+            "start_index": 131
+          },
+          {
+            "text": " freigestellte",
+            "confidence": 0.9990651191796481,
+            "start_index": 136
+          },
+          {
+            "text": " Kapitalerträge",
+            "confidence": 0.9967620947824147,
+            "start_index": 150
+          },
+          {
+            "text": " Sparkasse",
+            "confidence": 0.9998265955551598,
+            "start_index": 165
+          },
+          {
+            "text": " Westerwald-Sieg",
+            "confidence": 0.9999190675554275,
+            "start_index": 175
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9940889883329403,
+            "start_index": 191
+          },
+          {
+            "text": "Die",
+            "confidence": 0.9999558945068824,
+            "start_index": 193
+          },
+          {
+            "text": " folgende",
+            "confidence": 0.9994426497353306,
+            "start_index": 196
+          },
+          {
+            "text": " Daten",
+            "confidence": 0.9999830725678546,
+            "start_index": 205
+          },
+          {
+            "text": " wurden",
+            "confidence": 0.9999960661089133,
+            "start_index": 211
+          },
+          {
+            "text": " von",
+            "confidence": 0.9999920130413283,
+            "start_index": 218
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999984502816872,
+            "start_index": 222
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.999995052848634,
+            "start_index": 226
+          },
+          {
+            "text": " abgerufen.",
+            "confidence": 0.9998287329291732,
+            "start_index": 243
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9997944062567485,
+            "start_index": 254
+          },
+          {
+            "text": "Übermittlung",
+            "confidence": 0.9997780779244323,
+            "start_index": 259
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999997615814777,
+            "start_index": 271
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9999589547753246,
+            "start_index": 275
+          },
+          {
+            "text": " an",
+            "confidence": 0.9999994039539004,
+            "start_index": 289
+          },
+          {
+            "text": " die",
+            "confidence": 0.9999998807907247,
+            "start_index": 292
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999985765150265,
+            "start_index": 296
+          },
+          {
+            "text": "16.03.2025",
+            "confidence": 0.9999985765150265,
+            "start_index": 316
+          },
+          {
+            "text": " 14:20:21",
+            "confidence": 0.9998601263749417,
+            "start_index": 326
+          },
+          {
+            "text": "Meldejahr",
+            "confidence": 0.9998601263749417,
+            "start_index": 356
+          },
+          {
+            "text": "2024",
+            "confidence": 0.9998601263749417,
+            "start_index": 368
+          },
+          {
+            "text": "Betrag",
+            "confidence": 0.9998601263749417,
+            "start_index": 379
+          },
+          {
+            "text": "5,00",
+            "confidence": 0.9998601263749417,
+            "start_index": 388
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999484547003742,
+            "start_index": 392
+          },
+          {
+            "text": "Identifikationsnummer",
+            "confidence": 0.9999484547003742,
+            "start_index": 401
+          },
+          {
+            "text": "85236749007",
+            "confidence": 0.9999484547003742,
+            "start_index": 425
+          },
+          {
+            "text": "Vorname",
+            "confidence": 0.9999484547003742,
+            "start_index": 443
+          },
+          {
+            "text": "Rainer",
+            "confidence": 0.9999484547003742,
+            "start_index": 453
+          },
+          {
+            "text": "Nachname",
+            "confidence": 0.9999484547003742,
+            "start_index": 466
+          },
+          {
+            "text": "Stricker",
+            "confidence": 0.9999484547003742,
+            "start_index": 477
+          },
+          {
+            "text": "Ehepartner:",
+            "confidence": 0.9999484547003742,
+            "start_index": 492
+          },
+          {
+            "text": " Identifikationsnummer",
+            "confidence": 0.9999963298736483,
+            "start_index": 503
+          },
+          {
+            "text": "54129386608",
+            "confidence": 0.9999963298736483,
+            "start_index": 528
+          },
+          {
+            "text": "Ehepartner:",
+            "confidence": 0.9999963298736483,
+            "start_index": 546
+          },
+          {
+            "text": " Vorname",
+            "confidence": 0.9999811454871846,
+            "start_index": 557
+          },
+          {
+            "text": "Ute",
+            "confidence": 0.9999811454871846,
+            "start_index": 568
+          },
+          {
+            "text": "Ehepartner:",
+            "confidence": 0.9999811454871846,
+            "start_index": 578
+          },
+          {
+            "text": " Nachname",
+            "confidence": 0.9999859450535535,
+            "start_index": 589
+          },
+          {
+            "text": "Stricker",
+            "confidence": 0.9999859450535535,
+            "start_index": 601
+          },
+          {
+            "text": "Bankverbindung:",
+            "confidence": 0.9999859450535535,
+            "start_index": 616
+          },
+          {
+            "text": " Geldinstitut",
+            "confidence": 0.9999025798406019,
+            "start_index": 631
+          },
+          {
+            "text": "Sparkasse",
+            "confidence": 0.9999025798406019,
+            "start_index": 647
+          },
+          {
+            "text": " Westerwald-Sieg",
+            "confidence": 0.9999789665429928,
+            "start_index": 656
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999990463265931,
+            "start_index": 675
+          },
+          {
+            "text": "Soweit",
+            "confidence": 0.9819471118348815,
+            "start_index": 677
+          },
+          {
+            "text": " im",
+            "confidence": 0.9999704369697439,
+            "start_index": 683
+          },
+          {
+            "text": " Einzelnen",
+            "confidence": 0.9997646884745227,
+            "start_index": 686
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999961853172863,
+            "start_index": 696
+          },
+          {
+            "text": " anders",
+            "confidence": 0.9999896288992495,
+            "start_index": 702
+          },
+          {
+            "text": " vermerkt,",
+            "confidence": 0.9999822780421976,
+            "start_index": 709
+          },
+          {
+            "text": " Betragsangaben",
+            "confidence": 0.9996967366846712,
+            "start_index": 719
+          },
+          {
+            "text": " in",
+            "confidence": 0.9999992847447459,
+            "start_index": 734
+          },
+          {
+            "text": " Euro.",
+            "confidence": 0.9999490627297878,
+            "start_index": 737
+          }
+        ],
+        "average_page_confidence_score": 0.9977084728049375,
+        "minimum_page_confidence_score": 0.9068376181334594
+      }
+    },
+    {
+      "index": 3,
+      "confidence_scores": {
+        "word_confidence_scores": [
+          {
+            "text": "Transferticket:",
+            "confidence": 0.9073120384841589,
+            "start_index": 0
+          },
+          {
+            "text": " Steuer-Abruf",
+            "confidence": 0.9924865736699288,
+            "start_index": 15
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9944065722401424,
+            "start_index": 28
+          },
+          {
+            "text": "Zuletzt",
+            "confidence": 0.9951411292990954,
+            "start_index": 29
+          },
+          {
+            "text": " abgerufen",
+            "confidence": 0.9999753245781916,
+            "start_index": 36
+          },
+          {
+            "text": " am:",
+            "confidence": 0.9999769337262057,
+            "start_index": 46
+          },
+          {
+            "text": " 05.05.2025",
+            "confidence": 0.9999992522347149,
+            "start_index": 50
+          },
+          {
+            "text": " 11:25",
+            "confidence": 0.9999999403953606,
+            "start_index": 61
+          },
+          {
+            "text": " Uhr",
+            "confidence": 0.9999991655356624,
+            "start_index": 67
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9975255122331688,
+            "start_index": 71
+          },
+          {
+            "text": "Diese",
+            "confidence": 0.9997219620661811,
+            "start_index": 72
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9997723840035433,
+            "start_index": 77
+          },
+          {
+            "text": " wurde",
+            "confidence": 0.9999899865198352,
+            "start_index": 91
+          },
+          {
+            "text": " übernommen.",
+            "confidence": 0.9910145221423479,
+            "start_index": 97
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9856881126322651,
+            "start_index": 109
+          },
+          {
+            "text": "Seite",
+            "confidence": 0.9999885560391694,
+            "start_index": 110
+          },
+          {
+            "text": " 1",
+            "confidence": 0.9999999403953606,
+            "start_index": 115
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9997964319781567,
+            "start_index": 117
+          },
+          {
+            "text": "#",
+            "confidence": 0.9932005974794947,
+            "start_index": 119
+          },
+          {
+            "text": " Mitteilung",
+            "confidence": 0.9999561330350224,
+            "start_index": 120
+          },
+          {
+            "text": " über",
+            "confidence": 0.999997854237364,
+            "start_index": 131
+          },
+          {
+            "text": " freigestellte",
+            "confidence": 0.999107529108101,
+            "start_index": 136
+          },
+          {
+            "text": " Kapitalerträge",
+            "confidence": 0.9945701510956261,
+            "start_index": 150
+          },
+          {
+            "text": " Volksbank",
+            "confidence": 0.9999352736643237,
+            "start_index": 165
+          },
+          {
+            "text": " Gebhardshain",
+            "confidence": 0.9984779049859311,
+            "start_index": 175
+          },
+          {
+            "text": " eG",
+            "confidence": 0.9999899269604675,
+            "start_index": 188
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9820137577607906,
+            "start_index": 191
+          },
+          {
+            "text": "Die",
+            "confidence": 0.9998974905186837,
+            "start_index": 193
+          },
+          {
+            "text": " folgende",
+            "confidence": 0.9996336848671316,
+            "start_index": 196
+          },
+          {
+            "text": " Daten",
+            "confidence": 0.999984264621273,
+            "start_index": 205
+          },
+          {
+            "text": " wurden",
+            "confidence": 0.9999948740268748,
+            "start_index": 211
+          },
+          {
+            "text": " von",
+            "confidence": 0.9999902249342363,
+            "start_index": 218
+          },
+          {
+            "text": " der",
+            "confidence": 0.999998927117538,
+            "start_index": 222
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999941587941874,
+            "start_index": 226
+          },
+          {
+            "text": " abgerufen.",
+            "confidence": 0.9998483142890406,
+            "start_index": 243
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9997950020498901,
+            "start_index": 254
+          },
+          {
+            "text": "Übermittlung",
+            "confidence": 0.9998016530039597,
+            "start_index": 259
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999997615814777,
+            "start_index": 271
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9999641993960082,
+            "start_index": 275
+          },
+          {
+            "text": " an",
+            "confidence": 0.9999997615814777,
+            "start_index": 289
+          },
+          {
+            "text": " die",
+            "confidence": 0.9999998807907247,
+            "start_index": 292
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999986816969205,
+            "start_index": 296
+          },
+          {
+            "text": "05.03.2025",
+            "confidence": 0.9999986816969205,
+            "start_index": 316
+          },
+          {
+            "text": " 14:52:17",
+            "confidence": 0.9998563055471594,
+            "start_index": 326
+          },
+          {
+            "text": "Meldejahr",
+            "confidence": 0.9998563055471594,
+            "start_index": 356
+          },
+          {
+            "text": "2024",
+            "confidence": 0.9998563055471594,
+            "start_index": 368
+          },
+          {
+            "text": "Betrag",
+            "confidence": 0.9998563055471594,
+            "start_index": 379
+          },
+          {
+            "text": "319,00",
+            "confidence": 0.9998563055471594,
+            "start_index": 388
+          },
+          {
+            "text": " €",
+            "confidence": 0.9999526223096111,
+            "start_index": 394
+          },
+          {
+            "text": "Identifikationsnummer",
+            "confidence": 0.9999526223096111,
+            "start_index": 403
+          },
+          {
+            "text": "85236749007",
+            "confidence": 0.9999526223096111,
+            "start_index": 427
+          },
+          {
+            "text": "Vorname",
+            "confidence": 0.9999526223096111,
+            "start_index": 445
+          },
+          {
+            "text": "Rainer",
+            "confidence": 0.9999526223096111,
+            "start_index": 455
+          },
+          {
+            "text": "Nachname",
+            "confidence": 0.9999526223096111,
+            "start_index": 468
+          },
+          {
+            "text": "Stricker",
+            "confidence": 0.9999526223096111,
+            "start_index": 479
+          },
+          {
+            "text": "Ehepartner:",
+            "confidence": 0.9999526223096111,
+            "start_index": 494
+          },
+          {
+            "text": " Identifikationsnummer",
+            "confidence": 0.9999966694185914,
+            "start_index": 505
+          },
+          {
+            "text": "54129386608",
+            "confidence": 0.9999966694185914,
+            "start_index": 530
+          },
+          {
+            "text": "Ehepartner:",
+            "confidence": 0.9999966694185914,
+            "start_index": 548
+          },
+          {
+            "text": " Vorname",
+            "confidence": 0.9999934435899366,
+            "start_index": 559
+          },
+          {
+            "text": "Maria",
+            "confidence": 0.9999934435899366,
+            "start_index": 570
+          },
+          {
+            "text": " Ute",
+            "confidence": 0.9999978383507204,
+            "start_index": 575
+          },
+          {
+            "text": "Ehepartner:",
+            "confidence": 0.9999978383507204,
+            "start_index": 586
+          },
+          {
+            "text": " Nachname",
+            "confidence": 0.9999880038042004,
+            "start_index": 597
+          },
+          {
+            "text": "Stricker",
+            "confidence": 0.9999880038042004,
+            "start_index": 609
+          },
+          {
+            "text": "Bankverbindung:",
+            "confidence": 0.9999880038042004,
+            "start_index": 624
+          },
+          {
+            "text": " Geldinstitut",
+            "confidence": 0.9999015743154139,
+            "start_index": 639
+          },
+          {
+            "text": "Volksbank",
+            "confidence": 0.9999015743154139,
+            "start_index": 655
+          },
+          {
+            "text": " Gebhardshain",
+            "confidence": 0.9997885714219743,
+            "start_index": 664
+          },
+          {
+            "text": " eG",
+            "confidence": 0.9999975760954906,
+            "start_index": 677
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999996423722521,
+            "start_index": 683
+          },
+          {
+            "text": "Soweit",
+            "confidence": 0.9728172313929742,
+            "start_index": 685
+          },
+          {
+            "text": " im",
+            "confidence": 0.9999270492388316,
+            "start_index": 691
+          },
+          {
+            "text": " Einzelnen",
+            "confidence": 0.9997172198612105,
+            "start_index": 694
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999939203633587,
+            "start_index": 704
+          },
+          {
+            "text": " anders",
+            "confidence": 0.9999879600069962,
+            "start_index": 710
+          },
+          {
+            "text": " vermerkt,",
+            "confidence": 0.9999750067699251,
+            "start_index": 717
+          },
+          {
+            "text": " Betragsangaben",
+            "confidence": 0.9996352032793382,
+            "start_index": 727
+          },
+          {
+            "text": " in",
+            "confidence": 0.9999994039539004,
+            "start_index": 742
+          },
+          {
+            "text": " Euro.",
+            "confidence": 0.9999681332288831,
+            "start_index": 745
+          }
+        ],
+        "average_page_confidence_score": 0.9974924022980662,
+        "minimum_page_confidence_score": 0.9073120384841589
+      }
+    },
+    {
+      "index": 4,
+      "confidence_scores": {
+        "word_confidence_scores": [
+          {
+            "text": "Transferticket:",
+            "confidence": 0.897826628881549,
+            "start_index": 0
+          },
+          {
+            "text": " Steuer-Abruf",
+            "confidence": 0.9931247132482335,
+            "start_index": 15
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9987813798202932,
+            "start_index": 28
+          },
+          {
+            "text": "Zuletzt",
+            "confidence": 0.997529280859983,
+            "start_index": 29
+          },
+          {
+            "text": " abgerufen",
+            "confidence": 0.999970973788779,
+            "start_index": 36
+          },
+          {
+            "text": " am:",
+            "confidence": 0.9999713909203114,
+            "start_index": 46
+          },
+          {
+            "text": " 05.05.2025",
+            "confidence": 0.9999963912823934,
+            "start_index": 50
+          },
+          {
+            "text": " 11:25",
+            "confidence": 0.9999999403953629,
+            "start_index": 61
+          },
+          {
+            "text": " Uhr",
+            "confidence": 0.9999984502816872,
+            "start_index": 67
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9975252748690908,
+            "start_index": 71
+          },
+          {
+            "text": "Diese",
+            "confidence": 0.9997260129285791,
+            "start_index": 72
+          },
+          {
+            "text": " Bescheinigung",
+            "confidence": 0.9986314626150565,
+            "start_index": 77
+          },
+          {
+            "text": " wurde",
+            "confidence": 0.9999921322487634,
+            "start_index": 91
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999983310727032,
+            "start_index": 97
+          },
+          {
+            "text": " übernommen.",
+            "confidence": 0.9927404583915997,
+            "start_index": 103
+          },
+          {
+            "text": "\n",
+            "confidence": 0.9857871498379077,
+            "start_index": 115
+          },
+          {
+            "text": "Seite",
+            "confidence": 0.9999817613105537,
+            "start_index": 116
+          },
+          {
+            "text": " 1",
+            "confidence": 0.9999999403953606,
+            "start_index": 121
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9997027803899773,
+            "start_index": 123
+          },
+          {
+            "text": "#",
+            "confidence": 0.9784553630716376,
+            "start_index": 125
+          },
+          {
+            "text": " Religionszugehörigkeit",
+            "confidence": 0.998303836772021,
+            "start_index": 126
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.6224591814684473,
+            "start_index": 149
+          },
+          {
+            "text": "Die",
+            "confidence": 0.9999939203633587,
+            "start_index": 151
+          },
+          {
+            "text": " folgende",
+            "confidence": 0.9982059061388847,
+            "start_index": 154
+          },
+          {
+            "text": " Daten",
+            "confidence": 0.9999873639751784,
+            "start_index": 163
+          },
+          {
+            "text": " wurden",
+            "confidence": 0.9999874831811497,
+            "start_index": 169
+          },
+          {
+            "text": " von",
+            "confidence": 0.9999963045256735,
+            "start_index": 176
+          },
+          {
+            "text": " der",
+            "confidence": 0.9999988079084972,
+            "start_index": 180
+          },
+          {
+            "text": " Finanzverwaltung",
+            "confidence": 0.9999935627547811,
+            "start_index": 184
+          },
+          {
+            "text": " abgerufen.",
+            "confidence": 0.9998156382932806,
+            "start_index": 201
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999336048345919,
+            "start_index": 212
+          },
+          {
+            "text": "Identifikationsnummer",
+            "confidence": 0.9999387969376529,
+            "start_index": 217
+          },
+          {
+            "text": "54129386608",
+            "confidence": 0.9999387969376529,
+            "start_index": 241
+          },
+          {
+            "text": "Religion",
+            "confidence": 0.9999387969376529,
+            "start_index": 273
+          },
+          {
+            "text": "Römisch-katholisch",
+            "confidence": 0.9999387969376529,
+            "start_index": 284
+          },
+          {
+            "text": "\n\n",
+            "confidence": 0.9999949932351057,
+            "start_index": 305
+          },
+          {
+            "text": "Soweit",
+            "confidence": 0.9925826574880094,
+            "start_index": 307
+          },
+          {
+            "text": " im",
+            "confidence": 0.9999717481958249,
+            "start_index": 313
+          },
+          {
+            "text": " Einzelnen",
+            "confidence": 0.999459925863061,
+            "start_index": 316
+          },
+          {
+            "text": " nicht",
+            "confidence": 0.9999948740268748,
+            "start_index": 326
+          },
+          {
+            "text": " anders",
+            "confidence": 0.9999898673126559,
+            "start_index": 332
+          },
+          {
+            "text": " vermerkt,",
+            "confidence": 0.9999698013528946,
+            "start_index": 339
+          },
+          {
+            "text": " Betragsangaben",
+            "confidence": 0.9994462130814621,
+            "start_index": 349
+          },
+          {
+            "text": " in",
+            "confidence": 0.9999991655356624,
+            "start_index": 364
+          },
+          {
+            "text": " Euro.",
+            "confidence": 0.9999676960948871,
+            "start_index": 367
+          }
+        ],
+        "average_page_confidence_score": 0.9877677234836164,
+        "minimum_page_confidence_score": 0.6224591814684473
+      }
+    }
+  ],
+  "rawFirstPage": {
+    "index": 0,
+    "markdown": "Transferticket: Steuer-Abruf\nZuletzt abgerufen am: 05.05.2025 11:25 Uhr\nDiese Bescheinigung wurde nicht übernommen.\nSeite 1\n\n# Religionszugehörigkeit\n\nDie folgende Daten wurden von der Finanzverwaltung abgerufen.\n\n|  Identifikationsnummer | 85236749007  |\n| --- | --- |\n|  Religion | Evangelisch  |\n\nSoweit im Einzelnen nicht anders vermerkt, Betragsangaben in Euro.",
+    "images": [],
+    "tables": [],
+    "hyperlinks": [],
+    "header": null,
+    "footer": null,
+    "dimensions": {
+      "dpi": 87,
+      "height": 1018,
+      "width": 719
+    },
+    "confidence_scores": {
+      "word_confidence_scores": [
+        {
+          "text": "Transferticket:",
+          "confidence": 0.8973942854082255,
+          "start_index": 0
+        },
+        {
+          "text": " Steuer-Abruf",
+          "confidence": 0.9927848132749366,
+          "start_index": 15
+        },
+        {
+          "text": "\n",
+          "confidence": 0.9989124455797107,
+          "start_index": 28
+        },
+        {
+          "text": "Zuletzt",
+          "confidence": 0.996951403190052,
+          "start_index": 29
+        },
+        {
+          "text": " abgerufen",
+          "confidence": 0.9999718677819686,
+          "start_index": 36
+        },
+        {
+          "text": " am:",
+          "confidence": 0.999971510122446,
+          "start_index": 46
+        },
+        {
+          "text": " 05.05.2025",
+          "confidence": 0.9999945815650819,
+          "start_index": 50
+        },
+        {
+          "text": " 11:25",
+          "confidence": 0.9999999403953629,
+          "start_index": 61
+        },
+        {
+          "text": " Uhr",
+          "confidence": 0.9999984502816872,
+          "start_index": 67
+        },
+        {
+          "text": "\n",
+          "confidence": 0.998297614215884,
+          "start_index": 71
+        },
+        {
+          "text": "Diese",
+          "confidence": 0.9996025950225329,
+          "start_index": 72
+        },
+        {
+          "text": " Bescheinigung",
+          "confidence": 0.9985363099053906,
+          "start_index": 77
+        },
+        {
+          "text": " wurde",
+          "confidence": 0.9999897481064004,
+          "start_index": 91
+        },
+        {
+          "text": " nicht",
+          "confidence": 0.9999983310727032,
+          "start_index": 97
+        },
+        {
+          "text": " übernommen.",
+          "confidence": 0.9935781207877991,
+          "start_index": 103
+        },
+        {
+          "text": "\n",
+          "confidence": 0.9874197855051154,
+          "start_index": 115
+        },
+        {
+          "text": "Seite",
+          "confidence": 0.9999837877990074,
+          "start_index": 116
+        },
+        {
+          "text": " 1",
+          "confidence": 0.9999999403953606,
+          "start_index": 121
+        },
+        {
+          "text": "\n\n",
+          "confidence": 0.9997027803899773,
+          "start_index": 123
+        },
+        {
+          "text": "#",
+          "confidence": 0.973232591539018,
+          "start_index": 125
+        },
+        {
+          "text": " Religionszugehörigkeit",
+          "confidence": 0.9981449044717584,
+          "start_index": 126
+        },
+        {
+          "text": "\n\n",
+          "confidence": 0.6791785143226179,
+          "start_index": 149
+        },
+        {
+          "text": "Die",
+          "confidence": 0.9999941587791524,
+          "start_index": 151
+        },
+        {
+          "text": " folgende",
+          "confidence": 0.9982141020980769,
+          "start_index": 154
+        },
+        {
+          "text": " Daten",
+          "confidence": 0.9999867679437158,
+          "start_index": 163
+        },
+        {
+          "text": " wurden",
+          "confidence": 0.9999878408000585,
+          "start_index": 169
+        },
+        {
+          "text": " von",
+          "confidence": 0.9999969005680498,
+          "start_index": 176
+        },
+        {
+          "text": " der",
+          "confidence": 0.9999990463265931,
+          "start_index": 180
+        },
+        {
+          "text": " Finanzverwaltung",
+          "confidence": 0.9999929667192259,
+          "start_index": 184
+        },
+        {
+          "text": " abgerufen.",
+          "confidence": 0.9998292583341328,
+          "start_index": 201
+        },
+        {
+          "text": "\n\n",
+          "confidence": 0.9999246654044206,
+          "start_index": 212
+        },
+        {
+          "text": "Identifikationsnummer",
+          "confidence": 0.9999903812062434,
+          "start_index": 217
+        },
+        {
+          "text": "85236749007",
+          "confidence": 0.9999903812062434,
+          "start_index": 241
+        },
+        {
+          "text": "Religion",
+          "confidence": 0.9999903812062434,
+          "start_index": 273
+        },
+        {
+          "text": "Evangelisch",
+          "confidence": 0.9999903812062434,
+          "start_index": 284
+        },
+        {
+          "text": "\n\n",
+          "confidence": 0.9999899865198352,
+          "start_index": 298
+        },
+        {
+          "text": "Soweit",
+          "confidence": 0.9927883452706499,
+          "start_index": 300
+        },
+        {
+          "text": " im",
+          "confidence": 0.9999542257282243,
+          "start_index": 306
+        },
+        {
+          "text": " Einzelnen",
+          "confidence": 0.9995739665569098,
+          "start_index": 309
+        },
+        {
+          "text": " nicht",
+          "confidence": 0.9999966621509202,
+          "start_index": 319
+        },
+        {
+          "text": " anders",
+          "confidence": 0.9999880792130387,
+          "start_index": 325
+        },
+        {
+          "text": " vermerkt,",
+          "confidence": 0.9999741720879726,
+          "start_index": 332
+        },
+        {
+          "text": " Betragsangaben",
+          "confidence": 0.9994325499684363,
+          "start_index": 342
+        },
+        {
+          "text": " in",
+          "confidence": 0.9999992847447459,
+          "start_index": 357
+        },
+        {
+          "text": " Euro.",
+          "confidence": 0.9999790198804963,
+          "start_index": 360
+        }
+      ],
+      "average_page_confidence_score": 0.9889601743345037,
+      "minimum_page_confidence_score": 0.6791785143226179
+    }
+  }
+}

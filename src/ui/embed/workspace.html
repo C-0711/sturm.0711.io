@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>STURM · Embed</title>
+  <link rel="stylesheet" href="/colors_and_type.css?v=20260427g" />
+  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <style>
+    body { margin: 0; padding: 0; font-family: var(--font-sans, system-ui); background: var(--color-bg, #fff); color: var(--color-text-primary, #2a2a2a); }
+    .embed-shell { display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: center; gap: 16px; padding: 20px; box-sizing: border-box; }
+    .embed-spinner { width: 32px; height: 32px; border: 3px solid var(--color-border-light, #e0e0e0); border-top-color: var(--color-accent, #4a6fa5); border-radius: 50%; animation: sp 0.8s linear infinite; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+    .embed-status { font-size: 13px; color: var(--color-text-secondary); text-align: center; max-width: 380px; }
+    .embed-error { color: var(--color-danger, #c08585); font-size: 12px; max-width: 460px; text-align: center; }
+    .embed-debug { position: fixed; bottom: 8px; right: 8px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; color: var(--color-text-tertiary, #999); }
+  </style>
+</head>
+<body>
+  <div class="embed-shell">
+    <div id="spin" class="embed-spinner"></div>
+    <div id="status" class="embed-status">Warte auf Authentifizierung vom Parent-Frame…</div>
+    <div id="error" class="embed-error" hidden></div>
+  </div>
+  <div id="debug" class="embed-debug"></div>
+  <script src="/embed/embed.js?v=20260427g" type="module"></script>
+</body>
+</html>

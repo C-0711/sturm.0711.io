@@ -1,0 +1,13 @@
+{
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      }
+    }
+  },
+  "name": "Smoke",
+  "defaultPrompt": "hi",
+  "createdAt": "2026-04-25T12:01:09.826Z"
+}

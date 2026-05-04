@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STURM · OCR Studio</title>
+  <link rel="stylesheet" href="/design-system/colors_and_type.css" />
+  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <link rel="stylesheet" href="/studio-ocr.css" />
+  <link rel="stylesheet" href="/schema-builder.css" />
+
+  <!-- React + Babel for the schema builder (mounted only inside the schema section). -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body class="studio">
+  <header class="studio-header">
+    <div class="brand">
+      <a href="/" class="brand-link"><img src="/design-system/assets/logo-mark.svg" alt="STURM" /></a>
+      <h1 id="studio-title">OCR Studio</h1>
+      <span class="badge" id="studio-badge">MVP</span>
+    </div>
+    <div class="header-actions">
+      <span id="tuning-context" class="tuning-context hidden" aria-hidden="true"></span>
+      <span id="override-pill" class="override-pill hidden" aria-hidden="true" title="Diese Stage hat einen aktiven Override">Override aktiv</span>
+      <button id="apply-btn" type="button" class="btn-secondary hidden" aria-hidden="true" tabindex="-1" title="Aktuelle Konfiguration als Override für diese Stage speichern">Apply to workflow</button>
+      <button id="revert-btn" type="button" class="btn-secondary hidden" aria-hidden="true" tabindex="-1" title="Override entfernen, Workflow-Quelle gilt wieder">Revert</button>
+      <button id="rerun-btn" type="button" class="btn-secondary hidden" aria-hidden="true" tabindex="-1" title="Diese Eingabe mit aktiver Konfiguration neu ausführen">Re-run input</button>
+      <button id="add-variant-btn" type="button" class="btn-secondary" title="Variante zum Vergleich hinzufügen">+ Variant</button>
+      <a id="back-to-pipeline" href="/pipeline.html" class="link-secondary">Pipelines →</a>
+    </div>
+  </header>
+  <div id="toast-container" class="toast-container"></div>
+
+  <main class="studio-grid">
+    <!-- LEFT — document -->
+    <section class="pane pane-doc">
+      <header class="pane-header">
+        <h2>Dokument</h2>
+        <label class="file-picker">
+          <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" />
+          <span>Datei wählen…</span>
+        </label>
+      </header>
+      <div class="doc-meta" id="doc-meta">Keine Datei ausgewählt.</div>
+      <div class="doc-viewer" id="doc-viewer">
+        <div class="doc-empty">PDF oder Bild ablegen, um zu starten.</div>
+      </div>
+    </section>
+
+    <!-- MIDDLE — config -->
+    <section class="pane pane-config">
+      <header class="pane-header">
+        <h2>Konfiguration</h2>
+        <button id="run-btn" class="btn-primary" disabled>Preview ausführen</button>
+      </header>
+
+      <div class="config-section">
+        <h3>Modell &amp; Seiten</h3>
+        <label class="field">
+          <span>Modell</span>
+          <select id="cfg-model">
+            <option value="mistral-ocr-latest">mistral-ocr-latest</option>
+            <option value="mistral-ocr-2505">mistral-ocr-2505 (legacy)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Seiten <small>(z.B. <code>1-4,8</code>; leer = alle)</small></span>
+          <input id="cfg-pages" type="text" placeholder="alle" />
+          <small id="cfg-pages-error" class="error-text"></small>
+        </label>
+      </div>
+
+      <div class="config-section">
+        <h3>Layout</h3>
+        <label class="field-row">
+          <input type="checkbox" id="cfg-extract-header" />
+          <span>Header extrahieren</span>
+        </label>
+        <label class="field-row">
+          <input type="checkbox" id="cfg-extract-footer" />
+          <span>Footer extrahieren</span>
+        </label>
+        <label class="field">
+          <span>Tabellen-Format</span>
+          <select id="cfg-table-format">
+            <option value="markdown">Markdown</option>
+            <option value="html">HTML</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="config-section">
+        <h3>Bild-Filter</h3>
+        <label class="field-row">
+          <input type="checkbox" id="cfg-include-base64" />
+          <span>Bild-Base64 zurückgeben (Bandbreite!)</span>
+        </label>
+        <label class="field">
+          <span>Min. Pixelgröße <small>(<code>image_min_size</code>)</small></span>
+          <input id="cfg-image-min-size" type="number" min="0" placeholder="kein Limit" />
+        </label>
+        <label class="field">
+          <span>Max. Bilder pro Seite <small>(<code>image_limit</code>)</small></span>
+          <input id="cfg-image-limit" type="number" min="0" placeholder="kein Limit" />
+        </label>
+      </div>
+
+      <div class="config-section">
+        <h3>Confidence <span class="beta">beta</span></h3>
+        <label class="field">
+          <span>Granularität</span>
+          <select id="cfg-confidence">
+            <option value="none">aus</option>
+            <option value="page">page</option>
+            <option value="word">word</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="config-section">
+        <h3>Document-Annotation</h3>
+        <div class="field">
+          <button id="schema-generate-btn" type="button" class="btn-secondary" disabled
+                  title="3 LLM-Kandidaten parallel; Sieger wird in den Schema-Builder geladen.">
+            Schema aus Dokument generieren
+          </button>
+        </div>
+        <div id="schema-generate-progress" class="schema-gen-progress hidden" aria-hidden="true"></div>
+        <label class="field">
+          <span>Vorlage laden…</span>
+          <select id="cfg-template">
+            <option value="">— keine —</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Schema-Name</span>
+          <input id="cfg-schema-name" type="text" placeholder="extraction" />
+        </label>
+        <label class="field">
+          <span>Annotation-Prompt <small>(wirkt nur mit Schema)</small></span>
+          <textarea id="cfg-prompt" rows="3" placeholder="z.B.: Beträge in EUR. Komma als Dezimaltrennzeichen."></textarea>
+        </label>
+        <!-- Schema builder mount: React component renders Visual + JSON tabs in here. -->
+        <div id="schema-builder-mount"></div>
+        <div class="schema-actions">
+          <button id="save-schema-btn" type="button" class="btn-secondary" title="Aktuelles Schema im Schema-Repo als neue Version speichern">Save schema as…</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT — output -->
+    <section class="pane pane-output">
+      <header class="pane-header">
+        <h2>Ergebnis</h2>
+        <div class="status-row">
+          <span id="status-pill" class="status-pill status-idle">Idle</span>
+          <span id="status-meta" class="status-meta"></span>
+        </div>
+      </header>
+      <nav class="tabs" role="tablist">
+        <button id="tab-diff" type="button" class="tab hidden" aria-hidden="true" tabindex="-1" data-tab="diff">Diff vs. Original</button>
+        <button class="tab active" data-tab="annotation">Annotation</button>
+        <button class="tab" data-tab="markdown">Markdown</button>
+        <button class="tab" data-tab="links">Links</button>
+        <button class="tab" data-tab="quality">Qualität</button>
+        <button class="tab" data-tab="raw">Raw</button>
+        <button id="tab-variants" type="button" class="tab hidden" aria-hidden="true" tabindex="-1" data-tab="variants">Variants</button>
+      </nav>
+      <div class="tab-panel hidden" data-panel="diff" aria-hidden="true">
+        <div id="out-diff"><div class="muted">Noch keine Preview ausgeführt — kein Vergleich möglich.</div></div>
+      </div>
+      <div class="tab-panel" data-panel="annotation">
+        <pre id="out-annotation" class="mono">—</pre>
+      </div>
+      <div class="tab-panel hidden" data-panel="markdown">
+        <pre id="out-markdown" class="mono">—</pre>
+      </div>
+      <div class="tab-panel hidden" data-panel="links">
+        <ul id="out-links" class="link-list"><li class="muted">—</li></ul>
+      </div>
+      <div class="tab-panel hidden" data-panel="quality">
+        <div id="out-quality">—</div>
+      </div>
+      <div class="tab-panel hidden" data-panel="raw">
+        <pre id="out-raw" class="mono">—</pre>
+      </div>
+      <div class="tab-panel hidden" data-panel="variants" aria-hidden="true">
+        <div id="out-variants"><div class="muted">Keine Variant-Läufe.</div></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Variants side rail (hidden until +Variant pressed) -->
+  <aside id="variants-rail" class="variants-rail hidden" aria-hidden="true">
+    <header>
+      <h3>Variants</h3>
+      <button id="variants-close" type="button" class="link-secondary" aria-label="Schließen">×</button>
+    </header>
+    <ul id="variants-list" class="variants-list"></ul>
+    <div class="variants-actions">
+      <button id="variants-add" type="button" class="btn-secondary">+ Variante</button>
+      <button id="variants-run" type="button" class="btn-primary">Run all</button>
+    </div>
+  </aside>
+
+  <!-- Schema builder loads first so window.__schemaBuilder is ready when studio-ocr.js queries it. -->
+  <script type="text/babel" data-presets="react" src="/schema-builder.jsx"></script>
+  <script type="module" src="/studio-ocr.js"></script>
+</body>
+</html>

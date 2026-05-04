@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>STURM · Dokument</title>
+  <link rel="stylesheet" href="/colors_and_type.css?v=20260426u" />
+  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <link rel="stylesheet" href="/neo-tokens.css?v=20260426u" />
+  <link rel="stylesheet" href="/workspaces.css?v=20260426u" />
+  <script src="/theme-toggle.js?v=20260426u"></script>
+</head>
+<body class="ws-root">
+  <header class="ws-header">
+    <div class="brand">
+      <a id="back-link" href="/workspaces.html" class="brand-link" title="Zum Workspace">←</a>
+      <h1 id="doc-title">Dokument</h1>
+      <span id="doc-class-pill" class="ws-pill"></span>
+      <button id="doc-version" type="button" class="version-pill mono" title="" hidden></button>
+    </div>
+    <nav class="doc-actions">
+      <a id="action-playground" class="btn-secondary" href="#" title="Mit diesem Dokument im Playground öffnen">→ Playground</a>
+      <button id="action-extract" class="btn-secondary" disabled title="Phase 4">Extrahieren</button>
+      <div class="action-dropdown">
+        <button id="action-quality" class="btn-secondary" disabled title="Quality-Check ausführen" aria-haspopup="menu" aria-expanded="false">Quality Check ▾</button>
+        <div id="quality-menu" class="action-menu hidden" role="menu">
+          <button type="button" role="menuitem" data-kind="structural">
+            <strong>Strukturchecker</strong>
+            <span class="muted">gratis · &lt;10 ms · Regex-Tokens (IBAN, Datum, Betrag, …)</span>
+          </button>
+          <button type="button" role="menuitem" data-kind="consistency">
+            <strong>Konsistenz-Check</strong>
+            <span class="muted">gratis · sofort · Werte vs OCR-Text</span>
+          </button>
+          <button type="button" role="menuitem" data-kind="semantic">
+            <strong>Semantischer Re-Read</strong>
+            <span class="muted">~€0.001 · ~3 s · mistral-small prüft jeden Wert</span>
+          </button>
+          <button type="button" role="menuitem" data-kind="visual">
+            <strong>Visuelles Audit</strong>
+            <span class="muted">gratis · pro-Seite Lokalisierung jedes Werts</span>
+          </button>
+          <button type="button" role="menuitem" data-kind="vision">
+            <strong>Vision-Audit (mistral-ocr-latest)</strong>
+            <span class="muted">~€0.003 · ~4 s · Vision-Modell sieht das Dokument & prüft jeden Wert</span>
+          </button>
+          <button type="button" role="menuitem" data-kind="cross-model">
+            <strong>Cross-Check (Claude Haiku 4.5)</strong>
+            <span class="muted">~€0.005 · ~6 s · zweite Meinung vom anderen Modellanbieter</span>
+          </button>
+        </div>
+      </div>
+      <button id="action-approve" class="btn-secondary" disabled title="Phase 5">Freigeben</button>
+      <button type="button" class="theme-toggle" data-theme-toggle title="Theme wechseln">
+        <span data-theme-icon aria-hidden="true">☾</span>
+        <span data-theme-label class="sr-only">Light</span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="doc-main">
+    <section class="doc-viewer-pane">
+      <div id="doc-viewer" class="doc-viewer">
+        <div class="muted">Lade…</div>
+      </div>
+    </section>
+
+    <section class="doc-detail-pane">
+      <nav class="doc-tabs" role="tablist">
+        <button class="doc-tab active" data-tab="werte-fluss">Werte-Fluss</button>
+        <button class="doc-tab" data-tab="klassifikation">Klassifikation</button>
+        <button class="doc-tab" data-tab="insight">Insight</button>
+        <button class="doc-tab" data-tab="annotation">Annotation</button>
+        <button class="doc-tab" data-tab="schema">Schema</button>
+        <button class="doc-tab" data-tab="verlauf">Verlauf</button>
+        <button class="doc-tab" data-tab="audit">Audit</button>
+        <button class="doc-tab" data-tab="fall-json">Fall-JSON</button>
+        <button class="doc-tab" data-tab="master">Master JSON</button>
+      </nav>
+
+      <div class="doc-tab-panel" data-panel="werte-fluss">
+        <div id="werte-fluss-root">
+          <p class="muted">Lade…</p>
+        </div>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="klassifikation">
+        <div id="klassifikation-root">
+          <p class="muted">Lade…</p>
+        </div>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="insight">
+        <div id="insight-root">
+          <p class="muted">Lade…</p>
+        </div>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="schema">
+        <h3>Vorlage wählen</h3>
+        <div id="template-picker">
+          <p class="muted">Lade Kanonikalien…</p>
+        </div>
+        <h3>Aktive Vorlage</h3>
+        <div id="template-current" class="muted">Keine Vorlage gesetzt.</div>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="annotation">
+        <h3>Annotation</h3>
+        <p id="extraction-status" class="muted">
+          Phase 4: Mistral OCR Latest läuft erst nach Vorlagenwahl.
+        </p>
+        <pre id="extraction-out" class="json-out muted">—</pre>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="verlauf">
+        <header class="verlauf-head">
+          <h3>Verlauf</h3>
+          <div class="cleanup-actions">
+            <label class="cleanup-toggle"><input type="checkbox" id="show-superseded" /> Superseded zeigen</label>
+            <button id="action-tag" type="button" class="btn-secondary" title="Aktuelle Version taggen">🏷 Taggen</button>
+            <button id="action-squash" type="button" class="btn-secondary" disabled title="Markierte Einträge zusammenfassen">🧹 Aufräumen</button>
+          </div>
+        </header>
+        <p class="muted" style="margin-bottom:14px">Audit-Trail dieses Dokuments. Jeder Eintrag wird zum GitChain-Commit, sobald der Container hochgezogen wird.</p>
+        <ol id="verlauf-list" class="insight-history-full">
+          <li class="muted">Noch keine Einträge.</li>
+        </ol>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="audit">
+        <div id="audit-root">
+          <p class="muted">Noch kein Audit ausgeführt. Wähle „Quality Check“ in der Aktionsleiste.</p>
+        </div>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="fall-json">
+        <div id="fall-json-root">
+          <p class="muted">Lade Fall-JSON…</p>
+        </div>
+      </div>
+
+      <div class="doc-tab-panel hidden" data-panel="master">
+        <h3>Beitrag zum Master JSON</h3>
+        <p class="muted">
+          Vorschau, was dieses Dokument zur konsolidierten Workspace-Sicht
+          beiträgt (sobald freigegeben).
+        </p>
+        <pre id="master-preview" class="json-out">—</pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="/document.js?v=20260426u" type="module"></script>
+</body>
+</html>

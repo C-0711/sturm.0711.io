@@ -1,0 +1,71 @@
+{
+  "id": "0711/elster-haupt",
+  "name": "Elster Hauptvordruck (ESt 1 A)",
+  "description": "Hauptvordruck der Einkommensteuererklärung — Stammdaten, Bankverbindung, Steuerermäßigungen.",
+  "classificationHints": ["elster", "einkommensteuer", "est_1_a", "hauptvordruck"],
+  "annotationPrompt": "Extrahiere die Daten des Hauptvordrucks der deutschen Einkommensteuererklärung. Person A = Steuerpflichtige(r), Person B = Ehepartner falls vorhanden. Beträge im Originalformat.",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["jahr", "art_der_erklaerung", "person_a"],
+    "properties": {
+      "jahr": { "type": "integer", "minimum": 2000, "maximum": 2099 },
+      "art_der_erklaerung": {
+        "type": "string",
+        "enum": ["einkommensteuer", "antrag_arbeitnehmer", "erklaerung_beschraenkt"]
+      },
+      "veranlagungswahl": {
+        "type": "string",
+        "enum": ["einzelveranlagung", "zusammenveranlagung", "getrennte_veranlagung", "besondere_veranlagung"]
+      },
+      "person_a": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nachname", "vorname", "steuer_id"],
+        "properties": {
+          "nachname": { "type": "string" },
+          "vorname": { "type": "string" },
+          "geburtsdatum": { "type": "string", "format": "date" },
+          "steuer_id": { "type": "string", "pattern": "^[0-9]{11}$" },
+          "religion": { "type": "string" },
+          "beruf": { "type": "string" }
+        }
+      },
+      "person_b": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nachname": { "type": "string" },
+          "vorname": { "type": "string" },
+          "geburtsdatum": { "type": "string", "format": "date" },
+          "steuer_id": { "type": "string", "pattern": "^[0-9]{11}$" },
+          "religion": { "type": "string" },
+          "beruf": { "type": "string" }
+        }
+      },
+      "anschrift": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "strasse": { "type": "string" },
+          "hausnummer": { "type": "string" },
+          "plz": { "type": "string", "pattern": "^[0-9]{5}$" },
+          "ort": { "type": "string" }
+        }
+      },
+      "bankverbindung": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "iban": { "type": "string", "pattern": "^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$", "description": "IBAN, z.B. DE08 5735 1030 0105 0569" },
+          "bic": { "type": "string" },
+          "kontoinhaber": { "type": "string" }
+        }
+      },
+      "anlagen_eingereicht": {
+        "type": "array",
+        "items": { "type": "string", "description": "z.B. \"Anlage N\", \"Anlage KAP\", \"Anlage Vorsorgeaufwand\"" }
+      }
+    }
+  }
+}
