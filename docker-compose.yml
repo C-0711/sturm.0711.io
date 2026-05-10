@@ -7,6 +7,16 @@
 # Mistral + Anthropic + Bearer-Tokens come from .env (gitignored).
 # In production we map sturm.0711.io → :7800 via the existing nginx vhost
 # at ~/0711/0711-STURM/nginx/sturm.0711.io.conf (host nginx, NOT in compose).
+#
+# DATA-PATH STRATEGY
+# ──────────────────
+# To preserve the existing 267 MB workspaces / 141 MB runs / per-mandant
+# state on h200v, the live data dirs are bind-mounted from the host onto
+# the container. The host paths default to the existing 0711-STURM tree;
+# override with STURM_DATA_ROOT in .env if running on a different host.
+#
+#   STURM_DATA_ROOT=/home/christoph.bertsch/0711/0711-STURM   (h200v default)
+#   STURM_DATA_ROOT=./.local-state                            (Mac dev)
 
 services:
   sturm:
@@ -30,14 +40,22 @@ services:
       GITCHAIN_DEFAULT_NAMESPACE: ctax
       GITCHAIN_DEFAULT_TENANT: ctax-0711
     volumes:
-      - sturm_workspaces:/app/workspaces
-      - sturm_runs:/app/runs
-      - sturm_uploads:/app/uploads
-      - sturm_gitchain_repos:/app/gitchain-repos
-      - sturm_canonicals:/app/canonicals
-      - sturm_pipelines:/app/pipelines
-      - sturm_schemas:/app/schemas
-      - sturm_logs:/app/logs
+      # ── Stateful: bind-mount existing host data so we don't lose live
+      #    workspaces / runs / schemas / gitchain repos on cutover.
+      - ${STURM_DATA_ROOT:-./.local-state}/workspaces:/app/workspaces
+      - ${STURM_DATA_ROOT:-./.local-state}/runs:/app/runs
+      - ${STURM_DATA_ROOT:-./.local-state}/uploads:/app/uploads
+      - ${STURM_DATA_ROOT:-./.local-state}/schemas:/app/schemas
+      - ${STURM_DATA_ROOT:-./.local-state}/logs:/app/logs
+      # gitchain bare repos already live separately on h200v at
+      # ~/gitchain-repos (referenced by GITCHAIN_REPO_ROOT in the env).
+      # Override here if the host path differs from default.
+      - ${GITCHAIN_REPO_ROOT_HOST:-./.local-state/gitchain-repos}:/app/gitchain-repos
+      # Anchor + master keys: read-only mount of the existing host secrets
+      # (gitignored on h200v at ~/0711/0711-STURM/.anchor-api-key etc.).
+      # Optional — comment out if not yet provisioned.
+      - ${STURM_DATA_ROOT:-./.local-state}/.anchor-api-key:/app/.anchor-api-key:ro
+      - ${STURM_DATA_ROOT:-./.local-state}/.master-key.json:/app/.master-key.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +75,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?must be set}
       POSTGRES_DB: sturm_gitchain
     volumes:
+      # Postgres can stay in a named volume — fresh install fine, gitchain
+      # client will create its own tables. If you want to import the
+      # existing gitchain registry (ctax-postgres on h200v), do that as a
+      # separate `pg_dump | pg_restore` step pre-cutover.
       - sturm_postgres:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5444:5432"
@@ -68,12 +90,4 @@ services:
       start_period: 10s
 
 volumes:
-  sturm_workspaces:
-  sturm_runs:
-  sturm_uploads:
-  sturm_gitchain_repos:
-  sturm_canonicals:
-  sturm_pipelines:
-  sturm_schemas:
-  sturm_logs:
   sturm_postgres:
