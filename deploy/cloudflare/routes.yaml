@@ -1,0 +1,72 @@
+# Cloudflare Tunnel route map — single source of truth, diff-able.
+#
+# Generated 2026-05-10 from API; drift-checked by deploy/cloudflare/refresh-routes.sh.
+# DO NOT edit by hand; edit Cloudflare and re-run the refresh script, or
+# edit this file and run the apply script (which exists in Phase F.3).
+#
+# Phase F.2 / Task 8 — covers the four known tunnels. Full per-route
+# ingress for `0711-platform` (65 routes) is captured by the refresh
+# script; this file pins the tunnel identities and the SSH gap.
+
+tunnels:
+  - name: 0711-platform
+    id: fb8267e6-0a22-44b8-9978-c3e3b32583f6
+    status: HEALTHY
+    config_src: cloudflare
+    primary_routes:
+      - hostname: gitchain.0711.io
+        service: http://127.0.0.1:7800
+        purpose: STURM web UI + SSE
+      - hostname: api-gitchain.0711.io
+        service: http://127.0.0.1:3361
+        purpose: Gitchain CRUD API
+      - hostname: storage.0711.io
+        service: http://127.0.0.1:9000
+        purpose: object storage / artifacts
+      - hostname: sturm.0711.io
+        service: http://127.0.0.1:7800
+        purpose: STURM workflow engine entry point
+    ssh_route_present: false  # CLOSED GAP per Phase F.2 audit
+    note: |
+      No `ssh://` ingress is configured. To enable cloudflared-access SSH
+      to REACTOR, add an ingress rule:
+        hostname: ssh-reactor.0711.io
+        service:  ssh://127.0.0.1:22
+      and a Cloudflare Access policy gating it to c@camm.org. Until then,
+      out-of-band SSH (LAN h200v or direct Scaleway IP) is the only path.
+
+  - name: mastermind-bridge
+    id: 5925ce28-8a4e-4d32-ad4b-6643a1e98d61
+    status: HEALTHY
+    config_src: cloudflare
+    primary_routes:
+      - hostname: mastermind.0711.io
+        service: http://127.0.0.1:8080
+        purpose: BRIDGE mastermind UI
+    ssh_route_present: false
+
+  - name: lightnet-tender
+    id: 5303238d-3bf3-4394-a054-25079d5f8b4f
+    status: HEALTHY
+    config_src: cloudflare
+    primary_routes:
+      - hostname: lightnet-tender.0711.io
+        service: http://127.0.0.1:8081
+      - hostname: data-ln.0711.io
+        service: http://127.0.0.1:8082
+      - hostname: search-ln.0711.io
+        service: http://127.0.0.1:8083
+
+  - name: h200v-gitty
+    id: a25b2f73-78ad-45d4-9066-619f4ee11a4e
+    status: DOWN  # action required: restart or delete
+    config_src: cloudflare
+    primary_routes:
+      - hostname: gitty.0711.io
+        service: http://127.0.0.1:7800
+    decision_required: |
+      This tunnel has been DOWN at least since 2026-05-10. Either:
+      (a) restart cloudflared on h200v and confirm gitty.0711.io is a
+          real production hostname, or
+      (b) delete the tunnel from Cloudflare to clear the noise.
+      Decision owner: Mastermind C.
