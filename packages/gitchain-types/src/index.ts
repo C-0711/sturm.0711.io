@@ -6,3 +6,4 @@
  */
 export * from './elster.ts';
 export * from './verify.ts';
+export * from './projection.ts';
