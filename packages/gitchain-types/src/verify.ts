@@ -313,7 +313,8 @@ function parseGermanNumberLocal(value: ECodeValue): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function eq(a: ECodeValue, b: ECodeValue): boolean {
+function eq(a: ECodeValue | undefined, b: ECodeValue | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
   if (a === null && b === null) return true;
   if (typeof a === 'number' && typeof b === 'number') {
     return Math.abs(a - b) < 1e-9;
@@ -330,6 +331,6 @@ function eqLoose(a: ECodeValue, b: ECodeValue): boolean {
   return false;
 }
 
-function stringify(v: ECodeValue): string {
-  return JSON.stringify(v);
+function stringify(v: ECodeValue | undefined): string {
+  return v === undefined ? 'undefined' : JSON.stringify(v);
 }

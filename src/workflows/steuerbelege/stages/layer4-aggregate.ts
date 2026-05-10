@@ -249,10 +249,28 @@ function applyStrategy(
         : { value: null };
     }
     case 'first': {
+      let kept: ECodeValue = null;
+      let keptSeen = false;
+      const distinctNonNull = new Set<string>();
       for (const c of contribs) {
-        if (c.value !== null && c.value !== '') return { value: c.value };
+        if (c.value === null || c.value === '') continue;
+        if (!keptSeen) {
+          kept = c.value;
+          keptSeen = true;
+        }
+        distinctNonNull.add(JSON.stringify(c.value));
       }
-      return { value: null };
+      if (distinctNonNull.size > 1) {
+        return {
+          value: kept,
+          conflict: {
+            kind: 'kept',
+            value: kept,
+            reason: `first-strategy: ${distinctNonNull.size} distinct values, kept the first by sub-doc order`,
+          },
+        };
+      }
+      return { value: kept };
     }
     case 'count': {
       const n = contribs.filter(
