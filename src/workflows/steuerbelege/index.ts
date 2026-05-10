@@ -4,12 +4,14 @@ import { dokumentTypStage } from './stages/dokument-typ.ts';
 import { belegExtraktionStage } from './stages/beleg-extraktion.ts';
 import { seitenSplitterStage } from './stages/seiten-splitter.ts';
 import { belegeMultiStage } from './stages/belege-multi.ts';
+import { layer4AggregateStage } from './stages/layer4-aggregate.ts';
 
 export function registerSteuerbelegeStages(): void {
   registerStage(dokumentTypStage);
   registerStage(belegExtraktionStage);
   registerStage(seitenSplitterStage);
   registerStage(belegeMultiStage);
+  registerStage(layer4AggregateStage);
 }
 
 /**
@@ -119,10 +121,18 @@ export function buildBelegeBundleWorkflow() {
           vz: '${input.vz}',
         },
       },
+      'layer4-aggregate': {
+        uses: 'steuerbelege/layer4-aggregate',
+        inputs: {
+          belege: '${belege-multi.belege}',
+          runId: '${input.runId}',
+        },
+      },
     },
     edges: [
       ['ocr', 'seiten-splitter'],
       ['seiten-splitter', 'belege-multi'],
+      ['belege-multi', 'layer4-aggregate'],
     ],
   });
 }
