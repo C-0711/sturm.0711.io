@@ -5,3 +5,4 @@
  * downstream consumers can `import { BundleAggregateOutput } from '@0711/gitchain-types'`.
  */
 export * from './elster.ts';
+export * from './verify.ts';
