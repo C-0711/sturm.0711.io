@@ -1,0 +1,79 @@
+# STURM — Workflow-Engine Compose
+#
+# Brings up:
+#   - sturm        the Node service on :7800
+#   - postgres     gitchain registry (used by GitChainClient via pg)
+#
+# Mistral + Anthropic + Bearer-Tokens come from .env (gitignored).
+# In production we map sturm.0711.io → :7800 via the existing nginx vhost
+# at ~/0711/0711-STURM/nginx/sturm.0711.io.conf (host nginx, NOT in compose).
+
+services:
+  sturm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sturm:0.1.0
+    container_name: sturm
+    restart: unless-stopped
+    ports:
+      - "7800:7800"
+    environment:
+      NODE_ENV: production
+      PORT: 7800
+      STURM_BEARER_TOKEN: ${STURM_BEARER_TOKEN:?must be set}
+      STURM_MASTER_HMAC_KEY: ${STURM_MASTER_HMAC_KEY:?must be set}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:?must be set}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?must be set}
+      STURM_INPUT_RETENTION_DAYS: "7"
+      DATABASE_URL: postgres://sturm:${POSTGRES_PASSWORD:?must be set}@postgres:5432/sturm_gitchain
+      GITCHAIN_DEFAULT_NAMESPACE: ctax
+      GITCHAIN_DEFAULT_TENANT: ctax-0711
+    volumes:
+      - sturm_workspaces:/data/workspaces
+      - sturm_runs:/data/runs
+      - sturm_uploads:/data/uploads
+      - sturm_gitchain_repos:/data/gitchain-repos
+      - sturm_canonicals:/data/canonicals
+      - sturm_pipelines:/data/pipelines
+      - sturm_schemas:/data/schemas
+      - sturm_logs:/data/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7800/api/workflows"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: sturm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sturm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?must be set}
+      POSTGRES_DB: sturm_gitchain
+    volumes:
+      - sturm_postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5444:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sturm -d sturm_gitchain"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  sturm_workspaces:
+  sturm_runs:
+  sturm_uploads:
+  sturm_gitchain_repos:
+  sturm_canonicals:
+  sturm_pipelines:
+  sturm_schemas:
+  sturm_logs:
+  sturm_postgres:

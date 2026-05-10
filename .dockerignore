@@ -1,0 +1,53 @@
+# STURM .dockerignore — keep build context lean and secret-free.
+
+# Version control
+.git
+.gitignore
+
+# Runtime artefacts (mounted as volumes)
+node_modules
+runs/
+workspaces/
+uploads/
+canonicals/
+logs/
+*.log
+
+# Build artefacts
+dist/
+build/
+.next/
+.tsbuildinfo
+*.tsbuildinfo
+
+# Backups (live edits captured on h200v rescue branch)
+*.bak
+*.bak.*
+**/*.bak
+**/*.bak.*
+
+# Secrets — must NEVER enter the image
+.env
+.env.*
+!.env.example
+.anchor-api-key
+.master-key.json
+.wallet-rotation-*.txt
+**/secrets/
+**/*.pem
+**/*.key
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Test fixtures with real case data
+tests/fixtures/
+
+# Docs that don't need to be in container
+docs/audits/
+docs/architecture/
+*.png
+*.pdf
