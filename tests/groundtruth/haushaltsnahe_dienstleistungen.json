@@ -1,0 +1,17 @@
+{
+  "docClass": "haushaltsnahe_dienstleistungen",
+  "anlage": "HA_35a",
+  "anchor": "Hildburg Augustinum Bad Neuenahr 2024",
+  "anchors": ["Augustinum", "Seniorenresidenz", "haushaltsnahe Dienstleistungen", "§35a"],
+  "expected": {
+    "E0107208": { "value": 19529.70, "required": true, "label": "Aufwendungen für haushaltsnahe Dienstleistungen — Wohnen-Anteil (zur Aufteilung)" },
+    "E0111215": { "value": 6192.00,  "required": false, "label": "Speisen-Anteil (in der Regel NICHT abzugsfähig — siehe Notes)" }
+  },
+  "notes": [
+    "Augustinum-Aufwendungen 2024: Wohnen 19.529,70€ (Jahressumme), Speisen 6.192€.",
+    "WICHTIG: Nur der DIENSTLEISTUNGS- und PFLEGE-Anteil im Wohn-Entgelt ist nach §35a abzugsfähig — typisch 25-40%, nicht der volle Mietanteil.",
+    "Verpflegung ist NICHT haushaltsnah → nicht ansetzbar.",
+    "Für ELSTER bräuchten wir die genaue Aufteilung Wohnen → DL-Anteil; das Augustinum stellt dazu eine separate Bescheinigung. Nur dieser DL-Anteil geht in E0107208.",
+    "ECode E0107208 ist die typische Eingabe; E0111215 ist Handwerkerleistungen (anderer Block) — falsch hier, dient nur als Test ob Cascade es ausschließt."
+  ]
+}

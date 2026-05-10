@@ -141,7 +141,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 .sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; }
 
 .sturm-sb-item {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: flex-start; gap: 10px;
   padding: 7px 10px; border-radius: var(--radius-md);
   background: transparent; border: 0; cursor: pointer;
   color: var(--color-text-secondary);
@@ -154,10 +154,19 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   background: var(--color-bg-active);
   color: var(--color-text-primary); font-weight: 500;
 }
-.sturm-sb-item svg { width: 15px; height: 15px; stroke-width: 1.5; flex-shrink: 0; }
+.sturm-sb-item svg { width: 15px; height: 15px; stroke-width: 1.5; flex-shrink: 0; margin-top: 2px; }
+.sturm-sb-item-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sturm-sb-item-label {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; line-height: 1.28;
+}
+.sturm-sb-item-sub {
+  font-size: 10.5px; color: var(--color-text-tertiary);
+  font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .sturm-sb-item-meta {
-  margin-left: auto; font-size: 10.5px; color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  margin-left: 8px; font-size: 10.5px; color: var(--color-text-tertiary);
+  font-family: var(--font-mono); flex-shrink: 0; line-height: 1.6;
 }
 
 .sturm-sb-foot {
@@ -185,11 +194,17 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   background: var(--color-bg);
 }
 .sturm-topbar-l, .sturm-topbar-r { display: flex; align-items: center; gap: 4px; }
+.sturm-topbar-l { min-width: 0; flex: 1; }
 .sturm-topbar-title {
   font-size: 13px; color: var(--color-text-secondary); margin-left: 4px;
   display: flex; align-items: center; gap: 6px;
+  min-width: 0; flex: 1;
 }
 .sturm-topbar-title strong { color: var(--color-text-primary); font-weight: 500; }
+.sturm-topbar-workflow {
+  display: inline-block; min-width: 0; max-width: min(54vw, 760px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .sturm-topbar-sep { color: var(--color-text-tertiary); }
 
 .sturm-run-id {
@@ -205,7 +220,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   color: var(--color-text-primary);
   font-size: 12.5px; font-family: var(--font-inter); cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
+  min-width: 0; max-width: 220px;
 }
+.sturm-wf-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sturm-wf-chip:hover { background: var(--color-bg-hover); border-color: var(--color-accent); }
 .sturm-wf-chip svg { width: 12px; height: 12px; stroke-width: 1.5; }
 
@@ -494,6 +511,107 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 
 @keyframes sturm-pulse { 50% { opacity: 0.35; } }
 
+/* ============ Container Node (gitchain catalog/registry artifact) ============
+   Visuell konsistent mit StageNode — gleiche Karte, gleicher Border-Radius.
+   Subtle gold accent + lock-badge oben, kompakte Stats-Zeile unten.
+   ========================================================================= */
+.sturm-container-node {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent-gold, #d4a574);
+  border-radius: var(--radius-xl);
+  padding: 10px 14px;
+  min-width: 220px; max-width: 280px;
+  color: var(--color-text-primary);
+  font-family: var(--font-inter);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-fast) var(--ease-default);
+  cursor: default;
+}
+.sturm-container-node:hover { box-shadow: var(--shadow-md); }
+.sturm-container-node[data-selected="true"] { border-color: var(--color-accent); }
+
+.sturm-container-node[data-lock-state="anchored"] {
+  border-left-color: #5fa572;
+}
+.sturm-container-node[data-lock-state="loading"] {
+  opacity: 0.6;
+  animation: sturm-pulse 1.6s infinite;
+}
+
+.sturm-container-node-inner { /* no extra wrapping styles, just structural */ }
+
+.sturm-container-node-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: var(--radius-full);
+  margin-bottom: 6px;
+  background: rgba(212, 165, 116, 0.15);
+  color: var(--color-accent-gold, #a8855a);
+}
+.sturm-container-node-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 999px;
+  background: currentColor;
+}
+.sturm-container-node[data-lock-state="anchored"] .sturm-container-node-badge {
+  background: rgba(95, 165, 114, 0.15); color: #5fa572;
+}
+
+.sturm-container-node-type {
+  display: none; /* "CATALOG · v5.1" — drop this, redundant with badge */
+}
+.sturm-container-node-title {
+  font-size: 13px; font-weight: 500; margin: 0;
+  line-height: 1.3;
+}
+.sturm-container-node-sub {
+  font-size: 11.5px; color: var(--color-text-tertiary);
+  line-height: 1.35; margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sturm-container-node-stats {
+  display: flex; gap: 14px; margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light, var(--color-border));
+}
+.sturm-container-stat { display: flex; flex-direction: column; align-items: flex-start; }
+.sturm-container-stat-value {
+  font-size: 12px; font-weight: 600; line-height: 1;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.sturm-container-stat-label {
+  font-size: 9px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-top: 3px;
+}
+
+.sturm-container-node-hash {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; line-height: 1.4;
+  margin-top: 6px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+.sturm-container-node-hash-label {
+  font-family: var(--font-inter);
+  font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+}
+
+.sturm-container-node-anchor {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.sturm-container-node-anchor:hover { text-decoration: underline; }
 /* ============ Right drawer (event log / issues) ============ */
 .sturm-drawer {
   width: 360px; flex-shrink: 0;
@@ -501,19 +619,31 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   border-left: 1px solid var(--color-border);
   display: flex; flex-direction: column;
   overflow: hidden;
+  transition: width var(--duration-fast) var(--ease-default);
 }
+.sturm-drawer.is-collapsed { width: 72px; }
 .sturm-drawer-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px; border-bottom: 1px solid var(--color-border-light);
+  gap: 8px;
 }
-.sturm-drawer-tabs { display: flex; gap: 2px; }
+.sturm-drawer.is-collapsed .sturm-drawer-head {
+  padding: 10px 8px;
+  flex-direction: column;
+  align-items: stretch;
+}
+.sturm-drawer-tabs { display: flex; gap: 2px; min-width: 0; }
+.sturm-drawer.is-collapsed .sturm-drawer-tabs { flex-direction: column; }
 .sturm-drawer-tab {
   padding: 5px 10px; border: 0; background: transparent;
   color: var(--color-text-secondary); font-size: 12.5px; font-weight: 500;
   cursor: pointer; border-radius: var(--radius-sm);
   transition: all var(--duration-fast) var(--ease-default);
   font-family: var(--font-inter);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
+.sturm-drawer.is-collapsed .sturm-drawer-tab { padding: 8px 6px; }
+.sturm-drawer-tab svg { width: 14px; height: 14px; stroke-width: 1.6; }
 .sturm-drawer-tab:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .sturm-drawer-tab.is-active { color: var(--color-text-primary); background: var(--color-bg-active); }
 

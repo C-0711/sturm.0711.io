@@ -1,0 +1,36 @@
+{
+  "id": "0711:elster:bmf:jahresdok-2024:v1",
+  "schema_version": 5,
+  "version": "v5.1",
+  "type": "catalog",
+  "namespace": "elster",
+  "identifier": "jahresdok-2024",
+  "display_name": "ELSTER Jahresdokumentation 2024 (10/2024)",
+  "description": "2287 eCodes across 35 Anlagen, sourced from official BMF Jahresdokumentation_10_2024.xml.",
+  "catalog_version": "Jahresdokumentation_10_2024 1.xml",
+  "created_at": "2026-05-06T08:00:36.938Z",
+  "updated_at": "2026-05-06T08:00:36.938Z",
+  "stats": {
+    "atoms_total": 2287,
+    "anlagen_count": 35,
+    "pflicht_codes": 19,
+    "datentyp_distribution": {
+      "string": 744,
+      "date": 168,
+      "currency": 1375
+    }
+  },
+  "merkle_root": "66e8ddf58ea9861de6bd8cb9051e32ec3c44d0a07be9c013296a3bc1b76157bd",
+  "container_sha256": "de938e468a7d85488906bf88af067160edeb08dc52d4399e2416df6760652bcc",
+  "embeddings": {
+    "model": "bge-m3",
+    "provider": "ollama",
+    "dim": 1024,
+    "count": 2287
+  },
+  "signature": null,
+  "anchor_block_number": null,
+  "anchor_tx_hash": null,
+  "anchor_chain": null,
+  "issuer_fingerprint": null
+}

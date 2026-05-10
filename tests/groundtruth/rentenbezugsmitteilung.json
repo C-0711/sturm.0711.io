@@ -1,0 +1,16 @@
+{
+  "docClass": "rentenbezugsmitteilung",
+  "anlage": "R",
+  "anchor": "Hildburg DRV Bund 2024",
+  "anchors": ["Deutsche Rentenversicherung", "Rentenbetrag", "Rentenanpassungsbetrag"],
+  "expected": {
+    "E1800301": { "value": 24807.78, "required": true,  "label": "Rentenbetrag (einschließlich Einmalzahlung und Leistungen)" },
+    "E1800606": { "value":  7953.18, "required": true,  "label": "Rentenanpassungsbetrag (in Zeile 4 enthalten)" },
+    "E1800501": { "value": "1995-12-01", "required": true, "label": "Beginn der Rente" }
+  },
+  "notes": [
+    "Gesetzliche Rente, Rentenbeginn 12/1995 → Besteuerungsanteil 50% nach § 22 Nr. 1 EStG.",
+    "Anpassungsbetrag wird steuerfrei berücksichtigt; Restbetrag voll steuerpflichtig nach Abzug Freibetrag.",
+    "Hildburg bezieht zusätzlich eine BETRIEBLICHE Rente von Philips Pensionskasse (~704€) — anderes ELSTER-Format (nicht Anlage R sondern N als Versorgungsbezug)."
+  ]
+}

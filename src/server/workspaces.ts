@@ -38,6 +38,7 @@ import {
   type JsonSchema,
 } from '../lib/mistral-ocr/index.ts';
 import { classifyDocument, type ClassificationResult } from '../lib/classify.ts';
+import { ocrDocumentFromFile } from '../lib/ocr.ts';
 import { extractElsterValues } from '../lib/elster-extract.ts';
 import {
   loadPipelines,
@@ -810,14 +811,36 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
         return;
       }
 
+      // Step 2a: PRE-OCR via /v1/ocr (mistral-ocr-latest) — pure markdown.
+      // Spart Files-API-Upload + Signed-URL und beschleunigt anschliessende
+      // Mistral-Small-Calls drastisch (kein interner OCR pro Anlage mehr).
+      send('ocr_started', { uuid });
+      const ocrResult = await ocrDocumentFromFile({
+        filePath: inboxAbs,
+        apiKey,
+        signal: ac.signal,
+        tableFormat: 'markdown',
+      });
+      send('ocr_done', {
+        uuid,
+        pages: ocrResult.pages.length,
+        chars: ocrResult.charCount,
+        ms: ocrResult.ms,
+      });
+
+      // Step 2b: Klassifikation gegen das OCR-Markdown — mistral-small-latest
+      // ohne document_url, daher kein interner OCR-Pass mehr.
       send('classify_started', { uuid });
-      const { file_id } = await uploadFile(inboxAbs, meta.originalFilename, { apiKey, signal: ac.signal });
-      const { url: signedUrl } = await getFileSignedUrl(file_id, { apiKey, signal: ac.signal });
       const classification: ClassificationResult = await classifyDocument({
-        documentUrl: signedUrl,
+        markdown: ocrResult.markdown,
         apiKey,
         signal: ac.signal,
       });
+      // Legacy-Variablen damit nachfolgender Code (file_id, signedUrl) weiter
+      // kompiliert. Beide werden jetzt nicht mehr verwendet — Pass-2 nutzt
+      // markdown statt signedUrl.
+      const file_id = '';
+      const signedUrl = '';
 
       // Resolve the workspace's pipeline binding to the controlled-vocabulary
       // {templateId, folderSlug, displayName} triple. If the bound pipeline
@@ -832,6 +855,13 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
       meta = {
         ...meta,
         fileId: file_id,
+        ocr: {
+          markdown: ocrResult.markdown,
+          pages: ocrResult.pages.map((p) => ({ index: p.index, chars: p.markdown.length })),
+          charCount: ocrResult.charCount,
+          ms: ocrResult.ms,
+          pagesProcessed: ocrResult.pagesProcessed,
+        },
         classification: {
           label: classification.label,
           confidence: classification.confidence,
@@ -860,6 +890,8 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
         recommendedAnlagen: classification.recommendedAnlagen,
         valueCount: classification.valueCount,
         ms: classification.ms,
+        ocr_ms: ocrResult.ms,
+        ocr_chars: ocrResult.charCount,
         tokens: classification.mistralUsage.total_tokens,
         templateId: matchedClassif?.templateId,
         folderSlug: matchedClassif?.folderSlug,
@@ -892,7 +924,7 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
           const extract = await extractElsterValues({
             vz,
             anlagen: classification.recommendedAnlagen,
-            documentUrl: signedUrl,
+            markdown: ocrResult.markdown,
             apiKey,
             signal: ac.signal,
             onAnlageDone: (info) => {

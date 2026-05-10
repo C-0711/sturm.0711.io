@@ -1,0 +1,20 @@
+{
+  "docClass": "lohnsteuerbescheinigung",
+  "anlage": "N",
+  "anchor": "Hildburg LBV NRW Versorgungsbezug 2024",
+  "anchors": ["LBV NRW", "Bruttoarbeitslohn", "Versorgungsbezug"],
+  "expected": {
+    "E0200201": { "value": 30707.00, "required": true,  "label": "Bruttoarbeitslohn" },
+    "E0200301": { "value":  2960.00, "required": true,  "label": "einbehaltene Lohnsteuer" },
+    "E0200401": { "value":     0.00, "required": false, "label": "einbehaltener Solidaritätszuschlag" },
+    "E0200501": { "value":   266.35, "required": true,  "label": "Kirchensteuer des Arbeitnehmers" },
+    "E0200801": { "value": 30707.00, "required": true,  "label": "steuerbegünstigte Versorgungsbezüge" },
+    "E0200902": { "value": 24316.94, "required": true,  "label": "Bemessungsgrundlage Versorgungsfreibetrag" }
+  },
+  "notes": [
+    "LBV NRW = Landesamt für Besoldung und Versorgung NRW. Hildburg bezieht eine Witwen-Beamtenpension.",
+    "Versorgungsbeginn 1991 — relevant für Versorgungsfreibetrag-Berechnung (40% max 3.000€, Zuschlag 900€).",
+    "Konfession ev (Evangelisch); KiSt-Satz RLP 9% (Wohnsitz Bad Neuenahr-Ahrweiler).",
+    "Es gibt einen ZWEITEN Versorgungsbezug (Philips GmbH, ~4.019€); separate Bemessungsgrundlage."
+  ]
+}

@@ -68,7 +68,7 @@ app.use(helmet({
       // Tesseract.js needs script + worker + WASM from unpkg/jsdelivr CDN
       'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
       'worker-src': ["'self'", 'blob:', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
-      'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
       'img-src': ["'self'", 'data:', 'blob:'],
       'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
       // Tesseract fetches traineddata + wasm via XHR/fetch
@@ -135,6 +135,7 @@ function summarizeWorkflow(def: WorkflowDef) {
       id, uses: s.uses, name: s.name ?? id, description: s.description ?? null,
     })),
     edges: def.edges,
+    containers: def.containers ?? [],
   };
 }
 

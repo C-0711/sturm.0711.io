@@ -1,0 +1,86 @@
+{
+  "name": "religionszugehoerigkeit_extraction",
+  "doc_class": "religionszugehoerigkeit",
+  "description": "Layer-1 strict JSON-Schema für VaSt-Auszug 'Religionszugehörigkeit' (vorausgefüllte Steuererklärung). Erzeugt eine person[]-Liste, weil ein VaSt-Bundle mehrere Religionszugehörigkeit-Bescheinigungen enthalten kann (Hauptperson + Ehegatte). Die nachgelagerten Rules ordnen Konfession und ggf. Monatszugehörigkeit den ESt1A-eCodes E0100402 / E0100410..E0100421 zu.",
+  "anlage": "ESt1A",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "personen": {
+        "type": "array",
+        "description": "Eine Person pro 'Religionszugehörigkeit'-Block. Übermittelt vom VaSt-Service der Finanzverwaltung; daher pro Person eine separate Karte.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rolle": {
+              "type": "string",
+              "enum": ["hauptperson", "ehegatte_lebenspartner", "unbekannt"],
+              "description": "Hauptperson = Steuerpflichtiger (ESt1A E0100081, E0100402). Ehegatte / Lebenspartner = mitveranlagter Partner (ESt1A E0100082, E0100502). 'unbekannt' wenn aus dem OCR nicht eindeutig zuordenbar; die Rules-Engine löst dann via Steuer-ID-Match auf."
+            },
+            "steuer_id": {
+              "type": "string",
+              "description": "11-stellige Steuer-Identifikationsnummer (Identifikationsnummer im VaSt-Auszug). Hauptperson → ESt1A E0100081, Ehegatte → E0100082."
+            },
+            "konfession": {
+              "type": "string",
+              "enum": [
+                "ev", "rk", "ak", "is", "fr", "fb", "lt", "rf", "vd", "fa", "jh", "ib", "rk_neu",
+                "evangelisch", "roemisch_katholisch", "altkatholisch", "israelitisch",
+                "freireligioes", "freie_religionsgemeinschaft", "andere", "vd_keine"
+              ],
+              "description": "Kanonisierte Konfession. OCR-Werte → enum-Mapping: 'Evangelisch'/'evang.' → 'ev', 'Römisch-Katholisch'/'Römisch-katholisch'/'r.-k.' → 'rk', 'Altkatholisch' → 'ak', 'Israelitisch'/'jüdisch' → 'is', 'freireligiös' → 'fr', 'keine'/'ohne'/'-' → 'vd_keine'. Output landet in ESt1A E0100402 (Hauptperson) bzw. E0100502 (Ehegatte)."
+            },
+            "konfession_raw": {
+              "type": "string",
+              "description": "Original-OCR-Text der Konfession, bevor das Mapping greift (z.B. 'Römisch-Katholisch'). Audit-Spur für die Rules-Engine."
+            },
+            "monatswechsel": {
+              "type": "array",
+              "description": "Optional: Konfessionswechsel innerhalb des Veranlagungszeitraums. Pro Monat eine Zelle, die in E0100410 (Januar) bis E0100421 (Dezember) gemappt wird. Bleibt leer, wenn die Konfession ganzjährig konstant ist.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "monat": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 12,
+                    "description": "Monat 1=Januar … 12=Dezember."
+                  },
+                  "konfession": {
+                    "type": "string",
+                    "description": "Konfession in diesem Monat (gleiches Mapping wie 'konfession')."
+                  }
+                },
+                "required": ["monat", "konfession"]
+              }
+            }
+          },
+          "required": ["rolle", "konfession"]
+        }
+      },
+      "abruf_metadaten": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Wann hat die Finanzverwaltung diese Daten abgerufen / übermittelt? Audit-Information; landet nicht direkt in einem eCode, aber wichtig für die Provenienz im Container.",
+        "properties": {
+          "abrufzeitpunkt": {
+            "type": "string",
+            "description": "ISO-8601-Zeitstempel YYYY-MM-DDTHH:MM, vom 'Zuletzt abgerufen am'-Header. Original-Format im OCR ist DD.MM.YYYY HH:MM."
+          },
+          "uebernommen": {
+            "type": "boolean",
+            "description": "true wenn 'Diese Bescheinigung wurde übernommen', false wenn 'Diese Bescheinigung wurde nicht übernommen'."
+          },
+          "transferticket": {
+            "type": "string",
+            "description": "Ticket-ID falls im OCR vorhanden ('Transferticket: Steuer-Abruf')."
+          }
+        }
+      }
+    },
+    "required": ["personen"]
+  }
+}

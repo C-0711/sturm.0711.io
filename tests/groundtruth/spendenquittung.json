@@ -1,0 +1,14 @@
+{
+  "docClass": "spendenquittung",
+  "anlage": "SA",
+  "anchor": "Hildburg Spenden 2024 (Hospizstiftung + BUND)",
+  "anchors": ["Spende", "Zuwendung", "gemeinnützig"],
+  "expected": {
+    "E0108405": { "value": 40.00, "required": true, "label": "geleistete Spenden an Empfänger im Inland (gemeinnützige Zwecke)" }
+  },
+  "notes": [
+    "Hildburg-Spenden 2024: 20€ Hospizstiftung Balthasar + 20€ BUND e.V. = 40€ Inland-gemeinnützig.",
+    "Sturm extrahierte 47 KPIs aus diesem PDF, viele davon Adressen, IBANs, Datum etc. — nur die Beträge sind ELSTER-relevant.",
+    "Bei kleinen Beträgen (≤300€) reicht Kontoauszug, ab 300€ Zuwendungsbestätigung."
+  ]
+}

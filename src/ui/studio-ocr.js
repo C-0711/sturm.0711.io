@@ -1240,22 +1240,137 @@ function formatValue(v) {
 
 // ============ Templates dropdown ============================================
 let _templates = [];
+
+// Map template-id-prefix to thumbnail-class + tiny SVG-ish skeleton.
+function _thumbForTemplate(t) {
+  const id = t.id || '';
+  if (id.startsWith('belege/rechnung')) {
+    return `<div class="empty-thumb empty-thumb-invoice" aria-hidden="true">
+      <span class="t-block t-head"></span>
+      <span class="t-line t-w60"></span>
+      <span class="t-line t-w40"></span>
+      <span class="t-table"><span></span><span></span><span></span><span></span><span></span><span></span></span>
+      <span class="t-line t-w30 t-right"></span>
+    </div>`;
+  }
+  if (id.startsWith('belege/spende') || id.includes('spende')) {
+    return `<div class="empty-thumb empty-thumb-receipt" aria-hidden="true">
+      <span class="t-stamp"></span>
+      <span class="t-line t-w80"></span>
+      <span class="t-line t-w60"></span>
+      <span class="t-amount"></span>
+      <span class="t-line t-w50"></span>
+    </div>`;
+  }
+  // Default: ELSTER-style "form" skeleton.
+  return `<div class="empty-thumb empty-thumb-form" aria-hidden="true">
+    <span class="t-line t-w70"></span>
+    <span class="t-line t-w90"></span>
+    <span class="t-line t-w50"></span>
+    <span class="t-line t-w80"></span>
+    <span class="t-line t-w40"></span>
+  </div>`;
+}
+
+function _renderEmptyCards() {
+  const grid = document.getElementById('empty-cards');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (!_templates.length) {
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--color-text-tertiary); padding: 24px;">Keine Vorlagen verfügbar.</div>';
+    return;
+  }
+  for (const t of _templates) {
+    const btn = document.createElement('button');
+    btn.className = 'empty-card';
+    btn.type = 'button';
+    btn.dataset.templateId = t.id;
+    if (t.description) btn.title = t.description;
+    const subParts = [];
+    // Try to derive a short "sub" line from the schema's top-level properties.
+    try {
+      const props = t?.schema?.properties || {};
+      const keys = Object.keys(props).slice(0, 3);
+      if (keys.length) subParts.push(keys.join(', '));
+    } catch { /* ignore */ }
+    const sub = subParts.join(' · ') || (t.description || '').slice(0, 50);
+    btn.innerHTML = `
+      ${_thumbForTemplate(t)}
+      <div class="empty-card-title">${escapeHtml(t.name || t.id)}</div>
+      <div class="empty-card-sub">${escapeHtml(sub)}</div>
+      <span class="empty-card-cta">Schema laden →</span>
+    `;
+    btn.addEventListener('click', () => _onCardClick(t.id));
+    grid.appendChild(btn);
+  }
+}
+
+async function _onCardClick(id) {
+  if (!id) return;
+  const ok = applyTemplateById(id);
+  if (!ok) { toast(`Vorlage nicht verfügbar: ${escapeHtml(id)} — lege manuell ein Schema an.`, 'warn'); return; }
+  const sel = $('cfg-template');
+  if (sel) sel.value = id;
+  // S2 fix: in empty-stage the schema-pane is display:none via stages.css.
+  // Replace the card grid with a prominent confirmation + file-CTA.
+  const t = _templates.find((x) => x.id === id);
+  const grid = document.getElementById('empty-cards');
+  if (grid && t) {
+    const props = t?.schema?.properties ? Object.keys(t.schema.properties) : [];
+    const fieldList = props.length
+      ? `<div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 8px;">${props.length} Felder: <code style="font-family: var(--font-mono); font-size: 11.5px;">${props.slice(0, 8).map(escapeHtml).join(', ')}${props.length > 8 ? `, … +${props.length - 8}` : ''}</code></div>`
+      : '';
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 24px; border: 1px solid var(--border, #21262d); border-radius: 8px; background: var(--surface-2, rgba(88, 166, 255, 0.04));">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(46, 160, 67, 0.18); color: var(--color-success, #2ea043); flex-shrink: 0; font-size: 16px;">✓</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 14px; color: var(--color-text-primary);">Vorlage geladen: ${escapeHtml(t.name || t.id)}</div>
+            <div style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px;">${escapeHtml(t.description || '')}</div>
+            ${fieldList}
+            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+              <button type="button" class="btn-primary" id="empty-confirm-pickfile">Datei wählen …</button>
+              <button type="button" class="btn-secondary" id="empty-confirm-back">Andere Vorlage</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('empty-confirm-pickfile')?.addEventListener('click', () => {
+      const fi = document.getElementById('file-input') || document.querySelector('input[type="file"]');
+      if (fi) fi.click();
+    });
+    document.getElementById('empty-confirm-back')?.addEventListener('click', () => {
+      _renderEmptyCards();
+    });
+  }
+  toast(`Vorlage geladen: ${escapeHtml(t?.name || id)}. Jetzt Datei wählen.`, 'success', 4000);
+}
+
 async function loadTemplates() {
   const sel = $('cfg-template');
-  if (!sel) return;
   try {
     const resp = await fetch('/api/studio/templates');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     _templates = data.templates || [];
-    for (const t of _templates) {
-      const opt = document.createElement('option');
-      opt.value = t.id; opt.textContent = t.name; opt.title = t.description || '';
-      sel.appendChild(opt);
+    if (sel) {
+      for (const t of _templates) {
+        const opt = document.createElement('option');
+        opt.value = t.id; opt.textContent = t.name; opt.title = t.description || '';
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('change', () => applyTemplateById(sel.value));
     }
-  } catch (e) { console.warn('[studio] failed to load templates:', e); }
-  sel.addEventListener('change', () => applyTemplateById(sel.value));
+  } catch (e) {
+    console.warn('[studio] failed to load templates:', e);
+    const grid = document.getElementById('empty-cards');
+    if (grid) grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--color-text-tertiary); padding: 24px;">Konnte Vorlagen nicht laden: ${escapeHtml(String(e.message || e))}</div>`;
+    return;
+  }
+  _renderEmptyCards();
 }
+
 function applyTemplateById(id) {
   const t = _templates.find((x) => x.id === id);
   if (!t) return false;
@@ -1266,23 +1381,6 @@ function applyTemplateById(id) {
   toast(`Vorlage geladen: <strong>${escapeHtml(t.name)}</strong>`, 'success', 3000);
   return true;
 }
-
-// ============ Empty-state cards (1.3) =======================================
-document.querySelectorAll('.empty-card').forEach((card) => {
-  card.addEventListener('click', async () => {
-    const id = card.dataset.templateId;
-    if (!id) return;
-    // Templates may load async; poll briefly.
-    let attempts = 0;
-    while (_templates.length === 0 && attempts < 30) { await new Promise((r) => setTimeout(r, 50)); attempts++; }
-    const ok = applyTemplateById(id);
-    if (!ok) { toast(`Vorlage nicht verfügbar: ${escapeHtml(id)} — lege manuell ein Schema an.`, 'warn'); return; }
-    // Also pre-select in the dropdown for clarity
-    const sel = $('cfg-template');
-    if (sel) sel.value = id;
-    toast('Lade jetzt ein passendes Dokument.', 'success', 4000);
-  });
-});
 
 // ============ Save schema ===================================================
 const saveSchemaBtn = $('save-schema-btn');

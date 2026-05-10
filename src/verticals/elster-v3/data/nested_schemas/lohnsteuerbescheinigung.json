@@ -1,0 +1,104 @@
+{
+  "name": "lohnsteuerbescheinigung_extraction",
+  "doc_class": "lohnsteuerbescheinigung",
+  "description": "Layer-1 strict json_schema für deutsche Lohnsteuerbescheinigung — deckt aktive Beschäftigung UND Versorgungsbezug (Pension/Beamtenversorgung) ab. Versorgungsbezug-spezifische Felder (Bemessungsgrundlage, Versorgungsbeginn, einmalige Zahlungen) sind first-class, damit die Rules-Engine in die korrekten eCodes routen kann.",
+  "anlage": "N",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "arbeitnehmer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Voller Name (Vorname + Nachname zusammen)." },
+          "vorname": { "type": "string", "description": "Vorname allein — geht in ESt1A E0100301." },
+          "familienname": { "type": "string", "description": "Familienname/Nachname allein — geht in ESt1A E0100201." },
+          "steuer_id": { "type": "string", "description": "Steuer-Identifikationsnummer (11-stellig); ESt1A E0100081." },
+          "konfession": {
+            "type": "string",
+            "enum": ["ev", "rk", "ak", "is", "fr", "fb", "lt", "rf", "vd", "--", ""],
+            "description": "Konfession-Schlüssel: ev=Evangelisch, rk=römisch-katholisch, ak=altkatholisch, is=israelitisch, fr=Freireligiös, fb=Freie Religionsgemeinschaft, lt=lutherisch, rf=reformiert, vd=verschiedene, '--'=keine."
+          },
+          "steuerklasse": { "type": "string", "enum": ["1","2","3","4","5","6"] }
+        },
+        "required": ["name"]
+      },
+      "arbeitgeber": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "art": {
+            "type": "string",
+            "enum": ["arbeitgeber", "versorgungstraeger", "rentenversicherer", "unbekannt"],
+            "description": "arbeitgeber = aktive Beschäftigung; versorgungstraeger = Beamtenversorgung/Witwenpension/Betriebsrente (LBV, Pensionskasse usw.); rentenversicherer = gesetzliche/private Rentenkasse"
+          }
+        },
+        "required": ["name", "art"]
+      },
+      "zeitraum": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "jahr": { "type": "integer" },
+          "von_monat": { "type": "integer" },
+          "bis_monat": { "type": "integer" }
+        }
+      },
+      "lohn": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bruttoarbeitslohn": {
+            "type": "number",
+            "description": "Bruttoarbeitslohn (Lohnsteuerbescheinigung Nr. 3); inkl. Versorgungsbezüge falls anwendbar."
+          },
+          "lohnsteuer_einbehalten": { "type": "number", "description": "Einbehaltene Lohnsteuer (Nr. 4)." },
+          "solidaritaetszuschlag_einbehalten": { "type": "number" },
+          "kirchensteuer_arbeitnehmer_einbehalten": { "type": "number" },
+          "kirchensteuer_ehegatte_einbehalten": { "type": "number" }
+        }
+      },
+      "versorgungsbezug": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Versorgungsbezug-Block. Wenn der Beleg Versorgungsbezüge (Beamtenversorgung, Witwenpension, Pensionskasse) erwähnt, MÜSSEN alle drei Hauptfelder (versorgungsbezug_brutto, bemessungsgrundlage_freibetrag, versorgungsbeginn_jahr) befüllt werden. Sonst Block ganz weglassen.",
+        "properties": {
+          "versorgungsbezug_brutto": {
+            "type": "number",
+            "description": "Steuerbegünstigte Versorgungsbezüge (im Bruttoarbeitslohn enthalten); LStB Nr. 8 / Anlage N E0200801."
+          },
+          "bemessungsgrundlage_freibetrag": {
+            "type": "number",
+            "description": "Bemessungsgrundlage für den Versorgungsfreibetrag (LStB Nr. 29); Anlage N E0200902. PFLICHT bei Versorgungsbezug — bestimmt zusammen mit Versorgungsbeginn die Höhe des Freibetrags."
+          },
+          "versorgungsbeginn_jahr": {
+            "type": "integer",
+            "description": "Maßgebendes Kalenderjahr des Versorgungsbeginns (LStB Nr. 30); Anlage N E0201307."
+          },
+          "einmalige_versorgungsbezuege": {
+            "type": "number",
+            "description": "Sterbegeld / Kapitalauszahlung / Abfindung — getrennt ausgewiesen, oft 0."
+          }
+        },
+        "required": ["versorgungsbezug_brutto", "bemessungsgrundlage_freibetrag", "versorgungsbeginn_jahr"]
+      },
+      "sozialversicherung": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kv_arbeitnehmer": { "type": "number" },
+          "pv_arbeitnehmer": { "type": "number" },
+          "rv_arbeitnehmer": { "type": "number" },
+          "av_arbeitnehmer": { "type": "number" },
+          "private_kv_pv_nachgewiesen": {
+            "type": "number",
+            "description": "Bei Versorgungsempfängern oft als 'nachgewiesene Beiträge zur privaten KV/PV' ausgewiesen."
+          }
+        }
+      }
+    },
+    "required": ["arbeitnehmer", "arbeitgeber", "lohn"]
+  }
+}

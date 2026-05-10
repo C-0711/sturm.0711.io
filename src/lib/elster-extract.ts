@@ -95,9 +95,25 @@ function dekodiereHtmlEntities(s: string | null | undefined): string {
  * Lädt die Feldliste einer Anlage und filtert irrelevante Felder weg
  * (Indexfelder, interne ERiC-Felder, Felder ohne ELSTER-Code).
  */
+// VZ_2023_FALLBACK — fuer 2023 fehlen die ELSTER-Kataloge auf der Disk.
+// Wir nutzen den 2024-Katalog als Naeherung (BMF-Felder aendern sich Jahr
+// fuer Jahr nur marginal). Fuer andere Jahre keine Fallback-Logik.
+const VZ_2023_FALLBACK = 2024;
+
 async function ladeFelder(vz: number, anlage: string): Promise<FelderJson['felder']> {
-  const filename = path.join(FELDER_ROOT, String(vz), 'felder', `${anlage}.json`);
-  const raw = await fs.readFile(filename, 'utf-8');
+  const primaryFile = path.join(FELDER_ROOT, String(vz), 'felder', `${anlage}.json`);
+  let raw: string;
+  try {
+    raw = await fs.readFile(primaryFile, 'utf-8');
+  } catch (e: any) {
+    if (e?.code === 'ENOENT' && vz === 2023) {
+      const fallbackFile = path.join(FELDER_ROOT, String(VZ_2023_FALLBACK), 'felder', `${anlage}.json`);
+      raw = await fs.readFile(fallbackFile, 'utf-8');
+      console.log(`[elster-extract] VZ-2023-Fallback fuer ${anlage}: nutze 2024-Schema`);
+    } else {
+      throw e;
+    }
+  }
   const data = JSON.parse(raw) as FelderJson;
   const basis = data.felder.filter((f) => {
     if (!f.Name || !/^E\d{6,7}$/.test(f.Name)) return false;
@@ -240,7 +256,8 @@ const PROMPT_TEMPLATE = (anlage: string, fieldCount: number) => {
 async function extrahiereEineAnlage(opts: {
   vz: number;
   anlage: string;
-  documentUrl: string;
+  documentUrl?: string;
+  markdown?: string;
   apiKey: string;
   signal?: AbortSignal;
   baseUrl?: string;
@@ -276,17 +293,27 @@ async function extrahiereEineAnlage(opts: {
     });
   }
 
+  let userContent: any[];
+  if (opts.markdown !== undefined) {
+    userContent = [
+      { type: 'text', text: prompt },
+      { type: 'text', text: '\n\n--- Document Markdown (Mistral OCR pre-extract) ---\n' + opts.markdown },
+    ];
+  } else if (opts.documentUrl) {
+    userContent = [
+      { type: 'text', text: prompt },
+      { type: 'document_url', document_url: opts.documentUrl },
+    ];
+  } else {
+    throw new Error('extrahiereEineAnlage: either markdown or documentUrl required');
+  }
+
   const body = {
     model: MODEL,
     stream: false,
+    temperature: 0,
     messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'document_url', document_url: opts.documentUrl },
-        ],
-      },
+      { role: 'user', content: userContent },
     ],
     response_format: {
       type: 'json_schema',
@@ -341,7 +368,7 @@ async function extrahiereEineAnlage(opts: {
     fieldsInSchema: fieldCount,
     ms: Date.now() - t0,
     tokens: json.usage?.total_tokens,
-    raw: { request: { model: MODEL, prompt, documentUrl: opts.documentUrl, schemaFieldCount: fieldCount }, response: json },
+    raw: { request: { model: MODEL, prompt, documentUrl: opts.documentUrl, markdownLen: opts.markdown ? opts.markdown.length : 0, schemaFieldCount: fieldCount }, response: json },
   };
 }
 
@@ -352,7 +379,8 @@ async function extrahiereEineAnlage(opts: {
 export async function extractElsterValues(opts: {
   vz: number;
   anlagen: string[];
-  documentUrl: string;
+  documentUrl?: string;
+  markdown?: string;
   apiKey: string;
   signal?: AbortSignal;
   baseUrl?: string;
@@ -377,6 +405,7 @@ export async function extractElsterValues(opts: {
           vz: opts.vz,
           anlage,
           documentUrl: opts.documentUrl,
+          markdown: opts.markdown,
           apiKey: opts.apiKey,
           signal: opts.signal,
           baseUrl: opts.baseUrl,

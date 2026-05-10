@@ -1,0 +1,93 @@
+{
+  "name": "mitteilung_kapitalertraege_extraction",
+  "doc_class": "mitteilung_kapitalertraege",
+  "description": "Layer-1 strict JSON-Schema für VaSt-Auszug 'Mitteilung über freigestellte Kapitalerträge' (z.B. Sparkasse, Volksbank). Diese Bescheinigung dokumentiert NUR den Betrag, der via Freistellungsauftrag freigestellt wurde — sie ist KEIN Steuerbescheinigung-Kapitalerträge. Der freigestellte Betrag verbraucht Sparer-Pauschbetrag (KAP E1901401) und ist relevant für die KAP-Anlage Position 'Inländische Kapitalerträge' (E1901501) bzw. die kirchensteuerpflichtige Information (E1900601).",
+  "anlage": "KAP",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "person": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rolle": {
+            "type": "string",
+            "enum": ["hauptperson", "ehegatte_lebenspartner", "unbekannt"]
+          },
+          "steuer_id": { "type": "string", "description": "11-stellig, Hauptperson → ESt1A E0100081, Ehegatte → E0100082." },
+          "vorname": { "type": "string" },
+          "nachname": { "type": "string" }
+        },
+        "required": ["steuer_id"]
+      },
+      "ehepartner": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Falls die Bescheinigung den Ehepartner mit aufführt (z.B. Gemeinschaftskonto). Optional.",
+        "properties": {
+          "steuer_id": { "type": "string" },
+          "vorname": { "type": "string" },
+          "nachname": { "type": "string" }
+        }
+      },
+      "freigestellte_kapitalertraege": {
+        "type": "array",
+        "description": "Pro Geldinstitut eine Zeile. Ein VaSt-Bundle kann mehrere Mitteilungen enthalten (eine pro Bank), die hier zu einem Array zusammengefasst werden.",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "geldinstitut": {
+              "type": "string",
+              "description": "Originalname der Bank wie aufgedruckt, z.B. 'Sparkasse Westerwald-Sieg' oder 'Volksbank Gebhardshain eG'. OCR-Werte hier bewahren; Entity-Resolution-Layer kanonisiert sie ggf."
+            },
+            "betrag_eur": {
+              "type": "number",
+              "description": "Freigestellter Betrag in EUR (Dezimal mit Punkt, deutsches Komma im OCR ⇒ Punkt im JSON)."
+            },
+            "meldejahr": {
+              "type": "integer",
+              "description": "Veranlagungsjahr, z.B. 2024."
+            },
+            "uebermittlung_an_finanzverwaltung": {
+              "type": "string",
+              "description": "ISO-8601-Datum YYYY-MM-DD oder YYYY-MM-DDTHH:MM, vom 'Übermittlung der Bescheinigung an die Finanzverwaltung'-Eintrag."
+            },
+            "konto_inhaber": {
+              "type": "string",
+              "enum": ["einzelkonto_hauptperson", "einzelkonto_partner", "gemeinschaftskonto", "unbekannt"],
+              "description": "Aus der Beleg-Struktur abgeleitet: wenn nur Hauptperson genannt → einzelkonto_hauptperson, wenn beide → gemeinschaftskonto."
+            }
+          },
+          "required": ["geldinstitut", "betrag_eur", "meldejahr"]
+        }
+      },
+      "summen": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Vorberechnete Aggregate, die die deterministic-rules direkt in eCodes routen kann.",
+        "properties": {
+          "summe_freigestellt_eur": {
+            "type": "number",
+            "description": "Summe aller 'freigestellte_kapitalertraege[].betrag_eur'. Geht in den 'In Anspruch genommenen Sparer-Pauschbetrag' (KAP E1901401, ggf. E1901402 für Ehegatte)."
+          },
+          "anzahl_geldinstitute": {
+            "type": "integer",
+            "description": "Anzahl der Banken, die eine Freistellung gemeldet haben."
+          }
+        }
+      },
+      "abruf_metadaten": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "abrufzeitpunkt": { "type": "string" },
+          "uebernommen": { "type": "boolean" },
+          "transferticket": { "type": "string" }
+        }
+      }
+    },
+    "required": ["person", "freigestellte_kapitalertraege"]
+  }
+}
