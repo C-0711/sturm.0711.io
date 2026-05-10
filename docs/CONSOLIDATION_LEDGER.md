@@ -96,20 +96,48 @@ git tag post-consolidation-2026-05-10
 
 ## Post-state checklist
 
-- [x] Mac canonical tagged `pre-consolidation-mac-2026-05-10`
+- [x] Mac canonical tagged `pre-consolidation-mac-2026-05-10` @ `9e47e99`
 - [x] h200v dirty state rescue-committed without secrets
-- [x] h200v tagged `pre-consolidation-h200v-2026-05-10`
+- [x] h200v tagged `pre-consolidation-h200v-2026-05-10` @ `3cdb8bb`
 - [x] Consolidation branch created on Mac
-- [x] Dockerfile + docker-compose.yml + .dockerignore added
+- [x] Dockerfile + docker-compose.yml + .dockerignore added (commit `6b2fdba`)
+- [x] Docker path fix /app/* (commit `eb149cd`)
 - [x] .env.example extended with new variables
 - [x] CONSOLIDATION_LEDGER.md (this file)
-- [ ] h200v rescue branch fetched into Mac canonical as remote
-- [ ] h200v new lib files cherry-picked onto consolidation branch
-- [ ] Docker build succeeds (`docker build -t sturm:0.1.0 .`)
-- [ ] Docker compose up succeeds + healthcheck passes
-- [ ] Pushed to `github.com/C-0711/sturm.0711.io`
-- [ ] Tagged `post-consolidation-2026-05-10`
-- [ ] Master Catalog (Quantum Gateway) shows new state
+- [x] h200v rescue fetched as remote (`h200v/rescue-runtime`)
+- [x] h200v live runtime merged via `-X theirs` (commit `6517762`) — 113 new files + 33 modified resolved to live behavior
+- [x] mistral-ocr/sturm-workflow → `legacy/sturm-cli/`
+- [x] dev-cb-ctax sturm prototypes → `legacy/sturm-prototype-{python,bridge}/`
+- [x] ELSTER 2024 reference schemas → `schemas/elster-2024-reference/`
+- [x] STURM-QUANTUM-LEDGER.md (Bombas) → `docs/STURM-QUANTUM-LEDGER.md`
+- [x] Final absorption commit (`a4bd037`)
+- [x] Docker build succeeds → image `sturm:0.1.0-consolidation-final-2026-05-10`
+- [x] Container healthy + all 7 workflows registered:
+      hello-ocr, elster-v1, steuerbelege-v1, belege-bundle-v1,
+      elster-v2, elster-v3, elster-v3-multi
+- [x] Tagged `post-consolidation-2026-05-10` @ `a4bd037`
+- [ ] Pushed to `github.com/C-0711/sturm.0711.io` — pending `gh auth login`
+- [x] Master Catalog (Quantum Gateway) updated to show consolidation state
+
+## Cumulative diff vs pre-state
+
+```
+255 files changed, 569117 insertions(+), 1405 deletions(-)
+```
+
+Major additions:
+- `src/verticals/elster/` — 35-Anlagen field catalog + postgres dumps + golden mappings
+- `src/verticals/elster-v3/` — gitchain three-lane (Gemma-4 + bge-m3 + container-anchored)
+- `src/verticals/elster-v3/data/` — atoms.json, container.json, merkle.json, embeddings.fp32.bin, nested_schemas/
+- `src/lib/{canonical-layer,cascade-runtime,embedding-runtime,llm-chat,ocr}.ts`
+- `src/ui/pipeline.jsx` (React source for pipeline.bundle.js)
+- `tests/groundtruth/` — 8 ground-truth JSON fixtures (real cases)
+- `scripts/{anchor-elster-v3.sh,phasef-test.ts,run-v2-vs-v3.mjs,run-v3-e2e.mjs}`
+- `legacy/sturm-cli/` — historical CLI shim
+- `legacy/sturm-prototype-python/` — predecessor Python prototypes
+- `legacy/sturm-prototype-bridge/` — CTAX→Sturm bridge code
+- `schemas/elster-2024-reference/` — official XSD + sample XML
+- `docs/STURM-QUANTUM-LEDGER.md` — priority context
 
 ---
 
