@@ -30,14 +30,14 @@ services:
       GITCHAIN_DEFAULT_NAMESPACE: ctax
       GITCHAIN_DEFAULT_TENANT: ctax-0711
     volumes:
-      - sturm_workspaces:/data/workspaces
-      - sturm_runs:/data/runs
-      - sturm_uploads:/data/uploads
-      - sturm_gitchain_repos:/data/gitchain-repos
-      - sturm_canonicals:/data/canonicals
-      - sturm_pipelines:/data/pipelines
-      - sturm_schemas:/data/schemas
-      - sturm_logs:/data/logs
+      - sturm_workspaces:/app/workspaces
+      - sturm_runs:/app/runs
+      - sturm_uploads:/app/uploads
+      - sturm_gitchain_repos:/app/gitchain-repos
+      - sturm_canonicals:/app/canonicals
+      - sturm_pipelines:/app/pipelines
+      - sturm_schemas:/app/schemas
+      - sturm_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy

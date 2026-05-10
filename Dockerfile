@@ -36,17 +36,17 @@ COPY --from=deps --chown=sturm:sturm /app/node_modules ./node_modules
 # Copy source (note: .dockerignore prunes secrets, .git, runs/, workspaces/)
 COPY --chown=sturm:sturm . .
 
-# Runtime data dirs (mounted as volumes in docker-compose)
-RUN mkdir -p /data/workspaces /data/runs /data/uploads /data/canonicals \
-            /data/pipelines /data/schemas /data/gitchain-repos \
-            /data/logs \
- && chown -R sturm:sturm /data
+# Server.ts derives runtime dirs from path.resolve(__dirname, '..') which
+# resolves to /app. We mkdir them and hand /app over to the sturm user so
+# the process can create per-run subdirs.
+RUN mkdir -p /app/workspaces /app/runs /app/uploads /app/schemas \
+             /app/gitchain-repos /app/logs \
+ && chown -R sturm:sturm /app
 
 ENV NODE_ENV=production \
     PORT=7800 \
     STURM_INPUT_RETENTION_DAYS=7 \
-    STURM_DATA_DIR=/data \
-    GITCHAIN_REPO_ROOT=/data/gitchain-repos
+    GITCHAIN_REPO_ROOT=/app/gitchain-repos
 
 USER sturm
 EXPOSE 7800
