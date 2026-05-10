@@ -33,3 +33,7 @@ _staging/
 .wallet-rotation-*.txt
 *.bak.*
 *.bak
+.venv
+venv
+__pycache__
+*.pyc

@@ -1,0 +1,487 @@
+{
+  "generatedAt": "2026-05-06T00:58:04.330Z",
+  "summary": {
+    "workspaceId": "haubrich-koch-hildburg-2024",
+    "filesUploaded": 0,
+    "documentsProcessed": 18,
+    "docClassesWithGroundTruth": [
+      "spendenquittung",
+      "beitragsbescheinigung_kranken_p",
+      "haushaltsnahe_dienstleistungen",
+      "lohnsteuerbescheinigung",
+      "rentenbezugsmitteilung",
+      "steuerkonto_transferticket",
+      "religionszugehoerigkeit",
+      "kapitalertragsbescheinigung"
+    ],
+    "docClassesWithoutGroundTruth": [
+      "steuerbescheid_einkommen",
+      "elster_einkommensteuererkl_2023",
+      "zinsbescheinigung_wohndarlehen",
+      "steuerbescheinigung_kapitalertr",
+      "steuerkontoabfrage"
+    ],
+    "perClass": {
+      "spendenquittung": {
+        "docs": 1,
+        "requiredCoverage": 1,
+        "requiredHit": 1,
+        "requiredTotal": 1,
+        "valueMatches": 0
+      },
+      "beitragsbescheinigung_kranken_p": {
+        "docs": 2,
+        "requiredCoverage": 1,
+        "requiredHit": 4,
+        "requiredTotal": 4,
+        "valueMatches": 0
+      },
+      "haushaltsnahe_dienstleistungen": {
+        "docs": 1,
+        "requiredCoverage": 1,
+        "requiredHit": 1,
+        "requiredTotal": 1,
+        "valueMatches": 1
+      },
+      "lohnsteuerbescheinigung": {
+        "docs": 3,
+        "requiredCoverage": 0.7333333333333333,
+        "requiredHit": 11,
+        "requiredTotal": 15,
+        "valueMatches": 10
+      },
+      "rentenbezugsmitteilung": {
+        "docs": 2,
+        "requiredCoverage": 0.8333333333333334,
+        "requiredHit": 5,
+        "requiredTotal": 6,
+        "valueMatches": 4
+      },
+      "steuerkonto_transferticket": {
+        "docs": 1,
+        "requiredCoverage": 1,
+        "requiredHit": 7,
+        "requiredTotal": 7,
+        "valueMatches": 6
+      },
+      "religionszugehoerigkeit": {
+        "docs": 1,
+        "requiredCoverage": 1,
+        "requiredHit": 1,
+        "requiredTotal": 1,
+        "valueMatches": 1
+      },
+      "kapitalertragsbescheinigung": {
+        "docs": 2,
+        "requiredCoverage": 1,
+        "requiredHit": 2,
+        "requiredTotal": 2,
+        "valueMatches": 1
+      }
+    }
+  },
+  "documents": [
+    {
+      "filename": "Einkommen Steuerbescheid 2023.pdf",
+      "docClass": "steuerbescheid_einkommen",
+      "kpiCount": 106,
+      "extractedCodes": 26,
+      "unmapped": 47,
+      "comparison": null
+    },
+    {
+      "filename": "EinkommensteuererklÃ¤rung 2023 - ELSTER Dokument.pdf",
+      "docClass": "elster_einkommensteuererkl_2023",
+      "kpiCount": 68,
+      "extractedCodes": 41,
+      "unmapped": 11,
+      "comparison": null
+    },
+    {
+      "filename": "Spenden 2024.pdf",
+      "docClass": "spendenquittung",
+      "kpiCount": 47,
+      "extractedCodes": 6,
+      "unmapped": 26,
+      "comparison": {
+        "gtFile": "spendenquittung.json",
+        "required": {
+          "hit": 1,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 0,
+        "valueMismatches": [
+          {
+            "code": "E0108405",
+            "expected": 40,
+            "actual": "20,00 EUR"
+          }
+        ],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Kranken-und-Plegeversicherung 2024.pdf",
+      "docClass": "beitragsbescheinigung_kranken_p",
+      "kpiCount": 40,
+      "extractedCodes": 11,
+      "unmapped": 20,
+      "comparison": {
+        "gtFile": "beitragsbescheinigung_kranken_p.json",
+        "required": {
+          "hit": 2,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 1
+        },
+        "valueMatches": 0,
+        "valueMismatches": [
+          {
+            "code": "E2003104",
+            "expected": 1781.98,
+            "actual": "1.781,98 EUR"
+          },
+          {
+            "code": "E2003202",
+            "expected": 772.68,
+            "actual": "772,68 EUR"
+          }
+        ],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Haushaltnahe Dienstleistungen 2024.pdf",
+      "docClass": "haushaltsnahe_dienstleistungen",
+      "kpiCount": 38,
+      "extractedCodes": 7,
+      "unmapped": 21,
+      "comparison": {
+        "gtFile": "haushaltsnahe_dienstleistungen.json",
+        "required": {
+          "hit": 1,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 1
+        },
+        "valueMatches": 1,
+        "valueMismatches": [],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Witwen Pension 2024.pdf",
+      "docClass": "lohnsteuerbescheinigung",
+      "kpiCount": 62,
+      "extractedCodes": 25,
+      "unmapped": 27,
+      "comparison": {
+        "gtFile": "lohnsteuerbescheinigung.json",
+        "required": {
+          "hit": 3,
+          "miss": 2,
+          "missing": [
+            "E0200501",
+            "E0200801"
+          ]
+        },
+        "optional": {
+          "hit": 1,
+          "miss": 0
+        },
+        "valueMatches": 4,
+        "valueMismatches": [],
+        "requiredCoverage": 0.6
+      }
+    },
+    {
+      "filename": "Zinsen Wohndarlehn 2024.pdf",
+      "docClass": "zinsbescheinigung_wohndarlehen",
+      "kpiCount": 17,
+      "extractedCodes": 3,
+      "unmapped": 11,
+      "comparison": null
+    },
+    {
+      "filename": "Steuerbescheinigung Volksbank 2024.pdf",
+      "docClass": "steuerbescheinigung_kapitalertr",
+      "kpiCount": 24,
+      "extractedCodes": 9,
+      "unmapped": 12,
+      "comparison": null
+    },
+    {
+      "filename": "Rentenbezugsmitteilung_2024_57438590613_Deutsche_Rentenversicherung_Bund.pdf",
+      "docClass": "rentenbezugsmitteilung",
+      "kpiCount": 20,
+      "extractedCodes": 9,
+      "unmapped": 5,
+      "comparison": {
+        "gtFile": "rentenbezugsmitteilung.json",
+        "required": {
+          "hit": 3,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 3,
+        "valueMismatches": [],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Krankenversicherung_2024_57438590613_Debeka_Krankenversicherungsverein_a._G..pdf",
+      "docClass": "beitragsbescheinigung_kranken_p",
+      "kpiCount": 24,
+      "extractedCodes": 10,
+      "unmapped": 6,
+      "comparison": {
+        "gtFile": "beitragsbescheinigung_kranken_p.json",
+        "required": {
+          "hit": 2,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 1
+        },
+        "valueMatches": 0,
+        "valueMismatches": [
+          {
+            "code": "E2003104",
+            "expected": 1781.98,
+            "actual": 12024
+          },
+          {
+            "code": "E2003202",
+            "expected": 772.68,
+            "actual": "772,68 EUR"
+          }
+        ],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Lohnsteuerbescheinigung_2024_57438590613_LBV_NRW.pdf",
+      "docClass": "lohnsteuerbescheinigung",
+      "kpiCount": 27,
+      "extractedCodes": 15,
+      "unmapped": 10,
+      "comparison": {
+        "gtFile": "lohnsteuerbescheinigung.json",
+        "required": {
+          "hit": 4,
+          "miss": 1,
+          "missing": [
+            "E0200501"
+          ]
+        },
+        "optional": {
+          "hit": 1,
+          "miss": 0
+        },
+        "valueMatches": 5,
+        "valueMismatches": [],
+        "requiredCoverage": 0.8
+      }
+    },
+    {
+      "filename": "Stammdaten_2024_57438590613_Finanzverwaltung.pdf",
+      "docClass": "steuerkonto_transferticket",
+      "kpiCount": 17,
+      "extractedCodes": 9,
+      "unmapped": 2,
+      "comparison": {
+        "gtFile": "steuerkonto_transferticket.json",
+        "required": {
+          "hit": 7,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 6,
+        "valueMismatches": [
+          {
+            "code": "E0100602",
+            "expected": "Bad Neuenahr-Ahrweiler",
+            "actual": "Bad Neuenahr-Ahrweil"
+          }
+        ],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Religionszugehoerigkeit_2024_57438590613_Finanzverwaltung.pdf",
+      "docClass": "religionszugehoerigkeit",
+      "kpiCount": 5,
+      "extractedCodes": 2,
+      "unmapped": 3,
+      "comparison": {
+        "gtFile": "religionszugehoerigkeit.json",
+        "required": {
+          "hit": 1,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 1,
+        "valueMismatches": [],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Lohnsteuerbescheinigung_2024_57438590613_Philips_GmbH.pdf",
+      "docClass": "lohnsteuerbescheinigung",
+      "kpiCount": 26,
+      "extractedCodes": 15,
+      "unmapped": 9,
+      "comparison": {
+        "gtFile": "lohnsteuerbescheinigung.json",
+        "required": {
+          "hit": 4,
+          "miss": 1,
+          "missing": [
+            "E0200501"
+          ]
+        },
+        "optional": {
+          "hit": 1,
+          "miss": 0
+        },
+        "valueMatches": 1,
+        "valueMismatches": [
+          {
+            "code": "E0200201",
+            "expected": 30707,
+            "actual": 4019.16
+          },
+          {
+            "code": "E0200301",
+            "expected": 2960,
+            "actual": 330
+          },
+          {
+            "code": "E0200801",
+            "expected": 30707,
+            "actual": 4019.16
+          },
+          {
+            "code": "E0200902",
+            "expected": 24316.94,
+            "actual": 2928
+          }
+        ],
+        "requiredCoverage": 0.8
+      }
+    },
+    {
+      "filename": "Kapitalertraege_mit_Freistellungsauftrag_2024_57438590613_Kreissparkasse_Ahrweiler.pdf",
+      "docClass": "kapitalertragsbescheinigung",
+      "kpiCount": 15,
+      "extractedCodes": 4,
+      "unmapped": 9,
+      "comparison": {
+        "gtFile": "kapitalertragsbescheinigung.json",
+        "required": {
+          "hit": 1,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 1,
+        "valueMismatches": [],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Kapitalertraege_mit_Freistellungsauftrag_2024_57438590613_VR_Bank_RheinAhrEifel_eG.pdf",
+      "docClass": "kapitalertragsbescheinigung",
+      "kpiCount": 15,
+      "extractedCodes": 4,
+      "unmapped": 9,
+      "comparison": {
+        "gtFile": "kapitalertragsbescheinigung.json",
+        "required": {
+          "hit": 1,
+          "miss": 0,
+          "missing": []
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 0,
+        "valueMismatches": [
+          {
+            "code": "E1900701",
+            "expected": 15,
+            "actual": 2
+          }
+        ],
+        "requiredCoverage": 1
+      }
+    },
+    {
+      "filename": "Ergebnis_Steuerkontoabfrage.pdf",
+      "docClass": "steuerkontoabfrage",
+      "kpiCount": 36,
+      "extractedCodes": 6,
+      "unmapped": 11,
+      "comparison": null
+    },
+    {
+      "filename": "Rentenbezugsmitteilung_2024_57438590613_Philips_Pensionskasse__VVaG_.pdf",
+      "docClass": "rentenbezugsmitteilung",
+      "kpiCount": 14,
+      "extractedCodes": 7,
+      "unmapped": 6,
+      "comparison": {
+        "gtFile": "rentenbezugsmitteilung.json",
+        "required": {
+          "hit": 2,
+          "miss": 1,
+          "missing": [
+            "E1800606"
+          ]
+        },
+        "optional": {
+          "hit": 0,
+          "miss": 0
+        },
+        "valueMatches": 1,
+        "valueMismatches": [
+          {
+            "code": "E1800301",
+            "expected": 24807.78,
+            "actual": 704.52
+          }
+        ],
+        "requiredCoverage": 0.6666666666666666
+      }
+    }
+  ]
+}

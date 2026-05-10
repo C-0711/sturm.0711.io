@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:elster="http://www.elster.de/elsterxml/schema/v11"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://www.elster.de/elsterxml/schema/v11"
+    elementFormDefault="qualified">
+    <xs:include schemaLocation="../../../ElsterBasisSchema/Schema/th000011_extern.xsd"/>
+    <xs:include schemaLocation="../../../ElsterBasisSchema/Schema/ndh000011.xsd">
+        <xs:annotation>
+            <xs:documentation xml:lang="DE">Nutzdatenheader</xs:documentation>
+        </xs:annotation>
+    </xs:include>
+    <xs:include schemaLocation="./E10-2024-Nutzdaten.xsd"/>
+    <xs:element name="Elster">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="TransferHeader" type="elster:TransferHeaderCType"/>
+                <xs:element name="DatenTeil" type="elster:DatenTeilCType"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+    <xs:complexType name="DatenTeilCType">
+        <xs:sequence>
+            <xs:element name="Nutzdatenblock" type="elster:NutzdatenblockCType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="NutzdatenblockCType">
+        <xs:sequence>
+            <xs:element name="NutzdatenHeader" type="elster:NutzdatenHeaderCType"/>
+            <xs:element name="Nutzdaten" type="elster:NutzdatenCType"/>
+        </xs:sequence>
+    </xs:complexType>
+</xs:schema>

@@ -1,0 +1,14 @@
+{
+  "docClass": "religionszugehoerigkeit",
+  "anlage": "ESt1A",
+  "anchor": "Hildburg Religion 2024 (ev)",
+  "anchors": ["Religion", "Konfession", "Evangelisch"],
+  "expected": {
+    "E0100402": { "value": "Evangelisch", "required": true, "label": "Religion (Person A)" }
+  },
+  "notes": [
+    "Bei Hildburg = Evangelisch → KiSt-Pflicht ja → 9% in RLP (Wohnsitz Bad Neuenahr-Ahrweiler).",
+    "Wenn Konfession leer wäre: Engine darf KEINE KiSt rechnen (Stricker-Bug von gestern).",
+    "ECode-Wert ist meist als String wie 'ev', 'rk', 'ak', 'is' kodiert — Vollform 'Evangelisch' wird vom Mapper akzeptiert."
+  ]
+}

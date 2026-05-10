@@ -1,0 +1,15 @@
+{
+  "docClass": "kapitalertragsbescheinigung",
+  "anlage": "KAP",
+  "anchor": "Hildburg KSK Ahrweiler / VR Bank 2024",
+  "anchors": ["Freistellungsauftrag", "freigestellte Kapitalerträge"],
+  "expected": {
+    "E1900701": { "value": 15.00, "required": true, "label": "Kapitalerträge (z.B. Zinsen, Dividenden) — vom Steuerabzug freigestellt" }
+  },
+  "notes": [
+    "Hildburg hat 3 Banken mit kleinen Kapitalerträgen: KSK Ahrweiler (15€), VR Bank (2€), Volksbank (2,56€).",
+    "Bei freistellungsbescheinigten Erträgen unterhalb Sparer-PB (1.000€) keine Steuerlast.",
+    "Werden in Anlage KAP aufaddiert; einzelne Bescheinigungen sind nur Beleg.",
+    "Acht: Sturm klassifiziert eine ähnliche Variante 'steuerbescheinigung_kapitalertr' separat (Volksbank/komplexere Steuerbescheinigungen)."
+  ]
+}

@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+// Sturm CLI shim — delegates to scripts/sturm-cli.mjs
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const cli = resolve(HERE, '..', 'scripts', 'sturm-cli.mjs');
+await import(cli);
