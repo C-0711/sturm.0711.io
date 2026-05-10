@@ -40,6 +40,39 @@ export interface WorkflowDef {
   stages: Record<StageId, StageDef>;
   /** [from, to]-Paare. Topologische Sortierung bestimmt Ausführungsreihenfolge. */
   edges: Array<[StageId, StageId]>;
+  /** Optional: gitchain catalog containers referenced by stages (read-only artifacts). */
+  containers?: WorkflowContainerRef[];
+}
+
+/**
+ * Reference to a gitchain catalog container that one or more stages read from
+ * (e.g. ELSTER eCode catalog). Rendered in the UI as a distinct ContainerNode
+ * with merkle/anchor metadata.
+ */
+export interface WorkflowContainerRef {
+  /** Canonical gitchain id, e.g. "0711:elster:bmf:jahresdok-2024:v1". */
+  id: string;
+  /** Human display name. */
+  displayName: string;
+  /** Short description. */
+  description?: string;
+  /** Stage ids that read this container. Renders as dashed reference-edges. */
+  readBy: StageId[];
+  /** Provenance + lock metadata (populated from registry.containers). */
+  schemaVersion?: number;
+  atomsCount?: number;
+  anlagenCount?: number;
+  embeddingDim?: number;
+  embeddingModel?: string;
+  merkleRoot?: string;
+  containerSha256?: string;
+  issuerFingerprint?: string;
+  /** "sealed" = lokal signiert, "anchored" = on-chain. Auto-derived from anchorBlock if omitted. */
+  lockState?: "sealed" | "anchored" | "loading";
+  anchorBlock?: number;
+  anchorTxHash?: string;
+  anchorChain?: string;
+  anchorUrl?: string;
 }
 
 // ============ Stage-Contract ============

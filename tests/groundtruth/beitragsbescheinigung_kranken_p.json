@@ -1,0 +1,20 @@
+{
+  "docClass": "beitragsbescheinigung_kranken_p",
+  "anlage": "VOR",
+  "anchor": "Hildburg Debeka 2024 (private KV/PV)",
+  "anchors": ["Krankenversicherung", "Pflegeversicherung", "Beiträge", "Debeka", "Basisabsicherung"],
+  "expected": {
+    "E2003104": { "value": 1781.98, "required": true,  "label": "Beiträge zu privaten Krankenversicherungen (nur Basisabsicherung)" },
+    "E2003202": { "value":  772.68, "required": true,  "label": "Beiträge zu Pflege-Pflichtversicherungen" },
+    "E2003502": { "value":  456.62, "required": false, "label": "Über die Basisabsicherung hinausgehende Beiträge (Wahlleistungen)" }
+  },
+  "notes": [
+    "Hildburg ist privatversichert (Debeka). Basisabsicherung KV 1.781,98€, gesamt KV 2.238,60€ (Differenz 456,62€ Wahlleistungen).",
+    "Pflege-Pflichtversicherung 772,68€ — voll abzugsfähig.",
+    "Real-codes verifiziert gegen feld_katalog_full.json:",
+    "  E2003104 = Beiträge zu privaten KV (nur Basisabsicherung, keine Wahlleistungen)",
+    "  E2003202 = Beiträge zu Pflege-Pflichtversicherungen",
+    "  E2003502 = Über Basisabsicherung hinausgehende Beiträge (Wahlleistungen)",
+    "Lohnsteuer-getriebene Codes (E2003807 für private KV laut Nr. 24b LSt) gehören zur LSt-Bescheinigung, nicht zur eigenständigen Beitragsbescheinigung."
+  ]
+}

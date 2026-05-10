@@ -74,46 +74,8 @@
       <div class="doc-viewer" id="doc-viewer">
         <div class="doc-empty" id="doc-empty">
           <div class="empty-headline">Wähle einen Dokumenttyp — Schema wird vorgeladen.</div>
-          <div class="empty-cards">
-            <button class="empty-card" type="button" data-template-id="elster/steuerpflichtige-person">
-              <div class="empty-thumb empty-thumb-form" aria-hidden="true">
-                <span class="t-line t-w70"></span>
-                <span class="t-line t-w90"></span>
-                <span class="t-line t-w50"></span>
-                <span class="t-line t-w80"></span>
-                <span class="t-line t-w40"></span>
-              </div>
-              <div class="empty-card-title">ELSTER · Steuerpflichtige Person</div>
-              <div class="empty-card-sub">Stammdaten + Anschrift</div>
-              <span class="empty-card-cta">Schema laden →</span>
-            </button>
-            <button class="empty-card" type="button" data-template-id="belege/rechnung">
-              <div class="empty-thumb empty-thumb-invoice" aria-hidden="true">
-                <span class="t-block t-head"></span>
-                <span class="t-line t-w60"></span>
-                <span class="t-line t-w40"></span>
-                <span class="t-table">
-                  <span></span><span></span><span></span>
-                  <span></span><span></span><span></span>
-                </span>
-                <span class="t-line t-w30 t-right"></span>
-              </div>
-              <div class="empty-card-title">Rechnung</div>
-              <div class="empty-card-sub">Aussteller, Positionen, Summe</div>
-              <span class="empty-card-cta">Schema laden →</span>
-            </button>
-            <button class="empty-card" type="button" data-template-id="belege/spende">
-              <div class="empty-thumb empty-thumb-receipt" aria-hidden="true">
-                <span class="t-stamp"></span>
-                <span class="t-line t-w80"></span>
-                <span class="t-line t-w60"></span>
-                <span class="t-amount"></span>
-                <span class="t-line t-w50"></span>
-              </div>
-              <div class="empty-card-title">Spendenquittung</div>
-              <div class="empty-card-sub">Empfänger, Datum, Betrag</div>
-              <span class="empty-card-cta">Schema laden →</span>
-            </button>
+          <div class="empty-cards" id="empty-cards">
+            <div class="empty-cards-loading" style="grid-column: 1 / -1; text-align: center; color: var(--color-text-tertiary); padding: 24px;">Lade Vorlagen …</div>
           </div>
           <div class="empty-or">oder PDF / Bild hier ablegen</div>
         </div>

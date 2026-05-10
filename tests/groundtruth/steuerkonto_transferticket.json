@@ -1,0 +1,20 @@
+{
+  "docClass": "steuerkonto_transferticket",
+  "anlage": "ESt1A",
+  "anchor": "Hildburg Stammdaten 2024",
+  "anchors": ["Stammdaten", "Identifikationsnummer", "Bankverbindung"],
+  "expected": {
+    "E0100201": { "value": "Haubrich-Koch",   "required": true, "label": "Familienname Person A" },
+    "E0100301": { "value": "Hildburg",         "required": true, "label": "Vorname Person A" },
+    "E0100401": { "value": "1935-11-24",       "required": true, "label": "Geburtsdatum Person A" },
+    "E0100601": { "value": "53474",            "required": true, "label": "PLZ" },
+    "E0100602": { "value": "Bad Neuenahr-Ahrweiler", "required": true, "label": "Ort" },
+    "E0101104": { "value": "Am Schwanenteich", "required": true, "label": "Straße" },
+    "E0101206": { "value": "1",                "required": true, "label": "Hausnummer" }
+  },
+  "notes": [
+    "Stammdaten-PDF kommt direkt aus dem ELSTER-Portal — alle Werte sind sicher.",
+    "IBAN ist E0102102 (Bankverbindung), kann auch geprüft werden — zur Vereinfachung hier weggelassen.",
+    "ECode-Belegung verifiziert anhand Stricker-JSON-Export, der das gleiche Schema nutzt."
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "name": "spendenquittung_extraction",
+  "doc_class": "spendenquittung",
+  "description": "Layer-1 strict JSON-Schema für deutsche Spendenquittung. Erzeugt ein strukturiertes spenden[]-Array mit art-Enum, damit die nachgelagerten Regeln § 10b-Spende von Mitgliedsbeitrag unterscheiden können.",
+  "anlage": "SA",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "spender": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "anschrift": { "type": "string" },
+          "iban": { "type": "string" },
+          "steuer_id": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "spenden": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "empfaenger": {
+              "type": "string",
+              "description": "Offizieller Organisationsname wie aufgedruckt (OCR-Fehler hier bewahren; der Entity-Resolution-Layer korrigiert sie)."
+            },
+            "betrag_eur": {
+              "type": "number",
+              "description": "Spendenbetrag in EUR (Dezimal)."
+            },
+            "datum": {
+              "type": "string",
+              "description": "ISO-8601-Datum YYYY-MM-DD."
+            },
+            "art": {
+              "type": "string",
+              "enum": ["Spende", "Mitgliedsbeitrag", "Sachspende", "Aufwandsspende"],
+              "description": "Spende = § 10b allgemein; Mitgliedsbeitrag = § 10b Abs. 1 Satz 8 (andere Regeln); Sachspende = Naturalspende; Aufwandsspende = Verzicht auf Aufwandserstattung."
+            },
+            "zweck": {
+              "type": "string",
+              "description": "Optionaler Verwendungszweck/Stichwort, z.B. 'Zustiftung Lebensweg', 'Spendenaufruf Dezember'."
+            },
+            "empfaenger_iban": {
+              "type": "string"
+            },
+            "empfaenger_bic": {
+              "type": "string"
+            }
+          },
+          "required": ["empfaenger", "betrag_eur", "datum", "art"]
+        }
+      },
+      "steuer_metadaten": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "freistellungsbescheid": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "finanzamt": { "type": "string" },
+              "steuernummer": { "type": "string" },
+              "bescheid_datum": { "type": "string" },
+              "veranlagungszeitraum": { "type": "string" }
+            }
+          },
+          "zuwendung_in_vermoegen": { "type": "boolean" },
+          "verzicht_auf_aufwandserstattung": { "type": "boolean" }
+        }
+      }
+    },
+    "required": ["spender", "spenden"]
+  }
+}

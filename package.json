@@ -11,7 +11,8 @@
     "test:codec": "tsx src/lib/mistral-ocr/codec.test.ts",
     "test:schema": "tsx src/server/schema-generate.test.ts",
     "test:gitchain": "tsx src/lib/gitchain-client.test.ts",
-    "test": "npm run test:codec && npm run test:schema && npm run test:gitchain"
+    "test": "npm run test:codec && npm run test:schema && npm run test:gitchain",
+    "build:ui": "esbuild src/ui/pipeline.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/pipeline.bundle.js"
   },
   "dependencies": {
     "express": "^4.19.2",

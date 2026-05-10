@@ -127,40 +127,49 @@ interface MistralChatResponse {
 }
 
 export async function classifyDocument(opts: {
-  documentUrl: string;
+  /** Legacy-Pfad: PDF-URL → Mistral OCR-t intern (langsam, 8-15s). */
+  documentUrl?: string;
+  /** Neu: vorgefertigtes OCR-Markdown → ueberspringt internen OCR (schnell, 2-4s). */
+  markdown?: string;
   apiKey: string;
   signal?: AbortSignal;
   baseUrl?: string;
-  /** Optional MIME-Type oder Filename — entscheidet ueber Mistral-Content-
-   *  Type. Bilder muessen 'image_url' verwenden, sonst antwortet die API
-   *  mit "unsupported document format". PDFs / Office-Dokumente bleiben
-   *  bei 'document_url' (Mistral OCR-t intern). */
+  /** Nur Legacy-Pfad: Mistral-Content-Type-Detection (Image vs PDF). */
   mime?: string;
   filename?: string;
 }): Promise<ClassificationResult> {
   const t0 = Date.now();
 
-  // Bild-Detection: Mistral verlangt 'image_url' fuer JPG/PNG/WEBP/GIF/HEIC.
-  const mimeLower = (opts.mime ?? '').toLowerCase();
-  const nameLower = (opts.filename ?? '').toLowerCase();
-  const isImage =
-    mimeLower.startsWith('image/') ||
-    /\.(jpg|jpeg|png|webp|gif|heic|heif|bmp|tiff?)$/.test(nameLower);
-  const docContent = isImage
-    ? { type: 'image_url' as const, image_url: opts.documentUrl }
-    : { type: 'document_url' as const, document_url: opts.documentUrl };
+  // Branch: markdown ODER documentUrl. Markdown ist preferred — schneller.
+  let userContent: any[];
+  if (opts.markdown !== undefined) {
+    userContent = [
+      { type: 'text', text: CLASSIFY_PROMPT },
+      { type: 'text', text: '\n\n--- Document Markdown (Mistral OCR pre-extract) ---\n' + opts.markdown },
+    ];
+  } else if (opts.documentUrl) {
+    const mimeLower = (opts.mime ?? '').toLowerCase();
+    const nameLower = (opts.filename ?? '').toLowerCase();
+    const isImage =
+      mimeLower.startsWith('image/') ||
+      /\.(jpg|jpeg|png|webp|gif|heic|heif|bmp|tiff?)$/.test(nameLower);
+    const docContent = isImage
+      ? { type: 'image_url' as const, image_url: opts.documentUrl }
+      : { type: 'document_url' as const, document_url: opts.documentUrl };
+    userContent = [
+      { type: 'text', text: CLASSIFY_PROMPT },
+      docContent,
+    ];
+  } else {
+    throw new Error('classifyDocument: either markdown or documentUrl required');
+  }
 
   const body = {
     model: MODEL,
     stream: false,
+    temperature: 0,
     messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: CLASSIFY_PROMPT },
-          docContent,
-        ],
-      },
+      { role: 'user', content: userContent },
     ],
     response_format: {
       type: 'json_schema',
@@ -226,7 +235,7 @@ export async function classifyDocument(opts: {
     mistralUsage: json.usage ?? {},
     ms: Date.now() - t0,
     raw: {
-      request: { model: MODEL, promptText: CLASSIFY_PROMPT, documentUrl: opts.documentUrl },
+      request: { model: MODEL, promptText: CLASSIFY_PROMPT, documentUrl: opts.documentUrl, markdownLen: opts.markdown ? opts.markdown.length : 0 },
       response: json,
     },
   };

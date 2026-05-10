@@ -76,11 +76,12 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
 
     const req = configToApiRequest(cfg, document, { runId: ctx.runId, stageId: ctx.stageId });
     const t0 = Date.now();
+    ctx.emit("ocr_started", { filename: input.filename, fileId });
     const { response, degradation } = await callMistralOcrWithFallback(req, { signal: ctx.signal });
     const parsed = parseApiResponse(response, cfg, t0, degradation);
 
     if (degradation) ctx.emit('ocr_degraded', degradation);
-    ctx.emit('ocr_pages', { count: parsed.pages.length, chars: parsed.chars });
+    ctx.emit('ocr_done', { pages: parsed.pages.length, chars: parsed.chars, ms: parsed.ms });
     if (parsed.validation.documentAnnotation.length > 0) {
       ctx.emit('ocr_validation', {
         issues: parsed.validation.documentAnnotation.length,

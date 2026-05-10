@@ -1,0 +1,218 @@
+{
+  "vz": 2024,
+  "datenart": "E10",
+  "eric": "42.4.4.0",
+  "generated": "2026-04-23T19:23:14.635Z",
+  "anlagen": [
+    {
+      "name": "ESt1A",
+      "maxLfdNrVordruck": 1,
+      "pflicht": true,
+      "fieldCount": 117
+    },
+    {
+      "name": "SA",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 75
+    },
+    {
+      "name": "AgB",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 52
+    },
+    {
+      "name": "HA_35a",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 20
+    },
+    {
+      "name": "EM_35c",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 43
+    },
+    {
+      "name": "Sonst",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 29
+    },
+    {
+      "name": "WA_ESt",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 38
+    },
+    {
+      "name": "ESt1A_U",
+      "maxLfdNrVordruck": 99,
+      "pflicht": false,
+      "fieldCount": 72
+    },
+    {
+      "name": "Kind",
+      "maxLfdNrVordruck": 14,
+      "pflicht": false,
+      "fieldCount": 104
+    },
+    {
+      "name": "L",
+      "maxLfdNrVordruck": 99,
+      "pflicht": false,
+      "fieldCount": 244
+    },
+    {
+      "name": "Anl_34b",
+      "maxLfdNrVordruck": 99,
+      "pflicht": false,
+      "fieldCount": 118
+    },
+    {
+      "name": "G",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 153
+    },
+    {
+      "name": "Zins",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 36
+    },
+    {
+      "name": "S",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 100
+    },
+    {
+      "name": "Corona",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 7
+    },
+    {
+      "name": "N_GRE",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 152
+    },
+    {
+      "name": "N",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 137
+    },
+    {
+      "name": "N_DHH",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 45
+    },
+    {
+      "name": "N_AUS",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 74
+    },
+    {
+      "name": "KAP",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 99
+    },
+    {
+      "name": "KAP_BET",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 53
+    },
+    {
+      "name": "KAP_I",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 54
+    },
+    {
+      "name": "AUS",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 66
+    },
+    {
+      "name": "R",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 36
+    },
+    {
+      "name": "RAV_bAV",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 46
+    },
+    {
+      "name": "R_AUS",
+      "maxLfdNrVordruck": 2,
+      "pflicht": false,
+      "fieldCount": 50
+    },
+    {
+      "name": "SO",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 82
+    },
+    {
+      "name": "V",
+      "maxLfdNrVordruck": 999,
+      "pflicht": false,
+      "fieldCount": 199
+    },
+    {
+      "name": "V_FeWo",
+      "maxLfdNrVordruck": 999,
+      "pflicht": false,
+      "fieldCount": 13
+    },
+    {
+      "name": "V_Sonstige",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 52
+    },
+    {
+      "name": "FW",
+      "maxLfdNrVordruck": 99,
+      "pflicht": false,
+      "fieldCount": 66
+    },
+    {
+      "name": "VOR",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 71
+    },
+    {
+      "name": "AV",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 35
+    },
+    {
+      "name": "Mob",
+      "maxLfdNrVordruck": 1,
+      "pflicht": false,
+      "fieldCount": 12
+    },
+    {
+      "name": "Vorsatz",
+      "maxLfdNrVordruck": 1,
+      "pflicht": true,
+      "fieldCount": 19
+    }
+  ]
+}
