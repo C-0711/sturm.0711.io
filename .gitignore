@@ -9,6 +9,9 @@ logs/
 runs/
 uploads/
 
+# User-defined workflows (designer-authored) — kept local
+workflows-user/
+
 # Legacy-MVP hat eigenen Lifecycle
 legacy/*/node_modules/
 legacy/*/uploads/
@@ -17,6 +20,8 @@ legacy/*/uploads/
 .DS_Store
 .vscode/
 .idea/
+.claude/settings.local.json
+.claude/worktrees/
 
 # Snapshot-Filter (running-state push 2026-05-04)
 .master-key.json
@@ -37,3 +42,11 @@ _staging/
 venv
 __pycache__
 *.pyc
+
+# Local credentials dumps (never commit)
+*.rtf
+.h200v-creds*
+0711-ALLES.*
+
+# Claude Code session transcripts / build summaries (local-only context)
+qc_ElsterV3_Container.*
