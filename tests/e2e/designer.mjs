@@ -146,7 +146,32 @@ if (modal) {
   !stillThere ? pass('Modal Schließen-button closes') : fail('Modal Schließen-button closes');
 }
 
-// 15. Console errors
+// 16. Container palette section + drag-drop
+const containerCount = await page.$$eval('.dsg-palette-item', xs => xs.filter(x => x.querySelector('.dsg-palette-name')?.textContent?.includes('🗄️')).length);
+containerCount > 0 ? pass(`Container palette section has entries`, `(${containerCount})`) : fail('Container palette section has entries');
+
+if (containerCount > 0) {
+  const dropped = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.dsg-palette-item')];
+    const containerItem = items.find(el => el.querySelector('.dsg-palette-name')?.textContent?.includes('🗄️'));
+    if (!containerItem) return { error: 'no container item' };
+    const id = containerItem.querySelector('.dsg-palette-id')?.textContent?.trim();
+    const pane = document.querySelector('.react-flow__pane');
+    const rect = pane.getBoundingClientRect();
+    const cx = rect.left + 350, cy = rect.top + 500;
+    const dt = new DataTransfer();
+    dt.setData('application/sturm-container', JSON.stringify({ id, displayName: 'Test Container', atomsCount: 2287, readBy: [] }));
+    containerItem.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+    pane.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt, clientX: cx, clientY: cy }));
+    pane.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt, clientX: cx, clientY: cy }));
+    return { id };
+  });
+  await new Promise(r => setTimeout(r, 400));
+  const containerOnCanvas = await page.$('.dsg-container-node');
+  containerOnCanvas ? pass('Drag container from palette adds container node', dropped.id) : fail('Drag container from palette adds container node');
+}
+
+// 17. Console errors
 consoleErrors.length === 0 ? pass('No JS console errors') : fail(`${consoleErrors.length} console error(s)`, consoleErrors.slice(0,3).join(' | '));
 
 await page.screenshot({ path: '/tmp/sturm-e2e/final.png', fullPage: false });
