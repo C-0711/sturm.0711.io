@@ -934,7 +934,12 @@ function renderMatrix(pipeline) {
     });
   });
   matrixEl.querySelectorAll('tbody tr').forEach((tr) => {
-    tr.addEventListener('click', () => {
+    tr.addEventListener('click', (ev) => {
+      // Clicks on the checkbox cell drive bulk-selection, not the strip view.
+      // Letting the row handler fire here would trigger renderMatrix() which
+      // detaches the checkbox before its `change` event reaches the document
+      // delegate — bulk-bar would never update.
+      if (ev.target.closest('.pl-check-cell')) return;
       const uuid = tr.dataset.uuid;
       if (!uuid) return;
       selectedUuid = selectedUuid === uuid ? null : uuid;

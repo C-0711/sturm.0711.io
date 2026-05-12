@@ -1,6 +1,11 @@
 /* global React, ReactDOM, ReactFlow */
-const { useState, useEffect, useMemo, useRef } = React;
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
 const RF = window.ReactFlow;
+
+function authHeaders() {
+  const tok = localStorage.getItem('sturm-token');
+  return tok ? { 'Authorization': `Bearer ${tok}` } : {};
+}
 
 /* ------------------------------------------------------------
    Topo-Layout: aus stages + edges x/y-Positionen berechnen.
@@ -158,7 +163,42 @@ function ContainerNode({ data, selected }) {
   );
 }
 
-const nodeTypes = { stage: StageNode, container: ContainerNode };
+/* ------------------------------------------------------------
+   FanoutNode — Stage-node variant for `compare/fanout`. Renders
+   per-branch chips with live state (pending/running/done/error)
+   and ms badges driven by branch_started/branch_done/branch_error.
+   ------------------------------------------------------------ */
+function FanoutNode({ data, selected }) {
+  const stateLabel = {
+    idle: 'wartet', running: 'läuft', ok: 'fertig', error: 'fehler', skipped: 'übersprungen',
+  }[data.state || 'idle'];
+  const branches = data.branches || []; // [{id, state, ms, error}]
+  return (
+    <div className="sturm-node sturm-fanout-node" data-state={data.state || 'idle'} data-selected={selected}>
+      <RF.Handle type="target" position="left" style={{ background: 'var(--color-border)', width: 6, height: 6 }} />
+      <div className="sturm-node-state">{stateLabel}</div>
+      <div className="sturm-node-title">{data.label}</div>
+      {data.sub && <div className="sturm-node-sub">{data.sub}</div>}
+      {branches.length > 0 && (
+        <div className="sturm-fanout-branches">
+          {branches.map(b => (
+            <span key={b.id} className="sturm-branch-chip" data-state={b.state || 'pending'} title={b.error || b.id}>
+              <span className="sturm-branch-icon">
+                {b.state === 'done' ? '✓' : b.state === 'error' ? '✗' : b.state === 'running' ? '◌' : '·'}
+              </span>
+              <span className="sturm-branch-id">{b.id}</span>
+              {b.ms != null && <span className="sturm-branch-ms">{fmtDur(b.ms)}</span>}
+            </span>
+          ))}
+        </div>
+      )}
+      {data.ms != null && <div className="sturm-node-time">{fmtDur(data.ms)}</div>}
+      <RF.Handle type="source" position="right" style={{ background: 'var(--color-border)', width: 6, height: 6 }} />
+    </div>
+  );
+}
+
+const nodeTypes = { stage: StageNode, container: ContainerNode, fanout: FanoutNode };
 
 /* ------------------------------------------------------------
    KPI-Aggregation: pro Stage-`uses` eine Reducer-Funktion, die
@@ -629,6 +669,91 @@ const KPI_BUILDERS = {
   },
 };
 
+// compare/fanout — show branch ok/err tally on the node
+KPI_BUILDERS['compare/fanout'] = (acc, name, p) => {
+  const st = acc._st || { ok: 0, err: 0, total: 0 };
+  if (name === 'fanout_started') {
+    st.total = (p?.branches || []).length;
+    return { _st: st, kpis: [{ label: 'Branches', value: fmtInt(st.total), tone: 'accent' }], progress: 0 };
+  }
+  if (name === 'branch_done') {
+    st.ok += 1;
+    return {
+      _st: st,
+      kpis: [
+        { label: 'ok', value: `${fmtInt(st.ok)}/${fmtInt(st.total)}`, tone: 'ok' },
+        st.err > 0 && { label: 'err', value: fmtInt(st.err), tone: 'warn' },
+      ].filter(Boolean),
+      progress: st.total > 0 ? { value: (st.ok + st.err) / st.total } : null,
+    };
+  }
+  if (name === 'branch_error') {
+    st.err += 1;
+    return {
+      _st: st,
+      kpis: [
+        { label: 'ok', value: `${fmtInt(st.ok)}/${fmtInt(st.total)}`, tone: st.ok ? 'ok' : undefined },
+        { label: 'err', value: fmtInt(st.err), tone: 'warn' },
+      ],
+      progress: st.total > 0 ? { value: (st.ok + st.err) / st.total } : null,
+    };
+  }
+  if (name === 'stage_done') {
+    const o = p?.output || {};
+    const ok = Object.keys(o.branches || {}).length;
+    const err = Object.keys(o.errors || {}).length;
+    return {
+      _st: st,
+      kpis: [
+        { label: 'ok', value: fmtInt(ok), tone: 'ok' },
+        err > 0 && { label: 'err', value: fmtInt(err), tone: 'warn' },
+      ].filter(Boolean),
+      progress: null,
+    };
+  }
+  return acc;
+};
+
+// compare/merge — show picked branch + policy
+KPI_BUILDERS['compare/merge'] = (acc, name, p) => {
+  if (name === 'merge_done') {
+    return {
+      kpis: [
+        p?.picked && { label: 'picked', value: String(p.picked), tone: 'ok' },
+        p?.policy && { label: 'policy', value: String(p.policy) },
+      ].filter(Boolean),
+      progress: null,
+    };
+  }
+  if (name === 'stage_done') {
+    const o = p?.output || {};
+    return {
+      kpis: [
+        o.picked && { label: 'picked', value: String(o.picked), tone: 'ok' },
+        o.policy && { label: 'policy', value: String(o.policy) },
+      ].filter(Boolean),
+      progress: null,
+    };
+  }
+  return acc;
+};
+
+// eval/kpi — show score + verdict on the node
+KPI_BUILDERS['eval/kpi'] = (acc, name, p) => {
+  if (name === 'kpi_report') {
+    const score = typeof p?.score === 'number' ? p.score.toFixed(2) : '—';
+    const tone = p?.verdict === 'pass' ? 'ok' : p?.verdict === 'fail' ? 'warn' : undefined;
+    return {
+      kpis: [
+        { label: 'Score', value: score, tone },
+        p?.verdict && { label: 'verdict', value: p.verdict, tone },
+      ].filter(Boolean),
+      progress: null,
+    };
+  }
+  return acc;
+};
+
 function buildMultiKpis(prog) {
   const total = prog.total;
   const pct = total > 0 ? prog.extr / total : null;
@@ -1060,6 +1185,7 @@ async function streamRun(workflowId, file, onEvent) {
   form.append('file', file);
   const resp = await fetch(`/api/workflows/${encodeURIComponent(workflowId)}/run`, {
     method: 'POST',
+    headers: authHeaders(),
     body: form,
   });
   if (!resp.ok || !resp.body) {
@@ -1091,7 +1217,7 @@ async function streamRun(workflowId, file, onEvent) {
   }
 }
 
-function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick, drawerCollapsed }) {
+function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick, onNodeDragStop, drawerCollapsed }) {
   const flowRef = useRef(null);
 
   useEffect(() => {
@@ -1111,10 +1237,11 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
         flowRef.current = instance;
         setTimeout(() => instance.fitView({ padding: 0.24, duration: 0, maxZoom: 1 }), 0);
       }}
-      nodesDraggable={false}
+      nodesDraggable={true}
       nodesConnectable={false}
       elementsSelectable
       onNodeClick={onNodeClick}
+      onNodeDragStop={onNodeDragStop}
       proOptions={{ hideAttribution: false }}
     >
       <RF.Background color="var(--color-border-light)" gap={22} size={1} />
@@ -1131,6 +1258,129 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
         style={{ background: 'var(--color-bg-secondary)' }}
       />
     </RF.ReactFlow>
+  );
+}
+
+/* ------------------------------------------------------------
+   KpiPanel — verdict, component bars, per-branch table, disputed.
+   Renders below the canvas when an eval/kpi stage produced a report.
+   ------------------------------------------------------------ */
+function ScoreBar({ label, value }) {
+  const v = Math.max(0, Math.min(1, Number(value) || 0));
+  return (
+    <div className="sturm-kpi-bar">
+      <div className="sturm-kpi-bar-label">{label}</div>
+      <div className="sturm-kpi-bar-track"><div className="sturm-kpi-bar-fill" style={{ width: `${v * 100}%` }} /></div>
+      <div className="sturm-kpi-bar-value">{v.toFixed(2)}</div>
+    </div>
+  );
+}
+
+function KpiPanel({ report, fanoutOutput }) {
+  const [disputedOpen, setDisputedOpen] = useState(false);
+  if (!report) return null;
+  const verdict = report.verdict || 'fail';
+  const score = typeof report.score === 'number' ? report.score : 0;
+  const c = report.components || {};
+  const cb = report.cross_branch;
+  const branchKeys = cb ? Object.keys(cb.per_branch || {}) : [];
+  // Best branch by score (schema_coverage*format_conformance fallback)
+  const branchScore = (b) => (b.schema_coverage ?? 0) * 0.5 + (b.format_conformance ?? 0) * 0.5;
+  const bestBranch = branchKeys.reduce((best, k) => {
+    const s = branchScore(cb.per_branch[k]);
+    return !best || s > best.s ? { k, s } : best;
+  }, null);
+  const branchValues = fanoutOutput?.branches || {};
+
+  function valueFor(branchId, key) {
+    const v = branchValues?.[branchId];
+    if (v == null || typeof v !== 'object') return '—';
+    // Walk dotted path: key may be "a.b.c"
+    const parts = String(key).split('.');
+    let cur = v;
+    for (const p of parts) {
+      if (cur == null || typeof cur !== 'object') return '—';
+      cur = cur[p];
+    }
+    if (cur == null) return '—';
+    if (typeof cur === 'object') return JSON.stringify(cur);
+    return String(cur);
+  }
+
+  return (
+    <div className="sturm-kpi-panel">
+      <div className="sturm-kpi-panel-head">
+        <div className="sturm-kpi-score">
+          <span className="sturm-kpi-score-label">Score</span>
+          <span className="sturm-kpi-score-value">{score.toFixed(2)}</span>
+          <span className="sturm-kpi-score-sep">·</span>
+          <span className={`sturm-kpi-verdict is-${verdict}`}>{verdict}</span>
+        </div>
+        <div className="sturm-kpi-panel-meta">
+          {report.field_count != null && <span>{fmtInt(report.field_count)} Felder</span>}
+          {report.total_duration_ms != null && <span>{fmtDur(report.total_duration_ms)}</span>}
+        </div>
+      </div>
+
+      <div className="sturm-kpi-bars">
+        <ScoreBar label="schema_coverage" value={c.schema_coverage ?? report.schema_coverage} />
+        <ScoreBar label="format_conformance" value={c.format_conformance ?? report.format_conformance} />
+        <ScoreBar label="cross_branch_agreement" value={c.cross_branch_agreement ?? 0} />
+        <ScoreBar label="speed" value={c.speed ?? 0} />
+      </div>
+
+      {branchKeys.length > 0 && (
+        <table className="sturm-kpi-table">
+          <thead>
+            <tr><th>Branch</th><th>ms</th><th>Felder</th><th>Coverage</th><th>Conformance</th><th>Score</th><th>Cost</th></tr>
+          </thead>
+          <tbody>
+            {branchKeys.map(k => {
+              const b = cb.per_branch[k];
+              const isBest = bestBranch?.k === k;
+              return (
+                <tr key={k} className={isBest ? 'is-best' : ''}>
+                  <td><span className="sturm-branch-tag">{k}</span>{b.error && <span className="sturm-kpi-err" title={b.error}> err</span>}</td>
+                  <td>{fmtDur(b.ms)}</td>
+                  <td>{fmtInt(b.fields ?? 0)}</td>
+                  <td>{(b.schema_coverage ?? 0).toFixed(2)}</td>
+                  <td>{(b.format_conformance ?? 0).toFixed(2)}</td>
+                  <td>{branchScore(b).toFixed(2)}</td>
+                  <td>{b.cost_usd != null ? `$${Number(b.cost_usd).toFixed(4)}` : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {cb && (cb.disputed_keys?.length || 0) > 0 && (
+        <div className="sturm-kpi-disputed">
+          <button className="sturm-kpi-disputed-head" onClick={() => setDisputedOpen(o => !o)}>
+            <span className="sturm-kpi-disputed-chev">{disputedOpen ? '▾' : '▸'}</span>
+            <span>Disputed keys</span>
+            <span className="sturm-kpi-disputed-count">{cb.disputed_keys.length}</span>
+          </button>
+          {disputedOpen && (
+            <div className="sturm-kpi-disputed-body">
+              {cb.disputed_keys.map(key => (
+                <div key={key} className="sturm-disputed-row">
+                  <div className="sturm-disputed-key">{key}</div>
+                  <div className="sturm-disputed-values">
+                    {branchKeys.map(bk => (
+                      <div key={bk} className="sturm-disputed-val">
+                        <span className="sturm-branch-tag">{bk}</span>
+                        <span className="sturm-disputed-v">{valueFor(bk, key)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1152,14 +1402,21 @@ function App() {
   const [stageKpis, setStageKpis] = useState({}); // { [stageId]: { kpis, progress, _prog } }
   const [selectedStage, setSelectedStage] = useState(null);
   const [drawerCollapsed, setDrawerCollapsed] = useState(true);
+  const [branchStates, setBranchStates] = useState({}); // { [fanoutStageId]: { [branchId]: {state, ms, error} } }
+  const [kpiReport, setKpiReport] = useState(null);
+  const [fanoutOutput, setFanoutOutput] = useState(null); // { branches, perBranchMs, errors }
 
-  // Workflow-ID aus URL
+  // Workflow-ID aus URL — akzeptiert ?workflow= UND ?wf= (Alias, vom Designer benutzt)
   const wfIdFromUrl = useMemo(() => {
     const p = new URLSearchParams(location.search);
-    return p.get('workflow') || 'hello-ocr';
+    return p.get('workflow') || p.get('wf') || 'hello-ocr';
   }, []);
 
   const [issues, setIssues] = useState([]);
+
+  // Node-Positionen-Overrides — der Operator kann Stages umsortieren, das wird
+  // pro Workflow in localStorage gehalten und vor dem auto-layout angewandt.
+  const [nodePosOverrides, setNodePosOverrides] = useState({});
 
   // Issues pro Workflow persistieren
   useEffect(() => {
@@ -1168,6 +1425,11 @@ function App() {
       const saved = JSON.parse(localStorage.getItem(`sturm-issues:${workflow.id}`) || '[]');
       setIssues(saved);
     } catch { setIssues([]); }
+    // Position-Overrides pro Workflow laden (separater Key so Issues & Layout unabhängig sind)
+    try {
+      const layoutSaved = JSON.parse(localStorage.getItem(`sturm-layout:${workflow.id}`) || '{}');
+      setNodePosOverrides(layoutSaved && typeof layoutSaved === 'object' ? layoutSaved : {});
+    } catch { setNodePosOverrides({}); }
   }, [workflow?.id]);
   useEffect(() => {
     if (!workflow) return;
@@ -1177,6 +1439,44 @@ function App() {
   useEffect(() => {
     setDrawerCollapsed(true);
   }, [workflow?.id]);
+
+  // Operator-dragged node positions get persisted per workflow. Container nodes
+  // (id prefixed with "container:") share the same map.
+  const handleNodeDragStop = useCallback((_event, node) => {
+    if (!workflow || !node?.id || !node.position) return;
+    setNodePosOverrides(prev => {
+      const next = { ...prev, [node.id]: { x: node.position.x, y: node.position.y } };
+      try { localStorage.setItem(`sturm-layout:${workflow.id}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [workflow]);
+
+  const resetLayout = useCallback(() => {
+    if (!workflow) return;
+    setNodePosOverrides({});
+    try { localStorage.removeItem(`sturm-layout:${workflow.id}`); } catch {}
+  }, [workflow]);
+
+  // Fallback: when a run completes and we missed live SSE for kpi/fanout
+  // (e.g. user reloads, or events arrived before listeners), pull artefacts.
+  useEffect(() => {
+    if (!workflow || !runId) return;
+    const kpiStage = workflow.stages.find(s => s.uses === 'eval/kpi');
+    const fanoutStage = workflow.stages.find(s => s.uses === 'compare/fanout');
+    const headers = authHeaders();
+    if (kpiStage && !kpiReport) {
+      fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/stages/${encodeURIComponent(kpiStage.id)}/output`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(j => { if (j) setKpiReport(j); })
+        .catch(() => {});
+    }
+    if (fanoutStage && !fanoutOutput) {
+      fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/stages/${encodeURIComponent(fanoutStage.id)}/output`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(j => { if (j) setFanoutOutput(j); })
+        .catch(() => {});
+    }
+  }, [workflow, runId, status]);
 
   useEffect(() => {
     if (events.length > 0 || issues.length > 0) setDrawerCollapsed(false);
@@ -1194,8 +1494,8 @@ function App() {
     (async () => {
       try {
         const [listResp, wfResp] = await Promise.all([
-          fetch('/api/workflows').then(r => r.json()),
-          fetch(`/api/workflows/${encodeURIComponent(wfIdFromUrl)}`).then(r => r.ok ? r.json() : null),
+          fetch('/api/workflows', { headers: authHeaders() }).then(r => r.json()),
+          fetch(`/api/workflows/${encodeURIComponent(wfIdFromUrl)}`, { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
         ]);
         setWorkflows(listResp || []);
         if (!wfResp) {
@@ -1222,20 +1522,28 @@ function App() {
 
   const nodes = useMemo(() => {
     if (!workflow || !layout) return [];
-    const stageNodes = workflow.stages.map(s => ({
-      id: s.id,
-      type: 'stage',
-      position: layout.positions[s.id] || { x: 0, y: 0 },
-      data: {
-        label: s.name,
-        sub: s.description || s.uses,
-        state: stageStates[s.id]?.state,
-        ms: stageStates[s.id]?.ms,
-        kpis: stageKpis[s.id]?.kpis || [],
-        progress: stageKpis[s.id]?.progress || null,
-      },
-      draggable: false,
-    }));
+    const stageNodes = workflow.stages.map(s => {
+      const isFanout = s.uses === 'compare/fanout';
+      const branchesMap = branchStates[s.id] || {};
+      const branches = Object.keys(branchesMap).map(id => ({ id, ...branchesMap[id] }));
+      // User-overrides gewinnen über das auto-Layout.
+      const pos = nodePosOverrides[s.id] || layout.positions[s.id] || { x: 0, y: 0 };
+      return {
+        id: s.id,
+        type: isFanout ? 'fanout' : 'stage',
+        position: pos,
+        data: {
+          label: s.name,
+          sub: s.description || s.uses,
+          state: stageStates[s.id]?.state,
+          ms: stageStates[s.id]?.ms,
+          kpis: stageKpis[s.id]?.kpis || [],
+          progress: stageKpis[s.id]?.progress || null,
+          branches: isFanout ? branches : undefined,
+        },
+        draggable: true,
+      };
+    });
     // Container nodes (read-only catalog artifacts referenced by stages)
     const containerNodes = (workflow.containers || []).map((c, idx) => ({
       id: `container:${c.id}`,
@@ -1259,7 +1567,7 @@ function App() {
       draggable: true, // operator can move containers around the canvas
     }));
     return [...stageNodes, ...containerNodes];
-  }, [workflow, layout, stageStates, stageKpis]);
+  }, [workflow, layout, stageStates, stageKpis, branchStates]);
 
   const edges = useMemo(() => {
     if (!workflow) return [];
@@ -1294,6 +1602,7 @@ function App() {
     if (!workflow || !file) return;
     setRunning(true); setStatus('running');
     setRunId(null); setEvents([]); setStageStates({}); setStageKpis({});
+    setBranchStates({}); setKpiReport(null); setFanoutOutput(null);
 
     const onEvent = (name, env) => {
       const t = new Date().toLocaleTimeString();
@@ -1312,6 +1621,33 @@ function App() {
         setStatus('ok');
       } else if (name === 'run_error') {
         setStatus('error');
+      } else if (name === 'fanout_started' && env.stageId) {
+        const sid = env.stageId;
+        const init = {};
+        for (const b of (env.payload?.branches || [])) init[b] = { state: 'pending' };
+        setBranchStates(prev => ({ ...prev, [sid]: init }));
+      } else if (name === 'branch_started' && env.stageId) {
+        const sid = env.stageId, bid = env.payload?.branchId;
+        if (bid) setBranchStates(prev => ({
+          ...prev,
+          [sid]: { ...(prev[sid] || {}), [bid]: { ...(prev[sid]?.[bid] || {}), state: 'running' } },
+        }));
+      } else if (name === 'branch_done' && env.stageId) {
+        const sid = env.stageId, bid = env.payload?.branchId;
+        if (bid) setBranchStates(prev => ({
+          ...prev,
+          [sid]: { ...(prev[sid] || {}), [bid]: { state: 'done', ms: env.payload?.ms } },
+        }));
+      } else if (name === 'branch_error' && env.stageId) {
+        const sid = env.stageId, bid = env.payload?.branchId;
+        if (bid) setBranchStates(prev => ({
+          ...prev,
+          [sid]: { ...(prev[sid] || {}), [bid]: { state: 'error', ms: env.payload?.ms, error: env.payload?.error } },
+        }));
+      } else if (name === 'kpi_report') {
+        setKpiReport(env.payload || null);
+      } else if (name === 'stage_done' && env.stageId && stageUsesById[env.stageId] === 'compare/fanout') {
+        if (env.payload?.output) setFanoutOutput(env.payload.output);
       }
 
       // KPIs pro Stage aus stage-gebundenem Event anreichern
@@ -1373,21 +1709,47 @@ function App() {
           }}>{loadError}</div>
         )}
 
-        <div className="sturm-canvas" style={{ flex: 1 }}>
+        <div className="sturm-canvas" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {workflow ? (
-            <RF.ReactFlowProvider>
-              <FlowViewportManager
-                workflowId={workflow.id}
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                drawerCollapsed={drawerCollapsed}
-                onNodeClick={(_e, n) => {
-                  setSelectedStage(n.id);
-                  setDrawerCollapsed(false);
-                }}
-              />
-            </RF.ReactFlowProvider>
+            <>
+              <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                <RF.ReactFlowProvider>
+                  <FlowViewportManager
+                    workflowId={workflow.id}
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    drawerCollapsed={drawerCollapsed}
+                    onNodeClick={(_e, n) => {
+                      setSelectedStage(n.id);
+                      setDrawerCollapsed(false);
+                    }}
+                    onNodeDragStop={handleNodeDragStop}
+                  />
+                  {Object.keys(nodePosOverrides).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={resetLayout}
+                      title="Eigene Node-Positionen verwerfen und automatisches Layout wiederherstellen"
+                      style={{
+                        position: 'absolute', top: 10, right: 10, zIndex: 5,
+                        height: 26, padding: '0 10px',
+                        fontSize: 11.5,
+                        fontFamily: 'var(--font-inter)',
+                        color: 'var(--color-text-secondary)',
+                        background: 'var(--color-bg-secondary)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Layout zurücksetzen
+                    </button>
+                  )}
+                </RF.ReactFlowProvider>
+              </div>
+              {kpiReport && <KpiPanel report={kpiReport} fanoutOutput={fanoutOutput} />}
+            </>
           ) : (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
               {loadError ? loadError : 'Workflow wird geladen …'}

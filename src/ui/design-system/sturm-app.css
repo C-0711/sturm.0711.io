@@ -842,3 +842,10 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 .sturm-status.is-running::before { background: var(--color-accent); animation: sturm-pulse 1.2s infinite; }
 .sturm-status.is-ok::before      { background: var(--color-success); }
 .sturm-status.is-error::before   { background: var(--color-danger); }
+
+/* Accessible-but-invisible label used by icon-only buttons (theme toggle, …). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}

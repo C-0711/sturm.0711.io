@@ -24,14 +24,14 @@
         </button>
       </div>
 
-      <button class="sturm-sb-new" onclick="location.href='/pipeline.html'">
+      <a class="sturm-sb-new" id="sb-new-link" href="/pipeline.html" style="text-decoration:none;">
         <i data-lucide="play"></i><span>Workflow starten</span>
         <span class="sturm-kbd">⌘N</span>
-      </button>
+      </a>
 
       <div class="sturm-sb-search">
         <i data-lucide="search"></i>
-        <input placeholder="Suchen">
+        <input id="sb-search-input" placeholder="Suchen" autocomplete="off">
         <span class="sturm-kbd">⌘K</span>
       </div>
 
@@ -52,24 +52,6 @@
         </a>
       </nav>
 
-      <div class="sturm-sb-section"><span>Runs</span></div>
-      <div class="sturm-sb-nav sturm-sb-nav-scroll">
-        <button class="sturm-sb-item">
-          <i data-lucide="check-circle-2"></i>
-          <span>Stricker 2023</span>
-          <span class="sturm-sb-item-meta">heute</span>
-        </button>
-        <button class="sturm-sb-item">
-          <i data-lucide="check-circle-2"></i>
-          <span>Gymnastik-Beleg</span>
-          <span class="sturm-sb-item-meta">gestern</span>
-        </button>
-        <button class="sturm-sb-item">
-          <i data-lucide="circle-slash"></i>
-          <span>Tape-Foto</span>
-          <span class="sturm-sb-item-meta">-3d</span>
-        </button>
-      </div>
 
       <div class="sturm-sb-foot">
         <div class="sturm-avatar">C</div>
@@ -87,11 +69,8 @@
           <span class="sturm-topbar-title">Workflow-Engine</span>
         </div>
         <div class="sturm-topbar-r">
-          <button class="sturm-icon-btn" aria-label="Theme umschalten" onclick="toggleTheme()">
+          <button class="sturm-icon-btn" id="theme-btn" aria-label="Theme umschalten">
             <i data-lucide="sun" id="theme-icon"></i>
-          </button>
-          <button class="sturm-icon-btn" aria-label="Einstellungen">
-            <i data-lucide="settings"></i>
           </button>
         </div>
       </header>
@@ -113,17 +92,18 @@
         <div class="sturm-grid" id="workflow-grid">
           <!-- Workflow-Cards werden dynamisch von /api/workflows geladen -->
 
-          <a class="sturm-card" id="new-workflow-card" href="/docs/WORKFLOW_TEMPLATE.md" style="background: transparent; border-style: dashed;">
+          <a class="sturm-card" id="new-workflow-card" href="/designer.html" style="background: transparent; border-style: dashed;">
             <div class="sturm-card-head">
               <h3 class="sturm-card-title" style="color: var(--color-text-secondary);">Neuer Workflow</h3>
               <span class="sturm-card-id">+</span>
             </div>
             <p class="sturm-card-sub">
-              Spec ausfüllen, an Claude Code geben — neuer Workflow in <code>src/workflows/</code>. Guide unter <code>docs/WORKFLOW_TEMPLATE.md</code>.
+              Visuell bauen: Stages aus der Palette ziehen, verbinden, testen, speichern.
+              Wer lieber Code schreibt: <a href="/docs/WORKFLOW_TEMPLATE.md">Guide unter <code>docs/WORKFLOW_TEMPLATE.md</code></a>.
             </p>
             <div class="sturm-card-meta">
               <span class="sturm-card-meta-item">
-                <i data-lucide="plus"></i><span>Vorlage öffnen</span>
+                <i data-lucide="layout-grid"></i><span>Designer öffnen</span>
               </span>
             </div>
           </a>
@@ -140,15 +120,26 @@
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('is-collapsed');
     }
-    function toggleTheme() {
+    function applyTheme(mode) {
       const html = document.documentElement;
-      const isDark = html.classList.toggle('dark');
-      const icon = document.getElementById('theme-icon');
-      icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
-      window.lucide && window.lucide.createIcons();
-      localStorage.setItem('sturm-theme', isDark ? 'dark' : 'light');
+      const isDark = mode === 'dark';
+      html.classList.toggle('dark', isDark);
+      // Replace the icon node entirely so Lucide regenerates the SVG cleanly.
+      const old = document.getElementById('theme-icon');
+      if (old && old.parentNode) {
+        const fresh = document.createElement('i');
+        fresh.id = 'theme-icon';
+        fresh.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+        old.parentNode.replaceChild(fresh, old);
+        window.lucide && window.lucide.createIcons();
+      }
+      localStorage.setItem('sturm-theme', mode);
     }
-    // Restore theme preference
+    function toggleTheme() {
+      const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+      applyTheme(next);
+    }
+    // Restore theme preference on load
     (function () {
       const saved = localStorage.getItem('sturm-theme');
       if (saved === 'light') document.documentElement.classList.remove('dark');
@@ -195,7 +186,8 @@
             const versionMatch = id.match(/(v\d+)$/);
             const version = versionMatch ? versionMatch[1] : '';
             const icon = pickIcon(id);
-            return `<a class="sturm-sb-item${i === 0 ? ' is-active' : ''}" href="/pipeline.html?workflow=${encodeURIComponent(id)}" style="text-decoration:none;">
+            const search = (shortName + ' ' + id + ' ' + name).toLowerCase();
+            return `<a class="sturm-sb-item${i === 0 ? ' is-active' : ''}" href="/pipeline.html?workflow=${encodeURIComponent(id)}" style="text-decoration:none;" data-search="${escapeHtml(search)}">
               <i data-lucide="${icon}"></i>
               <span>${escapeHtml(shortName)}</span>
               <span class="sturm-sb-item-meta">${escapeHtml(version)}</span>
@@ -213,7 +205,8 @@
             const desc = shortDesc(w.description);
             const stages = Array.isArray(w.stages) ? w.stages.length : 0;
             const accept = w.input && w.input.accept;
-            return `<a class="sturm-card" href="/pipeline.html?workflow=${encodeURIComponent(id)}">
+            const search = (name + ' ' + id + ' ' + desc).toLowerCase();
+            return `<a class="sturm-card" href="/pipeline.html?workflow=${encodeURIComponent(id)}" data-search="${escapeHtml(search)}">
               <div class="sturm-card-head">
                 <h3 class="sturm-card-title">${escapeHtml(name)}</h3>
                 <span class="sturm-card-id">${escapeHtml(id)}</span>
@@ -240,9 +233,54 @@
       }
     }
 
+    function filterWorkflows(query) {
+      const q = String(query || '').trim().toLowerCase();
+      const nav = document.getElementById('sb-workflow-nav');
+      const grid = document.getElementById('workflow-grid');
+      let visibleSb = 0;
+      if (nav) {
+        for (const el of nav.querySelectorAll('[data-search]')) {
+          const match = !q || el.dataset.search.includes(q);
+          el.style.display = match ? '' : 'none';
+          if (match) visibleSb++;
+        }
+      }
+      if (grid) {
+        for (const el of grid.querySelectorAll('[data-search]')) {
+          el.style.display = (!q || el.dataset.search.includes(q)) ? '' : 'none';
+        }
+      }
+      const cnt = document.getElementById('sb-workflow-count');
+      if (cnt) cnt.textContent = String(visibleSb);
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       window.lucide && window.lucide.createIcons();
       loadWorkflows();
+      // Wire interactive handlers programmatically (more robust than inline attrs).
+      document.getElementById('sb-search-input')?.addEventListener('input', (e) => {
+        filterWorkflows(e.target.value);
+      });
+      document.getElementById('theme-btn')?.addEventListener('click', toggleTheme);
+    });
+
+    // Tastatur-Shortcuts: ⌘N startet Workflow, ⌘K fokussiert Suche, Esc löscht Suche.
+    window.addEventListener('keydown', (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        document.getElementById('sb-search-input')?.focus();
+      } else if (mod && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        location.href = '/pipeline.html';
+      } else if (e.key === 'Escape') {
+        const input = document.getElementById('sb-search-input');
+        if (input && document.activeElement === input) {
+          input.value = '';
+          filterWorkflows('');
+          input.blur();
+        }
+      }
     });
   </script>
 </body>

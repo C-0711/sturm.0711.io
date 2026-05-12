@@ -32,7 +32,9 @@
         <div class="ws-create-block">
           <h2>Neuer Workspace</h2>
           <form id="create-form" class="ws-form">
-            <input id="ws-name" type="text" placeholder="Name (z.B. Steuern 2024)" required maxlength="80" />
+            <input id="ws-name" type="text" placeholder="Name (z.B. Steuern 2024)" required maxlength="80"
+                   oninvalid="this.setCustomValidity('Bitte einen Namen für den Workspace eingeben.')"
+                   oninput="this.setCustomValidity('')" />
             <button type="submit" class="btn-primary">Anlegen</button>
             <span id="create-error" class="error-text" role="alert"></span>
           </form>

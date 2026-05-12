@@ -335,7 +335,7 @@ html:has(body.ws-root) { overflow: auto !important; height: auto !important; }
 .kpi-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
 .kpi-list li {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
   gap: 10px;
   padding: 6px 10px;
   background: var(--neo-surface, #fff);
@@ -343,8 +343,17 @@ html:has(body.ws-root) { overflow: auto !important; height: auto !important; }
   border-radius: 6px;
   font-size: 13px;
 }
-.kpi-key { color: var(--neo-muted, #6f6a60); }
-.kpi-val { font-family: var(--neo-font-mono, ui-monospace, monospace); }
+.kpi-key {
+  color: var(--neo-muted, #6f6a60);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.kpi-val {
+  font-family: var(--neo-font-mono, ui-monospace, monospace);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 .kv {
   display: grid;

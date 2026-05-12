@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>STURM · Workflow-Designer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <style>
+    /* Designer shell ------------------------------------------------------ */
+    .dsg-shell {
+      display: grid;
+      grid-template-columns: 220px 1fr 340px;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: var(--font-inter);
+    }
+    .dsg-toolbar {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg-secondary);
+    }
+    .dsg-toolbar-brand {
+      font-family: var(--font-playfair);
+      font-size: 15px; font-weight: 600;
+      margin-right: 14px;
+      color: var(--color-text-primary);
+    }
+    .dsg-toolbar-brand small {
+      font-family: var(--font-inter);
+      font-size: 11px; font-weight: 400;
+      color: var(--color-text-tertiary);
+      margin-left: 6px;
+    }
+    .dsg-toolbar input, .dsg-toolbar select {
+      height: 28px;
+      padding: 0 8px;
+      font-size: 12.5px;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-inter);
+    }
+    .dsg-toolbar input:focus, .dsg-toolbar select:focus {
+      outline: none;
+      border-color: var(--color-accent);
+    }
+    .dsg-toolbar input[data-invalid="true"] {
+      border-color: var(--color-danger);
+    }
+    .dsg-toolbar input.dsg-id-input { width: 200px; font-family: var(--font-mono); font-size: 12px; }
+    .dsg-toolbar input.dsg-name-input { width: 200px; }
+    .dsg-toolbar input.dsg-desc-input { flex: 1; min-width: 120px; }
+    .dsg-toolbar select.dsg-input-type { width: 90px; }
+
+    .dsg-toolbar-spacer { flex: 1; }
+
+    .dsg-btn {
+      height: 28px;
+      padding: 0 12px;
+      font-size: 12px; font-weight: 500;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: var(--font-inter);
+    }
+    .dsg-btn:hover { background: var(--color-bg-hover); border-color: var(--color-accent); }
+    .dsg-btn[data-primary="true"] {
+      background: var(--color-accent);
+      color: var(--color-accent-light);
+      border-color: var(--color-accent);
+    }
+    .dsg-btn[data-primary="true"]:hover { background: var(--color-accent-hover); }
+    .dsg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .dsg-btn-link {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      font-size: 12px;
+      padding: 0 8px;
+      height: 28px;
+      display: inline-flex; align-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+    }
+    .dsg-btn-link:hover { color: var(--color-accent); }
+
+    .dsg-status {
+      font-size: 11.5px;
+      padding: 0 10px;
+      color: var(--color-text-tertiary);
+      font-variant-numeric: tabular-nums;
+    }
+    .dsg-status[data-tone="ok"] { color: var(--color-success); }
+    .dsg-status[data-tone="err"] { color: var(--color-danger); }
+
+    /* Palette (left) ----------------------------------------------------- */
+    .dsg-palette {
+      border-right: 1px solid var(--color-border);
+      background: var(--color-bg-secondary);
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .dsg-palette-search {
+      margin: 4px 10px 8px;
+      width: calc(100% - 20px);
+      height: 28px;
+      padding: 0 8px;
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-family: var(--font-inter);
+    }
+    .dsg-palette-search:focus { outline: none; border-color: var(--color-accent); }
+    .dsg-cat-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 12px 4px;
+      font-size: 10.5px; font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-tertiary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .dsg-cat-head:hover { color: var(--color-text-secondary); }
+    .dsg-cat-count {
+      font-weight: 400;
+      color: var(--color-text-tertiary);
+      font-size: 10.5px;
+    }
+    /* Tiny accent dot left of each category title — visually clusters the
+       palette by theme using the same accent token the canvas badges use. */
+    .dsg-cat-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: var(--cat-accent, var(--color-text-tertiary));
+      vertical-align: 1px;
+    }
+    .dsg-cat-chev { font-size: 9px; margin-right: 4px; transition: transform 0.15s; }
+    .dsg-cat-head[data-collapsed="true"] .dsg-cat-chev { transform: rotate(-90deg); }
+
+    .dsg-palette-item {
+      display: block;
+      margin: 2px 8px;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      cursor: grab;
+      user-select: none;
+      background: transparent;
+    }
+    .dsg-palette-item:hover {
+      background: var(--color-bg-hover);
+      border-color: var(--color-border);
+    }
+    .dsg-palette-item:active { cursor: grabbing; }
+    .dsg-palette-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      line-height: 1.3;
+    }
+    .dsg-palette-id {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--color-text-tertiary);
+      margin-top: 1px;
+    }
+    .dsg-palette-desc {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Canvas (middle) ---------------------------------------------------- */
+    .dsg-canvas {
+      position: relative;
+      background: var(--color-bg);
+      overflow: hidden;
+    }
+    .dsg-canvas.is-dragover::after {
+      content: 'Hier ablegen';
+      position: absolute; inset: 16px;
+      border: 2px dashed var(--color-accent);
+      border-radius: var(--radius-lg);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--color-accent);
+      font-size: 14px; font-weight: 500;
+      background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+      pointer-events: none;
+      z-index: 5;
+    }
+    .dsg-canvas-empty {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--color-text-tertiary);
+      font-size: 13px;
+      pointer-events: none;
+      text-align: center;
+      padding: 20px;
+    }
+    .dsg-canvas-empty strong { color: var(--color-text-secondary); display: block; margin-bottom: 4px; font-size: 14px; }
+
+    /* Onboarding card — shown when canvas has zero stages, dismissible. */
+    .dsg-quickstart {
+      position: relative;
+      max-width: 460px;
+      padding: 22px 26px;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      text-align: left;
+      /* Parent .dsg-canvas-empty has pointer-events:none so the canvas-drop
+         underneath stays draggable. Re-enable on the card so its close button
+         and contents are clickable. */
+      pointer-events: auto;
+    }
+    .dsg-quickstart-close {
+      position: absolute;
+      top: 8px; right: 10px;
+      width: 24px; height: 24px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-text-tertiary);
+      font-size: 18px; line-height: 1;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+    }
+    .dsg-quickstart-close:hover {
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
+    }
+    .dsg-quickstart > strong {
+      display: block;
+      margin: 0 0 14px;
+      font-family: var(--font-playfair);
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--color-text-primary);
+      text-align: center;
+    }
+    .dsg-quickstart-steps {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .dsg-quickstart-steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: var(--color-text-secondary);
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+    .dsg-quickstart-num {
+      flex: 0 0 22px;
+      width: 22px; height: 22px;
+      border-radius: var(--radius-full);
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .dsg-quickstart em {
+      font-style: normal;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+    .dsg-quickstart code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-accent);
+      background: var(--color-accent-light);
+      padding: 0 4px;
+      border-radius: var(--radius-sm);
+    }
+    .dsg-quickstart-arrow {
+      margin-left: 4px;
+      color: var(--color-accent);
+      font-weight: 600;
+    }
+    .dsg-quickstart-source {
+      color: var(--color-accent);
+      font-weight: 600;
+    }
+
+    /* Inspector (right) -------------------------------------------------- */
+    .dsg-inspector {
+      border-left: 1px solid var(--color-border);
+      background: var(--color-bg-secondary);
+      overflow-y: auto;
+      padding: 14px;
+    }
+    .dsg-inspector-empty {
+      color: var(--color-text-tertiary);
+      font-size: 13px;
+      text-align: center;
+      padding: 40px 10px;
+    }
+    .dsg-section-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-tertiary);
+      margin: 0 0 10px;
+    }
+    .dsg-field { margin-bottom: 12px; }
+    .dsg-field-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .dsg-field-readonly {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 6px 8px;
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      word-break: break-all;
+    }
+    .dsg-input, .dsg-textarea {
+      width: 100%;
+      padding: 6px 8px;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-inter);
+      font-size: 12.5px;
+      box-sizing: border-box;
+    }
+    .dsg-input:focus, .dsg-textarea:focus { outline: none; border-color: var(--color-accent); }
+    .dsg-textarea {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.4;
+    }
+    .dsg-textarea[data-invalid="true"], .dsg-input[data-invalid="true"] { border-color: var(--color-danger); }
+    .dsg-field-hint {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      font-style: italic;
+    }
+    .dsg-field-err {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--color-danger);
+    }
+
+    /* Stage-Vertrag panel — sits between description and config in the inspector.
+       Renders inputs / outputs / configExample from /api/stages/catalog hints. */
+    .dsg-hints {
+      margin: 4px 0 14px;
+      padding: 10px 12px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+    }
+    .dsg-hints-head {
+      font-size: 10.5px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--color-text-tertiary);
+      margin-bottom: 6px;
+    }
+    .dsg-hints-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 11.5px;
+      line-height: 1.4;
+      padding: 3px 0;
+    }
+    .dsg-hints-row-block { flex-direction: column; align-items: stretch; gap: 4px; }
+    .dsg-hints-key {
+      flex: 0 0 70px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 10.5px;
+      padding-top: 1px;
+    }
+    .dsg-hints-val {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-text-primary);
+      word-break: break-word;
+    }
+    .dsg-hints-pre {
+      margin: 0;
+      padding: 6px 8px;
+      font-family: var(--font-mono); font-size: 10.5px;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 140px; overflow-y: auto;
+      line-height: 1.4;
+    }
+    .dsg-btn-sm {
+      height: 22px;
+      padding: 0 8px;
+      font-size: 11px;
+      align-self: flex-end;
+    }
+
+    .dsg-inspector-actions {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--color-border);
+      display: flex; gap: 8px;
+    }
+    .dsg-btn-danger {
+      background: transparent;
+      color: var(--color-danger);
+      border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
+    }
+    .dsg-btn-danger:hover {
+      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+      border-color: var(--color-danger);
+    }
+
+    /* Designer-styled node (simpler than runtime sturm-node) -------------- */
+    .dsg-node {
+      position: relative;
+      min-width: 180px;
+      padding: 10px 12px;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      /* Left-edge accent stripe in the stage's category color — quick visual
+         clustering on a busy canvas. Falls back to plain border for "general". */
+      border-left: 3px solid var(--cat-accent, var(--color-border));
+      border-radius: var(--radius-md);
+      font-family: var(--font-inter);
+      box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.04));
+    }
+    .dsg-node[data-selected="true"] {
+      border-color: var(--color-accent);
+      border-left-color: var(--cat-accent, var(--color-accent));
+      box-shadow: 0 0 0 2px var(--color-accent-light);
+    }
+    .dsg-node-cat-badge {
+      position: absolute;
+      top: 6px; right: 8px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--cat-accent, var(--color-text-tertiary));
+      background: color-mix(in srgb, var(--cat-accent, transparent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--cat-accent, var(--color-border)) 40%, transparent);
+      border-radius: var(--radius-sm);
+      padding: 1px 5px;
+      pointer-events: none;
+    }
+    .dsg-node-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      line-height: 1.25;
+    }
+    .dsg-node-uses {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--color-text-tertiary);
+      margin-top: 2px;
+    }
+    .dsg-node-id {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--color-accent);
+      margin-top: 4px;
+      padding: 1px 5px;
+      background: var(--color-accent-light);
+      border-radius: var(--radius-sm);
+      display: inline-block;
+    }
+
+    /* Container node — pinned data assets (gitchain-anchored). Distinct
+       orange-tinted dashed look so it reads as "external reference" not
+       "in-line stage". Sits anywhere on the canvas; emits edges to stages. */
+    .dsg-container-node {
+      min-width: 200px;
+      max-width: 240px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--color-orange) 8%, var(--color-bg-secondary));
+      border: 2px dashed var(--color-orange);
+      border-radius: var(--radius-md);
+      font-family: var(--font-inter);
+      position: relative;
+    }
+    .dsg-container-node[data-selected="true"] {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-orange) 25%, transparent);
+    }
+    .dsg-container-icon {
+      position: absolute;
+      top: 8px; right: 10px;
+      font-size: 14px;
+      opacity: 0.7;
+    }
+    .dsg-container-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      line-height: 1.25;
+      padding-right: 18px;
+    }
+    .dsg-container-meta {
+      margin-top: 4px;
+      font-size: 10.5px;
+      color: var(--color-text-secondary);
+    }
+    .dsg-container-id {
+      margin-top: 6px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      color: var(--color-text-tertiary);
+      word-break: break-all;
+    }
+    .dsg-container-readby {
+      margin-top: 6px;
+      padding-top: 4px;
+      border-top: 1px dashed color-mix(in srgb, var(--color-orange) 35%, transparent);
+      font-size: 10.5px;
+      color: var(--color-orange);
+    }
+    .dsg-container-node .react-flow__handle.dsg-container-h {
+      background: var(--color-orange);
+      width: 9px; height: 9px;
+      border: 1px solid var(--color-bg);
+      right: -5px;
+    }
+
+    /* Source node (virtual workflow input) — warm accent, dashed to signal
+       "lives outside the persisted stages graph". */
+    .dsg-source-node {
+      width: 180px;
+      padding: 10px 12px;
+      background: var(--color-accent-light);
+      border: 2px dashed var(--color-accent);
+      border-radius: var(--radius-md);
+      font-family: var(--font-inter);
+      position: relative;
+    }
+    .dsg-source-node[data-selected="true"] {
+      box-shadow: var(--shadow-focus-accent);
+    }
+    .dsg-source-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      line-height: 1.25;
+    }
+    .dsg-source-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--color-text-tertiary);
+      margin-top: 2px;
+    }
+    .dsg-source-handles {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dsg-source-handle-row {
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--color-text-secondary);
+      padding: 2px 14px 2px 0;
+      text-align: right;
+      line-height: 1.2;
+    }
+    .dsg-source-node .react-flow__handle.dsg-src-h {
+      background: var(--color-accent);
+      width: 9px;
+      height: 9px;
+      border: 1px solid var(--color-bg);
+      /* Vertically center on the row regardless of label height / count.
+         right:-5px puts the handle on the node's right edge (the row is full-width). */
+      top: 50%;
+      transform: translateY(-50%);
+      right: -5px;
+    }
+    .dsg-source-hint {
+      font-size: 11.5px;
+      color: var(--color-text-secondary);
+      line-height: 1.4;
+      padding: 8px 10px;
+      background: var(--color-accent-light);
+      border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+      border-radius: var(--radius-sm);
+    }
+
+    /* Run-Test Modal ----------------------------------------------------- */
+    .dsg-modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(2px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: var(--z-modal);
+    }
+    .dsg-modal {
+      width: min(560px, 92vw);
+      max-height: 86vh;
+      display: flex; flex-direction: column;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
+      overflow: hidden;
+    }
+    .dsg-modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg-tertiary);
+    }
+    .dsg-modal-title {
+      margin: 0;
+      font-family: var(--font-playfair);
+      font-size: 15px; font-weight: 500;
+      color: var(--color-text-primary);
+    }
+    .dsg-modal-title code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--color-accent);
+      background: var(--color-accent-light);
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      margin-left: 6px;
+    }
+    .dsg-modal-body { padding: 16px; overflow-y: auto; }
+    .dsg-modal-foot {
+      padding: 12px 16px;
+      border-top: 1px solid var(--color-border);
+      background: var(--color-bg-tertiary);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    .dsg-runtest-head {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .dsg-runtest-badge {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      border: 1px solid;
+    }
+    .dsg-runtest-badge[data-state="running"] {
+      color: var(--color-accent);
+      border-color: var(--color-accent);
+      background: var(--color-accent-light);
+    }
+    .dsg-runtest-badge[data-state="ok"] {
+      color: var(--color-success);
+      border-color: var(--color-success);
+      background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    }
+    .dsg-runtest-badge[data-state="error"] {
+      color: var(--color-danger);
+      border-color: var(--color-danger);
+      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    }
+    .dsg-runtest-runid {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+    }
+    .dsg-runtest-totalms {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      margin-left: auto;
+    }
+
+    .dsg-runtest-stages {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex; flex-direction: column;
+      gap: 4px;
+    }
+    .dsg-runtest-stage {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 10px;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-left: 3px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+    }
+    .dsg-runtest-stage[data-state="running"] { border-left-color: var(--color-accent); }
+    .dsg-runtest-stage[data-state="ok"]      { border-left-color: var(--color-success); }
+    .dsg-runtest-stage[data-state="error"]   { border-left-color: var(--color-danger); }
+    .dsg-runtest-stage[data-state="skipped"] { opacity: 0.55; }
+    .dsg-runtest-stage-id {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--color-text-primary);
+    }
+    .dsg-runtest-stage-state {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-tertiary);
+    }
+    .dsg-runtest-stage[data-state="ok"]    .dsg-runtest-stage-state { color: var(--color-success); }
+    .dsg-runtest-stage[data-state="error"] .dsg-runtest-stage-state { color: var(--color-danger); }
+    .dsg-runtest-stage-ms {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-text-secondary);
+    }
+    .dsg-runtest-stage-err {
+      grid-column: 1 / -1;
+      margin-top: 4px;
+      padding: 4px 6px;
+      font-size: 11px;
+      color: var(--color-danger);
+      background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      word-break: break-word;
+    }
+
+    /* Load dropdown ------------------------------------------------------ */
+    .dsg-load-wrap { position: relative; }
+    .dsg-load-menu {
+      position: absolute;
+      top: 32px; right: 0;
+      min-width: 260px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      z-index: 50;
+      padding: 4px 0;
+    }
+    .dsg-load-item {
+      display: block;
+      width: 100%;
+      padding: 6px 12px;
+      background: transparent;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      font-family: var(--font-inter);
+      color: var(--color-text-primary);
+    }
+    .dsg-load-item:hover { background: var(--color-bg-hover); }
+    .dsg-load-name { font-size: 12.5px; font-weight: 500; }
+    .dsg-load-meta { font-size: 10.5px; color: var(--color-text-tertiary); font-family: var(--font-mono); }
+    .dsg-load-empty { padding: 12px; color: var(--color-text-tertiary); font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
+  <script src="/designer.bundle.js?v=20260512b"></script>
+</body>
+</html>
