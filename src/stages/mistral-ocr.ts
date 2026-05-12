@@ -47,6 +47,11 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
   id: 'mistral-ocr',
   name: 'Mistral OCR',
   description: 'OCR via Mistral mit voller API-Konfiguration (Header, Footer, Annotationen, Image-Filter, Confidence)',
+  hints: {
+    inputs: 'filePath, filename · optional: schema, schemaName, fileId',
+    outputs: 'text, pages[{index,markdown,chars}], chars, annotation, ms, parsed',
+    configExample: '{"model": "mistral-ocr-latest"}',
+  },
 
   async run(input, ctx) {
     if (!input?.filePath) throw new Error('mistral-ocr: filePath fehlt');

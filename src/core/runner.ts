@@ -160,6 +160,10 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           artifacts,
           emit: (n, p) => bus.emit(n, p, stageId),
           signal,
+          // Snapshot of stages completed in earlier layers. Within the same
+          // parallel layer siblings are not yet visible — by design, since
+          // their outputs are still in flight.
+          results: stageResults as Readonly<Record<string, StageResult>>,
         };
         try {
           const output = await impl.run(resolved, ctx);

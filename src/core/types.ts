@@ -109,12 +109,40 @@ export interface StageContext<TConfig = unknown> {
   emit(eventName: string, payload?: unknown): void;
   /** AbortSignal — kann von langen Operationen respektiert werden. */
   signal: AbortSignal;
+  /**
+   * Read-only snapshot of all stage results completed so far in this run.
+   * Used by introspective stages (eval/kpi, compare/merge) — do not mutate.
+   */
+  results: Readonly<Record<StageId, StageResult>>;
+}
+
+/**
+ * Optional metadata to help the designer-UI render an "inputs/outputs/config"
+ * cheat-sheet per stage. Stage authors fill this in when relevant; the runner
+ * never reads it.
+ */
+export interface StageHints {
+  /** Free-form description of expected `input` fields. */
+  inputs?: string;
+  /** Free-form description of `output` shape. */
+  outputs?: string;
+  /** Example config as a (parseable) JSON string. */
+  configExample?: string;
+  /**
+   * If set, the stage uses an LLM-chat backend and accepts a `config.provider`
+   * override. The designer surfaces a per-stage provider dropdown for these.
+   */
+  llm?: {
+    providers: Array<'mistral' | 'vllm' | 'ollama'>;
+    default: 'mistral' | 'vllm' | 'ollama';
+  };
 }
 
 export interface StageDefinition<TIn = unknown, TOut = unknown, TConfig = unknown> {
   id: string;
   name: string;
   description?: string;
+  hints?: StageHints;
   run(input: TIn, ctx: StageContext<TConfig>): Promise<TOut>;
 }
 
