@@ -545,11 +545,11 @@ function dedupeByCanonicalRecipient<T extends { _resolution?: { canonical?: stri
 export function applyProjections(
   nested: any,
   layer: CanonicalLayer,
-  docClass: string | undefined,
+  dokumenttyp_id: string | undefined,
 ): ProjectionResult {
   const result: ProjectionResult = { appliedRules: [] };
   for (const rule of PROJECTION_RULES) {
-    if (rule.applicableDocClasses && docClass && !rule.applicableDocClasses.includes(docClass)) continue;
+    if (rule.applicableDocClasses && dokumenttyp_id && !rule.applicableDocClasses.includes(dokumenttyp_id)) continue;
     const raw = getPath(nested, rule.sourcePath);
     if (raw === undefined) continue;
     const itemsRaw = Array.isArray(raw) ? raw : [raw];

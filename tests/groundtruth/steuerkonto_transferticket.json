@@ -1,5 +1,5 @@
 {
-  "docClass": "steuerkonto_transferticket",
+  "dokumenttyp_id": "steuerkonto_transferticket",
   "anlage": "ESt1A",
   "anchor": "Hildburg Stammdaten 2024",
   "anchors": ["Stammdaten", "Identifikationsnummer", "Bankverbindung"],

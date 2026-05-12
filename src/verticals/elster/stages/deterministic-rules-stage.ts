@@ -20,7 +20,7 @@ export interface DeterministicRulesInput {
   /** Existing canonical layer to augment (from embed-cascade-stage) */
   canonicalLayer: CanonicalLayer;
   /** Doc class for rule scoping */
-  docClass?: string;
+  dokumenttyp_id?: string;
 }
 
 export interface DeterministicRulesOutput {
@@ -53,10 +53,23 @@ export const deterministicRulesStage = defineStage<
     'predicate (e.g. is_charitable_certified for Spenden), aggregates with §-aware ' +
     'ceilings (§ 10b 20%, § 35a Abs. 2 max 4.000 €), writes canonical eCode values ' +
     'into the layer. Probabilistic outputs become deterministic, audit-ready facts.',
+  hints: {
+    inputs: 'nested (Layer-2 output), dokumenttyp_id · optional: canonicalLayer',
+    outputs: 'canonicalLayer (eCode-Map mit Traces), applied_rules[], ms',
+    acceptsContainers: ['elster-catalog'],
+    inputPorts: [
+      { name: 'nested', type: 'nested-json' },
+      { name: 'dokumenttyp_id', type: 'string' },
+      { name: 'canonicalLayer', type: 'canonical-layer', description: 'Optional pre-existing layer to augment' },
+    ],
+    outputPorts: [
+      { name: 'canonicalLayer', type: 'canonical-layer', description: 'eCode-Map mit Traces' },
+    ],
+  },
 
   async run(input, ctx) {
     const t0 = Date.now();
-    const result = applyProjections(input.nested, input.canonicalLayer, input.docClass);
+    const result = applyProjections(input.nested, input.canonicalLayer, input.dokumenttyp_id);
     const stats = {
       rulesApplied: result.appliedRules.length,
       codesWritten: result.appliedRules.length,

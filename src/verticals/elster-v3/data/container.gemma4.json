@@ -1,0 +1,60 @@
+{
+  "id": "0711:elster:gemma4-tq:embeddings:v1",
+  "schema_version": 5,
+  "version": "v5.2",
+  "type": "embedding-index",
+  "namespace": "elster",
+  "identifier": "gemma4-tq:embeddings",
+  "display_name": "ELSTER eCode Embeddings — EmbeddingGemma + TurboQuant cascade",
+  "description": "2287 eCodes embedded via EmbeddingGemma-300m (native 768-d, multilingual incl. German). MRL×TurboQuant cascade: d=256/b=3@136B → d=768/b=3@392B → fp32 (768×4=3072B).",
+  "created_at": "2026-05-12T20:24:18.252Z",
+  "catalog_id_ref": "0711:elster:bmf:jahresdok-2024:v1",
+  "embedder": {
+    "provider": "ollama",
+    "model": "embeddinggemma",
+    "base_url": "http://localhost:11434",
+    "family": "google/embeddinggemma-300m",
+    "matryoshka": [
+      768,
+      512,
+      256,
+      128
+    ],
+    "document_prompt": "title: {title|none} | text: {content}",
+    "query_prompt": "task: search result | query: {content}"
+  },
+  "quantizer": {
+    "kind": "TurboQuant",
+    "reference": "arxiv:2504.19874",
+    "stage_1": "PolarQuant (Haar rotation + Lloyd-Max @ N(0,1/d))",
+    "stage_2": "QJL (sign(S·r) random Gaussian projection)",
+    "seed_tag_format": "tq-seed-{seed}-d{d}-b{b}"
+  },
+  "artifacts": {
+    "embeddings.gemma4.tq-d256-b3.bin": {
+      "sha256": "4591df11765aa8900d8d6d33e4dca45202d1c5bfc850daea569ac003a9e15142",
+      "bytes": 311064
+    },
+    "embeddings.gemma4.tq-d768-b3.bin": {
+      "sha256": "6a46e76f413c6adec48705d2bd2ea4e103cf8756a6475a7e3b50b8b89fafeec2",
+      "bytes": 896536
+    },
+    "embeddings.gemma4.fp32.bin": {
+      "sha256": "cb7dd5368774fde3b06b919e55f87bab56f036cf5e7d0d1c44e6b4d9c517df60",
+      "bytes": 7025664
+    },
+    "embeddings.gemma4.projection_seed.bin": {
+      "sha256": "e8a4b2ee7ede79a3afb332b5b6cc3d952a65fd8cffb897f5d18016577c33d7cc",
+      "bytes": 4
+    },
+    "embeddings.gemma4.cascade.json": {
+      "sha256": "85027e72d84f3871bf9e736bd3e199c75a9473189503e778caa04465efae4454",
+      "bytes": -1
+    }
+  },
+  "signature": null,
+  "anchor_block_number": null,
+  "anchor_tx_hash": null,
+  "anchor_chain": null,
+  "issuer_fingerprint": null
+}

@@ -50,6 +50,14 @@ export const compareFanoutStage = defineStage<unknown, FanoutOutput, FanoutConfi
     inputs: 'whatever the branches expect — passed verbatim to each branch',
     outputs: 'branches{branchId: branchOutput}, perBranchMs{branchId: ms}, errors{branchId: msg}, ms',
     configExample: '{"continueOnError": true, "branches": {"a": {"uses": "mistral-ocr", "config": {}}, "b": {"uses": "lighton-ocr", "config": {}}}}',
+    inputPorts: [
+      { name: 'input', type: 'any', description: 'Forwarded verbatim to each branch' },
+    ],
+    outputPorts: [
+      { name: 'branches', type: 'branches' },
+      { name: 'perBranchMs', type: 'json' },
+      { name: 'errors', type: 'json' },
+    ],
   },
 
   async run(input, ctx) {

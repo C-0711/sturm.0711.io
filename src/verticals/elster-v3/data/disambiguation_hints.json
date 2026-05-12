@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "beschreibung": "Pro dokumenttyp_id: Klassifikations-Hinweise die der LLM beim Mapping von free-text Labels auf Schema-Enum-Werte braucht. NICHT im atoms.json encodiert, weil es um Klassifikations-Entscheidungen geht, nicht um Feld-Schemata. Gelesen von layer1-extract.",
+  "hints": {
+    "spendenquittung": [
+      "spenden[].art ist eine Klassifikation (nicht im Catalog):",
+      "  - \"Spende\" = freiwillige Zuwendung ohne Gegenleistung (default)",
+      "  - \"Mitgliedsbeitrag\" = wenn das Dokument explizit \"Mitgliedsbeitrag\" angibt",
+      "  - \"Sachspende\" = Naturalspende",
+      "  - \"Aufwandsspende\" = Verzicht auf Aufwandserstattung"
+    ],
+    "lohnsteuerbescheinigung": [
+      "arbeitgeber.art ist eine Klassifikation (nicht im Catalog):",
+      "  - \"versorgungstraeger\" = Beamtenversorgung (LBV, Versorgungswerk), Witwenpension, Pensionskasse, Betriebsrente",
+      "  - \"arbeitgeber\" = aktive Beschäftigung",
+      "  - \"rentenversicherer\" = gesetzliche/private Rentenkasse (DRV)",
+      "  - \"unbekannt\" = NUR wenn Dokument keinen Hinweis liefert",
+      "Hinweis: \"LBV NRW\" = Landesamt für Besoldung und Versorgung NRW = Versorgungsträger.",
+      "",
+      "arbeitnehmer.konfession ist eine Klassifikation: \"Evangelisch\"→ev, \"römisch-katholisch\"→rk, \"altkatholisch\"→ak."
+    ],
+    "pension_versorgung": [
+      "Behandle wie lohnsteuerbescheinigung."
+    ]
+  }
+}

@@ -104,6 +104,14 @@ export const lightonOcrStage = defineStage<LightonOcrInput, LightonOcrOutput, Li
     inputs: 'filePath, filename',
     outputs: 'model, text, pages[], chars, ms',
     configExample: '{"baseUrl": "http://localhost:11437", "model": "lighton-ocr", "maxTokens": 4096, "dpi": 200}',
+    inputPorts: [
+      { name: 'filePath', type: 'file-path' },
+      { name: 'filename', type: 'string' },
+    ],
+    outputPorts: [
+      { name: 'text', type: 'text' },
+      { name: 'pages', type: 'pages' },
+    ],
   },
 
   async run(input, ctx) {

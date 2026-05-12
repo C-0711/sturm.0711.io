@@ -1,5 +1,5 @@
 {
-  "docClass": "beitragsbescheinigung_kranken_p",
+  "dokumenttyp_id": "beitragsbescheinigung_kranken_p",
   "anlage": "VOR",
   "anchor": "Hildburg Debeka 2024 (private KV/PV)",
   "anchors": ["Krankenversicherung", "Pflegeversicherung", "Beiträge", "Debeka", "Basisabsicherung"],

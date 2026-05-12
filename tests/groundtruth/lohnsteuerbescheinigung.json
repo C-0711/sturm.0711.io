@@ -1,5 +1,5 @@
 {
-  "docClass": "lohnsteuerbescheinigung",
+  "dokumenttyp_id": "lohnsteuerbescheinigung",
   "anlage": "N",
   "anchor": "Hildburg LBV NRW Versorgungsbezug 2024",
   "anchors": ["LBV NRW", "Bruttoarbeitslohn", "Versorgungsbezug"],

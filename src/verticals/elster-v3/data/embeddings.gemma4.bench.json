@@ -1,0 +1,159 @@
+{
+  "queries": [
+    {
+      "query": "Betrag",
+      "tieThreshold": 0.3915049086594854,
+      "tieRecallAt10_tq768": 0,
+      "tieRecallAt10_tq256": 0,
+      "tieRecallAt10_cascade": 0,
+      "broadRecall_tq768": 1,
+      "broadRecall_tq256": 0,
+      "broadRecall_cascade": 0.9,
+      "meanAbsErr_tq768": 0.006868670466613163,
+      "meanAbsErr_tq256": 0.010835526190731278,
+      "truthTop3": [
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-602",
+          "score": 0.3915049086594854,
+          "drucktext": "Betrag"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-603",
+          "score": 0.3915049086594854,
+          "drucktext": "Betrag"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-605",
+          "score": 0.3915049086594854,
+          "drucktext": "Betrag"
+        }
+      ]
+    },
+    {
+      "query": "Identifikationsnummer",
+      "tieThreshold": 0.4219675752132299,
+      "tieRecallAt10_tq768": 1,
+      "tieRecallAt10_tq256": 0.8,
+      "tieRecallAt10_cascade": 1,
+      "broadRecall_tq768": 1,
+      "broadRecall_tq256": 1,
+      "broadRecall_cascade": 1,
+      "meanAbsErr_tq768": 0.00623481748342544,
+      "meanAbsErr_tq256": 0.011598800059934166,
+      "truthTop3": [
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-93",
+          "score": 0.4586135701139341,
+          "drucktext": "Identifikationsnummer der empfangsberechtigten Person"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-334",
+          "score": 0.4586135701139341,
+          "drucktext": "Identifikationsnummer der empfangsberechtigten Person"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-340",
+          "score": 0.4586135701139341,
+          "drucktext": "Identifikationsnummer der empfangsberechtigten Person"
+        }
+      ]
+    },
+    {
+      "query": "Anschrift des Spenders",
+      "tieThreshold": 0.35507842076183727,
+      "tieRecallAt10_tq768": 1,
+      "tieRecallAt10_tq256": 0.6,
+      "tieRecallAt10_cascade": 1,
+      "broadRecall_tq768": 1,
+      "broadRecall_tq256": 0.9,
+      "broadRecall_cascade": 1,
+      "meanAbsErr_tq768": 0.006903422378205483,
+      "meanAbsErr_tq256": 0.01189078825394134,
+      "truthTop3": [
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1540",
+          "score": 0.4554778438365742,
+          "drucktext": "Name und Anschrift des Verpächters / Überlassenden"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1553",
+          "score": 0.41842648330335364,
+          "drucktext": "Name und Anschrift des Pächters"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-343",
+          "score": 0.36989304390582445,
+          "drucktext": "Die unterstützte Person hat ihren Wohnsitz / gewöhnlichen Aufenthalt im Inland"
+        }
+      ]
+    },
+    {
+      "query": "Bruttoarbeitslohn",
+      "tieThreshold": 0.3592487509302438,
+      "tieRecallAt10_tq768": 0.9,
+      "tieRecallAt10_tq256": 0.8,
+      "tieRecallAt10_cascade": 0.9,
+      "broadRecall_tq768": 1,
+      "broadRecall_tq256": 1,
+      "broadRecall_cascade": 1,
+      "meanAbsErr_tq768": 0.006990730632025365,
+      "meanAbsErr_tq256": 0.010489094547535863,
+      "truthTop3": [
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2247",
+          "score": 0.45421977580961126,
+          "drucktext": "Bruttoarbeitslohn laut Nr. 3 der Lohnsteuerbescheinigung(en)"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-362",
+          "score": 0.44745612196652484,
+          "drucktext": "Bruttoarbeitslohn"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-363",
+          "score": 0.44745612196652484,
+          "drucktext": "Bruttoarbeitslohn"
+        }
+      ]
+    },
+    {
+      "query": "donor address",
+      "tieThreshold": 0.2643619845331576,
+      "tieRecallAt10_tq768": 0.9,
+      "tieRecallAt10_tq256": 0.8,
+      "tieRecallAt10_cascade": 0.9,
+      "broadRecall_tq768": 1,
+      "broadRecall_tq256": 1,
+      "broadRecall_cascade": 1,
+      "meanAbsErr_tq768": 0.006703667580554754,
+      "meanAbsErr_tq256": 0.012876115281151892,
+      "truthTop3": [
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-162",
+          "score": 0.2998427492814021,
+          "drucktext": "Von den Spenden in den Zeilen 9 und 10 sollen $VZ$ berücksichtigt werden"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-125",
+          "score": 0.2851980189899071,
+          "drucktext": "$VZ$ geleistete Spenden an Empfänger im EU- / EWR-Ausland (laut Bestätigungen / laut Betriebsfinanzamt)"
+        },
+        {
+          "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1540",
+          "score": 0.28205761376149263,
+          "drucktext": "Name und Anschrift des Verpächters / Überlassenden"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "avgTieRecall_tq768": 0.76,
+    "avgTieRecall_tq256": 0.6,
+    "avgTieRecall_cascade": 0.76,
+    "avgBroadRecall_tq768": 1,
+    "avgBroadRecall_tq256": 0.78,
+    "avgBroadRecall_cascade": 0.9800000000000001,
+    "avgMeanAbsErr_tq768": 0.006740261708164841,
+    "avgMeanAbsErr_tq256": 0.011538064866658908
+  }
+}

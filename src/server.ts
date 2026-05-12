@@ -164,6 +164,11 @@ app.get('/api/workflows/:id', (req, res) => {
 
 function categorizeStage(id: string): string {
   if (id.startsWith('compare/')) return 'control-flow';
+  // Quality-Trias: critic + cross-validator + schema-guard + span-linker — defensibility nodes.
+  // Sort BEFORE the generic eval/ + extract/ buckets so they land in the dedicated category.
+  if (id === 'eval/critic-llm') return 'quality';
+  if (id === 'extract/span-linker' || id === 'extract/cross-validator' || id === 'extract/schema-guarded-llm') return 'quality';
+  if (id.startsWith('quality/')) return 'quality';
   if (id.startsWith('eval/')) return 'evaluation';
   if (id.startsWith('extract/')) return 'extract';
   if (id === 'paddleocr-vl' || id.endsWith('-ocr')) return 'ocr';

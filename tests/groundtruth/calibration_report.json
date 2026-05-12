@@ -1,0 +1,582 @@
+{
+  "fixtures": [
+    {
+      "file": "beitragsbescheinigung_kranken_p.json",
+      "dokumenttyp_id": "beitragsbescheinigung_kranken_p",
+      "expectedECodes": [
+        "E2003104",
+        "E2003202",
+        "E2003502"
+      ],
+      "expectedAnlagen": [
+        "VOR"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_withScaffold": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": []
+      },
+      "labelScores": [
+        {
+          "eCode": "E2003104",
+          "label": "Beiträge zu privaten Krankenversicherungen (nur Basisabsicherung)",
+          "top1Score": 0.6057710253818454,
+          "inTop20": true,
+          "rank": 1
+        },
+        {
+          "eCode": "E2003202",
+          "label": "Beiträge zu Pflege-Pflichtversicherungen",
+          "top1Score": 0.5477901476579468,
+          "inTop20": true,
+          "rank": 1
+        },
+        {
+          "eCode": "E2003502",
+          "label": "Über die Basisabsicherung hinausgehende Beiträge (Wahlleistungen)",
+          "top1Score": 0.6181780665272514,
+          "inTop20": true,
+          "rank": 1
+        }
+      ]
+    },
+    {
+      "file": "haushaltsnahe_dienstleistungen.json",
+      "dokumenttyp_id": "haushaltsnahe_dienstleistungen",
+      "expectedECodes": [
+        "E0107208",
+        "E0111215"
+      ],
+      "expectedAnlagen": [
+        "HA_35a"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_withScaffold": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": []
+      },
+      "labelScores": [
+        {
+          "eCode": "E0107208",
+          "label": "Aufwendungen für haushaltsnahe Dienstleistungen — Wohnen-Anteil (zur Aufteilung)",
+          "top1Score": 0.5769682733939887,
+          "inTop20": false,
+          "rank": null
+        },
+        {
+          "eCode": "E0111215",
+          "label": "Speisen-Anteil (in der Regel NICHT abzugsfähig — siehe Notes)",
+          "top1Score": 0.4084673372378011,
+          "inTop20": false,
+          "rank": null
+        }
+      ]
+    },
+    {
+      "file": "kapitalertragsbescheinigung.json",
+      "dokumenttyp_id": "kapitalertragsbescheinigung",
+      "expectedECodes": [
+        "E1900701"
+      ],
+      "expectedAnlagen": [
+        "KAP",
+        "AUS"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "perK_withScaffold": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": [
+          {
+            "eCode": "E1900701",
+            "label": "Kapitalerträge (z.B. Zinsen, Dividenden) — vom Steuerabzug freigestellt",
+            "bestRankObserved": null,
+            "bestScore": null
+          }
+        ]
+      },
+      "labelScores": [
+        {
+          "eCode": "E1900701",
+          "label": "Kapitalerträge (z.B. Zinsen, Dividenden) — vom Steuerabzug freigestellt",
+          "top1Score": 0.5156874105586291,
+          "inTop20": false,
+          "rank": null
+        }
+      ]
+    },
+    {
+      "file": "lohnsteuerbescheinigung.json",
+      "dokumenttyp_id": "lohnsteuerbescheinigung",
+      "expectedECodes": [
+        "E0200201",
+        "E0200301",
+        "E0200401",
+        "E0200501",
+        "E0200801",
+        "E0200902"
+      ],
+      "expectedAnlagen": [
+        "N",
+        "VOR"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 0.3333333333333333,
+          "25": 0.5,
+          "50": 0.5,
+          "100": 0.5,
+          "200": 0.5
+        },
+        "perK_withScaffold": {
+          "10": 0.3333333333333333,
+          "25": 0.5,
+          "50": 0.5,
+          "100": 0.5,
+          "200": 0.5
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": [
+          {
+            "eCode": "E0200301",
+            "label": "einbehaltene Lohnsteuer",
+            "bestRankObserved": null,
+            "bestScore": null
+          },
+          {
+            "eCode": "E0200401",
+            "label": "einbehaltener Solidaritätszuschlag",
+            "bestRankObserved": null,
+            "bestScore": null
+          },
+          {
+            "eCode": "E0200501",
+            "label": "Kirchensteuer des Arbeitnehmers",
+            "bestRankObserved": null,
+            "bestScore": null
+          }
+        ]
+      },
+      "labelScores": [
+        {
+          "eCode": "E0200201",
+          "label": "Bruttoarbeitslohn",
+          "top1Score": 0.45421977580961126,
+          "inTop20": true,
+          "rank": 3
+        },
+        {
+          "eCode": "E0200301",
+          "label": "einbehaltene Lohnsteuer",
+          "top1Score": 0.49133164008149066,
+          "inTop20": false,
+          "rank": null
+        },
+        {
+          "eCode": "E0200401",
+          "label": "einbehaltener Solidaritätszuschlag",
+          "top1Score": 0.45238182557627526,
+          "inTop20": true,
+          "rank": 8
+        },
+        {
+          "eCode": "E0200501",
+          "label": "Kirchensteuer des Arbeitnehmers",
+          "top1Score": 0.5413253083154502,
+          "inTop20": true,
+          "rank": 1
+        },
+        {
+          "eCode": "E0200801",
+          "label": "steuerbegünstigte Versorgungsbezüge",
+          "top1Score": 0.5009134082922512,
+          "inTop20": true,
+          "rank": 2
+        },
+        {
+          "eCode": "E0200902",
+          "label": "Bemessungsgrundlage Versorgungsfreibetrag",
+          "top1Score": 0.6114847414805508,
+          "inTop20": true,
+          "rank": 1
+        }
+      ]
+    },
+    {
+      "file": "religionszugehoerigkeit.json",
+      "dokumenttyp_id": "religionszugehoerigkeit",
+      "expectedECodes": [
+        "E0100402"
+      ],
+      "expectedAnlagen": [
+        "ESt1A"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_withScaffold": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": []
+      },
+      "labelScores": [
+        {
+          "eCode": "E0100402",
+          "label": "Religion (Person A)",
+          "top1Score": 0.3995250459304189,
+          "inTop20": true,
+          "rank": 1
+        }
+      ]
+    },
+    {
+      "file": "rentenbezugsmitteilung.json",
+      "dokumenttyp_id": "rentenbezugsmitteilung",
+      "expectedECodes": [
+        "E1800301",
+        "E1800606",
+        "E1800501"
+      ],
+      "expectedAnlagen": [
+        "R",
+        "VOR"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 0.6666666666666666,
+          "25": 0.6666666666666666,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_withScaffold": {
+          "10": 0.6666666666666666,
+          "25": 0.6666666666666666,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": []
+      },
+      "labelScores": [
+        {
+          "eCode": "E1800301",
+          "label": "Rentenbetrag (einschließlich Einmalzahlung und Leistungen)",
+          "top1Score": 0.5921183922180173,
+          "inTop20": true,
+          "rank": 1
+        },
+        {
+          "eCode": "E1800606",
+          "label": "Rentenanpassungsbetrag (in Zeile 4 enthalten)",
+          "top1Score": 0.7155395613422192,
+          "inTop20": true,
+          "rank": 1
+        },
+        {
+          "eCode": "E1800501",
+          "label": "Beginn der Rente",
+          "top1Score": 0.5342645568588903,
+          "inTop20": true,
+          "rank": 5
+        }
+      ]
+    },
+    {
+      "file": "spendenquittung.json",
+      "dokumenttyp_id": "spendenquittung",
+      "expectedECodes": [
+        "E0108405"
+      ],
+      "expectedAnlagen": [
+        "SA"
+      ],
+      "expectedPflichtCount": 0,
+      "groundingRecall": {
+        "perK": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_withScaffold": {
+          "10": 1,
+          "25": 1,
+          "50": 1,
+          "100": 1,
+          "200": 1
+        },
+        "perK_scaffoldLift": {
+          "10": 0,
+          "25": 0,
+          "50": 0,
+          "100": 0,
+          "200": 0
+        },
+        "misses": []
+      },
+      "labelScores": [
+        {
+          "eCode": "E0108405",
+          "label": "geleistete Spenden an Empfänger im Inland (gemeinnützige Zwecke)",
+          "top1Score": 0.5407027922819547,
+          "inTop20": true,
+          "rank": 1
+        }
+      ]
+    },
+    {
+      "file": "steuerkonto_transferticket.json",
+      "dokumenttyp_id": "steuerkonto_transferticket",
+      "expectedECodes": [
+        "E0100201",
+        "E0100301",
+        "E0100401",
+        "E0100601",
+        "E0100602",
+        "E0101104",
+        "E0101206"
+      ],
+      "expectedAnlagen": [
+        "ESt1A"
+      ],
+      "expectedPflichtCount": 5,
+      "groundingRecall": {
+        "perK": {
+          "10": 0.14285714285714285,
+          "25": 0.14285714285714285,
+          "50": 0.2857142857142857,
+          "100": 0.2857142857142857,
+          "200": 0.2857142857142857
+        },
+        "perK_withScaffold": {
+          "10": 0.7142857142857143,
+          "25": 0.7142857142857143,
+          "50": 0.7142857142857143,
+          "100": 0.7142857142857143,
+          "200": 0.7142857142857143
+        },
+        "perK_scaffoldLift": {
+          "10": 0.5714285714285714,
+          "25": 0.5714285714285714,
+          "50": 0.4285714285714286,
+          "100": 0.4285714285714286,
+          "200": 0.4285714285714286
+        },
+        "misses": [
+          {
+            "eCode": "E0100201",
+            "label": "Familienname Person A",
+            "bestRankObserved": null,
+            "bestScore": null
+          },
+          {
+            "eCode": "E0100601",
+            "label": "PLZ",
+            "bestRankObserved": null,
+            "bestScore": null
+          },
+          {
+            "eCode": "E0100602",
+            "label": "Ort",
+            "bestRankObserved": null,
+            "bestScore": null
+          },
+          {
+            "eCode": "E0101104",
+            "label": "Straße",
+            "bestRankObserved": null,
+            "bestScore": null
+          },
+          {
+            "eCode": "E0101206",
+            "label": "Hausnummer",
+            "bestRankObserved": null,
+            "bestScore": null
+          }
+        ]
+      },
+      "labelScores": [
+        {
+          "eCode": "E0100201",
+          "label": "Familienname Person A",
+          "top1Score": 0.3656238093897557,
+          "inTop20": false,
+          "rank": null
+        },
+        {
+          "eCode": "E0100301",
+          "label": "Vorname Person A",
+          "top1Score": 0.3752989190508259,
+          "inTop20": true,
+          "rank": 13
+        },
+        {
+          "eCode": "E0100401",
+          "label": "Geburtsdatum Person A",
+          "top1Score": 0.46095939717944484,
+          "inTop20": true,
+          "rank": 14
+        },
+        {
+          "eCode": "E0100601",
+          "label": "PLZ",
+          "top1Score": 0.3425480167285635,
+          "inTop20": false,
+          "rank": null
+        },
+        {
+          "eCode": "E0100602",
+          "label": "Ort",
+          "top1Score": 0.32135210625107147,
+          "inTop20": false,
+          "rank": null
+        },
+        {
+          "eCode": "E0101104",
+          "label": "Straße",
+          "top1Score": 0.3920277318871221,
+          "inTop20": true,
+          "rank": 2
+        },
+        {
+          "eCode": "E0101206",
+          "label": "Hausnummer",
+          "top1Score": 0.40549767869460307,
+          "inTop20": true,
+          "rank": 7
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalFixtures": 8,
+    "totalExpectedECodes": 24,
+    "avgGroundingRecall": {
+      "10": 0.6428571428571429,
+      "25": 0.6636904761904763,
+      "50": 0.7232142857142857,
+      "100": 0.7232142857142857,
+      "200": 0.7232142857142857
+    },
+    "avgGroundingRecall_withScaffold": {
+      "10": 0.7142857142857143,
+      "25": 0.7351190476190477,
+      "50": 0.7767857142857143,
+      "100": 0.7767857142857143,
+      "200": 0.7767857142857143
+    },
+    "avgScaffoldLift": {
+      "10": 0.0714285714285714,
+      "25": 0.0714285714285714,
+      "50": 0.0535714285714286,
+      "100": 0.0535714285714286,
+      "200": 0.0535714285714286
+    },
+    "knownGoodTop1Stats": {
+      "p5": 0.3425480167285635,
+      "p25": 0.3995250459304189,
+      "p50": 0.49133164008149066,
+      "p75": 0.5477901476579468,
+      "p95": 0.6114847414805508,
+      "mean": 0.4904157070052491
+    },
+    "recommendedThresholds": {
+      "unbekanntGrenze": 0.2740384133828508,
+      "konfidenzGrenze": 0.3995250459304189,
+      "rationale": "Based on top-1 cosine distribution over 24 known-good (label, eCode) pairs: p5=0.343 p25=0.400 p50=0.491 p95=0.611. unbekanntGrenze = max(0.05, 0.8·p5); konfidenzGrenze = max(novelty+0.02, p25)."
+    }
+  }
+}

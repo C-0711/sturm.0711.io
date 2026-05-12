@@ -1,5 +1,5 @@
 {
-  "docClass": "spendenquittung",
+  "dokumenttyp_id": "spendenquittung",
   "anlage": "SA",
   "anchor": "Hildburg Spenden 2024 (Hospizstiftung + BUND)",
   "anchors": ["Spende", "Zuwendung", "gemeinnützig"],

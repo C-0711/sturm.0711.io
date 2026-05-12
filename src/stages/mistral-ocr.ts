@@ -51,6 +51,15 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
     inputs: 'filePath, filename · optional: schema, schemaName, fileId',
     outputs: 'text, pages[{index,markdown,chars}], chars, annotation, ms, parsed',
     configExample: '{"model": "mistral-ocr-latest"}',
+    inputPorts: [
+      { name: 'filePath', type: 'file-path', description: 'Absolute filesystem path' },
+      { name: 'filename', type: 'string', description: 'Original filename' },
+    ],
+    outputPorts: [
+      { name: 'text', type: 'text', description: 'Concatenated markdown of all pages' },
+      { name: 'pages', type: 'pages', description: 'Array of {index, markdown, chars}' },
+      { name: 'annotation', type: 'json', description: 'Optional structured annotation' },
+    ],
   },
 
   async run(input, ctx) {
@@ -59,6 +68,16 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
 
     // Input-Schema-Override gewinnt vor config (Legacy-Verhalten).
     const cfg: MistralOcrConfig = { ...(ctx.config ?? {}) };
+    // Quality-pipeline default: turn on line-level confidence so downstream
+    // ocr-consensus-merge can pick the most-confident variant per aligned
+    // cluster. Costs nothing extra on the wire. Caller can disable via
+    // config.confidenceScoresGranularity = 'none'.
+    if (cfg.confidenceScoresGranularity === undefined) {
+      // 'page' is the finest granularity exposed by Mistral's typed config
+      // ('word' is for token-level; we need a per-page float that ocr-consensus-merge
+      // can use to weight clusters from this branch).
+      cfg.confidenceScoresGranularity = 'page';
+    }
     if (input.schema) {
       cfg.documentAnnotation = {
         schema: input.schema,

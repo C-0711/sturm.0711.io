@@ -17,7 +17,7 @@ export interface EntityResolveInput {
   /** Nested JSON from nested-extract-stage */
   nested: unknown;
   /** Doc-class hint for context-aware resolution */
-  docClass?: string;
+  dokumenttyp_id?: string;
 }
 
 export interface EntityResolveOutput {

@@ -56,6 +56,12 @@ export interface WorkflowContainerRef {
   displayName: string;
   /** Short description. */
   description?: string;
+  /**
+   * What this container exposes — used by the designer to validate connections.
+   * Examples: `elster-catalog` (eCode lookup), `embedding-index`, `medical-icd`.
+   * Stages whose `hints.acceptsContainers` lists this kind can read from it.
+   */
+  kind?: string;
   /** Stage ids that read this container. Renders as dashed reference-edges. */
   readBy: StageId[];
   /** Provenance + lock metadata (populated from registry.containers). */
@@ -136,6 +142,28 @@ export interface StageHints {
     providers: Array<'mistral' | 'vllm' | 'ollama'>;
     default: 'mistral' | 'vllm' | 'ollama';
   };
+  /**
+   * Which container "kinds" this stage can consume. The designer uses this to
+   * validate container→stage edges. Kinds are free-form strings, see e.g.
+   * `elster-catalog`, `embedding-index`. A stage that lists `["elster-catalog"]`
+   * here will only accept edges from containers whose `kind` matches.
+   */
+  acceptsContainers?: string[];
+
+  /**
+   * Typed input ports — each entry becomes a labeled left-side handle in the
+   * designer. The `type` is a free-form tag (e.g. `text`, `pages`, `nested`,
+   * `branches`, `kpi-report`) that's used to validate stage→stage connections.
+   * Missing ports → designer falls back to a single generic input handle.
+   */
+  inputPorts?: Array<{ name: string; type: string; description?: string }>;
+
+  /**
+   * Typed output ports — each entry becomes a labeled right-side handle. Used
+   * to validate stage→stage compat: target's port type must equal source's
+   * port type for the connection to be accepted.
+   */
+  outputPorts?: Array<{ name: string; type: string; description?: string }>;
 }
 
 export interface StageDefinition<TIn = unknown, TOut = unknown, TConfig = unknown> {

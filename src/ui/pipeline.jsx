@@ -1030,8 +1030,21 @@ function StageChipBar({ stageId, stageName, stageState, stageMs, kpis, events, d
   );
 }
 
-function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, stageKpis, selectedStage, runId, stageUses, collapsed, onToggleCollapsed }) {
+function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, stageKpis, selectedStage, runId, stageUses, collapsed, onToggleCollapsed, resultModel }) {
   const [tab, setTab] = useState('events');
+  const [autoFlipped, setAutoFlipped] = useState(false);
+  // Auto-flip to result when:
+  //  - replay: resultModel arrives via fetch and we never touched the tab
+  //  - live run: run_done event seen + resultModel present
+  useEffect(() => {
+    if (autoFlipped || tab !== 'events' || !resultModel) return;
+    const liveDone = events.some(e => e.name === 'run_done');
+    const isReplay = events.length === 0; // no live SSE → must be replay
+    if (liveDone || isReplay) {
+      setTab('result');
+      setAutoFlipped(true);
+    }
+  }, [resultModel, events.length, tab, autoFlipped]);
   const [newIssue, setNewIssue] = useState('');
   const [manualOpen, setManualOpen] = useState({}); // { [stageId]: boolean }
   // "run" ist die Pseudo-Stage für globale Events
@@ -1083,6 +1096,11 @@ function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, 
     <aside className={`sturm-drawer ${collapsed ? 'is-collapsed' : ''}`}>
       <div className="sturm-drawer-head">
         <div className="sturm-drawer-tabs">
+          <button className={`sturm-drawer-tab ${tab === 'result' ? 'is-active' : ''}`} onClick={() => openTab('result')} title="Ergebnis">
+            <i data-lucide="table-2"></i>
+            {!collapsed && <>Ergebnis {resultModel && <span className="sturm-badge sturm-badge-muted">{resultModel.meta.totalFields}</span>}</>}
+            {collapsed && resultModel && <span className="sturm-badge sturm-badge-muted">{resultModel.meta.totalFields}</span>}
+          </button>
           <button className={`sturm-drawer-tab ${tab === 'events' ? 'is-active' : ''}`} onClick={() => openTab('events')} title="Events">
             <i data-lucide="list-tree"></i>
             {!collapsed && <>Events <span className="sturm-badge sturm-badge-muted">{events.length}</span></>}
@@ -1098,6 +1116,12 @@ function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, 
           <i data-lucide={collapsed ? 'chevron-left' : 'chevron-right'}></i>
         </button>
       </div>
+
+      {!collapsed && tab === 'result' && (
+        <div className="sturm-drawer-body">
+          <ResultPanel model={resultModel} />
+        </div>
+      )}
 
       {!collapsed && tab === 'events' && (
         <div className="sturm-drawer-body sturm-drawer-body--bars">
@@ -1176,6 +1200,308 @@ function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, 
         </div>
       )}
     </aside>
+  );
+}
+
+/* ------------------------------------------------------------
+   Result-Model — joins quality-trias outputs into per-field rows
+   for the "Ergebnis" tab. Pure function; no React deps.
+
+   Inputs: artefacts from container-field-mapper, span-linker,
+   cross-validator, critic. Output: { groups[{ key, label, rows[] }],
+   meta }. Each row = one extracted leaf, fully decorated for display.
+   ------------------------------------------------------------ */
+const GROUP_LABELS = {
+  arbeitnehmer: 'Arbeitnehmer',
+  arbeitgeber:  'Arbeitgeber',
+  lohn:         'Lohn (Anlage N)',
+  versorgungsbezug: 'Versorgungsbezug',
+  sozialversicherung: 'Sozialversicherung (Anlage VOR)',
+  zeitraum:     'Bescheinigungszeitraum',
+  bescheinigung: 'Bescheinigung',
+};
+function groupLabel(key) {
+  return GROUP_LABELS[key] || (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '));
+}
+
+/**
+ * Container-aware value formatter — drives display formatting from the
+ * BMF atom's `formatRegex` and `formatkennzeichen` rather than hardcoded
+ * datentyp branches. Examples:
+ *
+ *   Bruttoarbeitslohn (regex `\d{1,12}`, no comma) →  "69.292 €"   (rounded, no cents)
+ *   Solidaritätszuschlag (regex `\d{1,12},\d{2}`)  →  "0,00 €"     (2 decimals)
+ *   IDNr                                             →  "8523 674 9007"
+ *   Datum (ISO)                                      →  "01.01.2024"
+ */
+function formatValue(value, datentyp, formatRegex) {
+  if (value == null) return '—';
+  const s = String(value);
+  if (!s.length) return '—';
+
+  const isCurrency = datentyp === 'currency'
+    || datentyp === 'GeldBetrag'
+    || datentyp === 'geldbetrag';
+
+  // Decimals expected iff regex permits a comma+digits OR a dot+digits.
+  const allowsDecimals = formatRegex
+    ? /,\\d|,\d|\.\\d|\.\d/.test(formatRegex)
+    : true; // fallback: assume decimals if no regex available
+
+  if (isCurrency) {
+    const n = typeof value === 'number'
+      ? value
+      : Number(s.replace(/[€\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    if (isFinite(n)) {
+      const opts = allowsDecimals
+        ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+        : { minimumFractionDigits: 0, maximumFractionDigits: 0 };
+      // Round (not truncate) when no decimals — matches ELSTER convention.
+      const rounded = allowsDecimals ? n : Math.round(n);
+      return rounded.toLocaleString('de-DE', opts) + ' €';
+    }
+  }
+  if (datentyp === 'idnr' || datentyp === 'identifikationsnummer') {
+    const m = s.replace(/\s+/g, '').match(/^(\d{4})(\d{3})(\d{4})$/);
+    if (m) return `${m[1]} ${m[2]} ${m[3]}`;
+  }
+  if (datentyp === 'date' || datentyp === 'Datum') {
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  }
+  if (datentyp === 'boolean' || typeof value === 'boolean') {
+    return value ? 'ja' : 'nein';
+  }
+  return s;
+}
+
+/**
+ * Walk extracted_with_codes (output of container-field-mapper) and flatten
+ * into rows. The sibling _meta_<leaf> / _span_<leaf> / _ecode_<leaf> keys
+ * embed everything we need on the leaf's parent.
+ */
+function buildResultModel({ fieldMapper, spanLinker, crossValidator, critic, workflow }) {
+  if (!fieldMapper) return null;
+  // Walk the decorated tree, collecting leaves with their sibling meta/span
+  const rows = [];
+  const issuesByField = new Map();
+  const violationsByField = new Map();
+  if (critic?.per_field_issues) {
+    for (const iss of critic.per_field_issues) {
+      const arr = issuesByField.get(iss.field) || [];
+      arr.push(iss);
+      issuesByField.set(iss.field, arr);
+    }
+  }
+  if (crossValidator?.violations) {
+    for (const v of crossValidator.violations) {
+      const arr = violationsByField.get(v.field) || [];
+      arr.push(v);
+      violationsByField.set(v.field, arr);
+    }
+  }
+  // The decorated tree is the most useful source — has _meta_<k> and (if span_linker ran) _span_<k>
+  // We prefer span_linker's output as the root, because it carries the _span_ siblings AND the meta.
+  const root = spanLinker?.extracted_with_spans || fieldMapper.extracted_with_codes || fieldMapper.extracted;
+
+  function walk(node, path) {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+      node.forEach((v, i) => walk(v, path ? `${path}[${i}]` : `[${i}]`));
+      return;
+    }
+    if (typeof node === 'object') {
+      const obj = node;
+      for (const [k, v] of Object.entries(obj)) {
+        if (k.startsWith('_')) continue; // skip annotation siblings
+        const childPath = path ? `${path}.${k}` : k;
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+          // Pull sibling meta + span from this object scope
+          const meta = obj[`_meta_${k}`] || {};
+          const span = obj[`_span_${k}`] || null;
+          const ecode = obj[`_ecode_${k}`] || meta.ecode || null;
+          const dataType = meta.datentyp || null;
+          const group = childPath.split('.')[0];
+          const fmtRegex = meta.formatRegex || null;
+          let formatValid = null;
+          if (fmtRegex) {
+            try { formatValid = new RegExp(fmtRegex).test(String(v)); } catch { formatValid = null; }
+          }
+          const fieldIssues = issuesByField.get(childPath) || [];
+          const fieldViolations = violationsByField.get(childPath) || [];
+          // Also match issues that cite the eCode in their field-path slot (critic emits "lohn.bruttoarbeitslohn" already, but be defensive)
+          rows.push({
+            path: childPath,
+            group,
+            leaf: k,
+            label: meta.drucktext || k.replace(/_/g, ' '),
+            value: v,
+            formatted: formatValue(v, dataType, fmtRegex),
+            ecode,
+            anlage: meta.anlage,
+            vordruckzeile: meta.vordruckzeile,
+            datentyp: dataType,
+            pflicht: meta.pflicht,
+            formatRegex: fmtRegex,
+            formatValid,
+            span,
+            issues: fieldIssues,
+            violations: fieldViolations.filter(x => x.severity === 'block' || x.severity === 'warn'),
+            matchMethod: meta.matchMethod,
+            anleitung: meta.anleitung,
+          });
+        }
+        walk(v, childPath);
+      }
+    }
+  }
+  walk(root, '');
+
+  // Group by first path-segment, preserving insertion order
+  const groupsMap = new Map();
+  for (const row of rows) {
+    const arr = groupsMap.get(row.group) || [];
+    arr.push(row);
+    groupsMap.set(row.group, arr);
+  }
+  const groups = Array.from(groupsMap.entries()).map(([key, rows]) => ({
+    key, label: groupLabel(key), rows,
+  }));
+
+  const spanLinked = rows.filter(r => r.span).length;
+  const flagged = rows.filter(r => r.issues.length > 0 || r.violations.length > 0).length;
+
+  return {
+    groups,
+    meta: {
+      workflowName: workflow?.name || workflow?.id || '—',
+      totalFields: rows.length,
+      spanLinked,
+      flagged,
+      criticScore: critic?.score,
+      criticAccept: critic?.accept,
+      validatorPass: crossValidator?.pass,
+    },
+  };
+}
+
+/* ------------------------------------------------------------
+   ResultPanel — renders the joined model as grouped tables.
+   ------------------------------------------------------------ */
+function ResultPanel({ model }) {
+  const [openPath, setOpenPath] = useState(null);
+  if (!model) {
+    return (
+      <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
+        Noch kein Ergebnis. Starte den Workflow — extrahierte Werte erscheinen hier nach dem Lauf.
+      </div>
+    );
+  }
+  if (model.groups.length === 0) {
+    return (
+      <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
+        Lauf abgeschlossen, aber keine extrahierten Felder. Prüfe den Events-Tab nach Fehlern.
+      </div>
+    );
+  }
+  return (
+    <div className="sturm-result-panel">
+      <div className="sturm-result-meta">
+        <span><strong>{model.meta.totalFields}</strong> Felder</span>
+        <span><strong>{model.meta.spanLinked}</strong> ✓ Quelle</span>
+        {model.meta.flagged > 0 && <span style={{ color: 'var(--color-amber)' }}>⚠ <strong>{model.meta.flagged}</strong> markiert</span>}
+        {model.meta.criticScore != null && (
+          <span>Critic <strong>{(model.meta.criticScore * 100).toFixed(0)}%</strong> {model.meta.criticAccept ? '✓' : '✗'}</span>
+        )}
+      </div>
+      {model.groups.map(group => (
+        <div key={group.key} className="sturm-result-group">
+          <div className="sturm-result-group-head">
+            <span className="sturm-result-group-label">{group.label}</span>
+            <span className="sturm-result-group-count">{group.rows.length} Felder</span>
+          </div>
+          <div className="sturm-result-rows">
+            {group.rows.map(row => (
+              <ResultRow key={row.path} row={row} expanded={openPath === row.path}
+                         onToggle={() => setOpenPath(openPath === row.path ? null : row.path)} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResultRow({ row, expanded, onToggle }) {
+  const hasIssues = row.issues.length > 0 || row.violations.length > 0;
+  const sevTone = (() => {
+    if (row.issues.some(i => i.severity === 'block') || row.violations.some(v => v.severity === 'block')) return 'err';
+    if (hasIssues) return 'warn';
+    return null;
+  })();
+  // Compact citation, only when we have one: "E0200201 · N Z.5"
+  const cite = row.ecode
+    ? `${row.ecode}${row.anlage ? ` · ${row.anlage}` : ''}${row.vordruckzeile ? ` Z.${row.vordruckzeile}` : ''}`
+    : null;
+  return (
+    <div className={`sturm-result-row ${expanded ? 'is-expanded' : ''}`} data-tone={sevTone}>
+      <button type="button" className="sturm-result-row-main" onClick={onToggle}>
+        <div className="sturm-result-row-top">
+          <span className="sturm-result-row-label">
+            {row.label}
+            {row.pflicht && <span className="sturm-result-pflicht" title="Pflichtfeld">*</span>}
+          </span>
+          <span className="sturm-result-row-flags">
+            {row.span && <span className="sturm-result-span" title={`Seite ${row.span.page} · Pos ${row.span.charStart}-${row.span.charEnd}`}>🔗</span>}
+            {row.formatValid === true && <span className="sturm-result-fmt-ok" title="Format gültig">✓</span>}
+            {row.formatValid === false && <span className="sturm-result-fmt-bad" title="Format weicht ab">⚠</span>}
+            {hasIssues && <span className="sturm-result-issue-count" title="Critic/Validator-Hinweise">{row.issues.length + row.violations.length}</span>}
+          </span>
+        </div>
+        <div className="sturm-result-row-bottom">
+          <span className="sturm-result-row-value">{row.formatted}</span>
+          {cite && <span className="sturm-result-cite">{cite}</span>}
+        </div>
+      </button>
+      {expanded && (
+        <div className="sturm-result-row-detail">
+          {row.span && (
+            <div className="sturm-result-detail-snippet">
+              <span className="sturm-result-detail-eyebrow">Quellzeile · Seite {row.span.page}</span>
+              <code>…{row.span.snippet}…</code>
+            </div>
+          )}
+          <dl className="sturm-result-detail-grid">
+            {row.datentyp && (<><dt>Typ</dt><dd>{row.datentyp}</dd></>)}
+            {row.formatRegex && (<><dt>Format</dt><dd className="sturm-result-mono-wrap">{row.formatRegex}</dd></>)}
+            {row.anleitung && (<><dt>Quelle</dt><dd>{row.anleitung.document} — {row.anleitung.section}</dd></>)}
+            {row.matchMethod && (<><dt>Mapping</dt><dd>{row.matchMethod}</dd></>)}
+          </dl>
+          {row.issues.length > 0 && (
+            <div className="sturm-result-issues">
+              <div className="sturm-result-issues-head">Critic</div>
+              {row.issues.map((i, idx) => (
+                <div key={idx} className={`sturm-result-issue sev-${i.severity}`}>
+                  <span className="sturm-result-issue-sev">{i.severity}</span>
+                  <span>{i.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {row.violations.length > 0 && (
+            <div className="sturm-result-issues">
+              <div className="sturm-result-issues-head">Validator</div>
+              {row.violations.map((v, idx) => (
+                <div key={idx} className={`sturm-result-issue sev-${v.severity}`}>
+                  <span className="sturm-result-issue-sev">{v.kind}</span>
+                  <span>{v.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1325,10 +1651,13 @@ function KpiPanel({ report, fanoutOutput }) {
       </div>
 
       <div className="sturm-kpi-bars">
+        {/* Quality-only composite — speed reported separately as latency info. */}
         <ScoreBar label="schema_coverage" value={c.schema_coverage ?? report.schema_coverage} />
         <ScoreBar label="format_conformance" value={c.format_conformance ?? report.format_conformance} />
-        <ScoreBar label="cross_branch_agreement" value={c.cross_branch_agreement ?? 0} />
-        <ScoreBar label="speed" value={c.speed ?? 0} />
+        {c.critic != null && <ScoreBar label="critic" value={c.critic} />}
+        {c.span_coverage != null && <ScoreBar label="span_coverage" value={c.span_coverage} />}
+        {c.validator != null && <ScoreBar label="validator" value={c.validator} />}
+        {(c.cross_branch_agreement ?? 0) > 0 && <ScoreBar label="cross_branch_agreement" value={c.cross_branch_agreement} />}
       </div>
 
       {branchKeys.length > 0 && (
@@ -1403,12 +1732,33 @@ function App() {
   const [stageStates, setStageStates] = useState({});
   const [stageKpis, setStageKpis] = useState({}); // { [stageId]: { kpis, progress, _prog } }
   const [selectedStage, setSelectedStage] = useState(null);
-  const [drawerCollapsed, setDrawerCollapsed] = useState(true);
+  // When replaying a run via URL (?run=…), default to open drawer so the
+  // Result-tab is visible immediately.
+  const [drawerCollapsed, setDrawerCollapsed] = useState(() => {
+    return !new URLSearchParams(location.search).get('run');
+  });
   const [branchStates, setBranchStates] = useState({}); // { [fanoutStageId]: { [branchId]: {state, ms, error} } }
   const [kpiReport, setKpiReport] = useState(null);
   const [fanoutOutput, setFanoutOutput] = useState(null); // { branches, perBranchMs, errors }
+  // Quality-Trias outputs — fetched after run_done for the Result-tab merge.
+  const [qualityArtifacts, setQualityArtifacts] = useState({
+    fieldMapper: null,
+    spanLinker: null,
+    crossValidator: null,
+    critic: null,
+  });
 
   // Workflow-ID aus URL — akzeptiert ?workflow= UND ?wf= (Alias, vom Designer benutzt)
+  // Replay support: ?run=<runId> loads a completed run's artefacts so the
+  // Result-tab can be inspected without re-running. Set ONCE from URL.
+  const runIdFromUrl = useMemo(() => {
+    const p = new URLSearchParams(location.search);
+    return p.get('run') || null;
+  }, []);
+  useEffect(() => {
+    if (runIdFromUrl && !runId) setRunId(runIdFromUrl);
+  }, [runIdFromUrl]);
+
   const wfIdFromUrl = useMemo(() => {
     const p = new URLSearchParams(location.search);
     return p.get('workflow') || p.get('wf') || 'hello-ocr';
@@ -1439,8 +1789,10 @@ function App() {
   }, [issues, workflow?.id]);
 
   useEffect(() => {
+    // When replaying a run, keep drawer open (the Result-tab is the whole point).
+    if (runIdFromUrl) return;
     setDrawerCollapsed(true);
-  }, [workflow?.id]);
+  }, [workflow?.id, runIdFromUrl]);
 
   // Operator-dragged node positions get persisted per workflow. Container nodes
   // (id prefixed with "container:") share the same map.
@@ -1478,11 +1830,45 @@ function App() {
         .then(j => { if (j) setFanoutOutput(j); })
         .catch(() => {});
     }
+    // Quality-Trias artefacts — needed for the Result tab.
+    const fieldMapperStage    = workflow.stages.find(s => s.uses === 'quality/container-field-mapper');
+    const spanLinkerStage     = workflow.stages.find(s => s.uses === 'extract/span-linker');
+    const crossValidatorStage = workflow.stages.find(s => s.uses === 'extract/cross-validator');
+    const criticStage         = workflow.stages.find(s => s.uses === 'eval/critic-llm');
+    const fetchArtifact = (stage, key) => {
+      if (!stage || qualityArtifacts[key]) return;
+      fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/stages/${encodeURIComponent(stage.id)}/output`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(j => { if (j) setQualityArtifacts(prev => ({ ...prev, [key]: j })); })
+        .catch(() => {});
+    };
+    fetchArtifact(fieldMapperStage, 'fieldMapper');
+    fetchArtifact(spanLinkerStage, 'spanLinker');
+    fetchArtifact(crossValidatorStage, 'crossValidator');
+    fetchArtifact(criticStage, 'critic');
   }, [workflow, runId, status]);
+
+  // Build the joined result model from the four artefacts.
+  const resultModel = useMemo(() => {
+    if (!qualityArtifacts.fieldMapper) return null;
+    return buildResultModel({
+      fieldMapper: qualityArtifacts.fieldMapper,
+      spanLinker: qualityArtifacts.spanLinker,
+      crossValidator: qualityArtifacts.crossValidator,
+      critic: qualityArtifacts.critic,
+      workflow,
+    });
+  }, [qualityArtifacts, workflow]);
 
   useEffect(() => {
     if (events.length > 0 || issues.length > 0) setDrawerCollapsed(false);
   }, [events.length, issues.length]);
+
+  // Replay: auto-expand drawer once the result-model becomes available
+  // (no live events fired the auto-open path).
+  useEffect(() => {
+    if (resultModel && resultModel.meta.totalFields > 0) setDrawerCollapsed(false);
+  }, [resultModel?.meta.totalFields]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -1605,6 +1991,7 @@ function App() {
     setRunning(true); setStatus('running');
     setRunId(null); setEvents([]); setStageStates({}); setStageKpis({});
     setBranchStates({}); setKpiReport(null); setFanoutOutput(null);
+    setQualityArtifacts({ fieldMapper: null, spanLinker: null, crossValidator: null, critic: null });
 
     const onEvent = (name, env) => {
       const t = new Date().toLocaleTimeString();
@@ -1773,6 +2160,7 @@ function App() {
         stageUses={stageUsesById}
         collapsed={drawerCollapsed}
         onToggleCollapsed={setDrawerCollapsed}
+        resultModel={resultModel}
       />
     </div>
   );

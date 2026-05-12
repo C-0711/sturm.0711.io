@@ -83,7 +83,7 @@ export const layer4AggregateStage = defineStage<
           const arr = contributionsByCode.get(feldName) ?? [];
           arr.push({
             subDocId: layer1.subDocId,
-            docClass: layer1.docClass,
+            dokumenttyp_id: layer1.dokumenttyp_id,
             ruleDescription: `extracted from anlage ${anlage}`,
             inputCount: 1,
             filteredCount: 1,
@@ -174,12 +174,12 @@ export const layer4AggregateStage = defineStage<
 function belegeToSubDocs(belege: BelegErgebnis[]): SubDocLayered[] {
   return belege.map((b) => {
     const subDocId = `subdoc_${String(b.index).padStart(2, '0')}`;
-    const docClass = b.klassifikation.typ_id ?? 'unknown';
+    const dokumenttyp_id = b.klassifikation.typ_id ?? 'unknown';
     const layer1: Layer1Result = {
       subDocId,
-      docClass,
-      schemaName: `belege/${docClass}`,
-      schemaId: `belege/${docClass}`,
+      dokumenttyp_id,
+      schemaName: `belege/${dokumenttyp_id}`,
+      schemaId: `belege/${dokumenttyp_id}`,
       nested: (b.extraktion.values ?? {}) as Readonly<Record<string, unknown>>,
       llmMs: 0,
       ms: b.extraktion.ms,
@@ -190,7 +190,7 @@ function belegeToSubDocs(belege: BelegErgebnis[]): SubDocLayered[] {
     return {
       subDocId,
       title: b.header,
-      headerKind: b.klassifikation.label ?? docClass,
+      headerKind: b.klassifikation.label ?? dokumenttyp_id,
       pages: b.seiten,
       classifierHint: b.klassifikation.typ_id ?? null,
       layer1,

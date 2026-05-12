@@ -99,6 +99,9 @@ function tryParseJSON(text, fallback) {
 const CATEGORY_META = {
   'ocr':          { label: 'OCR',                tag: 'OCR',  accent: 'var(--color-cyan)' },
   'extract':      { label: 'Extraktion',         tag: 'EXT',  accent: 'var(--color-teal)' },
+  // Quality-Trias: defensible extraction (Schema-Guard, Critic, Span-Linker, Cross-Validator).
+  // Emerald — same hue as success/eval to signal "trust + correctness".
+  'quality':      { label: 'Qualität · Audit',   tag: 'QLT',  accent: 'var(--color-emerald)' },
   'analysis':     { label: 'Analyse',            tag: 'ANL',  accent: 'var(--color-violet)' },
   'control-flow': { label: 'Steuerlogik',        tag: 'CF',   accent: 'var(--color-amber)' },
   'evaluation':   { label: 'Evaluation',         tag: 'KPI',  accent: 'var(--color-emerald)' },
@@ -120,7 +123,67 @@ function categoryLabel(c) { return CATEGORY_META[c]?.label || c; }
 function categoryTag(c) { return CATEGORY_META[c]?.tag || c.slice(0, 3).toUpperCase(); }
 function categoryAccent(c) { return CATEGORY_META[c]?.accent || 'var(--color-text-tertiary)'; }
 
-const CATEGORY_ORDER = ['ocr', 'extract', 'analysis', 'control-flow', 'evaluation', 'elster-v3', 'elster', 'steuerbelege', 'pentacam', 'myopia', 'general'];
+const CATEGORY_ORDER = ['ocr', 'extract', 'quality', 'analysis', 'control-flow', 'evaluation', 'elster-v3', 'elster', 'steuerbelege', 'pentacam', 'myopia', 'general'];
+/**
+ * Topological auto-layout. Returns position map covering all stages + the
+ * source-node + all containers. Sources/containers go in a left "rail";
+ * stages fan out left→right by topo depth, top-to-bottom within a layer.
+ */
+function computeAutoLayout(stages, edges, containers) {
+  const stageIds = Object.keys(stages);
+  if (stageIds.length === 0) return {};
+
+  // Build adjacency
+  const indeg = new Map(stageIds.map((id) => [id, 0]));
+  const succ = new Map(stageIds.map((id) => [id, []]));
+  for (const [a, b] of edges) {
+    if (!indeg.has(a) || !indeg.has(b)) continue;
+    succ.get(a).push(b);
+    indeg.set(b, indeg.get(b) + 1);
+  }
+  // Kahn layers
+  const layers = [];
+  let frontier = stageIds.filter((id) => indeg.get(id) === 0);
+  const seen = new Set();
+  while (frontier.length > 0) {
+    layers.push(frontier);
+    frontier.forEach((id) => seen.add(id));
+    const next = [];
+    for (const id of frontier) {
+      for (const t of succ.get(id) || []) {
+        const d = indeg.get(t) - 1;
+        indeg.set(t, d);
+        if (d === 0) next.push(t);
+      }
+    }
+    frontier = next;
+  }
+  // Orphans (cyclic remainders) into a last column.
+  for (const id of stageIds) if (!seen.has(id)) {
+    if (layers.length === 0) layers.push([]);
+    layers[layers.length - 1].push(id);
+  }
+
+  const COL_W = 280;
+  const ROW_H = 140;
+  const ORIGIN_X = 280;   // Stages start right of the source-rail
+  const ORIGIN_Y = 80;
+  const layout = {};
+  layers.forEach((layer, col) => {
+    layer.forEach((id, row) => {
+      layout[id] = { x: ORIGIN_X + col * COL_W, y: ORIGIN_Y + row * ROW_H };
+    });
+  });
+  // Source rail (left column, single node).
+  layout[SOURCE_ID] = { x: 40, y: ORIGIN_Y };
+  // Containers stack below the source.
+  const cIds = Object.keys(containers || {});
+  cIds.forEach((cid, i) => {
+    layout[CONTAINER_KEY_PREFIX + cid] = { x: 40, y: ORIGIN_Y + 240 + i * 180 };
+  });
+  return layout;
+}
+
 function compareCategory(a, b) {
   const ia = CATEGORY_ORDER.indexOf(a);
   const ib = CATEGORY_ORDER.indexOf(b);
@@ -345,6 +408,11 @@ function editorReducer(state, action) {
       };
     }
 
+    case 'apply_layout':
+      // Wholesale layout swap — used by Auto-Layout. Per-key merge preserves
+      // any layout entries not covered by the new map (defensive).
+      return { ...state, layout: { ...state.layout, ...action.layout } };
+
     case 'reset':
       return { ...INITIAL_STATE };
 
@@ -360,21 +428,51 @@ function StageNode({ data, selected }) {
   // data.category is supplied at node-build time from the catalog lookup.
   const cat = data.category || 'general';
   const accent = categoryAccent(cat);
+  // data.inputPorts / data.outputPorts may be empty arrays — fall back to a
+  // single generic handle so legacy stages still connect normally.
+  const inputs = (data.inputPorts && data.inputPorts.length > 0) ? data.inputPorts : null;
+  const outputs = (data.outputPorts && data.outputPorts.length > 0) ? data.outputPorts : null;
   return (
     <div
       className="dsg-node"
       data-selected={selected}
       data-category={cat}
-      // Inline CSS var lets the stylesheet drive border-tint, badge color etc.
-      // without a separate class per category.
       style={{ '--cat-accent': accent }}
     >
-      <RF.Handle type="target" position="left" style={{ background: 'var(--color-border)', width: 8, height: 8 }} />
+      {/* Inputs (left handles) */}
+      {inputs ? (
+        <div className="dsg-node-ports dsg-node-ports-in">
+          {inputs.map((p) => (
+            <div key={p.name} className="dsg-node-port-row dsg-node-port-row-in" title={`${p.name} : ${p.type}${p.description ? ' · ' + p.description : ''}`}>
+              <RF.Handle id={p.name} type="target" position="left" className="dsg-node-h" />
+              <span className="dsg-node-port-name">{p.name}</span>
+              <span className="dsg-node-port-type">{p.type}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <RF.Handle type="target" position="left" style={{ background: 'var(--color-border)', width: 8, height: 8 }} />
+      )}
+
       <div className="dsg-node-cat-badge" title={categoryLabel(cat)}>{categoryTag(cat)}</div>
       <div className="dsg-node-name">{data.label}</div>
       <div className="dsg-node-uses">{data.uses}</div>
       <div className="dsg-node-id">#{data.stageId}</div>
-      <RF.Handle type="source" position="right" style={{ background: 'var(--color-border)', width: 8, height: 8 }} />
+
+      {/* Outputs (right handles) */}
+      {outputs ? (
+        <div className="dsg-node-ports dsg-node-ports-out">
+          {outputs.map((p) => (
+            <div key={p.name} className="dsg-node-port-row dsg-node-port-row-out" title={`${p.name} : ${p.type}${p.description ? ' · ' + p.description : ''}`}>
+              <span className="dsg-node-port-type">{p.type}</span>
+              <span className="dsg-node-port-name">{p.name}</span>
+              <RF.Handle id={p.name} type="source" position="right" className="dsg-node-h" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <RF.Handle type="source" position="right" style={{ background: 'var(--color-border)', width: 8, height: 8 }} />
+      )}
     </div>
   );
 }
@@ -421,6 +519,7 @@ function ContainerNode({ data, selected }) {
       <RF.Handle type="source" position="right" className="dsg-container-h" />
       <div className="dsg-container-icon">🗄️</div>
       <div className="dsg-container-title">{data.displayName || data.id}</div>
+      {data.kind && <div className="dsg-container-kind">kind: {data.kind}</div>}
       {data.atomsCount != null && (
         <div className="dsg-container-meta">
           <span>{data.atomsCount.toLocaleString('de-DE')} Atoms</span>
@@ -624,6 +723,7 @@ function Inspector({ state, dispatch, onDelete, catalog }) {
         )}
         <div className="dsg-hints" style={{ marginTop: 4 }}>
           <div className="dsg-hints-head">Eckdaten</div>
+          {c.kind && <div className="dsg-hints-row"><span className="dsg-hints-key">Kind</span><code className="dsg-hints-val">{c.kind}</code></div>}
           {c.atomsCount != null && <div className="dsg-hints-row"><span className="dsg-hints-key">Atome</span><code className="dsg-hints-val">{c.atomsCount}</code></div>}
           {c.anlagenCount != null && <div className="dsg-hints-row"><span className="dsg-hints-key">Anlagen</span><code className="dsg-hints-val">{c.anlagenCount}</code></div>}
           {c.embeddingDim && <div className="dsg-hints-row"><span className="dsg-hints-key">Embeddings</span><code className="dsg-hints-val">{c.embeddingDim}-dim ({c.embeddingModel || '—'})</code></div>}
@@ -873,7 +973,7 @@ function StageInspector({ state, dispatch, onDelete, catalog }) {
 /* --------------------------------------------------------------------------
    Toolbar (top)
    -------------------------------------------------------------------------- */
-function Toolbar({ state, dispatch, onSave, onNew, onLoad, onTest, savedList, status, isSaving, reloadList, canTest }) {
+function Toolbar({ state, dispatch, onSave, onNew, onLoad, onTest, onAutoLayout, savedList, status, isSaving, reloadList, canTest }) {
   const [loadOpen, setLoadOpen] = useState(false);
   const loadRef = useRef(null);
 
@@ -937,6 +1037,15 @@ function Toolbar({ state, dispatch, onSave, onNew, onLoad, onTest, savedList, st
       <div className="dsg-toolbar-spacer" />
 
       <button type="button" className="dsg-btn" onClick={onNew}>Neu</button>
+      <button
+        type="button"
+        className="dsg-btn"
+        onClick={onAutoLayout}
+        disabled={Object.keys(state.stages).length === 0}
+        title="Stages + Container topologisch anordnen"
+      >
+        Auto-Layout
+      </button>
 
       <div className="dsg-load-wrap" ref={loadRef}>
         <button
@@ -996,7 +1105,45 @@ function Toolbar({ state, dispatch, onSave, onNew, onLoad, onTest, savedList, st
 /* --------------------------------------------------------------------------
    Canvas (ReactFlow wrapper + DnD onto pane)
    -------------------------------------------------------------------------- */
-function Canvas({ state, dispatch, catalog, paneRef }) {
+/**
+ * Checks whether `containerKind` is consumable by the stage whose catalog entry
+ * lists which container kinds it accepts. A stage with no `acceptsContainers`
+ * hint is treated as "any-kind ok" — we're not strict for un-annotated stages
+ * so existing workflows don't break.
+ */
+function canStageReadContainer(stageCatEntry, containerKind) {
+  if (!containerKind) return true; // legacy container without kind metadata
+  const accepts = stageCatEntry?.hints?.acceptsContainers;
+  if (!accepts || accepts.length === 0) return true; // un-annotated stage
+  return accepts.includes(containerKind);
+}
+
+/**
+ * Two port types are compatible if they're equal, OR if either side is `any`.
+ * `null/undefined` ports (un-annotated stages) are treated as `any` so legacy
+ * workflows continue to wire without friction.
+ */
+function arePortTypesCompatible(sourceType, targetType) {
+  if (!sourceType || !targetType) return true;
+  if (sourceType === 'any' || targetType === 'any') return true;
+  return sourceType === targetType;
+}
+
+/** Look up an output port by name on a stage's catalog entry. */
+function findOutputPort(catEntry, name) {
+  if (!catEntry || !name) return null;
+  const ports = catEntry?.hints?.outputPorts;
+  if (!ports || ports.length === 0) return null;
+  return ports.find((p) => p.name === name) || null;
+}
+function findInputPort(catEntry, name) {
+  if (!catEntry || !name) return null;
+  const ports = catEntry?.hints?.inputPorts;
+  if (!ports || ports.length === 0) return null;
+  return ports.find((p) => p.name === name) || null;
+}
+
+function Canvas({ state, dispatch, catalog, paneRef, onInvalidConnect }) {
   const [rfInstance, setRfInstance] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   // Quickstart is dismissible; pref lives in localStorage so it stays away
@@ -1034,10 +1181,11 @@ function Canvas({ state, dispatch, catalog, paneRef }) {
       deletable: false,
       draggable: true,
     };
-    // Catalog lookup so each rendered node knows its category for color-coding.
-    const catByUses = new Map((catalog ?? []).map(c => [c.id, c.category]));
+    // Catalog lookup so each rendered node knows its category + typed ports.
+    const catalogByUses = new Map((catalog ?? []).map(c => [c.id, c]));
     const stageNodes = Object.entries(state.stages).map(([stageId, def]) => {
       const pos = state.layout[stageId] || { x: 40, y: 40 };
+      const cat = catalogByUses.get(def.uses);
       return {
         id: stageId,
         type: 'stage',
@@ -1046,7 +1194,9 @@ function Canvas({ state, dispatch, catalog, paneRef }) {
           stageId,
           uses: def.uses,
           label: def.name || def.uses,
-          category: catByUses.get(def.uses) || 'general',
+          category: cat?.category || 'general',
+          inputPorts: cat?.hints?.inputPorts || null,
+          outputPorts: cat?.hints?.outputPorts || null,
         },
         selected: state.selectedId === stageId,
       };
@@ -1150,12 +1300,77 @@ function Canvas({ state, dispatch, catalog, paneRef }) {
     // container's readBy[]. The container becomes "consumed by this stage".
     if (isContainerKey(conn.source)) {
       if (isContainerKey(conn.target)) return;
-      dispatch({ type: 'wire_container_to_stage', containerId: containerIdFromKey(conn.source), stageId: conn.target });
+      const cid = containerIdFromKey(conn.source);
+      const container = state.containers?.[cid];
+      const stageDef = state.stages?.[conn.target];
+      const stageCat = (catalog || []).find((c) => c.id === stageDef?.uses);
+      if (!canStageReadContainer(stageCat, container?.kind)) {
+        // Typed-port mismatch: surface to the user, do NOT wire.
+        onInvalidConnect?.({
+          kind: 'container-mismatch',
+          containerId: cid,
+          containerKind: container?.kind,
+          stageId: conn.target,
+          stageUses: stageDef?.uses,
+          accepts: stageCat?.hints?.acceptsContainers,
+        });
+        return;
+      }
+      dispatch({ type: 'wire_container_to_stage', containerId: cid, stageId: conn.target });
       return;
     }
     if (isContainerKey(conn.target)) return; // stage→container makes no sense
+
+    // Stage → stage: enforce port-type matching if both stages declare ports.
+    const srcStage = state.stages?.[conn.source];
+    const tgtStage = state.stages?.[conn.target];
+    const srcCat = (catalog || []).find((c) => c.id === srcStage?.uses);
+    const tgtCat = (catalog || []).find((c) => c.id === tgtStage?.uses);
+    if (conn.sourceHandle && conn.targetHandle) {
+      const srcPort = findOutputPort(srcCat, conn.sourceHandle);
+      const tgtPort = findInputPort(tgtCat, conn.targetHandle);
+      if (!arePortTypesCompatible(srcPort?.type, tgtPort?.type)) {
+        onInvalidConnect?.({
+          kind: 'port-mismatch',
+          srcStage: conn.source,
+          srcPort: conn.sourceHandle,
+          srcType: srcPort?.type,
+          tgtStage: conn.target,
+          tgtPort: conn.targetHandle,
+          tgtType: tgtPort?.type,
+        });
+        return;
+      }
+    }
     dispatch({ type: 'add_edge', from: conn.source, to: conn.target });
-  }, [dispatch]);
+  }, [dispatch, state.containers, state.stages, catalog, onInvalidConnect]);
+
+  // While the user is actively dragging a connection, this fires for every
+  // candidate target. Return false → ReactFlow draws the wire red and refuses
+  // to call onConnect on release. We only enforce for container→stage; other
+  // pairs use their own legality checks inside onConnect.
+  const isValidConnection = useCallback((conn) => {
+    if (!conn.source || !conn.target) return true;
+    // Container → stage
+    if (isContainerKey(conn.source)) {
+      if (isContainerKey(conn.target) || conn.target === SOURCE_ID) return false;
+      const cid = containerIdFromKey(conn.source);
+      const container = state.containers?.[cid];
+      const stageDef = state.stages?.[conn.target];
+      if (!stageDef) return true;
+      const stageCat = (catalog || []).find((c) => c.id === stageDef.uses);
+      return canStageReadContainer(stageCat, container?.kind);
+    }
+    // Stage → stage port-type check (only when both handles named)
+    if (conn.sourceHandle && conn.targetHandle && state.stages?.[conn.source] && state.stages?.[conn.target]) {
+      const srcCat = (catalog || []).find((c) => c.id === state.stages[conn.source].uses);
+      const tgtCat = (catalog || []).find((c) => c.id === state.stages[conn.target].uses);
+      const sp = findOutputPort(srcCat, conn.sourceHandle);
+      const tp = findInputPort(tgtCat, conn.targetHandle);
+      return arePortTypesCompatible(sp?.type, tp?.type);
+    }
+    return true;
+  }, [state.containers, state.stages, catalog]);
 
   const onNodeClick = useCallback((_e, node) => {
     dispatch({ type: 'select_node', stageId: node.id });
@@ -1236,6 +1451,7 @@ function Canvas({ state, dispatch, catalog, paneRef }) {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
@@ -1682,6 +1898,14 @@ function App() {
     }
   }, [state, catalogIds, catalog]);
 
+  const handleAutoLayout = useCallback(() => {
+    const layout = computeAutoLayout(state.stages, state.edges, state.containers);
+    if (Object.keys(layout).length === 0) return;
+    dispatch({ type: 'apply_layout', layout });
+    setStatus({ message: 'Auto-Layout angewandt.', tone: 'ok' });
+    setTimeout(() => paneRef.current.fitView?.(), 50);
+  }, [state.stages, state.edges, state.containers]);
+
   const handleNew = useCallback(() => {
     const hasContent = Object.keys(state.stages).length > 0 || state.meta.name !== INITIAL_STATE.meta.name;
     if (hasContent && !window.confirm('Aktuelle Eingaben verwerfen?')) return;
@@ -1725,6 +1949,7 @@ function App() {
         onSave={handleSave}
         onNew={handleNew}
         onLoad={handleLoad}
+        onAutoLayout={handleAutoLayout}
         onTest={async () => {
           // Validate first → save (server is the source of truth for executable
           // workflows) → open modal only on save success. handleSave already
@@ -1751,8 +1976,55 @@ function App() {
         />
       )}
       <Palette catalog={catalog} containerCatalog={containerCatalog} />
-      <Canvas state={state} dispatch={dispatch} catalog={catalog} paneRef={paneRef} />
+      <Canvas
+        state={state}
+        dispatch={dispatch}
+        catalog={catalog}
+        paneRef={paneRef}
+        onInvalidConnect={(info) => {
+          if (info.kind === 'container-mismatch') {
+            const acceptsTxt = info.accepts?.length ? info.accepts.join(', ') : '(keine Container)';
+            setStatus({
+              message: `Container "${info.containerKind || '—'}" passt nicht zu Stage "${info.stageUses}" — akzeptiert: ${acceptsTxt}`,
+              tone: 'err',
+            });
+          } else if (info.kind === 'port-mismatch') {
+            setStatus({
+              message: `Port-Typen passen nicht: ${info.srcStage}.${info.srcPort} (${info.srcType || 'any'}) → ${info.tgtStage}.${info.tgtPort} (${info.tgtType || 'any'})`,
+              tone: 'err',
+            });
+          }
+        }}
+      />
       <Inspector state={state} dispatch={dispatch} onDelete={handleDeleteNode} catalog={catalog} />
+      <Statusbar state={state} status={status} />
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Live workflow stats — sits across the bottom of the shell. Renders counts
+   from current editor state so the user always sees workflow shape at a glance.
+   -------------------------------------------------------------------------- */
+function Statusbar({ state, status }) {
+  const stageCount = Object.keys(state.stages || {}).length;
+  const edgeCount = state.edges?.length || 0;
+  const containerCount = Object.keys(state.containers || {}).length;
+  const readByLinks = Object.values(state.containers || {})
+    .reduce((n, c) => n + (c.readBy?.length || 0), 0);
+  return (
+    <div className="dsg-statusbar">
+      <div className="dsg-statusbar-item"><strong>{stageCount}</strong>Stages</div>
+      <div className="dsg-statusbar-item"><strong>{edgeCount}</strong>Edges</div>
+      <div className="dsg-statusbar-item"><strong>{containerCount}</strong>Container{containerCount === 1 ? '' : ''}</div>
+      <div className="dsg-statusbar-item"><strong>{readByLinks}</strong>read-by</div>
+      <div className="dsg-statusbar-item">Input: <strong>{state.meta?.inputType}</strong></div>
+      <div className="dsg-statusbar-spacer" />
+      {status?.message && (
+        <div className={`dsg-statusbar-item dsg-statusbar-tone-${status.tone || 'neutral'}`}>
+          <strong>{status.message}</strong>
+        </div>
+      )}
     </div>
   );
 }

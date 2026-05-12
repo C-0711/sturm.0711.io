@@ -1,0 +1,55 @@
+{
+  "containerId": "0711:elster:gemma4-tq:embeddings:v1",
+  "nativeDim": 768,
+  "embedder": {
+    "provider": "ollama",
+    "model": "embeddinggemma",
+    "base_url": "http://localhost:11434",
+    "family": "google/embeddinggemma-300m",
+    "matryoshka": [
+      768,
+      512,
+      256,
+      128
+    ],
+    "document_prompt": "title: {title|none} | text: {content}",
+    "query_prompt": "task: search result | query: {content}"
+  },
+  "seed": 42,
+  "tiers": [
+    {
+      "file": "embeddings.gemma4.tq-d256-b3.bin",
+      "d": 256,
+      "b": 3,
+      "n": 2287,
+      "keepTopK": 200,
+      "bytesPerVector": 136,
+      "compressionRatio": 7.529411764705882,
+      "sha256": "4591df11765aa8900d8d6d33e4dca45202d1c5bfc850daea569ac003a9e15142"
+    },
+    {
+      "file": "embeddings.gemma4.tq-d768-b3.bin",
+      "d": 768,
+      "b": 3,
+      "n": 2287,
+      "keepTopK": 50,
+      "bytesPerVector": 392,
+      "compressionRatio": 7.836734693877551,
+      "sha256": "6a46e76f413c6adec48705d2bd2ea4e103cf8756a6475a7e3b50b8b89fafeec2"
+    }
+  ],
+  "exact": {
+    "file": "embeddings.gemma4.fp32.bin",
+    "d": 768,
+    "n": 2287,
+    "bytesPerVector": 3072,
+    "sha256": "cb7dd5368774fde3b06b919e55f87bab56f036cf5e7d0d1c44e6b4d9c517df60"
+  },
+  "quantizer": {
+    "kind": "TurboQuant",
+    "reference": "arxiv:2504.19874",
+    "stage_1": "PolarQuant (Haar rotation + Lloyd-Max @ N(0,1/d))",
+    "stage_2": "QJL (sign(S·r) random Gaussian projection)",
+    "seed_tag_format": "tq-seed-{seed}-d{d}-b{b}"
+  }
+}

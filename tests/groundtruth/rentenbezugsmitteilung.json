@@ -1,5 +1,5 @@
 {
-  "docClass": "rentenbezugsmitteilung",
+  "dokumenttyp_id": "rentenbezugsmitteilung",
   "anlage": "R",
   "anchor": "Hildburg DRV Bund 2024",
   "anchors": ["Deutsche Rentenversicherung", "Rentenbetrag", "Rentenanpassungsbetrag"],

@@ -60,7 +60,7 @@ export const multiExtractStage = defineStage<
   name: 'ELSTER-v3 Multi-Doc Iterator',
   description:
     'Iteriert über page-split sub-Dokumente und ruft pro sub-Doc Layer 1 auf. ' +
-    'Wenn ein header-hint vorhanden ist, wird der direkt als docClass benutzt; ' +
+    'Wenn ein header-hint vorhanden ist, wird der direkt als dokumenttyp_id benutzt; ' +
     'ansonsten würde man auf Klassifizierung zurückfallen (TODO Phase D.2).',
 
   async run(input, ctx) {
@@ -78,7 +78,7 @@ export const multiExtractStage = defineStage<
     const HERE = dirname(fileURLToPath(import.meta.url));
     const SCHEMAS_DIR = join(HERE, 'data', 'nested_schemas');
 
-    function resolveSchemaName(docClass: string): string {
+    function resolveSchemaName(dokumenttyp_id: string): string {
       // Mirror of stages/layer1-extract.ts resolveSchemaName.
       const m: Record<string, string> = {
         pension_versorgung: 'lohnsteuerbescheinigung',
@@ -106,14 +106,14 @@ export const multiExtractStage = defineStage<
         est1a_hauptvordruck: 'personaldaten_hauptvordruck',
         hauptvordruck: 'personaldaten_hauptvordruck',
       };
-      return m[docClass] ?? docClass;
+      return m[dokumenttyp_id] ?? dokumenttyp_id;
     }
 
     for (const sd of subDocs) {
       byHeaderKind[sd.headerKind] = (byHeaderKind[sd.headerKind] ?? 0) + 1;
 
-      const docClass = sd.classifierHint;
-      if (!docClass) {
+      const dokumenttyp_id = sd.classifierHint;
+      if (!dokumenttyp_id) {
         results.push({
           id: sd.id, title: sd.title, headerKind: sd.headerKind, pages: sd.pages,
           classifierHint: null, schemaResolved: null,
@@ -124,7 +124,7 @@ export const multiExtractStage = defineStage<
         continue;
       }
 
-      const schemaName = resolveSchemaName(docClass);
+      const schemaName = resolveSchemaName(dokumenttyp_id);
       const schemaPath = join(SCHEMAS_DIR, `${schemaName}.json`);
 
       let schemaJson: { schema: unknown; description?: string; name?: string } | null = null;
@@ -134,7 +134,7 @@ export const multiExtractStage = defineStage<
       } catch (err) {
         results.push({
           id: sd.id, title: sd.title, headerKind: sd.headerKind, pages: sd.pages,
-          classifierHint: docClass, schemaResolved: null,
+          classifierHint: dokumenttyp_id, schemaResolved: null,
           textChars: sd.text.length, nested: null,
           error: `schema not found: ${schemaName}.json (${(err as Error).message})`,
         });
@@ -143,21 +143,21 @@ export const multiExtractStage = defineStage<
       }
 
       const systemPrompt =
-        `Du bekommst einen deutschen Steuer-Beleg (Klasse: ${docClass}). ` +
+        `Du bekommst einen deutschen Steuer-Beleg (Klasse: ${dokumenttyp_id}). ` +
         `Extrahiere die relevanten Felder strikt nach dem JSON-Schema. ` +
         `Verwende ausschließlich Werte, die wörtlich im Beleg vorkommen. Erfinde nichts. ` +
         `Datumsangaben in ISO-8601 (YYYY-MM-DD), Beträge in EUR als Dezimal mit Punkt. ` +
         `Wenn ein Feld nicht im Beleg steht, lass es weg.`;
       const userPrompt = [
         `Beleg-Titel: ${sd.title}`,
-        `Doc-Klasse: ${docClass}`,
+        `Doc-Klasse: ${dokumenttyp_id}`,
         ``,
         `--- OCR-Text ---`,
         sd.text.slice(0, 6000),
       ].join('\n');
 
       try {
-        ctx.emit('subdoc_extract_start', { id: sd.id, docClass, schemaName });
+        ctx.emit('subdoc_extract_start', { id: sd.id, dokumenttyp_id, schemaName });
         const t0 = Date.now();
         const result = await chatJson(userPrompt, {
           system: systemPrompt,
@@ -178,7 +178,7 @@ export const multiExtractStage = defineStage<
 
         results.push({
           id: sd.id, title: sd.title, headerKind: sd.headerKind, pages: sd.pages,
-          classifierHint: docClass, schemaResolved: schemaName,
+          classifierHint: dokumenttyp_id, schemaResolved: schemaName,
           textChars: sd.text.length, nested,
           error: null,
         });
@@ -186,7 +186,7 @@ export const multiExtractStage = defineStage<
         const msg = (err as Error).message ?? String(err);
         results.push({
           id: sd.id, title: sd.title, headerKind: sd.headerKind, pages: sd.pages,
-          classifierHint: docClass, schemaResolved: schemaName,
+          classifierHint: dokumenttyp_id, schemaResolved: schemaName,
           textChars: sd.text.length, nested: null,
           error: msg.slice(0, 300),
         });
@@ -220,7 +220,7 @@ interface AggregateOutput {
   codes: Record<string, unknown>;
   perSubDoc: Array<{
     id: string;
-    docClass: string | null;
+    dokumenttyp_id: string | null;
     appliedRules: number;
     codesEmitted: string[];
   }>;
@@ -253,7 +253,7 @@ export const multiAggregateStage = defineStage<
       if (!sd.nested || sd.error) {
         perSubDoc.push({
           id: sd.id,
-          docClass: sd.classifierHint,
+          dokumenttyp_id: sd.classifierHint,
           appliedRules: 0,
           codesEmitted: [],
         });
@@ -266,7 +266,7 @@ export const multiAggregateStage = defineStage<
       const emittedCodes = Object.keys(layer.codes);
       perSubDoc.push({
         id: sd.id,
-        docClass: sd.classifierHint,
+        dokumenttyp_id: sd.classifierHint,
         appliedRules: result.appliedRules.length,
         codesEmitted: emittedCodes,
       });
@@ -355,6 +355,7 @@ export function buildElsterV3MultiWorkflowWithSchema() {
         id: '0711:elster:bmf:jahresdok-2024:v1',
         displayName: 'ELSTER eCode Catalog',
         description: 'BMF Jahresdokumentation 10/2024 — 2287 eCodes, 35 Anlagen.',
+        kind: 'elster-catalog',
         readBy: ['multi'],
         schemaVersion: 5,
         atomsCount: 2287,

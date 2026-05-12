@@ -123,18 +123,18 @@ function buildVerifyInput(
   return {
     subDocs: belege.map((b) => {
       const subDocId = `subdoc_${String(b.index).padStart(2, '0')}`;
-      const docClass = b.klassifikation.typ_id ?? 'unknown';
+      const dokumenttyp_id = b.klassifikation.typ_id ?? 'unknown';
       return {
         subDocId,
         title: b.header,
-        headerKind: b.klassifikation.label ?? docClass,
+        headerKind: b.klassifikation.label ?? dokumenttyp_id,
         pages: b.seiten,
         classifierHint: b.klassifikation.typ_id ?? null,
         layer1: {
           subDocId,
-          docClass,
-          schemaName: `belege/${docClass}`,
-          schemaId: `belege/${docClass}`,
+          dokumenttyp_id,
+          schemaName: `belege/${dokumenttyp_id}`,
+          schemaId: `belege/${dokumenttyp_id}`,
           nested: b.extraktion.values ?? {},
           llmMs: 0,
           ms: b.extraktion.ms,

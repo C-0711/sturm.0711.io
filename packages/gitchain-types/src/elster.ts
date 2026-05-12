@@ -75,7 +75,7 @@ export interface Layer1Result {
   /** Stable sub-doc id from page-split (e.g. `subdoc_03`). */
   readonly subDocId: string;
   /** Doc class fed into Gemma; matches the schema file picked. */
-  readonly docClass: ElsterDocClass | string; // string fallback for unknown header hints
+  readonly dokumenttyp_id: ElsterDocClass | string; // string fallback for unknown header hints
   /** Nested-schema name actually loaded (`<schema>.json`). */
   readonly schemaName: string;
   /** vLLM/json_schema payload `name` field (acts as schemaId for trace). */
@@ -173,7 +173,7 @@ export interface ContainerProof {
  */
 export interface ECodeContribution {
   readonly subDocId: string;
-  readonly docClass: ElsterDocClass | string;
+  readonly dokumenttyp_id: ElsterDocClass | string;
   readonly ruleDescription: string;
   readonly ruleRechtsgrundlage?: string;
   readonly inputCount: number;     // raw items considered

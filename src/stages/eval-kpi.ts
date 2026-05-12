@@ -8,6 +8,25 @@ export interface KpiConfig {
    */
   fanoutStageId?: string;
   /**
+   * Optional id of an upstream `eval/critic-llm` stage. If set, KPI pulls its
+   * `score` out of ctx.results and blends it into the composite score with
+   * weight `scoreWeights.critic` (default 0.2). Lets Quality-Trias pipelines
+   * surface critic-trust as a first-class KPI signal.
+   */
+  criticStageId?: string;
+  /**
+   * Optional id of an upstream `extract/span-linker` stage. If set, KPI pulls
+   * its `coverage` into the composite under `scoreWeights.span_coverage`
+   * (default 0.1).
+   */
+  spanLinkerStageId?: string;
+  /**
+   * Optional id of an upstream `extract/cross-validator` stage. If set, KPI
+   * surfaces its `violations.length` and per-severity counts; failing block
+   * violations drag the composite score down via `scoreWeights.validator`.
+   */
+  crossValidatorStageId?: string;
+  /**
    * Optional list of field names that must be present in the final output.
    * When set, schema_coverage = (#required found) / (#required).
    */
@@ -26,6 +45,9 @@ export interface KpiConfig {
     format_conformance?: number;
     cross_branch_agreement?: number;
     speed?: number; // 1 / (1 + total_seconds)
+    critic?: number;          // LLM-judge score, 0..1
+    span_coverage?: number;   // fraction of leaves linked to source, 0..1
+    validator?: number;       // 1 - (#block / max(#rules, 1))
   };
   /** Score >= passThreshold ⇒ verdict='pass'. Default 0.85. */
   passThreshold?: number;
@@ -57,12 +79,24 @@ export interface KpiReport {
   };
   score: number;
   verdict: 'pass' | 'fail';
+  /** Quality-Trias signals (populated when upstream stage IDs configured). */
+  quality?: {
+    critic_score?: number;
+    critic_accept?: boolean;
+    span_coverage?: number;
+    validator_pass?: boolean;
+    validator_block_count?: number;
+    validator_total_violations?: number;
+  };
   // Verbose components for UI transparency.
   components: {
     schema_coverage: number;
     format_conformance: number;
     cross_branch_agreement: number;
     speed: number;
+    critic: number;
+    span_coverage: number;
+    validator: number;
   };
 }
 
@@ -184,6 +218,14 @@ export const evalKpiStage = defineStage<unknown, KpiReport, KpiConfig>({
     inputs: 'any upstream object — used as the "document under measurement" for schema_coverage / format_conformance',
     outputs: 'total_duration_ms, stage_durations_ms, field_count, schema_coverage, format_conformance, cross_branch?, score (0..1), verdict (pass|fail)',
     configExample: '{"fanoutStageId": "ocr_fanout", "requiredFields": ["identifikationsnummer","bruttoarbeitslohn"], "formatRegex": {"identifikationsnummer": "^[0-9]{11}$"}, "passThreshold": 0.75}',
+    inputPorts: [
+      { name: 'input', type: 'any', description: 'Document under measurement' },
+    ],
+    outputPorts: [
+      { name: 'report', type: 'kpi-report' },
+      { name: 'score', type: 'number' },
+      { name: 'verdict', type: 'enum:pass|fail' },
+    ],
   },
 
   async run(input, ctx) {
@@ -241,17 +283,71 @@ export const evalKpiStage = defineStage<unknown, KpiReport, KpiConfig>({
     }
 
     const speed = 1 / (1 + totalMs / 1000);
+
+    // Quality-Trias signal pickup. Each is optional; default to "neutral 1.0" so
+    // un-configured pipelines aren't dragged down by missing data.
+    let criticScore = 1;
+    let spanCoverage = 1;
+    let validatorScore = 1;
+    let quality: KpiReport['quality'] = undefined;
+    if (cfg.criticStageId || cfg.spanLinkerStageId || cfg.crossValidatorStageId) {
+      quality = {};
+      if (cfg.criticStageId) {
+        const out = ctx.results[cfg.criticStageId]?.output as { score?: number; accept?: boolean } | undefined;
+        if (out && typeof out.score === 'number') {
+          criticScore = clamp01(out.score);
+          quality.critic_score = out.score;
+          quality.critic_accept = out.accept;
+        }
+      }
+      if (cfg.spanLinkerStageId) {
+        const out = ctx.results[cfg.spanLinkerStageId]?.output as { coverage?: number } | undefined;
+        if (out && typeof out.coverage === 'number') {
+          spanCoverage = clamp01(out.coverage);
+          quality.span_coverage = out.coverage;
+        }
+      }
+      if (cfg.crossValidatorStageId) {
+        const out = ctx.results[cfg.crossValidatorStageId]?.output as {
+          pass?: boolean; violations?: Array<{ severity?: string }>;
+        } | undefined;
+        if (out) {
+          const violations = out.violations ?? [];
+          const blocks = violations.filter((v) => v?.severity === 'block').length;
+          // Score = 1 if no blocks; degrades linearly with block count up to 5.
+          validatorScore = clamp01(1 - blocks * 0.2);
+          quality.validator_pass = !!out.pass;
+          quality.validator_block_count = blocks;
+          quality.validator_total_violations = violations.length;
+        }
+      }
+    }
+
+    // Quality-only composite. Speed is reported as a stage-duration breakdown
+    // in `total_duration_ms` + `stage_durations_ms` but is NOT a score-component
+    // by default — it's a latency/SLA signal, not a defensibility signal.
+    // Callers can still opt-in by setting `scoreWeights.speed > 0`.
     const w = {
-      schema_coverage: cfg.scoreWeights?.schema_coverage ?? 0.4,
-      format_conformance: cfg.scoreWeights?.format_conformance ?? 0.3,
-      cross_branch_agreement: cfg.scoreWeights?.cross_branch_agreement ?? 0.2,
-      speed: cfg.scoreWeights?.speed ?? 0.1,
+      schema_coverage: cfg.scoreWeights?.schema_coverage ?? 0.20,
+      format_conformance: cfg.scoreWeights?.format_conformance ?? 0.15,
+      cross_branch_agreement: cfg.scoreWeights?.cross_branch_agreement ?? 0.20,
+      speed: cfg.scoreWeights?.speed ?? 0,           // ← out of quality composite by default
+      critic: cfg.scoreWeights?.critic ?? (cfg.criticStageId ? 0.25 : 0),
+      span_coverage: cfg.scoreWeights?.span_coverage ?? (cfg.spanLinkerStageId ? 0.15 : 0),
+      validator: cfg.scoreWeights?.validator ?? (cfg.crossValidatorStageId ? 0.25 : 0),
     };
+    // Normalise weights so they sum to ≤ 1 (otherwise composite can exceed 1).
+    const totalW = w.schema_coverage + w.format_conformance + w.cross_branch_agreement
+      + w.speed + w.critic + w.span_coverage + w.validator;
+    const norm = totalW > 1 ? totalW : 1;
     const score = clamp01(
-      w.schema_coverage * schemaCoverage +
-      w.format_conformance * formatConformance +
-      w.cross_branch_agreement * crossBranchAgreementScore +
-      w.speed * speed,
+      (w.schema_coverage * schemaCoverage +
+       w.format_conformance * formatConformance +
+       w.cross_branch_agreement * crossBranchAgreementScore +
+       w.speed * speed +
+       w.critic * criticScore +
+       w.span_coverage * spanCoverage +
+       w.validator * validatorScore) / norm,
     );
     const passThreshold = cfg.passThreshold ?? 0.85;
 
@@ -264,11 +360,15 @@ export const evalKpiStage = defineStage<unknown, KpiReport, KpiConfig>({
       cross_branch: crossBranch,
       score,
       verdict: score >= passThreshold ? 'pass' : 'fail',
+      quality,
       components: {
         schema_coverage: schemaCoverage,
         format_conformance: formatConformance,
         cross_branch_agreement: crossBranchAgreementScore,
         speed,
+        critic: criticScore,
+        span_coverage: spanCoverage,
+        validator: validatorScore,
       },
     };
 

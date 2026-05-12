@@ -171,7 +171,113 @@ if (containerCount > 0) {
   containerOnCanvas ? pass('Drag container from palette adds container node', dropped.id) : fail('Drag container from palette adds container node');
 }
 
-// 17. Console errors
+// 18. Typed-port compat — direct API check (UI-drag of edge between handles is
+// fragile in headless; the connection-validation logic itself is what we care
+// about). Verify (a) ELSTER catalog has kind=elster-catalog, (b) at least one
+// stage declares acceptsContainers including it, (c) at least one stage does
+// NOT accept it (those should be rejected by isValidConnection).
+const compat = await page.evaluate(async () => {
+  const [containers, stages] = await Promise.all([
+    fetch('/api/containers').then(r => r.json()),
+    fetch('/api/stages/catalog').then(r => r.json()),
+  ]);
+  const elster = containers.find(c => c.id?.startsWith('0711:elster:'));
+  const accepting = stages.filter(s => (s.hints?.acceptsContainers || []).includes('elster-catalog'));
+  const notAccepting = stages.filter(s => {
+    const a = s.hints?.acceptsContainers;
+    return Array.isArray(a) && a.length > 0 && !a.includes('elster-catalog');
+  });
+  return { elsterKind: elster?.kind, acceptingCount: accepting.length, notAcceptingCount: notAccepting.length };
+});
+(compat.elsterKind === 'elster-catalog' && compat.acceptingCount >= 1)
+  ? pass(`Typed-port metadata exposed`, `kind=${compat.elsterKind}, ${compat.acceptingCount} accepting stage(s)`)
+  : fail('Typed-port metadata exposed', JSON.stringify(compat));
+
+// 20. Typed ports on canvas — confirm the dragged stage shows port rows
+const portInfo = await page.evaluate(() => {
+  const portRows = document.querySelectorAll('.dsg-node-port-row');
+  return {
+    rows: portRows.length,
+    types: [...document.querySelectorAll('.dsg-node-port-type')].map(el => el.textContent.trim()),
+  };
+});
+portInfo.rows > 0
+  ? pass('Typed ports rendered on stage node', `${portInfo.rows} rows, types=${portInfo.types.slice(0,5).join(',')}`)
+  : fail('Typed ports rendered on stage node', JSON.stringify(portInfo));
+
+// 21. Embedding-index container exists in catalog
+const containerKinds = await page.evaluate(async () => {
+  const r = await fetch('/api/containers');
+  return (await r.json()).map(c => c.kind);
+});
+containerKinds.includes('embedding-index')
+  ? pass('embedding-index container exposed', `kinds=${containerKinds.join(',')}`)
+  : fail('embedding-index container exposed', JSON.stringify(containerKinds));
+
+// 22. Auto-Layout button updates layout
+const layoutBefore = await page.evaluate(() => {
+  return [...document.querySelectorAll('.react-flow__node[data-id]')]
+    .filter(n => n.dataset.id !== '__source__' && !n.dataset.id.startsWith('container:'))
+    .map(n => ({ id: n.dataset.id, transform: n.style.transform }));
+});
+await page.evaluate(() => {
+  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim().startsWith('Auto-Layout'));
+  btn?.click();
+});
+await new Promise(r => setTimeout(r, 400));
+const layoutAfter = await page.evaluate(() => {
+  return [...document.querySelectorAll('.react-flow__node[data-id]')]
+    .filter(n => n.dataset.id !== '__source__' && !n.dataset.id.startsWith('container:'))
+    .map(n => ({ id: n.dataset.id, transform: n.style.transform }));
+});
+const moved = layoutBefore.some((b, i) => b.transform !== layoutAfter[i]?.transform);
+moved ? pass('Auto-Layout button repositions nodes') : fail('Auto-Layout button repositions nodes', JSON.stringify({ before: layoutBefore, after: layoutAfter }));
+
+// 23. Statusbar shows live counts
+const statusbarText = await page.$eval('.dsg-statusbar', el => el.textContent);
+statusbarText.includes('Stages') && statusbarText.includes('Container')
+  ? pass('Statusbar renders workflow stats', statusbarText.slice(0, 80))
+  : fail('Statusbar renders workflow stats', statusbarText);
+
+// 25. Quality category surfaces 5 stages (schema-guard + critic + span-linker + cross-validator + container-field-mapper)
+const qualityCount = await page.evaluate(async () => {
+  const r = await fetch('/api/stages/catalog');
+  const d = await r.json();
+  return d.filter(s => s.category === 'quality').length;
+});
+qualityCount === 5
+  ? pass('Quality category exposes 5 stages', `count=${qualityCount}`)
+  : fail('Quality category exposes 5 stages', `count=${qualityCount}`);
+
+// 26. Quality-Demo workflow registered (7 stages, 6 edges with container-field-mapper)
+const demoOk = await page.evaluate(async () => {
+  const r = await fetch('/api/workflows');
+  const d = await r.json();
+  const w = d.find(x => x.id === 'elster-quality-demo');
+  return w ? { stages: w.stages.length, edges: w.edges.length } : null;
+});
+demoOk && demoOk.stages === 7 && demoOk.edges === 6
+  ? pass('elster-quality-demo workflow registered', JSON.stringify(demoOk))
+  : fail('elster-quality-demo workflow registered', JSON.stringify(demoOk));
+
+// 27. All quality stages declare typed ports
+const stageWithPorts = await page.evaluate(async () => {
+  const r = await fetch('/api/stages/catalog');
+  const d = await r.json();
+  return d
+    .filter(s => s.category === 'quality')
+    .map(s => ({
+      id: s.id,
+      ins: (s.hints?.inputPorts || []).length,
+      outs: (s.hints?.outputPorts || []).length,
+    }));
+});
+const allTyped = stageWithPorts.length === 5 && stageWithPorts.every(s => s.ins > 0 && s.outs > 0);
+allTyped
+  ? pass('All 5 quality stages declare typed ports', JSON.stringify(stageWithPorts))
+  : fail('All 5 quality stages declare typed ports', JSON.stringify(stageWithPorts));
+
+// 28. Console errors
 consoleErrors.length === 0 ? pass('No JS console errors') : fail(`${consoleErrors.length} console error(s)`, consoleErrors.slice(0,3).join(' | '));
 
 await page.screenshot({ path: '/tmp/sturm-e2e/final.png', fullPage: false });

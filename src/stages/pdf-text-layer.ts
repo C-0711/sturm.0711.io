@@ -48,6 +48,15 @@ export const pdfTextLayerStage = defineStage<PdfTextLayerInput, PdfTextLayerOutp
     inputs: 'filePath (string, absolute), filename (string)',
     outputs: 'text, pages[{index,markdown,chars}], chars, ms, hasTextLayer',
     configExample: '{"layout": true, "minCharsPerPageHeuristic": 50}',
+    inputPorts: [
+      { name: 'filePath', type: 'file-path' },
+      { name: 'filename', type: 'string' },
+    ],
+    outputPorts: [
+      { name: 'text', type: 'text' },
+      { name: 'pages', type: 'pages' },
+      { name: 'hasTextLayer', type: 'boolean' },
+    ],
   },
 
   async run(input, ctx) {

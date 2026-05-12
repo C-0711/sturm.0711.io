@@ -45,6 +45,14 @@ export const paddleOcrVlStage = defineStage<PaddleOcrVlInput, PaddleOcrVlOutput,
     inputs: 'filePath, filename',
     outputs: 'model, text, pages[], chars, ms',
     configExample: '{"baseUrl": "http://localhost:11438", "endpointPath": "/predict", "format": "markdown"}',
+    inputPorts: [
+      { name: 'filePath', type: 'file-path' },
+      { name: 'filename', type: 'string' },
+    ],
+    outputPorts: [
+      { name: 'text', type: 'text' },
+      { name: 'pages', type: 'pages' },
+    ],
   },
 
   async run(input, ctx) {

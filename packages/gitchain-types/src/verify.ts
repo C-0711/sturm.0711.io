@@ -183,13 +183,13 @@ function verifyOneContribution(
       detail: `contribution from subDocId that appears in output.skipped[]`,
     });
   }
-  if (subDoc.layer1.docClass !== c.docClass) {
+  if (subDoc.layer1.dokumenttyp_id !== c.dokumenttyp_id) {
     issues.push({
       severity: 'warning',
       code: 'docclass-mismatch',
       subDocId: c.subDocId,
       eCode,
-      detail: `contribution.docClass="${c.docClass}" but layer1.docClass="${subDoc.layer1.docClass}"`,
+      detail: `contribution.dokumenttyp_id="${c.dokumenttyp_id}" but layer1.dokumenttyp_id="${subDoc.layer1.dokumenttyp_id}"`,
     });
   }
   // Walk the layer1.nested for the value.

@@ -1,6 +1,7 @@
 import { registerWorkflow } from '../core/registry.ts';
 import { helloOcrWorkflow } from './hello-ocr/index.ts';
 import { buildOcrShootoutWorkflow } from './ocr-shootout/index.ts';
+import { buildElsterQualityDemoWorkflow } from './elster-quality-demo/index.ts';
 import {
   registerElsterStages as registerLegacyElsterStages,
   buildElsterWorkflowWithSchema,
@@ -34,6 +35,8 @@ export function registerAllWorkflows(): void {
   registerWorkflow(buildPentacamKcWorkflow());
   registerMyopiaStages();
   registerWorkflow(buildMyopiaWorkflow());
+  // Quality-Trias showcase — uses the new quality/* stages.
+  registerWorkflow(buildElsterQualityDemoWorkflow());
 }
 
 export { helloOcrWorkflow };

@@ -104,6 +104,13 @@ export const compareMergeStage = defineStage<FanoutOutput, MergeOutput, MergeCon
     inputs: 'branches, perBranchMs, errors, ms — from an upstream compare/fanout',
     outputs: 'policy, picked|null, chosen|null, fanout, voteReport? (only for policy=vote)',
     configExample: '{"policy": "keep-all"}  // or "first-success" | "fastest" | "vote" | {"policy":"pick","pickBranch":"X"}',
+    inputPorts: [
+      { name: 'branches', type: 'branches', description: 'From compare/fanout' },
+    ],
+    outputPorts: [
+      { name: 'chosen', type: 'any', description: 'Selected branch output, null for keep-all' },
+      { name: 'fanout', type: 'branches', description: 'Echoed for downstream KPI' },
+    ],
   },
 
   async run(input, ctx) {

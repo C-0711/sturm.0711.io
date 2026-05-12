@@ -13,13 +13,36 @@
     .dsg-shell {
       display: grid;
       grid-template-columns: 220px 1fr 340px;
-      grid-template-rows: 48px 1fr;
+      grid-template-rows: 48px 1fr 26px;
       height: 100vh;
       overflow: hidden;
       background: var(--color-bg);
       color: var(--color-text-primary);
       font-family: var(--font-inter);
     }
+
+    /* Status footer — live workflow stats. Sits across all three columns. */
+    .dsg-statusbar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 14px;
+      border-top: 1px solid var(--color-border);
+      background: var(--color-bg-secondary);
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      font-family: var(--font-mono);
+    }
+    .dsg-statusbar-item { display: flex; align-items: center; gap: 4px; }
+    .dsg-statusbar-item strong {
+      color: var(--color-text-primary);
+      font-weight: 600;
+      font-family: var(--font-inter);
+    }
+    .dsg-statusbar-spacer { flex: 1; }
+    .dsg-statusbar-tone-err strong { color: var(--color-danger); }
+    .dsg-statusbar-tone-ok  strong { color: var(--color-success); }
     .dsg-toolbar {
       grid-column: 1 / -1;
       display: flex; align-items: center; gap: 10px;
@@ -471,6 +494,51 @@
       border-left-color: var(--cat-accent, var(--color-accent));
       box-shadow: 0 0 0 2px var(--color-accent-light);
     }
+    /* Typed-port handle rows on stage nodes — label sits inside the box, the
+       handle protrudes ~5px on each side (left = input, right = output). */
+    .dsg-node-ports {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 6px -12px 0;
+      padding: 4px 0;
+      border-top: 1px dashed var(--color-border-light);
+    }
+    .dsg-node-ports-in { margin-bottom: -6px; }
+    .dsg-node-port-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 1px 12px;
+      font-size: 10.5px;
+      line-height: 1.3;
+    }
+    .dsg-node-port-row-in { justify-content: flex-start; }
+    .dsg-node-port-row-out { justify-content: flex-end; }
+    .dsg-node-port-name {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--color-text-primary);
+    }
+    .dsg-node-port-type {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      color: var(--color-text-tertiary);
+      padding: 0 4px;
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-sm);
+    }
+    .dsg-node .react-flow__handle.dsg-node-h {
+      background: var(--cat-accent, var(--color-text-secondary));
+      width: 8px; height: 8px;
+      border: 1px solid var(--color-bg);
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .dsg-node .react-flow__handle.dsg-node-h.react-flow__handle-left  { left: -4px; }
+    .dsg-node .react-flow__handle.dsg-node-h.react-flow__handle-right { right: -4px; }
+
     .dsg-node-cat-badge {
       position: absolute;
       top: 6px; right: 8px;
@@ -536,6 +604,13 @@
       color: var(--color-text-primary);
       line-height: 1.25;
       padding-right: 18px;
+    }
+    .dsg-container-kind {
+      margin-top: 3px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--color-orange);
+      letter-spacing: 0.02em;
     }
     .dsg-container-meta {
       margin-top: 4px;

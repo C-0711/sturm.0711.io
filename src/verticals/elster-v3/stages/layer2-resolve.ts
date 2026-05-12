@@ -16,7 +16,7 @@ export interface Layer2Input {
   /** Nested JSON from layer1-extract */
   nested: unknown;
   /** Doc-class for context-aware resolution (passed through to LLM if used) */
-  docClass?: string;
+  dokumenttyp_id?: string;
 }
 
 export interface Layer2Output {
@@ -110,6 +110,20 @@ export const layer2ResolveStage = defineStage<Layer2Input, Layer2Output, Layer2C
     'Walks the nested JSON, resolves entity fields (Spendenempfänger, Arbeitgeber, Bank) ' +
     'against the curated legal-entity whitelist with Gemma-4 disambig fallback. Augments ' +
     'JSON with _resolution shadow keys (canonical, isCharitableCertified, source).',
+  hints: {
+    inputs: 'nested (Layer-1 output), dokumenttyp_id',
+    outputs: 'nested (augmented with _resolution shadow keys), entities_resolved, ms',
+    configExample: '{"chatProvider": "vllm", "chatModel": "gemma4-mm"}',
+    llm: { providers: ['vllm', 'mistral', 'ollama'], default: 'vllm' },
+    acceptsContainers: ['elster-catalog', 'embedding-index'],
+    inputPorts: [
+      { name: 'nested', type: 'nested-json' },
+      { name: 'dokumenttyp_id', type: 'string' },
+    ],
+    outputPorts: [
+      { name: 'nested', type: 'nested-json', description: 'Augmented with _resolution shadow keys' },
+    ],
+  },
 
   async run(input, ctx) {
     const t0 = Date.now();

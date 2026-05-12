@@ -248,7 +248,12 @@
           "E0602001",
           "E0602201"
         ]
-      }
+      },
+      "aliases": [
+        "kapitalertragsbescheinigung",
+        "steuerbescheinigung_kapitalertraege",
+        "jahressteuerbescheinigung"
+      ]
     },
     {
       "id": "nv_bescheinigung",
@@ -378,7 +383,10 @@
           "E2002105",
           "E2002402"
         ]
-      }
+      },
+      "aliases": [
+        "rentenbezugsmitteilung"
+      ]
     },
     {
       "id": "pension_versorgung",
@@ -410,7 +418,10 @@
           "E0201305",
           "E0201306"
         ]
-      }
+      },
+      "aliases": [
+        "lohnsteuerbescheinigung_kapital"
+      ]
     },
     {
       "id": "spendenquittung",
@@ -581,7 +592,11 @@
           "E2003202",
           "E2001605"
         ]
-      }
+      },
+      "aliases": [
+        "beitragsbescheinigung_kranken_p",
+        "beitragsbescheinigung_kranken_pflege"
+      ]
     },
     {
       "id": "arbeitslosen_vers",
@@ -817,7 +832,11 @@
           "E0107206",
           "E0107207"
         ]
-      }
+      },
+      "aliases": [
+        "haushaltsnahe_dienstleistungen",
+        "haushaltsnahe_dienstleistung"
+      ]
     },
     {
       "id": "haushaltshilfe",
@@ -1072,7 +1091,13 @@
           "E0102602",
           "E0102102"
         ]
-      }
+      },
+      "aliases": [
+        "steuerkonto_transferticket",
+        "hauptvordruck",
+        "est1a_hauptvordruck",
+        "einkommensteuererklaerung"
+      ]
     },
     {
       "id": "religionszugehoerigkeit",

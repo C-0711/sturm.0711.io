@@ -20,7 +20,7 @@ const REPO_ROOT = resolve(HERE, '..');
 process.env.OLLAMA_URL ??= 'http://localhost:11434';
 process.env.VLLM_URL ??= 'http://localhost:11435';
 
-const docClass = process.argv[2] ?? 'spendenquittung';
+const dokumenttyp_id = process.argv[2] ?? 'spendenquittung';
 const fileFilter = process.argv[3] ?? null;  // optional substring match on originalFilename
 
 // ── load runtime
@@ -36,26 +36,26 @@ const r = spawnSync('/usr/bin/curl', ['-s',
   'https://sturm.0711.io/api/workspaces/haubrich-koch-hildburg-2024/documents'],
   { encoding: 'utf-8', maxBuffer: 50_000_000 });
 const docs = JSON.parse(r.stdout);
-const candidates = docs.filter((d) => d.classification?.label === docClass);
+const candidates = docs.filter((d) => d.classification?.label === dokumenttyp_id);
 let doc = fileFilter
   ? candidates.find((d) => (d.originalFilename ?? '').toLowerCase().includes(fileFilter.toLowerCase()))
   : candidates[0];
 if (!doc) {
-  console.error(`No doc matching class=${docClass} fileFilter=${fileFilter}`);
+  console.error(`No doc matching class=${dokumenttyp_id} fileFilter=${fileFilter}`);
   if (candidates.length) {
     console.error('Candidates:');
     for (const c of candidates) console.error(`  - ${c.originalFilename}`);
   }
   process.exit(1);
 }
-const gt = JSON.parse(await readFile(resolve(REPO_ROOT, `tests/groundtruth/${docClass}.json`), 'utf-8'));
+const gt = JSON.parse(await readFile(resolve(REPO_ROOT, `tests/groundtruth/${dokumenttyp_id}.json`), 'utf-8'));
 
 // ── load v3 container
 const v3 = await loadV3Bundle();
 
 // ── load doc-class schema
 const schemaJson = JSON.parse(await readFile(
-  resolve(REPO_ROOT, `src/verticals/elster-v3/data/nested_schemas/${docClass}.json`), 'utf-8'));
+  resolve(REPO_ROOT, `src/verticals/elster-v3/data/nested_schemas/${dokumenttyp_id}.json`), 'utf-8'));
 
 const calls = { gemma_chat: 0, ollama_embed: 0, llm_total_ms: 0, embed_total_ms: 0 };
 
@@ -106,11 +106,11 @@ async function layer1NestedExtract() {
       `  - anpassungsbetrag = "Rentenanpassungsbetrag" (in Rentenbetrag enthalten — getrennt ausweisen)`,
     ],
   };
-  const guidance = docClassGuidance[docClass] ?? [];
+  const guidance = docClassGuidance[dokumenttyp_id] ?? [];
 
   const t0 = Date.now();
   const prompt = [
-    `Du bekommst einen deutschen Steuer-Beleg (Klasse: ${docClass}).`,
+    `Du bekommst einen deutschen Steuer-Beleg (Klasse: ${dokumenttyp_id}).`,
     `Extrahiere alle relevanten Daten EXAKT nach dem JSON-Schema. Bewahre Originalnamen (auch bei OCR-Fehlern).`,
     ``,
     ...guidance,
@@ -200,7 +200,7 @@ async function layer2EntityResolve(nested) {
 function layer4Projections(nested) {
   const layer = makeLayer('elster', v3.container.catalog_version);
   // Augment layer.codes with anchor metadata in trace reasoning
-  const result = applyProjections(nested, layer, docClass);
+  const result = applyProjections(nested, layer, dokumenttyp_id);
   // Stamp container provenance on the layer
   layer.traces.forEach((t) => {
     t.reasoning += ` [container=${v3.container.id} merkle=${v3.container.merkle_root.slice(0, 12)}…]`;

@@ -1,5 +1,5 @@
 {
-  "docClass": "kapitalertragsbescheinigung",
+  "dokumenttyp_id": "kapitalertragsbescheinigung",
   "anlage": "KAP",
   "anchor": "Hildburg KSK Ahrweiler / VR Bank 2024",
   "anchors": ["Freistellungsauftrag", "freigestellte Kapitalerträge"],

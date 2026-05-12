@@ -8,6 +8,23 @@
 #   :11435  vLLM  gemma4-mm     (running, RESTART mit gedrosselter VRAM-Quote)
 #   :11437  vLLM  LightOnOCR-1B (NEU, kleines Modell, eigene KV-Pool)
 #
+# Embeddings für die Gemma-quantum-Container laufen separat über Ollama
+# auf :11434 (Modell `embeddinggemma`, 308M Params, ~600 MB VRAM). Setup:
+#   ssh h200v 'curl -X POST localhost:11434/api/pull -d "{\"name\":\"embeddinggemma\"}"'
+# Aktuell auf CPU wegen voller GPUs (siehe quantum-retrieve Stage: EMBED_CPU=1).
+# Keine vLLM-Änderungen für das Embedding nötig.
+#
+# Performance-Tipp Gemma-4 chat: beim nächsten Restart `--enable-prefix-caching`
+# anhängen — Layer-1 Extraction-System-Prompts sind pro dokumenttyp_id identisch und
+# groß, KV-Reuse bringt 2-5× Latenz-Reduktion auf warmen Calls ohne Quality-Cost.
+# Beispiel:
+#   vllm serve google/gemma-4-31b-it \
+#     --served-model-name gemma4-mm \
+#     --port 11435 \
+#     --tensor-parallel-size 2 \
+#     --gpu-memory-utilization 0.45 \
+#     --enable-prefix-caching        # ← der einzige neue Flag
+#
 # Vorraussetzung: Gemma läuft heute mit der Default-Quote (≈0.9 freies VRAM
 # als KV-Pool). Ein zweiter vLLM-Prozess scheitert dann beim Start mit OOM,
 # auch wenn 200 GB physisch frei sind. Daher die Reihenfolge:
@@ -141,5 +158,6 @@ echo
 echo "✅ Deploy fertig. Sanity:"
 echo "   curl http://localhost:11435/v1/models  → gemma4-mm"
 echo "   curl http://localhost:11437/v1/models  → lighton-ocr"
+echo "   curl http://localhost:11434/api/tags   → ollama (embeddinggemma uvm.)"
 echo
 echo "Im ocr-shootout-Workflow wird LightOn jetzt automatisch erreicht."

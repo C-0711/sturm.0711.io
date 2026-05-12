@@ -1,0 +1,94 @@
+// ─────────────────────────────────────────────────────────────────────────
+// Container-Source Erweiterung für CourseProject
+//
+// Erlaubt einem Tenant einen externen gitchain-Container (z.B. Bosch-Produkt-
+// Container) als Quelle für einen Kurs anzuhängen. Die Atoms aus dem Container
+// werden später beim Generieren als grounding verwendet (Phase 2).
+//
+// IN prisma/schema.prisma ans Ende anfügen — model CourseProject erweitern
+// statt neu definieren, falls schon vorhanden. Bei Konflikt: die unten
+// stehenden Felder unter `model CourseProject {…}` einfügen, nicht das ganze
+// model duplizieren.
+// ─────────────────────────────────────────────────────────────────────────
+
+// === Erweiterung von model CourseProject ===
+//
+// Wenn CourseProject schon existiert, füge nur die Felder unten in das
+// bestehende model ein und entferne den nachfolgenden Block.
+//
+// model CourseProject {
+//   id        String   @id @default(cuid())
+//   tenantId  String
+//   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+//   name      String
+//   status    String   @default("DRAFT")
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//
+//   // ── Container-Source (NEU) ──
+//   sourceContainerId      String?    // z.B. "0711:product:bosch:8738213487"
+//   sourceContainerMerkle  String?    // Merkle-Root des Containers zum Import-Zeitpunkt
+//   sourceAnchor           Json?      // { chain: "base-mainnet", block: 45427604, txHash: "0x…" }
+//   sourceAtomsCount       Int        @default(0)
+//   sourceImportedAt       DateTime?
+//   sourceCategoryStats    Json?      // { schematics: 12, pdfs: 9, images: 49, ... }
+//   detectedAudiences      Json?      // [{ audience: "installer", confidence: 0.94, evidence: [...] }]
+//
+//   @@index([tenantId])
+//   @@index([sourceContainerId])
+// }
+
+// === ContainerSource: separate Tabelle für mehrere Quellen pro Project ===
+//
+// Optional — falls ein CourseProject mehrere Container kombinieren soll (z.B.
+// Hauptcontainer + Enrichment-Container). Wenn 1:1 reicht, die Felder direkt
+// in CourseProject einbetten (siehe Block oben).
+
+model ContainerSource {
+  id              String    @id @default(cuid())
+  courseProjectId String
+  // courseProject CourseProject @relation(fields: [courseProjectId], references: [id], onDelete: Cascade)
+
+  containerId   String   // z.B. "0711:product:bosch:8738213487"
+  containerType String   // "product" | "regulation" | "case" | "standard" | …
+  namespace     String   // z.B. "bosch"
+  displayName   String?
+
+  // Provenance
+  merkleRoot       String
+  containerSha256  String?
+  anchorChain      String?   // "base-mainnet"
+  anchorBlock      Int?
+  anchorTxHash     String?
+  isSealed         Boolean   @default(false)
+
+  // Lazy-loaded Stats
+  atomsCount       Int       @default(0)
+  embeddingsCount  Int       @default(0)
+  embeddingsDim    Int?
+  categories       Json?     // { schematics: 12, pdfs: 9, … }
+
+  // Auto-Detection-Output
+  detectedAudiences Json?    // siehe Format oben
+
+  importedAt   DateTime  @default(now())
+  lastVerified DateTime?
+
+  @@index([courseProjectId])
+  @@index([containerId])
+}
+
+// === Course-Erweiterung um Source-Container-Referenz ===
+//
+// Falls Course schon existiert, das `model Course {…}` öffnen und folgende
+// Felder ergänzen:
+//
+// model Course {
+//   // … bestehende Felder …
+//
+//   // ── Source-Container (NEU) ──
+//   sourceContainerId      String?    // referenziert ContainerSource.containerId
+//   sourceContainerMerkle  String?
+//   citationCoverage       Float?     // % der claims mit valider Citation (0-1)
+//   citationAuditStatus    String?    // "passed" | "below_threshold" | "blocked" | null
+// }
