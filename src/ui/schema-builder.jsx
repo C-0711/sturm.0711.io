@@ -394,6 +394,7 @@ function JsonTab({ text, setText, error, setError }) {
     <div>
       <textarea
         className="sb-json mono"
+        aria-label="JSON-Schema bearbeiten"
         rows={14}
         value={text}
         onChange={onChange}
@@ -493,12 +494,14 @@ function FieldRow({ field, index, onChange, onRemove, onDropAt, onDropAtEnd, isL
         <input
           className="sb-name"
           type="text"
+          aria-label="Feldname"
           placeholder="feldname"
           value={field.name}
           onChange={(e) => onChange({ name: e.target.value })}
         />
         <select
           className="sb-kind"
+          aria-label="Feld-Typ"
           value={field.kind}
           onChange={(e) => onKindChange(e.target.value)}
         >
@@ -518,6 +521,7 @@ function FieldRow({ field, index, onChange, onRemove, onDropAt, onDropAtEnd, isL
         <input
           className="sb-desc"
           type="text"
+          aria-label="Feld-Beschreibung"
           placeholder="Beschreibung (optional, hilft dem Modell)"
           value={field.description || ''}
           onChange={(e) => onChange({ description: e.target.value || undefined })}
@@ -544,6 +548,7 @@ function KindConfig({ field, onChange }) {
       <input
         className="sb-config"
         type="text"
+        aria-label="Enum-Werte (kommasepariert)"
         placeholder="Werte, kommasepariert (z.B. ja, nein, unbekannt)"
         value={text}
         onChange={(e) => {
@@ -557,6 +562,7 @@ function KindConfig({ field, onChange }) {
     return (
       <select
         className="sb-config"
+        aria-label="Array-Element-Typ"
         value={c.itemKind}
         onChange={(e) => onChange({ config: { kind: 'array', itemKind: e.target.value }, children: e.target.value === 'object' ? (field.children || []) : undefined })}
       >
@@ -567,17 +573,17 @@ function KindConfig({ field, onChange }) {
   if (c.kind === 'text') {
     return (
       <div className="sb-config-row">
-        <input type="number" placeholder="minLength" value={c.minLength ?? ''} onChange={(e) => onChange({ config: { ...c, minLength: e.target.value === '' ? undefined : Number(e.target.value) } })} />
-        <input type="number" placeholder="maxLength" value={c.maxLength ?? ''} onChange={(e) => onChange({ config: { ...c, maxLength: e.target.value === '' ? undefined : Number(e.target.value) } })} />
-        <input type="text"   placeholder="pattern (regex)" value={c.pattern ?? ''} onChange={(e) => onChange({ config: { ...c, pattern: e.target.value || undefined } })} />
+        <input type="number" aria-label="Mindestlänge" placeholder="minLength" value={c.minLength ?? ''} onChange={(e) => onChange({ config: { ...c, minLength: e.target.value === '' ? undefined : Number(e.target.value) } })} />
+        <input type="number" aria-label="Maximallänge" placeholder="maxLength" value={c.maxLength ?? ''} onChange={(e) => onChange({ config: { ...c, maxLength: e.target.value === '' ? undefined : Number(e.target.value) } })} />
+        <input type="text"   aria-label="Pattern (Regex)" placeholder="pattern (regex)" value={c.pattern ?? ''} onChange={(e) => onChange({ config: { ...c, pattern: e.target.value || undefined } })} />
       </div>
     );
   }
   if (c.kind === 'number' || c.kind === 'integer') {
     return (
       <div className="sb-config-row">
-        <input type="number" placeholder="minimum" value={c.minimum ?? ''} onChange={(e) => onChange({ config: { ...c, minimum: e.target.value === '' ? undefined : Number(e.target.value) } })} />
-        <input type="number" placeholder="maximum" value={c.maximum ?? ''} onChange={(e) => onChange({ config: { ...c, maximum: e.target.value === '' ? undefined : Number(e.target.value) } })} />
+        <input type="number" aria-label="Minimum" placeholder="minimum" value={c.minimum ?? ''} onChange={(e) => onChange({ config: { ...c, minimum: e.target.value === '' ? undefined : Number(e.target.value) } })} />
+        <input type="number" aria-label="Maximum" placeholder="maximum" value={c.maximum ?? ''} onChange={(e) => onChange({ config: { ...c, maximum: e.target.value === '' ? undefined : Number(e.target.value) } })} />
       </div>
     );
   }
@@ -596,7 +602,7 @@ function BindingPicker({ field, onChange }) {
     else if (v === 'elster_anlage') onChange({ ocrBinding: { type: 'elster_anlage' } });
   }
   return (
-    <select className="sb-binding" value={current} onChange={onPick} title="OCR-Coercion-Bindung">
+    <select className="sb-binding" aria-label="OCR-Coercion-Bindung" value={current} onChange={onPick} title="OCR-Coercion-Bindung">
       {BINDINGS.map((b) => <option key={b.value} value={b.value}>OCR: {b.label}</option>)}
     </select>
   );

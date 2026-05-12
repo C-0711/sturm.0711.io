@@ -822,6 +822,7 @@ function SidebarUpload({ workflow, file, onFile, onStart, running }) {
         <input
           ref={inputRef}
           type="file"
+          aria-label="Datei für Workflow-Lauf hochladen"
           style={{ display: 'none' }}
           accept={accept}
           onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }}
@@ -1142,6 +1143,7 @@ function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, 
         <div className="sturm-drawer-body">
           <div className="sturm-issue-add">
             <input
+              aria-label="Neuer Issue"
               placeholder="Neuer Issue …"
               value={newIssue}
               onChange={e => setNewIssue(e.target.value)}

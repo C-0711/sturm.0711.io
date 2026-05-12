@@ -474,6 +474,7 @@ function Palette({ catalog, containerCatalog }) {
       <input
         className="dsg-palette-search"
         type="search"
+        aria-label="Stages durchsuchen"
         placeholder="Stages durchsuchen…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -748,8 +749,9 @@ function StageInspector({ state, dispatch, onDelete, catalog }) {
       <h3 className="dsg-section-title">Knoten</h3>
 
       <div className="dsg-field">
-        <label className="dsg-field-label">Stage-ID</label>
+        <label className="dsg-field-label" htmlFor="dsg-stage-id">Stage-ID</label>
         <input
+          id="dsg-stage-id"
           className="dsg-input"
           value={stageIdInput}
           onChange={(e) => setStageIdInput(e.target.value)}
@@ -767,8 +769,9 @@ function StageInspector({ state, dispatch, onDelete, catalog }) {
       </div>
 
       <div className="dsg-field">
-        <label className="dsg-field-label">Name</label>
+        <label className="dsg-field-label" htmlFor="dsg-stage-name">Name</label>
         <input
+          id="dsg-stage-name"
           className="dsg-input"
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
@@ -778,8 +781,9 @@ function StageInspector({ state, dispatch, onDelete, catalog }) {
       </div>
 
       <div className="dsg-field">
-        <label className="dsg-field-label">Beschreibung</label>
+        <label className="dsg-field-label" htmlFor="dsg-stage-desc">Beschreibung</label>
         <textarea
+          id="dsg-stage-desc"
           className="dsg-textarea"
           style={{ fontFamily: 'var(--font-inter)', fontSize: 12, minHeight: 60 }}
           value={descInput}
@@ -821,8 +825,9 @@ function StageInspector({ state, dispatch, onDelete, catalog }) {
       )}
 
       <div className="dsg-field">
-        <label className="dsg-field-label">Config (JSON)</label>
+        <label className="dsg-field-label" htmlFor="dsg-stage-config">Config (JSON)</label>
         <textarea
+          id="dsg-stage-config"
           className="dsg-textarea"
           value={configText}
           onChange={(e) => setConfigText(e.target.value)}
@@ -835,8 +840,9 @@ function StageInspector({ state, dispatch, onDelete, catalog }) {
       </div>
 
       <div className="dsg-field">
-        <label className="dsg-field-label">Inputs (JSON)</label>
+        <label className="dsg-field-label" htmlFor="dsg-stage-inputs">Inputs (JSON)</label>
         <textarea
+          id="dsg-stage-inputs"
           className="dsg-textarea"
           value={inputsText}
           onChange={(e) => setInputsText(e.target.value)}
@@ -890,6 +896,7 @@ function Toolbar({ state, dispatch, onSave, onNew, onLoad, onTest, savedList, st
 
       <input
         className="dsg-id-input"
+        aria-label="Workflow-ID"
         value={state.meta.id}
         onChange={(e) => dispatch({ type: 'set_meta', patch: { id: e.target.value } })}
         placeholder="workflow_id"
@@ -899,18 +906,21 @@ function Toolbar({ state, dispatch, onSave, onNew, onLoad, onTest, savedList, st
       />
       <input
         className="dsg-name-input"
+        aria-label="Workflow-Name"
         value={state.meta.name}
         onChange={(e) => dispatch({ type: 'set_meta', patch: { name: e.target.value } })}
         placeholder="Workflow-Name"
       />
       <input
         className="dsg-desc-input"
+        aria-label="Workflow-Beschreibung"
         value={state.meta.description}
         onChange={(e) => dispatch({ type: 'set_meta', patch: { description: e.target.value } })}
         placeholder="Kurze Beschreibung…"
       />
       <select
         className="dsg-input-type"
+        aria-label="Workflow-Input-Typ"
         value={state.meta.inputType}
         onChange={(e) => dispatch({ type: 'set_meta', patch: { inputType: e.target.value } })}
         title="Input-Typ"
@@ -1411,8 +1421,9 @@ function RunTestModal({ workflowId, inputType, onClose }) {
           <div className="dsg-modal-body">
             {inputType === 'file' && (
               <div className="dsg-field">
-                <label className="dsg-field-label">Datei (PDF / Bild)</label>
+                <label className="dsg-field-label" htmlFor="dsg-runtest-file">Datei (PDF / Bild)</label>
                 <input
+                  id="dsg-runtest-file"
                   type="file"
                   className="dsg-input"
                   accept=".pdf,.png,.jpg,.jpeg"
@@ -1423,8 +1434,9 @@ function RunTestModal({ workflowId, inputType, onClose }) {
             )}
             {inputType === 'text' && (
               <div className="dsg-field">
-                <label className="dsg-field-label">Text-Input</label>
+                <label className="dsg-field-label" htmlFor="dsg-runtest-text">Text-Input</label>
                 <textarea
+                  id="dsg-runtest-text"
                   className="dsg-textarea"
                   style={{ minHeight: 140, fontFamily: 'var(--font-inter)' }}
                   value={bodyText}
@@ -1435,8 +1447,9 @@ function RunTestModal({ workflowId, inputType, onClose }) {
             )}
             {inputType === 'json' && (
               <div className="dsg-field">
-                <label className="dsg-field-label">JSON-Body</label>
+                <label className="dsg-field-label" htmlFor="dsg-runtest-json">JSON-Body</label>
                 <textarea
+                  id="dsg-runtest-json"
                   className="dsg-textarea"
                   value={bodyText}
                   onChange={(e) => setBodyText(e.target.value)}
