@@ -17,8 +17,8 @@ export function createJobsRouter(jobRunner: JobRunner): Router {
    *  ?status=running&limit=50 etc. */
   router.get('/', async (req, res) => {
     try {
-      const status = (req.query?.status as string | undefined) as Parameters<JobRunner['list']>[1]['status'] | undefined;
-      const kind = req.query?.kind as Parameters<JobRunner['list']>[1]['kind'] | undefined;
+      const status = req.query?.status as NonNullable<Parameters<JobRunner['list']>[1]>['status'] | undefined;
+      const kind = req.query?.kind as NonNullable<Parameters<JobRunner['list']>[1]>['kind'] | undefined;
       const limit = req.query?.limit ? parseInt(String(req.query.limit), 10) : 50;
       const jobs = await jobRunner.list(undefined, { status, kind, limit });
       res.json(jobs);

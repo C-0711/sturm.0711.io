@@ -81,6 +81,15 @@ export interface DocumentMeta {
   currentPath: string;
   /** Mistral Files API id, set after classify; reusable for OCR Run. */
   fileId?: string;
+  /** Persisted PRE-OCR (mistral-ocr-latest) result, used by Pass 2 (extract)
+   *  and visual-audit. Set after the OCR step succeeds. */
+  ocr?: {
+    markdown: string;
+    pages: Array<{ index: number; chars: number }>;
+    charCount: number;
+    ms: number;
+    pagesProcessed: number;
+  };
   classification?: {
     label: string;
     confidence: number;
@@ -116,7 +125,7 @@ export interface DocumentMeta {
      *  Mistral Small call. Kept verbatim so the user can audit what the model
      *  actually saw and produced. */
     raw?: {
-      request: { model: string; promptText: string; documentUrl: string };
+      request: { model: string; promptText: string; documentUrl?: string; markdownLen?: number };
       response: unknown;
     };
     /** Pass 1 — empfohlene ELSTER-Anlagen für dieses Dokument. Pass 2
@@ -1694,8 +1703,8 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
       const wsId = safeSeg(req.params.ws);
       const records = await readIndex();
       if (!records.some((r) => r.id === wsId)) { res.status(404).json({ error: 'workspace_not_found' }); return; }
-      const status = req.query?.status as Parameters<JobRunner['list']>[1]['status'] | undefined;
-      const kind = req.query?.kind as Parameters<JobRunner['list']>[1]['kind'] | undefined;
+      const status = req.query?.status as NonNullable<Parameters<JobRunner['list']>[1]>['status'] | undefined;
+      const kind = req.query?.kind as NonNullable<Parameters<JobRunner['list']>[1]>['kind'] | undefined;
       const limit = req.query?.limit ? parseInt(String(req.query.limit), 10) : 50;
       const jobs = await jobRunner.list(wsId, { status, kind, limit });
       res.json(jobs);

@@ -41,6 +41,7 @@ COPY --chown=sturm:sturm . .
 # the process can create per-run subdirs.
 RUN mkdir -p /app/workspaces /app/runs /app/uploads /app/schemas \
              /app/gitchain-repos /app/logs \
+ && npm run build:ui \
  && chown -R sturm:sturm /app
 
 ENV NODE_ENV=production \
@@ -56,4 +57,6 @@ ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["npx", "tsx", "src/server.ts"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -q -O- http://127.0.0.1:7800/api/workflows >/dev/null || exit 1
+  CMD wget -q -O- http://127.0.0.1:7800/api/workflows >/dev/null \
+   && wget -q -O- http://127.0.0.1:7800/pipeline.bundle.js >/dev/null \
+   || exit 1

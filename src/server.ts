@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { registerAllStages } from './stages/index.ts';
 import { registerAllWorkflows } from './workflows/index.ts';
-import { listWorkflows, getWorkflow } from './core/registry.ts';
+import { listWorkflows, getWorkflow, listStages } from './core/registry.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import type { WorkflowDef } from './core/types.ts';
@@ -22,6 +22,7 @@ import { resolveMasterKey } from './lib/master-signer.ts';
 import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
+import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
 import {
   applyOverrides,
   deleteStageOverride,
@@ -43,6 +44,7 @@ const ROOT = path.resolve(__dirname, '..');
 const UPLOADS_DIR = path.join(ROOT, 'uploads');
 const RUNS_DIR = path.join(ROOT, 'runs');
 const WORKSPACES_DIR = path.join(ROOT, 'workspaces');
+const USER_WORKFLOWS_DIR = path.join(ROOT, 'workflows-user');
 const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
 const PIPELINES_DIR = path.join(__dirname, 'pipelines-seed');
 const UI_DIR = path.join(__dirname, 'ui');
@@ -50,10 +52,19 @@ const UI_DIR = path.join(__dirname, 'ui');
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(RUNS_DIR, { recursive: true });
 fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
+fs.mkdirSync(USER_WORKFLOWS_DIR, { recursive: true });
 
 // Bootstrap-Registries
 registerAllStages();
 registerAllWorkflows();
+// Snapshot built-in IDs BEFORE user-workflows get registered. The workflows-user
+// router uses this to decide what's a "true" built-in vs what's user-owned.
+const builtInWorkflowIds = new Set(listWorkflows().map((w) => w.id));
+// User-defined workflows from disk — load AFTER built-ins so id collisions are detected.
+loadAndRegisterUserWorkflows(USER_WORKFLOWS_DIR).then((r) => {
+  if (r.loaded > 0) console.log(`[workflows-user] loaded ${r.loaded} workflow(s) from disk`);
+  for (const err of r.errors) console.warn(`[workflows-user] ${err}`);
+}).catch((e) => console.warn(`[workflows-user] boot load failed: ${(e as Error).message}`));
 
 const app = express();
 
@@ -149,9 +160,53 @@ app.get('/api/workflows/:id', (req, res) => {
   res.json(summarizeWorkflow(def));
 });
 
+// ============ Stage catalog (workflow designer metadata) ============
+
+function categorizeStage(id: string): string {
+  if (id.startsWith('compare/')) return 'control-flow';
+  if (id.startsWith('eval/')) return 'evaluation';
+  if (id.startsWith('extract/')) return 'extract';
+  if (id === 'paddleocr-vl' || id.endsWith('-ocr')) return 'ocr';
+  if (id.startsWith('elster-v3/')) return 'elster-v3';
+  if (id.startsWith('elster/')) return 'elster';
+  if (id.startsWith('steuerbelege/')) return 'steuerbelege';
+  if (id.startsWith('pentacam')) return 'pentacam';
+  if (id.startsWith('myopia')) return 'myopia';
+  if (id === 'text-stats') return 'analysis';
+  return 'general';
+}
+
+app.get('/api/stages/catalog', (_req, res) => {
+  res.json(listStages().map((s) => ({
+    id: s.id,
+    name: s.name ?? s.id,
+    description: s.description ?? null,
+    category: categorizeStage(s.id),
+    hints: s.hints ?? null,
+  })));
+});
+
+// Container catalog — deduplicated union of all `containers[]` declared across
+// registered workflows. Powers the designer's container palette so users can
+// pin a "data center" (e.g. ELSTER eCode catalog) to their workflow.
+app.get('/api/containers', (_req, res) => {
+  const seen = new Map<string, unknown>();
+  for (const wf of listWorkflows()) {
+    for (const c of (wf.containers ?? [])) {
+      if (!seen.has(c.id)) {
+        // Strip workflow-specific readBy[] — the catalog represents the container
+        // shape, not how a particular workflow consumes it.
+        const { readBy: _readBy, ...rest } = c;
+        seen.set(c.id, rest);
+      }
+    }
+  }
+  res.json(Array.from(seen.values()));
+});
+
 // ============ Upload ============
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', requireBearerToken, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'file fehlt (multipart/form-data, field "file")' });
   res.json({
     storedFilename: req.file.filename,
@@ -207,6 +262,11 @@ app.use('/api/integrations', requireBearerToken, createIntegrationsRouter({
 // ============ Standalone classify (used by /studio-ocr.html on file drop) ============
 
 app.use('/api/classify', requireBearerToken, schemaGenerateLimiter, createClassifyRouter(UPLOADS_DIR));
+
+// ============ User-defined workflows (designer-authored, persistent) ============
+// Mounted WITHOUT requireBearerToken intentionally — designer is local-dev tool.
+// If you expose this to the internet, gate it.
+app.use('/api/workflows-user', createWorkflowsUserRouter({ dir: USER_WORKFLOWS_DIR, builtInIds: builtInWorkflowIds }));
 
 // ============ Studio templates (P2.6) ============
 
@@ -286,7 +346,7 @@ app.delete('/api/schemas/:id(*)', requireBearerToken, (_req, res) => {
 
 // ============ Run (SSE) ============
 
-app.post('/api/workflows/:id/run', upload.single('file'), async (req, res) => {
+app.post('/api/workflows/:id/run', requireBearerToken, upload.single('file'), async (req, res) => {
   const baseDef = getWorkflow(req.params.id);
   if (!baseDef) { res.status(404).json({ error: `workflow not found: ${req.params.id}` }); return; }
   // Merge any persisted overrides onto the canonical workflow.
@@ -374,7 +434,7 @@ app.post('/api/workflows/:id/run', upload.single('file'), async (req, res) => {
 
 // ============ Runs ============
 
-app.get('/api/runs/:workflowId/:runId', async (req, res) => {
+app.get('/api/runs/:workflowId/:runId', requireBearerToken, async (req, res) => {
   const metaPath = path.join(RUNS_DIR, req.params.workflowId, req.params.runId, '_result.json');
   try {
     const raw = await fs.promises.readFile(metaPath, 'utf8');
@@ -510,6 +570,7 @@ function safeSeg(seg: string): string {
 app.use('/design-system', express.static(path.join(UI_DIR, 'design-system')));
 app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/pipeline.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
+app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/studio-ocr.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.use(express.static(UI_DIR));
