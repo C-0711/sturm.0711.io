@@ -1,0 +1,343 @@
+{
+  "workflowId": "elster-v3",
+  "updatedAt": "2026-05-11T21:01:23.238Z",
+  "stages": {
+    "ocr": {
+      "model": "mistral-ocr-latest",
+      "tableFormat": "markdown",
+      "documentAnnotation": {
+        "schema": {
+          "Religionszugehörigkeit": {
+            "type": "object",
+            "properties": {
+              "abgerufen_am": {
+                "type": "string"
+              },
+              "übernommen": {
+                "type": "string"
+              },
+              "daten": {
+                "type": "object",
+                "properties": {
+                  "Identifikationsnummer": {
+                    "type": "string"
+                  },
+                  "Religion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "Identifikationsnummer",
+                  "Religion"
+                ]
+              }
+            },
+            "required": [
+              "abgerufen_am",
+              "übernommen",
+              "daten"
+            ]
+          },
+          "Lohnsteuerbescheinigung_Verbandsgemeindewerke_Abwasser": {
+            "type": "object",
+            "properties": {
+              "abgerufen_am": {
+                "type": "string"
+              },
+              "übernommen": {
+                "type": "string"
+              },
+              "daten": {
+                "type": "object",
+                "properties": {
+                  "Übermittlung_der_Bescheinigung_an_die_Finanzverwaltung": {
+                    "type": "string"
+                  },
+                  "Name_des_Arbeitgebers": {
+                    "type": "string"
+                  },
+                  "Identifikationsnummer": {
+                    "type": "string"
+                  },
+                  "Nachname": {
+                    "type": "string"
+                  },
+                  "Vorname": {
+                    "type": "string"
+                  },
+                  "Besteuerungsmerkmale_gültig_ab": {
+                    "type": "string"
+                  },
+                  "Steuerklasse": {
+                    "type": "string"
+                  },
+                  "Kirchensteuermerkmal_Konfession": {
+                    "type": "string"
+                  },
+                  "Kirchensteuermerkmal_Konfession_des_Ehegatten": {
+                    "type": "string"
+                  },
+                  "Beschäftigungsjahr": {
+                    "type": "string"
+                  },
+                  "Bescheinigungszeitraum": {
+                    "type": "object",
+                    "properties": {
+                      "Von": {
+                        "type": "string"
+                      },
+                      "Bis": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "Von",
+                      "Bis"
+                    ]
+                  },
+                  "Anzahl_U": {
+                    "type": "string"
+                  },
+                  "Bruttoarbeitslohn_ohne_9_und_10": {
+                    "type": "string"
+                  },
+                  "Einbehaltene_Lohnsteuer": {
+                    "type": "string"
+                  },
+                  "Einbehaltener_Solidaritätszuschlag": {
+                    "type": "string"
+                  },
+                  "Einbehaltene_Kirchensteuer_des_Arbeitnehmers": {
+                    "type": "string"
+                  },
+                  "Einbehaltene_Kirchensteuer_des_Partners": {
+                    "type": "string"
+                  },
+                  "Entschädigungen_Arbeitslohn_für_mehrere_Kalenderjahre": {
+                    "type": "string"
+                  },
+                  "Arbeitgeberanteil_zuschuss_zur_gesetzlichen_Rentenversicherung": {
+                    "type": "string"
+                  },
+                  "Arbeitgeberanteil_zuschuss_zu_berufsständischen_Versorgungseinrichtungen": {
+                    "type": "string"
+                  },
+                  "Arbeitnehmeranteil_zur_gesetzlichen_Rentenversicherung": {
+                    "type": "string"
+                  },
+                  "Arbeitnehmeranteil_zu_berufsständischen_Versorgungseinrichtungen": {
+                    "type": "string"
+                  },
+                  "Arbeitnehmerbeiträge_zur_gesetzlichen_Krankenversicherung": {
+                    "type": "string"
+                  },
+                  "Arbeitnehmerbeiträge_zur_sozialen_Pflegeversicherung": {
+                    "type": "string"
+                  },
+                  "Arbeitnehmerbeiträge_zur_gesetzlichen_Arbeitslosenversicherung": {
+                    "type": "string"
+                  },
+                  "Steuerpflichtiger_Beitrag_zur_Zusatzversorgung": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "Übermittlung_der_Bescheinigung_an_die_Finanzverwaltung",
+                  "Name_des_Arbeitgebers",
+                  "Identifikationsnummer",
+                  "Nachname",
+                  "Vorname",
+                  "Besteuerungsmerkmale_gültig_ab",
+                  "Steuerklasse",
+                  "Kirchensteuermerkmal_Konfession",
+                  "Kirchensteuermerkmal_Konfession_des_Ehegatten",
+                  "Beschäftigungsjahr",
+                  "Bescheinigungszeitraum",
+                  "Anzahl_U",
+                  "Bruttoarbeitslohn_ohne_9_und_10",
+                  "Einbehaltene_Lohnsteuer",
+                  "Einbehaltener_Solidaritätszuschlag",
+                  "Einbehaltene_Kirchensteuer_des_Arbeitnehmers",
+                  "Einbehaltene_Kirchensteuer_des_Partners",
+                  "Entschädigungen_Arbeitslohn_für_mehrere_Kalenderjahre",
+                  "Arbeitgeberanteil_zuschuss_zur_gesetzlichen_Rentenversicherung",
+                  "Arbeitgeberanteil_zuschuss_zu_berufsständischen_Versorgungseinrichtungen",
+                  "Arbeitnehmeranteil_zur_gesetzlichen_Rentenversicherung",
+                  "Arbeitnehmeranteil_zu_berufsständischen_Versorgungseinrichtungen",
+                  "Arbeitnehmerbeiträge_zur_gesetzlichen_Krankenversicherung",
+                  "Arbeitnehmerbeiträge_zur_sozialen_Pflegeversicherung",
+                  "Arbeitnehmerbeiträge_zur_gesetzlichen_Arbeitslosenversicherung",
+                  "Steuerpflichtiger_Beitrag_zur_Zusatzversorgung"
+                ]
+              }
+            },
+            "required": [
+              "abgerufen_am",
+              "übernommen",
+              "daten"
+            ]
+          },
+          "Mitteilung_über_freigestellte_Kapitalerträge_Sparkasse_Westerwald_Sieg": {
+            "type": "object",
+            "properties": {
+              "abgerufen_am": {
+                "type": "string"
+              },
+              "übernommen": {
+                "type": "string"
+              },
+              "daten": {
+                "type": "object",
+                "properties": {
+                  "Übermittlung_der_Bescheinigung_an_die_Finanzverwaltung": {
+                    "type": "string"
+                  },
+                  "Meldejahr": {
+                    "type": "string"
+                  },
+                  "Betrag": {
+                    "type": "string"
+                  },
+                  "Identifikationsnummer": {
+                    "type": "string"
+                  },
+                  "Vorname": {
+                    "type": "string"
+                  },
+                  "Nachname": {
+                    "type": "string"
+                  },
+                  "Ehepartner": {
+                    "type": "object",
+                    "properties": {
+                      "Identifikationsnummer": {
+                        "type": "string"
+                      },
+                      "Vorname": {
+                        "type": "string"
+                      },
+                      "Nachname": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "Identifikationsnummer",
+                      "Vorname",
+                      "Nachname"
+                    ]
+                  },
+                  "Bankverbindung": {
+                    "type": "object",
+                    "properties": {
+                      "Geldinstitut": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "Geldinstitut"
+                    ]
+                  }
+                },
+                "required": [
+                  "Übermittlung_der_Bescheinigung_an_die_Finanzverwaltung",
+                  "Meldejahr",
+                  "Betrag",
+                  "Identifikationsnummer",
+                  "Vorname",
+                  "Nachname",
+                  "Ehepartner",
+                  "Bankverbindung"
+                ]
+              }
+            },
+            "required": [
+              "abgerufen_am",
+              "übernommen",
+              "daten"
+            ]
+          },
+          "Mitteilung_über_freigestellte_Kapitalerträge_Volksbank_Gebhardshain_eG": {
+            "type": "object",
+            "properties": {
+              "abgerufen_am": {
+                "type": "string"
+              },
+              "übernommen": {
+                "type": "string"
+              },
+              "daten": {
+                "type": "object",
+                "properties": {
+                  "Übermittlung_der_Bescheinigung_an_die_Finanzverwaltung": {
+                    "type": "string"
+                  },
+                  "Meldejahr": {
+                    "type": "string"
+                  },
+                  "Betrag": {
+                    "type": "string"
+                  },
+                  "Identifikationsnummer": {
+                    "type": "string"
+                  },
+                  "Vorname": {
+                    "type": "string"
+                  },
+                  "Nachname": {
+                    "type": "string"
+                  },
+                  "Ehepartner": {
+                    "type": "object",
+                    "properties": {
+                      "Identifikationsnummer": {
+                        "type": "string"
+                      },
+                      "Vorname": {
+                        "type": "string"
+                      },
+                      "Nachname": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "Identifikationsnummer",
+                      "Vorname",
+                      "Nachname"
+                    ]
+                  },
+                  "Bankverbindung": {
+                    "type": "object",
+                    "properties": {
+                      "Geldinstitut": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "Geldinstitut"
+                    ]
+                  }
+                },
+                "required": [
+                  "Übermittlung_der_Bescheinigung_an_die_Finanzverwaltung",
+                  "Meldejahr",
+                  "Betrag",
+                  "Identifikationsnummer",
+                  "Vorname",
+                  "Nachname",
+                  "Ehepartner",
+                  "Bankverbindung"
+                ]
+              }
+            },
+            "required": [
+              "abgerufen_am",
+              "übernommen",
+              "daten"
+            ]
+          }
+        },
+        "name": "steuer_abruf_dokument"
+      }
+    }
+  }
+}

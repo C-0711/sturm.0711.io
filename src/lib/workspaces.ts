@@ -74,7 +74,7 @@ export interface DocumentMeta {
      *  Mistral Small call. Kept verbatim so the user can audit what the model
      *  actually saw and produced. */
     raw?: {
-      request: { model: string; promptText: string; documentUrl: string };
+      request: { model: string; promptText: string; documentUrl?: string; markdownLen?: number };
       response: unknown;
     };
   };

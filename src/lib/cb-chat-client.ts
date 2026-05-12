@@ -73,7 +73,7 @@ export async function listCases(opts: CbChatClientOpts): Promise<CbChatFallRow[]
     signal: opts.signal,
   });
   if (!resp.ok) throw new Error(`cb-chat list cases ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-  const data = await resp.json();
+  const data = await resp.json() as any;
   const rows: any[] = Array.isArray(data) ? data
     : Array.isArray(data?.faelle) ? data.faelle
     : Array.isArray(data?.cases) ? data.cases
@@ -113,7 +113,7 @@ export async function listCaseDocuments(fallId: string, opts: CbChatClientOpts):
     signal: opts.signal,
   });
   if (!resp.ok) throw new Error(`cb-chat list ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-  const data = await resp.json();
+  const data = await resp.json() as any;
   // cb-chat sometimes wraps in {dokumente: [...]} or {documents: [...]} — be tolerant.
   if (Array.isArray(data)) return data as CbChatDocRow[];
   if (Array.isArray(data?.dokumente)) return data.dokumente as CbChatDocRow[];

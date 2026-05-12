@@ -24,6 +24,7 @@ import {
   configToApiRequest,
   parseApiResponse,
   type DocumentChunk,
+  type JsonSchema,
   type MistralOcrConfig,
 } from './mistral-ocr/index.ts';
 
@@ -451,7 +452,7 @@ const VISION_AUDIT_PROMPT =
   'Bei jedem Fehler: kurze Begründung + Seitenzahl (1-basiert) + Zitat dessen, was du auf der Seite siehst.\n' +
   'Du MUSST für JEDEN gelieferten Wert ein finding zurückgeben (gleicher path, gleicher value, gleiche Reihenfolge).';
 
-const VISION_AUDIT_SCHEMA = {
+const VISION_AUDIT_SCHEMA: JsonSchema = {
   type: 'object',
   required: ['findings'],
   additionalProperties: false,

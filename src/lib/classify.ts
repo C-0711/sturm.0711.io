@@ -45,7 +45,7 @@ export interface ClassificationResult {
    *  Persisted so the user can inspect what the model actually returned (raw
    *  prompt + response) at the upload step. */
   raw: {
-    request: { model: string; promptText: string; documentUrl: string };
+    request: { model: string; promptText: string; documentUrl?: string; markdownLen?: number };
     response: unknown;
   };
 }

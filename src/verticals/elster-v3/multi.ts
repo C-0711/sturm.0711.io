@@ -130,7 +130,7 @@ export const multiExtractStage = defineStage<
       let schemaJson: { schema: unknown; description?: string; name?: string } | null = null;
       try {
         const raw = await readFile(schemaPath, 'utf8');
-        schemaJson = JSON.parse(raw) as typeof schemaJson;
+        schemaJson = JSON.parse(raw) as { schema: unknown; description?: string; name?: string };
       } catch (err) {
         results.push({
           id: sd.id, title: sd.title, headerKind: sd.headerKind, pages: sd.pages,
@@ -163,7 +163,7 @@ export const multiExtractStage = defineStage<
           system: systemPrompt,
           jsonSchema: {
             name: schemaJson?.name ?? `${schemaName}_extract`,
-            schema: schemaJson?.schema,
+            schema: schemaJson?.schema as Record<string, unknown>,
             strict: true,
           },
           temperature: 0,
