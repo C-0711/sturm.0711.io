@@ -50,3 +50,6 @@ __pycache__
 
 # Claude Code session transcripts / build summaries (local-only context)
 qc_ElsterV3_Container.*
+
+# Stricker-pivot backup (local-only)
+src/verticals/elster-v3/data/.backup-*

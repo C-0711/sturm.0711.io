@@ -63,9 +63,11 @@ export interface PromptBudget {
 /** Pro-Modell Context-Window in Tokens. Kein Anspruch auf Vollständigkeit;
  *  unbekannte Modelle → conservative 32K. */
 const MODEL_CONTEXT_TOKENS: Record<string, number> = {
-  // vLLM Gemma-4 family (--max-model-len optional; falls nicht gesetzt = 128K)
-  'gemma4-mm': 128_000,
-  'google/gemma-4-31b-it': 128_000,
+  // vLLM Gemma-4 family. Deployment auf H200V ist aktuell mit
+  // --max-model-len=32768 gestartet (siehe `curl :11435/v1/models`).
+  // Wenn der Container später mit 128k re-deployed wird → hier hochziehen.
+  'gemma4-mm': 32_768,
+  'google/gemma-4-31b-it': 32_768,
   'gemma4-embed': 8_192,
   // Mistral cloud
   'mistral-large-latest': 128_000,

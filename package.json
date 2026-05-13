@@ -20,6 +20,7 @@
     "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js"
   },
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "express": "^4.19.2",
     "express-rate-limit": "^8.4.1",
     "helmet": "^8.1.0",

@@ -17,6 +17,63 @@
  */
 import { defineStage } from '../../core/stage.ts';
 import { chatJson, type ChatProvider } from '../../lib/llm-chat.ts';
+import { searchVariants } from '../../lib/quality/datentyp-normalize.ts';
+
+/** Heuristic: does this critic-message complain about formatting/typography only? */
+function isFormatOnlyComplaint(msg: string): boolean {
+  if (typeof msg !== 'string') return false;
+  const lower = msg.toLowerCase();
+  return /\bformat\b|punkt|komma|interpunktion|trennzeichen|dezimal|tausender|thousand|decimal|leerzeichen|whitespace|notation/.test(lower);
+}
+
+/** Walk dotted path on a plain JSON tree (ignores annotation siblings). */
+function getAtPath(obj: unknown, dotted: string): unknown {
+  if (!dotted) return obj;
+  let cur: unknown = obj;
+  for (const part of dotted.split('.')) {
+    if (cur == null || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string, unknown>)[part];
+  }
+  return cur;
+}
+
+/**
+ * For each path in field_meta, decide whether the extracted value can be
+ * found in the source under *any* datentyp-aware rendering. If yes, the
+ * critic shouldn't be allowed to flag it for "Punkt vs. Komma" / "Format"
+ * reasons — the container-normalized representations all map to the same
+ * semantic value.
+ *
+ * Returns:
+ *   verifiedFields[]  paths whose value matches a German/JSON variant in source
+ *   verifiedSummary   short table for the prompt (max 30 rows) showing the
+ *                     accepted forms — helps the LLM understand the convention
+ */
+function computeVerifiedFields(
+  extracted: unknown,
+  source: string,
+  fieldMeta: Record<string, { datentyp?: string } | null> | undefined,
+): { verifiedFields: Set<string>; verifiedSummary: string } {
+  const verified = new Set<string>();
+  const rows: string[] = [];
+  if (!fieldMeta || !source) return { verifiedFields: verified, verifiedSummary: '' };
+  const srcLower = source.toLowerCase();
+  for (const [path, meta] of Object.entries(fieldMeta)) {
+    if (!meta) continue;
+    const value = getAtPath(extracted, path);
+    if (value == null || value === '') continue;
+    const variants = searchVariants(value, meta.datentyp);
+    const hit = variants.find((v) => srcLower.includes(v.toLowerCase()));
+    if (hit) {
+      verified.add(path);
+      if (rows.length < 30) rows.push(`  ${path} = ${JSON.stringify(value)}  ⇔  Quelltext: "${hit}"`);
+    }
+  }
+  const verifiedSummary = rows.length > 0
+    ? '\n\n--- FORMAT-VERIFIZIERT (Wert ist im Quelltext, ggf. in deutscher Schreibweise) ---\n' + rows.join('\n')
+    : '';
+  return { verifiedFields: verified, verifiedSummary };
+}
 
 export interface CriticInput {
   /** The object the extractor produced. */
@@ -159,6 +216,25 @@ export const criticLlmStage = defineStage<CriticInput, CriticOutput, CriticConfi
   ]
 }`;
 
+    // Container-driven: pre-verify any extracted leaf whose value (under
+    // datentyp-aware German/JSON rendering) is found in the OCR source. The
+    // critic gets these paths upfront and is forbidden from flagging them
+    // for typography reasons ("Punkt vs. Komma" etc.). A second post-process
+    // pass drops format-only issues on the same fields as a safety net, so
+    // the rule holds even when the LLM ignores the instruction.
+    const { verifiedFields, verifiedSummary } = computeVerifiedFields(
+      input.extracted, input.source, input.field_meta,
+    );
+    const germanNumberRule =
+      '\nWICHTIG — DEUTSCHE ZAHLENNOTATION:' +
+      '\n  Die Extraktion serialisiert Beträge als JSON-Zahl (z.B. 914.71).' +
+      '\n  Der Quelltext nutzt deutsche Schreibweise (z.B. "914,71 €" oder "1.234,56").' +
+      '\n  Diese sind SEMANTISCH IDENTISCH — kein Format-Issue, keine Severity.' +
+      '\n  Beispiele die NIE geflaggt werden dürfen:' +
+      '\n    914.71  ⇔  "914,71"  ⇔  "914,71 €"' +
+      '\n    69291.8 ⇔  "69.291,80 €"' +
+      '\n    7532    ⇔  "7.532,00 €"  (Felder ohne Cent-Stelle werden gerundet)' +
+      '\n  Ebenso: Datum "2024-01-01" ⇔ "01.01.2024", IDNr ohne/mit Leerzeichen.';
     // Container-aware: if we have field metadata, render a per-field reference
     // table so the critic can cite eCode + BMF-Anleitung-Zeile in each issue.
     let fieldRefSnippet = '';
@@ -183,12 +259,13 @@ export const criticLlmStage = defineStage<CriticInput, CriticOutput, CriticConfi
     }
 
     const prompt = [
-      rubric + citationInstruction,
+      rubric + germanNumberRule + citationInstruction,
       '',
       '--- EXTRAKTION ---',
       JSON.stringify(input.extracted, null, 2).slice(0, 6000),
       schemaSnippet,
       fieldRefSnippet,
+      verifiedSummary,
       '',
       '--- QUELLTEXT ---',
       sourcePreview,
@@ -214,8 +291,27 @@ export const criticLlmStage = defineStage<CriticInput, CriticOutput, CriticConfi
     });
 
     const parsed = result.parsed ?? {} as Record<string, unknown>;
-    const score = typeof parsed.score === 'number' ? parsed.score : 0;
-    const issues: CriticIssue[] = Array.isArray(parsed.per_field_issues) ? parsed.per_field_issues : [];
+    let score = typeof parsed.score === 'number' ? parsed.score : 0;
+    const rawIssues: CriticIssue[] = Array.isArray(parsed.per_field_issues) ? parsed.per_field_issues : [];
+
+    // Post-filter: drop format-only complaints on container-verified fields.
+    // Each dropped 'block' frees the score from the blocker-penalty; each
+    // dropped 'warn' nudges the score back up by a small fraction (cap at 1).
+    let droppedBlock = 0, droppedWarn = 0, droppedInfo = 0;
+    const issues = rawIssues.filter((iss) => {
+      if (!iss?.field || !iss?.severity) return true;
+      if (!verifiedFields.has(iss.field)) return true;
+      if (!isFormatOnlyComplaint(iss.msg || '')) return true;
+      if (iss.severity === 'block') droppedBlock++;
+      else if (iss.severity === 'warn') droppedWarn++;
+      else droppedInfo++;
+      return false;
+    });
+    if (droppedBlock + droppedWarn > 0) {
+      // Soft score-correction: format-noise shouldn't punish the run.
+      const bump = droppedBlock * 0.10 + droppedWarn * 0.03;
+      score = Math.min(1, score + bump);
+    }
     const hasBlocker = issues.some((i) => i?.severity === 'block');
     const accept = !hasBlocker && score >= passThreshold;
 
@@ -226,6 +322,8 @@ export const criticLlmStage = defineStage<CriticInput, CriticOutput, CriticConfi
       accept,
       issueCount: issues.length,
       blockCount: issues.filter((i) => i.severity === 'block').length,
+      droppedFormatNoise: droppedBlock + droppedWarn + droppedInfo,
+      verifiedFieldsCount: verifiedFields.size,
     });
 
     return {

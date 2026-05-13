@@ -439,6 +439,49 @@ app.post('/api/workflows/:id/run', requireBearerToken, upload.single('file'), as
 
 // ============ Runs ============
 
+// List previous runs of a workflow (for Diff-vs-previous + replay-dropdown).
+// Sorted by mtime desc, capped at 20. Each entry pulls state + score from _result.json.
+app.get('/api/workflows/:id/runs', requireBearerToken, async (req, res) => {
+  const wf = safeSeg(req.params.id);
+  if (!wf) { res.status(400).json({ error: 'invalid workflow id' }); return; }
+  const dir = path.join(RUNS_DIR, wf);
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir(dir);
+  } catch {
+    res.json([]); return;
+  }
+  type Row = { runId: string; state: string | null; ms: number | null; kpiScore: number | null; finishedAt: string | null; mtime: number };
+  const rows: Row[] = [];
+  for (const name of entries) {
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) continue;
+    const runDir = path.join(dir, name);
+    const resultPath = path.join(runDir, '_result.json');
+    let st;
+    try { st = await fs.promises.stat(runDir); } catch { continue; }
+    if (!st.isDirectory()) continue;
+    let state: string | null = null;
+    let ms: number | null = null;
+    let kpiScore: number | null = null;
+    let finishedAt: string | null = null;
+    try {
+      const raw = await fs.promises.readFile(resultPath, 'utf8');
+      const j = JSON.parse(raw) as Record<string, unknown>;
+      state = typeof j.state === 'string' ? j.state : null;
+      ms = typeof j.ms === 'number' ? j.ms : null;
+      finishedAt = typeof j.finishedAt === 'string' ? j.finishedAt : null;
+      const stages = j.stages as Record<string, { output?: Record<string, unknown> }> | undefined;
+      const kpiOut = stages?.kpi?.output;
+      if (kpiOut && typeof kpiOut.score === 'number') kpiScore = kpiOut.score;
+    } catch {
+      // still-running or missing _result.json — keep state=null, useful to show "running"
+    }
+    rows.push({ runId: name, state, ms, kpiScore, finishedAt, mtime: st.mtimeMs });
+  }
+  rows.sort((a, b) => b.mtime - a.mtime);
+  res.json(rows.slice(0, 20).map(({ mtime: _m, ...r }) => r));
+});
+
 app.get('/api/runs/:workflowId/:runId', requireBearerToken, async (req, res) => {
   const metaPath = path.join(RUNS_DIR, req.params.workflowId, req.params.runId, '_result.json');
   try {

@@ -41,7 +41,15 @@ const PATTERNS: Record<string, RegExp[]> = {
   N_AUS: [/Anlage\s*N[\-\s]*AUS/i, /ausl[aä]ndische\s+Eink[uü]nfte\s+aus\s+nichtselbst/i],
   N_DHH: [/Anlage\s*N[\-\s]*DHH/i, /doppelte\s+Haushaltsf[uü]hrung/i],
   N_GRE: [/Anlage\s*N[\-\s]*GRE/i, /Grenzg[aä]nger/i],
-  N: [/Anlage\s*N\b/i, /Eink[uü]nfte\s+aus\s+nichtselbst[aä]ndiger\s+Arbeit/i],
+  N: [
+    /Anlage\s*N\b/i,
+    /Eink[uü]nfte\s+aus\s+nichtselbst[aä]ndiger\s+Arbeit/i,
+    // Quellbelege die zwingend zu Anlage N führen (VaSt / Arbeitgeber-Ausdrucke):
+    /Lohnsteuerbescheinigung/i,
+    /Ausdruck\s+der\s+elektronischen\s+Lohnsteuerbescheinigung/i,
+    /Bruttoarbeitslohn/i,
+    /eTIN\b/i,
+  ],
 
   // KAP-Familie
   KAP_BET: [/Anlage\s*KAP[\-\s]*BET/i, /Beteiligungen/i],

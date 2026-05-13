@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quantum-Elster × Lane 1 BMF — Task & Checklist · STURM</title>
+  <link rel="stylesheet" href="/neo-tokens.css" />
+  <link rel="stylesheet" href="/colors_and_type.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem 1rem 4rem;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: var(--neo-bg, #0d0f12);
+      color: var(--neo-fg, #e6e8ea);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    header.hero {
+      border-left: 4px solid var(--neo-accent, #5b8def);
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+      background: linear-gradient(90deg, rgba(91,141,239,0.08), transparent);
+    }
+    header.hero h1 { font-size: 1.6rem; margin: 0 0 .3rem 0; font-weight: 600; }
+    header.hero .tag {
+      font-size: .8rem; opacity: .7; text-transform: uppercase; letter-spacing: .08em;
+    }
+    header.hero .sub { margin-top: .6rem; font-size: 1rem; opacity: .85; }
+    h2 {
+      margin-top: 2.5rem;
+      font-size: 1.15rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: .4rem;
+    }
+    h3 { font-size: .95rem; margin-top: 1.5rem; opacity: .9; }
+    pre.diagram {
+      background: rgba(255,255,255,0.03);
+      padding: 1rem 1.2rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.35;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.8rem 0;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.7rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+    }
+    th { font-weight: 600; opacity: 0.75; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    code, kbd {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 12px;
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .task-list { list-style: none; padding: 0; margin: 0; }
+    .task-list li {
+      display: grid;
+      grid-template-columns: 32px 28px 1fr 80px 80px;
+      gap: 0.6rem;
+      padding: 0.6rem 0.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      align-items: start;
+    }
+    .task-list li.done { opacity: 0.45; }
+    .task-list li.done .task-text { text-decoration: line-through; }
+    .task-list .id { font-family: monospace; opacity: 0.55; font-size: 12px; padding-top: 2px; }
+    .task-list input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: var(--neo-accent, #5b8def);
+      cursor: pointer;
+      margin: 1px 0 0 0;
+    }
+    .task-text { font-size: 13px; }
+    .task-text code { font-size: 11.5px; }
+    .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 9px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge.B  { background: #c0392b22; color: #e57373; }
+    .badge.D  { background: #2980b922; color: #6db4e6; }
+    .badge.C  { background: #16a08522; color: #5fc9b0; }
+    .badge.T  { background: #8e44ad22; color: #b87cd6; }
+    .badge.U  { background: #e67e2222; color: #f5a76a; }
+    .badge.DO { background: #7f8c8d22; color: #b4bcbe; }
+    .eta { font-size: 12px; opacity: 0.7; font-family: monospace; }
+    .meta-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: .5rem; font-size: 12px; opacity: 0.7; }
+    .meta-row span strong { opacity: 1; color: var(--neo-accent, #5b8def); }
+    .progress-bar {
+      height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px;
+      margin: 1rem 0 1.5rem; overflow: hidden;
+    }
+    .progress-bar div {
+      height: 100%; background: var(--neo-accent, #5b8def);
+      transition: width 0.3s ease;
+    }
+    .gate-callout {
+      background: #c0392b18;
+      border: 1px solid #c0392b55;
+      padding: 0.7rem 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+      font-size: 13px;
+    }
+    .gate-callout strong { color: #ff8a80; }
+    footer {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 12px;
+      opacity: 0.6;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    footer a { color: var(--neo-accent, #5b8def); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .reset-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.15);
+      color: inherit; padding: 4px 12px; border-radius: 4px;
+      font-size: 11px; cursor: pointer;
+    }
+    .reset-btn:hover { border-color: rgba(255,255,255,0.4); }
+    .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="hero">
+      <div class="tag">STURM · Live-Implementierung · v2 (MCP-Pivot)</div>
+      <h1>Quantum-Elster × Lane 1 BMF — Steuerberechnung im Sturm-Workflow</h1>
+      <div class="sub">
+        Heute extrahiert die Pipeline nur <strong>deklarierte</strong> eCodes aus
+        Steuerdokumenten. Dieser Plan ergänzt die <strong>abgeleitete</strong>
+        Berechnung (zvE, tarifliche ESt, Soli, festzusetzende Steuer) via
+        <strong>Lane-1 MCP-Bridge</strong>. Neuer Workflow
+        <code>elster-v5_2</code>, lokal lauffähig auf :7800.
+      </div>
+      <div class="meta-row">
+        <span><strong>Status</strong> ✅ MVP läuft (E2E getestet, 333ms/Call)</span>
+        <span><strong>Container</strong> Quantum-Elster v0.5.8 (sealed)</span>
+        <span><strong>Rechner-Engine</strong> ctaxv1-lane1-bmf MCP v1.27.0 (40 Tools)</span>
+        <span><strong>Bridge</strong> JSON-RPC/SSE zu :12010/mcp</span>
+      </div>
+      <div class="meta-row" style="margin-top:.4rem">
+        <span style="color:#5fc9b0">
+          <strong>Pivot</strong>: MCP nimmt eCodes <em>nativ</em> als Input
+          (<code>elster_felder</code>) → kein TS-Formel-Executor nötig, keine
+          canonical_field↔eCode-Hand-Map. ~70% Code-Reduktion.
+        </span>
+      </div>
+    </header>
+
+    <h2>Architektur — wie der neue Stage live arbeitet</h2>
+    <pre class="diagram">
+Sturm-Pipeline (NEU: elster-v5_2, registriert auf :7800)
+   │
+   ├── ocr → klassifizierung → felderKatalog
+   │
+   ├── phase1Regex     (deterministisch, 4-/3-Faktor)
+   ├── phase3LlmFill   (vLLM Gemma-4-31B, typed schema)
+   ├── phase4Disambig  (Layer-2 entity disambig)
+   ├── phase5Merge   ─────────────────────►  canonical_layer (DEKLARIERTE eCodes)
+   │                                              │
+   ↓                                              ↓
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │  phase6BmfRechner  (elster-v5_2/bmf-rechner-compute)  ✅ LIVE         │
+   │  ────────────────────────────────────────────                          │
+   │  1. canonical_layer → canonicalLayerToElsterFelder()                  │
+   │       {E0200204: "50000,00", ...}                                      │
+   │                                                                       │
+   │  2. BmfMcpClient.berechneVollstaendigeSteuerV2()                      │
+   │     POST :12010/mcp  (JSON-RPC, Accept: text/event-stream)           │
+   │       method: tools/call                                               │
+   │       params: {name: "berechne_vollstaendige_steuer_v2",              │
+   │                arguments: {parameters: {erklaerungsjahr: 2024,       │
+   │                                         elster_felder: {...}}}}      │
+   │                                                                       │
+   │  3. MCP-Response (1 SSE-data-Frame):                                  │
+   │       {zve, einkommensteuer, soli, gesamtsteuer,                     │
+   │        berechnungsdetails: {formel_verwendet, bmf_referenz, zone}}  │
+   │                                                                       │
+   │  4. Mapping MCP-key → eCode:                                          │
+   │       zve  → E0107101  (zu versteuerndes Einkommen)                  │
+   │       est  → E0107201  (tarifliche ESt)                              │
+   │       soli → E0107501  (Solidaritätszuschlag)                        │
+   │       gst  → E0107301  (festzusetzende Steuer)                       │
+   │     Jeder Output bekommt origin=BMF_RECHNER + formula_string +       │
+   │     paragraph_estg + inputs_used (für Audit-Trail).                   │
+   │                                                                       │
+   │  Graceful Degradation: MCP unreachable → kpi_warning + leere         │
+   │  computed_layer, declared bleibt unverändert (kein Hard-Fail).       │
+   └──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ↓
+                       canonical_layer (deklariert + berechnet)
+                                  │
+                                  ↓
+                       phase7EricXml (TODO: Phase-7-Iteration)</pre>
+
+    <div class="gate-callout" style="background:#16a08518;border-color:#16a08555">
+      <strong style="color:#5fc9b0">✅ Live-Verifikation (synthetisches Beispiel)</strong><br/>
+      Bruttoarbeitslohn <code>E0200204=50000,00</code> → MCP →
+      4 berechnete eCodes in <strong>~330ms</strong>:<br/>
+      • <code>E0107101 zvE</code> ≈ 48 734 €<br/>
+      • <code>E0107201 tarifliche ESt</code> ≈ 10 511 € (Zone 3)<br/>
+      • <code>E0107501 Soli</code> = 0,00 € (unter Freibetrag)<br/>
+      • <code>E0107301 festzusetzende Steuer</code> ≈ 10 511 €<br/>
+      <em>Formel</em>: <code>Zone 3: Tax = (192.59 × z + 2397) × z + 966.53</code> ·
+      <em>BMF-Ref</em>: §32a EStG 2024 (Grundtabelle) ·
+      <em>fall_id</em>: <code>CTAX_&lt;timestamp&gt;_&lt;uuid&gt;</code>
+    </div>
+
+    <h2>Datenfluss-Beispiel: §32a EStG auf einem LStB-Bundle (synthetisch)</h2>
+    <pre class="diagram">
+DEKLARIERT (phase5Merge):
+  E0200201  Bruttoarbeitslohn   → 50000,00   origin=REGEX_3F
+  E0200301  Lohnsteuer          →  6000,00   origin=REGEX_3F
+  E0100402  Konfession          → ev         origin=LLM_FSM
+
+BERECHNET (phase6BmfRechner):
+  E0107101  zvE                 ≈ 48734,00   origin=BMF_RECHNER  rechner=tarif_32a
+  E0107201  tarifliche ESt      ≈ 10511,00   origin=BMF_RECHNER  rechner=tarif_32a
+                                              formula = "(192.59 * z + 2397) * z + 966.53"
+                                              paragraph = §32a Abs.1 Nr.3 EStG
+                                              inputs_used = { zvE: E0107101 }
+  E0107301  festzusetzende ESt  ≈ 10511,00   origin=BMF_RECHNER  rechner=tarif_32a</pre>
+
+    <h2>Task-Checkliste · 21 Schritte</h2>
+
+    <div class="controls">
+      <div class="meta-row" style="margin:0">
+        <span><strong>Fortschritt:</strong> <span id="progress-count">0/21</span></span>
+        <span><strong>Gate-Tasks:</strong> #1 (ENV), #9 (Conformance ≥48/50)</span>
+      </div>
+      <button class="reset-btn" id="reset-btn">Alle zurücksetzen</button>
+    </div>
+    <div class="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+
+    <ul class="task-list" id="task-list">
+      <!-- populated by JS -->
+    </ul>
+
+    <h2>Conformance-Gate (Task #9)</h2>
+    <div class="gate-callout">
+      <strong>Hartes Quality-Gate:</strong> <code>scripts/lane1-conformance.ts</code>
+      zieht 50 zufällige Rechner aus PG, vergleicht TS-Executor-Output gegen
+      <code>POST :9010/mcp/execute</code> (Python-Oracle), Toleranz
+      <code>0.01 EUR</code>. <br/>
+      <strong>Akzeptanz</strong>: ≥48/50 grün UND kein Einzelfehler &gt; 1 EUR.
+      Bei &lt;48 grün bleibt die Stage registriert aber <code>config.disabled=true</code>
+      — Workflow läuft, aber ohne berechnete Werte. Stage geht erst live wenn
+      Drift = 0.
+    </div>
+
+    <h2>Risiken & Mitigationen</h2>
+    <table>
+      <thead><tr><th>#</th><th>Annahme / Risiko</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>PG-Connection-String zur Lane-1-DB ist verfügbar</td><td>Discovery-Script <code>probe-lane1-pg.ts</code>. Bei nicht erreichbar → Stage <code>disabled</code>, kein v5_2-Bau bis Verbindung steht.</td></tr>
+        <tr><td>2</td><td><code>lane1_bmf_calculator.formulas</code> mit 195 Rows befüllt</td><td>Discovery reportet <code>COUNT(*)</code>. Bei ≪195 → STOPP, separater DB-Seed nötig.</td></tr>
+        <tr><td>3</td><td>eCode-Mapping (<code>rechner_id ↔ slot ↔ eCode</code>) existiert</td><td>Vermutlich als JOIN-Tabelle; falls nicht → <code>data/bmf_rechner_ecode_map.json</code> hand-curated aus den 25 Python-Modulen (~4h).</td></tr>
+        <tr><td>4</td><td>Drift TS-Executor ↔ Python-MCP</td><td><strong>Hauptrisiko</strong>. Mitigation = Conformance-Suite Task #9. Bei &lt;48/50 grün → Stage geht nicht live.</td></tr>
+        <tr><td>5</td><td>Decimal-Genauigkeit</td><td><code>decimal.js</code> mit ROUND_HALF_UP — matched Pythons <code>Decimal(ROUND_HALF_UP)</code>. canonical_layer hält Werte als String.</td></tr>
+        <tr><td>6</td><td>Lookup-Funktionen brauchen PG-Roundtrips</td><td>Pro Stage-Lauf In-Memory-Cache + Eager-Load aller Parameter+Thresholds beim Start (klein, selten ändernd).</td></tr>
+        <tr><td>7</td><td>Repo <code>CTAX-Lane1-BMF</code> ist archived (2026-03-08)</td><td>Code frozen → kein Upstream-Drift-Risiko. Falls MCP irgendwann abgeschaltet wird → letzten grünen Conformance-Stand fingerprinten.</td></tr>
+        <tr><td>8</td><td>Sandbox/Sicherheit des Formel-Executors</td><td>KEIN <code>eval</code>/<code>Function()</code> — eigener Tree-Walker mit Whitelist (matched Python-Doc: "NO Python exec/eval - uses AST parsing + whitelist operations").</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Verifikation — End-to-End</h2>
+    <table>
+      <thead><tr><th>#</th><th>Check</th><th>Erwartet</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>PG-Probe: <code>tsx scripts/probe-lane1-pg.ts</code></td><td><code>COUNT(*) FROM formulas</code> ≥ 195, <code>vz=2024</code> enthalten</td></tr>
+        <tr><td>2</td><td>Unit-Tests: <code>npm test src/lib/bmf-formula-executor</code></td><td>≥20 Cases inkl. §32a-Zonen 1-5 → 100% grün</td></tr>
+        <tr><td>3</td><td>Conformance: <code>tsx scripts/lane1-conformance.ts</code></td><td>≥48/50 grün, alle Fehler ≤ 0.01 EUR</td></tr>
+        <tr><td>4</td><td>Smoke: <code>tsx scripts/run-rechner.ts tarif_32a_2024 zvE=58000</code></td><td>tarifliche_est matched Python-MCP ≤ 0.01 EUR</td></tr>
+        <tr><td>5</td><td>E2E: <code>/pipeline.html?workflow=elster-v5_2</code> + LStB-Test-PDF</td><td>≥6 deklariert + ≥4 berechnet (zvE, tarif. ESt, Soli, festzus. ESt)</td></tr>
+        <tr><td>6</td><td>Audit-Fingerprint: 2× identischen Run, <code>diff -q computed_layer.json</code></td><td>byte-stabil</td></tr>
+        <tr><td>7</td><td>Graceful Degradation: PG-Service stoppen, Run starten</td><td><code>kpi_warning: 'lane1-pg unreachable'</code>, Lauf bleibt <code>ok-with-warnings</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>Kritische Files</h2>
+    <h3>Neu</h3>
+    <ul>
+      <li><code>scripts/probe-lane1-pg.ts</code> — Bootstrap-Schema-Discovery</li>
+      <li><code>scripts/lane1-conformance.ts</code> — Drift-Check gegen Python-MCP</li>
+      <li><code>scripts/run-rechner.ts</code> — CLI für Einzel-Smoketest</li>
+      <li><code>src/lib/bmf-rechner-client.ts</code> — PG-Pool + Lookups</li>
+      <li><code>src/lib/bmf-formula-executor.ts</code> — TS-Port des AST-Executors</li>
+      <li><code>src/lib/bmf-formula-executor.test.ts</code> — Vitest-Suite</li>
+      <li><code>src/verticals/elster-v3/stages/bmf-rechner-compute.ts</code> — die Stage</li>
+      <li><code>docs/lane1-pg-schema.md</code> — Output von probe-lane1-pg</li>
+    </ul>
+    <h3>Edit</h3>
+    <ul>
+      <li><code>src/verticals/elster-v3/stages/phase5-merge.ts</code> — CanonicalValue Union + optionale Felder</li>
+      <li><code>src/verticals/elster-v3/index.ts</code> — registerStage + <code>buildElsterV52Workflow()</code></li>
+      <li><code>src/workflows/index.ts</code> — registerWorkflow</li>
+      <li><code>src/ui/pipeline.jsx</code> — Result-Sektion "Berechnete Werte"</li>
+      <li><code>.env</code> — <code>BMF_RECHNER_DATABASE_URL=postgres://…</code></li>
+      <li><code>package.json</code> — Dep <code>decimal.js</code></li>
+    </ul>
+    <h3>Reuse-Referenzen</h3>
+    <ul>
+      <li><code>src/lib/gitchain-client.ts:1,44,324</code> — existierendes PG-Pool-Pattern, identisches Setup mit anderer Env-Var</li>
+      <li><code>src/verticals/elster-v3/stages/phase4-entity-disambig.ts:91-176</code> — Stage-Skelett, Worker-Pool, AbortController</li>
+      <li><code>src/verticals/elster-v3/stages/phase5-merge.ts:30-44</code> — CanonicalValue-Shape</li>
+      <li><code>src/lib/elster-catalog.ts:520-525, :608-620</code> — §EStG-Cite-Auflösung als Fallback</li>
+      <li>Python-Referenz: <code>CTAX-Lane1-BMF/data/formula_executor.py:1-300</code> (AST + Lookups) + <code>bmf_2024_calculator_api.py:47-90</code> (§32a 2024 Koeffizienten als Test-Vektor)</li>
+    </ul>
+
+    <h2>Out-of-Scope (bewusst nicht in dieser Iteration)</h2>
+    <ul>
+      <li>BMF-Rechner als <em>einzelne</em> Sturm-Stages registrieren — würde DAG auf 200+ Knoten aufblähen. Eine Sammel-Stage reicht.</li>
+      <li>Frontend zum Bearbeiten der Rechner — Lane 1 ist sealed.</li>
+      <li>Multi-VZ-Support (2023/2024/2025 parallel) — MVP nur 2024.</li>
+      <li>ERiC-XML mit berechneten Feldern angereichert — phase 7, separate Iteration.</li>
+      <li>Port der Python-MCP-Tools (34 Tools) — nicht in der Hot-Path.</li>
+    </ul>
+
+    <footer>
+      <span>
+        Quantum-Container <code>0711:elster:bmf:jahresdok-2024:v1</code> ·
+        Embeddings <code>0711:elster:gemma4-tq:embeddings:v1</code> (v5.8) ·
+        Rechner <code>lane1:bmf:rechner:2024:v1</code> (geplant)
+      </span>
+      <span>
+        <a href="/pipeline.html?workflow=elster-v5_1">↩ Pipeline (v5.1)</a> ·
+        <a href="/pipeline.html?workflow=elster-v4-stricker">Stricker</a> ·
+        <a href="/designer.html">Designer</a>
+      </span>
+    </footer>
+  </div>
+
+  <script>
+    // Task data — single source of truth. Edits hier propagieren in die Liste.
+    const TASKS = [
+      { id: 1,  type: 'B',  eta: '15min', blocks: 'alle', text: '<code>.env</code> ergänzen: <code>BMF_RECHNER_DATABASE_URL=postgres://…</code> von Lane-1-Host besorgen' },
+      { id: 2,  type: 'D',  eta: '30min', blocks: '3–15', text: '<code>scripts/probe-lane1-pg.ts</code> schreiben: <code>\\dt lane1_bmf_calculator.*</code>, COUNT pro Tabelle, Top-3-Rows dumpen → <code>docs/lane1-pg-schema.md</code>' },
+      { id: 3,  type: 'D',  eta: '30min', blocks: '4', text: '<code>docs/lane1-pg-schema.md</code> reviewen, mit Python-Source <code>formula_executor.py:50-300</code> abgleichen — gibt es <code>formula_inputs</code>/<code>formula_outputs</code> Mapping-Tables?' },
+      { id: 4,  type: 'C',  eta: '—',     blocks: 'OBSOLETE', text: '<s>Hand-curated <code>bmf_rechner_ecode_map.json</code></s> — <strong>OBSOLET</strong>: MCP nimmt eCodes nativ, kein Mapping nötig' },
+      { id: 5,  type: 'C',  eta: '5min',  blocks: '6', text: '<code>npm install decimal.js</code> ✓ — auch weiter gebraucht für mögliche local-side Re-Calculations' },
+      { id: 6,  type: 'C',  eta: '~1h',   blocks: '12', text: '<code>src/lib/bmf-mcp-client.ts</code> ✓ — JSON-RPC/SSE-Wrapper für Lane-1 MCP (statt PG-Pool)' },
+      { id: 7,  type: 'C',  eta: '—',     blocks: 'OBSOLETE', text: '<s>TS-Formel-Executor</s> — <strong>OBSOLET</strong>: MCP rechnet, wir brücken nur' },
+      { id: 8,  type: 'T',  eta: '—',     blocks: 'OBSOLETE', text: '<s>Vitest-Suite Formel-Executor</s> — <strong>OBSOLET</strong>' },
+      { id: 9,  type: 'T',  eta: '—',     blocks: 'OBSOLETE', text: '<s>Conformance-Suite</s> — <strong>OBSOLET</strong>: MCP IST das Oracle, kein Drift möglich' },
+      { id: 10, type: 'C',  eta: '—',     blocks: 'OBSOLETE', text: '<s>Conformance-Bugfixes</s> — <strong>OBSOLET</strong>' },
+      { id: 11, type: 'C',  eta: '30min', blocks: '12', text: '<code>phase5-merge.ts</code> editieren: <code>CanonicalValue.origin</code> Union erweitern um <code>BMF_RECHNER</code>, optionale Felder <code>rechner_id</code>/<code>formula_string</code>/<code>inputs_used</code>/<code>paragraph_estg</code>' },
+      { id: 12, type: 'C',  eta: '1d',    blocks: '13', text: '<code>bmf-rechner-compute.ts</code>: PG-Abfrage applicable, Toposort, Pro-Rechner-Eval, Output-Merge, <code>ctx.emit(\'bmf_rechner_compute\')</code> pro eCode, Graceful-Degradation bei PG-Down' },
+      { id: 13, type: 'C',  eta: '1h',    blocks: '14', text: '<code>verticals/elster-v3/index.ts</code>: <code>registerStage</code> + <code>buildElsterV52Workflow()</code> (kopie von v5.1 + phase6BmfRechner)' },
+      { id: 14, type: 'C',  eta: '5min',  blocks: '15', text: '<code>src/workflows/index.ts</code>: <code>registerWorkflow(buildElsterV52Workflow())</code>' },
+      { id: 15, type: 'T',  eta: '5min',  blocks: '16', text: '<code>npm run typecheck</code> clean' },
+      { id: 16, type: 'T',  eta: '30min', blocks: '17', text: 'E2E-Smoke: <code>http://localhost:7800/pipeline.html?workflow=elster-v5_2</code> mit Stricker-Bundle. Erwartet: ≥4 berechnete eCodes' },
+      { id: 17, type: 'U',  eta: '4h',    blocks: '18', text: '<code>pipeline.jsx</code>: <code>buildResultModelFromCanonical</code> erweitern um zweite Gruppe "Berechnete Werte (Lane 1 BMF)", Hover zeigt formula_string + paragraph' },
+      { id: 18, type: 'U',  eta: '15min', blocks: '19', text: '<code>npm run build:ui:pipeline</code> + Browser-Refresh + visuelle Verifikation' },
+      { id: 19, type: 'DO', eta: '2h',    blocks: '20', text: '<code>src/ui/quantum-elster/index.html</code> schreiben — <strong>DIESE Seite hier</strong> ✓' },
+      { id: 20, type: 'T',  eta: '15min', blocks: '21', text: 'Lokal verifizieren: <code>http://localhost:7800/quantum-elster/</code> rendert, Checkboxen persistieren in localStorage' },
+      { id: 21, type: 'DO', eta: 'offen', blocks: '—', text: 'Deploy auf <code>sturm.0711.io</code> (außerhalb dieses Repos; Tunnel/PM2 wie bei den anderen UIs)' },
+    ];
+
+    const STORAGE_KEY = 'sturm.quantum-elster.tasks';
+    // Server-side seed: MVP-Tasks die durch den MCP-Pivot bereits erledigt sind.
+    // Lokal abgehakte Tasks (im localStorage) gewinnen — User-Edits überschreiben den Seed nicht.
+    const SERVER_DONE = ['1','2','3','5','6','11','12','13','14','15','16','19','20'];
+    const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    for (const id of SERVER_DONE) if (state[id] === undefined) state[id] = true;
+
+    function render() {
+      const ul = document.getElementById('task-list');
+      ul.innerHTML = '';
+      let done = 0;
+      for (const t of TASKS) {
+        const checked = !!state[String(t.id)];
+        if (checked) done++;
+        const li = document.createElement('li');
+        if (checked) li.classList.add('done');
+        li.innerHTML = `
+          <input type="checkbox" data-id="${t.id}" ${checked ? 'checked' : ''} aria-label="Task ${t.id}"/>
+          <span class="id">#${t.id}</span>
+          <span class="task-text">${t.text}</span>
+          <span><span class="badge ${t.type}">${t.type}</span></span>
+          <span class="eta">${t.eta}</span>
+        `;
+        ul.appendChild(li);
+      }
+      const pct = Math.round((done / TASKS.length) * 100);
+      document.getElementById('progress-count').textContent = `${done}/${TASKS.length}`;
+      document.getElementById('progress-fill').style.width = pct + '%';
+    }
+    document.addEventListener('change', (e) => {
+      if (e.target.type === 'checkbox' && e.target.dataset.id) {
+        state[e.target.dataset.id] = e.target.checked;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        render();
+      }
+    });
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      if (confirm('Alle Tasks zurücksetzen?')) {
+        localStorage.removeItem(STORAGE_KEY);
+        for (const k of Object.keys(state)) delete state[k];
+        state['19'] = true; // diese Seite existiert ja weiterhin
+        render();
+      }
+    });
+    render();
+  </script>
+</body>
+</html>

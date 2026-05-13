@@ -26,6 +26,7 @@ import {
   assertFitsInBudget,
   PromptBudgetExceededError,
 } from '../../../lib/prompt-budget.ts';
+import { findDokumenttypFuerAnlagen } from '../../../workflows/steuerbelege/lib/typen-katalog.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCHEMAS_DIR = join(HERE, '..', 'data', 'nested_schemas');
@@ -254,14 +255,36 @@ export const layer1ExtractStage = defineStage<Layer1Input, Layer1Output, Layer1C
 
   async run(input, ctx) {
     const t0 = Date.now();
-    const schemaName = resolveSchemaName(input.dokumenttyp_id);
+    // Pass-2-Fallback: wenn Pass 1 (klassifizierung) versagt hat
+    // (dokumenttyp_id=null/"null"/leer), versuchen wir aus Pass-2's
+    // bestaetigteAnlagen via dokumenttypen.json den passenden Typ
+    // abzuleiten. Pass 2 ist Container-grounded und sieht den eigentlichen
+    // Beleg-Inhalt — bei Multi-Doc-Bundles ist das oft präziser als die
+    // Mistral-Small-Regex-Heuristik.
+    let effectiveTypId = input.dokumenttyp_id;
+    const typIdLeer = !effectiveTypId || effectiveTypId === 'null' || effectiveTypId === 'undefined';
+    if (typIdLeer && input.pass2Result?.bestaetigteAnlagen?.length) {
+      const derived = await findDokumenttypFuerAnlagen(input.pass2Result.bestaetigteAnlagen);
+      if (derived) {
+        effectiveTypId = derived.id;
+        ctx.emit('layer1_typ_id_derived_from_pass2', {
+          original: input.dokumenttyp_id,
+          derived: derived.id,
+          quelle: 'pass2.bestaetigteAnlagen',
+          anlagen: input.pass2Result.bestaetigteAnlagen,
+        });
+      }
+    }
+    const schemaName = resolveSchemaName(effectiveTypId ?? '');
     let schemaJson: { name: string; schema: Record<string, unknown> };
     try {
       schemaJson = JSON.parse(await readFile(join(SCHEMAS_DIR, `${schemaName}.json`), 'utf-8'));
     } catch (err) {
       throw new Error(
-        `elster-v3/layer1-extract: no nested schema for dokumenttyp_id="${input.dokumenttyp_id}" ` +
-        `(looked for ${schemaName}.json). ${(err as Error).message}`,
+        `elster-v3/layer1-extract: no nested schema for dokumenttyp_id="${effectiveTypId}" ` +
+        `(original="${input.dokumenttyp_id}", looked for ${schemaName}.json). ` +
+        `Pass-2 bestaetigteAnlagen: ${JSON.stringify(input.pass2Result?.bestaetigteAnlagen ?? [])}. ` +
+        `${(err as Error).message}`,
       );
     }
     const fieldHints = (input.kpis ?? [])
@@ -270,7 +293,7 @@ export const layer1ExtractStage = defineStage<Layer1Input, Layer1Output, Layer1C
       .join('\n');
     // Disambiguation aus dem Container — nicht aus dem Code.
     const disambiguationCandidates = await Promise.all([
-      disambiguationHinweiseFuer(input.dokumenttyp_id),
+      disambiguationHinweiseFuer(effectiveTypId ?? ''),
       disambiguationHinweiseFuer(schemaName),
     ]);
     const disambiguation = disambiguationCandidates[0].length > 0
@@ -368,7 +391,7 @@ export const layer1ExtractStage = defineStage<Layer1Input, Layer1Output, Layer1C
       containerBrief,
       '=== ENDE BRIEF ===',
       '',
-      `Du bekommst einen deutschen Steuer-Beleg (Klasse: ${input.dokumenttyp_id}).`,
+      `Du bekommst einen deutschen Steuer-Beleg (Klasse: ${effectiveTypId}${effectiveTypId !== input.dokumenttyp_id ? ` ← aus Pass-2-Anlagen abgeleitet (Pass-1 klassifizierung war null)` : ''}).`,
       `Extrahiere alle relevanten Daten EXAKT nach dem JSON-Schema. Bewahre Originalnamen (auch bei OCR-Fehlern).`,
       '',
       // §EStG-Rahmen: welche Einkunftsarten / Anlagen sind erwartet?
@@ -413,7 +436,7 @@ export const layer1ExtractStage = defineStage<Layer1Input, Layer1Output, Layer1C
 
     ctx.emit('layer1_started', {
       schemaName,
-      dokumenttyp_id: input.dokumenttyp_id,
+      dokumenttyp_id: effectiveTypId,
       provider,
       model: modelName,
       hasKpiHints: fieldHints.length > 0,

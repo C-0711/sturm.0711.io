@@ -80,3 +80,38 @@ export function findDokumenttypSync(idOrAlias: string): Dokumenttyp | undefined 
   }
   return aliasIndex.get(idOrAlias);
 }
+
+/**
+ * Findet den Dokumenttyp dessen Anlagen-Liste am besten zu einer gegebenen
+ * Anlagen-Menge passt. Wird als Fallback genutzt wenn Pass-1-Klassifizierung
+ * scheitert (typ_id=null) aber Pass-2 Anlagen bestätigt hat.
+ *
+ * Score: |bestaetigteAnlagen ∩ typ.anlagen|. Bei Gleichstand gewinnt der
+ * spezifischere Typ (weniger Gesamt-Anlagen).
+ *
+ * Gibt undefined wenn kein typ mindestens 1 Anlage überschneidet.
+ */
+export async function findDokumenttypFuerAnlagen(
+  bestaetigteAnlagen: readonly string[],
+): Promise<Dokumenttyp | undefined> {
+  const { typen } = await loadDokumenttypen();
+  if (bestaetigteAnlagen.length === 0) return undefined;
+  const set = new Set(bestaetigteAnlagen);
+
+  let best: { typ: Dokumenttyp; overlap: number } | undefined;
+  for (const t of typen) {
+    if (!t.anlagen || t.anlagen.length === 0) continue;
+    let overlap = 0;
+    for (const a of t.anlagen) if (set.has(a)) overlap++;
+    if (overlap === 0) continue;
+    if (
+      best === undefined ||
+      overlap > best.overlap ||
+      // Tie-break: spezifischerer Typ (kürzere anlagen-Liste = enger Scope)
+      (overlap === best.overlap && t.anlagen.length < best.typ.anlagen.length)
+    ) {
+      best = { typ: t, overlap };
+    }
+  }
+  return best?.typ;
+}

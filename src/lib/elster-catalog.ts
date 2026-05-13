@@ -222,6 +222,189 @@ export function checkFormat(value: unknown, atom: CatalogAtom): FormatCheck {
 }
 
 /**
+ * Field-Eintrag pro Anlage — komprimierte View auf einen CatalogAtom für
+ * die Verwendung in LLM-Prompts und dynamisch generierten JSON-Schemas.
+ */
+export interface AnlagenFeld {
+  /** eCode wie "E0200201". */
+  eCode: string;
+  /** Wie auf dem Vordruck gedruckt — kanonischer Label-Text. */
+  drucktext: string;
+  /** Bezeichnung aus dem BMF-XML (Fallback wenn drucktext leer). */
+  bezeichnung: string;
+  datentyp: ElsterDatentyp;
+  formatRegex: string;
+  pflicht: boolean;
+  vordruckzeile: string;
+  /** BMF-kontextPath-Prefix → Einkunftsart-Identifier (z.B. "ArbL"). */
+  einkunftsart: string | null;
+  maxLaenge?: number;
+  minLaenge?: number;
+}
+
+/** Geordnete Felder-Liste einer Anlage, wie sie ein LLM-Extract braucht. */
+export interface AnlagenFelderListe {
+  anlage: ElsterAnlage;
+  felder: AnlagenFeld[];
+}
+
+/**
+ * Liefert alle Atome einer Anlage als Felder-Liste, geordnet:
+ *   1. Pflicht-Felder zuerst (pflicht=true)
+ *   2. Innerhalb gleicher Pflicht-Klasse: aufsteigend nach vordruckzeile
+ *
+ * Wird von elster-v4/felder-katalog + container-extract genutzt — der Container
+ * (atoms.json) ist single-source-of-truth, kein paralleler felder/*.json-Cache.
+ */
+export async function felderFuerAnlage(
+  anlage: ElsterAnlage,
+  path?: string,
+): Promise<AnlagenFelderListe> {
+  const handle = await loadCatalog(path);
+  const atoms = handle.byAnlage.get(anlage) ?? [];
+  const felder: AnlagenFeld[] = atoms
+    .filter((a) => /^E\d+$/.test(a.field_name))
+    .map((a) => ({
+      eCode: a.field_name,
+      drucktext: a.metadata.drucktext || a.value || a.field_name,
+      bezeichnung: a.value,
+      datentyp: a.metadata.datentyp,
+      formatRegex: a.metadata.formatRegex,
+      pflicht: a.metadata.pflicht,
+      vordruckzeile: a.metadata.vordruckzeile,
+      einkunftsart: einkunftsartVonAtom(a),
+      maxLaenge: a.metadata.maxLaenge,
+      minLaenge: a.metadata.minLaenge,
+    }));
+  felder.sort((a, b) => {
+    if (a.pflicht !== b.pflicht) return a.pflicht ? -1 : 1;
+    const za = Number(a.vordruckzeile) || Number.MAX_SAFE_INTEGER;
+    const zb = Number(b.vordruckzeile) || Number.MAX_SAFE_INTEGER;
+    if (za !== zb) return za - zb;
+    return a.eCode.localeCompare(b.eCode);
+  });
+  return { anlage, felder };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Container-Scan: welche Anlagen sind im OCR-Text wirklich vertreten?
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Statt einen LLM-Klassifizierer raten zu lassen welche Anlagen relevant
+// sind, scannen wir den OCR-Text direkt gegen die `drucktext`-Strings ALLER
+// 2287 Atome. Match → die Anlage des Atoms ist im Beleg.
+//
+// Strategie:
+//   • Wir matchen nur Drucktexts ≥ `minDrucktextLength` Zeichen (Default 8),
+//     weil kurze ("Betrag", "Summe", "Datum") in 100+ Atomen wiederkehren
+//     und falsche Anlagen triggern würden.
+//   • Match ist case-insensitive, mit non-word-boundary-tolerant regex
+//     (BMF-XML hat manchmal Umlaut-Varianten oder Whitespace-Differenzen).
+//   • Jeder Match wird mit Position + ~100 Zeichen Kontext aufgezeichnet.
+//   • Output ist die deduplizierte Anlagen-Liste + die Match-Liste für Audit.
+
+export interface ContainerMatch {
+  atom_id: string;
+  eCode: string;
+  anlage: ElsterAnlage;
+  drucktext: string;
+  position: number;
+  context: string;
+}
+
+export interface ContainerScanResult {
+  /** Erkannte Anlagen, sortiert nach Anzahl Matches (häufigste zuerst). */
+  erkannte_anlagen: ElsterAnlage[];
+  /** Pro Anlage: wie viele Matches. */
+  anlagen_hits: Record<ElsterAnlage, number>;
+  /** Alle einzelnen Matches mit Kontext. */
+  matches: ContainerMatch[];
+  ms: number;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Scannt den OCR-Text gegen alle Atome im Container. Liefert die Liste der
+ * tatsächlich vertretenen Anlagen + Match-Details.
+ *
+ * NICHT für eCode-Disambiguation gedacht — bei mehrdeutigen Drucktexts
+ * ("Werbungskosten" in mehreren Anlagen) zählt der erste Match. Für echte
+ * Wert-Extraktion macht das Downstream-vLLM die feine Auflösung.
+ */
+export async function scanContainerInText(
+  text: string,
+  opts: { minDrucktextLength?: number; dataDir?: string } = {},
+): Promise<ContainerScanResult> {
+  const t0 = Date.now();
+  const minLen = opts.minDrucktextLength ?? 8;
+  const handle = await loadCatalog(opts.dataDir);
+
+  // Pre-build: pro unique drucktext, die zugehörigen atoms (kann mehrere
+  // sein bei Ambiguität — alle bekommen einen Match-Hit zugewiesen).
+  const byDrucktext = new Map<string, CatalogAtom[]>();
+  for (const a of handle.atoms) {
+    const dt = a.metadata.drucktext;
+    if (!dt || dt.length < minLen) continue;
+    if (!/[A-Za-zÄÖÜäöüß]/.test(dt)) continue; // pure digits/punct skippen
+    const arr = byDrucktext.get(dt);
+    if (arr) arr.push(a);
+    else byDrucktext.set(dt, [a]);
+  }
+
+  // Sortierte Liste — längste drucktexts zuerst, damit ein Längerer einen
+  // kürzeren überlappenden Match konsumiert (Greedy-Specifity).
+  const drucktexts = [...byDrucktext.keys()].sort((a, b) => b.length - a.length);
+
+  const matches: ContainerMatch[] = [];
+  const consumed = new Set<number>(); // text-positions bereits matched
+
+  for (const dt of drucktexts) {
+    const re = new RegExp(escapeRegex(dt), 'gi');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const pos = m.index;
+      // Skip wenn Position schon von längerem Match abgedeckt
+      if (consumed.has(pos)) continue;
+      // Markiere die Position als consumed (für den ganzen Match-Bereich)
+      for (let i = pos; i < pos + dt.length; i++) consumed.add(i);
+      const ctxStart = Math.max(0, pos - 30);
+      const ctxEnd = Math.min(text.length, pos + dt.length + 70);
+      const context = text.slice(ctxStart, ctxEnd).replace(/\s+/g, ' ');
+      // Bei Ambiguität ein Atom pro Anlage rausgeben (Anlagen-Detection
+      // bevorzugen, eCode-Detail dem LLM überlassen).
+      const atoms = byDrucktext.get(dt)!;
+      const seenAnlagen = new Set<string>();
+      for (const a of atoms) {
+        if (seenAnlagen.has(a.metadata.anlage)) continue;
+        seenAnlagen.add(a.metadata.anlage);
+        matches.push({
+          atom_id: a.atom_id,
+          eCode: a.field_name,
+          anlage: a.metadata.anlage,
+          drucktext: dt,
+          position: pos,
+          context,
+        });
+      }
+    }
+  }
+
+  const hits: Record<string, number> = {};
+  for (const m of matches) hits[m.anlage] = (hits[m.anlage] ?? 0) + 1;
+  const erkannte_anlagen = Object.keys(hits).sort((a, b) => hits[b] - hits[a]);
+
+  return {
+    erkannte_anlagen,
+    anlagen_hits: hits,
+    matches,
+    ms: Date.now() - t0,
+  };
+}
+
+/**
  * Returns the subset of atoms scoped to a single Anlage, useful for
  * "required-completeness" checks: "which pflicht=true fields for Anlage N
  * are missing in the extracted JSON?".

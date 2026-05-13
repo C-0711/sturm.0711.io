@@ -1,12 +1,12 @@
 {
   "id": "0711:elster:gemma4-tq:embeddings:v1",
   "schema_version": 5,
-  "version": "v5.2",
+  "version": "v5.8",
   "type": "embedding-index",
   "namespace": "elster",
   "identifier": "gemma4-tq:embeddings",
-  "display_name": "ELSTER eCode Embeddings — EmbeddingGemma + TurboQuant cascade",
-  "description": "2287 eCodes embedded via EmbeddingGemma-300m (native 768-d, multilingual incl. German). MRL×TurboQuant cascade: d=256/b=3@136B → d=768/b=3@392B → fp32 (768×4=3072B).",
+  "display_name": "ELSTER eCode Embeddings \u2014 EmbeddingGemma + TurboQuant cascade",
+  "description": "ELSTER eCode Embeddings v5.8 \u2014 v5.5 fp32 RESTORED from backup + TQ tiers re-quantized deterministically (Lloyd-Max + QJL with seed=42). atoms.json beh\u00e4lt die curated citation_excerpt patches f\u00fcr LLM-Disambig-Prompt. Best of both: stable retrieval + Person-A/B disambig info in prompt.",
   "created_at": "2026-05-12T20:24:18.252Z",
   "catalog_id_ref": "0711:elster:bmf:jahresdok-2024:v1",
   "embedder": {
@@ -27,20 +27,20 @@
     "kind": "TurboQuant",
     "reference": "arxiv:2504.19874",
     "stage_1": "PolarQuant (Haar rotation + Lloyd-Max @ N(0,1/d))",
-    "stage_2": "QJL (sign(S·r) random Gaussian projection)",
+    "stage_2": "QJL (sign(S\u00b7r) random Gaussian projection)",
     "seed_tag_format": "tq-seed-{seed}-d{d}-b{b}"
   },
   "artifacts": {
     "embeddings.gemma4.tq-d256-b3.bin": {
-      "sha256": "4591df11765aa8900d8d6d33e4dca45202d1c5bfc850daea569ac003a9e15142",
+      "sha256": "9ea6036619b3d7febfbba3b99c07083b745efec4c591aec7ab89546a73e0dda4",
       "bytes": 311064
     },
     "embeddings.gemma4.tq-d768-b3.bin": {
-      "sha256": "6a46e76f413c6adec48705d2bd2ea4e103cf8756a6475a7e3b50b8b89fafeec2",
+      "sha256": "2ca6275c928fd2eba007284d30d86cf37f63ad3a21aef07de85dd06fd9589d4b",
       "bytes": 896536
     },
     "embeddings.gemma4.fp32.bin": {
-      "sha256": "cb7dd5368774fde3b06b919e55f87bab56f036cf5e7d0d1c44e6b4d9c517df60",
+      "sha256": "9d85b489c3525ba72a0b22131a15d13f938167881c0a9335ce4f99e9b8b6fb85",
       "bytes": 7025664
     },
     "embeddings.gemma4.projection_seed.bin": {
@@ -48,13 +48,22 @@
       "bytes": 4
     },
     "embeddings.gemma4.cascade.json": {
-      "sha256": "85027e72d84f3871bf9e736bd3e199c75a9473189503e778caa04465efae4454",
+      "sha256": "c14413e35998aa014f604f04885f3305f95c12a6a0be08d5f7b393fc09a7ddd4",
       "bytes": -1
+    },
+    "embeddings.gemma4.tq-d128-b2.bin": {
+      "sha256": "2e90ee2df759d332ece4fb04723ff792885a66416d103ba46372992dd52e11c8",
+      "bytes": 128104
+    },
+    "embeddings.gemma4.tq-d512-b3.bin": {
+      "sha256": "880dca96ba71903a57f5db4227dd318e573afc534c798a451a99eca33262a30c",
+      "bytes": 603800
     }
   },
   "signature": null,
   "anchor_block_number": null,
   "anchor_tx_hash": null,
   "anchor_chain": null,
-  "issuer_fingerprint": null
+  "issuer_fingerprint": null,
+  "updated_at": "2026-05-13T10:20:00.000Z"
 }

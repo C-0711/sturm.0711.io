@@ -7,6 +7,90 @@ function authHeaders() {
   return tok ? { 'Authorization': `Bearer ${tok}` } : {};
 }
 
+// Query-string form of the bearer token — for URLs handed to non-fetch
+// consumers (img/iframe/PDF.js worker) that cannot set request headers.
+// Returns empty string if no token (server treats local-dev as un-gated).
+function authTokenQuery() {
+  const tok = localStorage.getItem('sturm-token');
+  return tok ? `?token=${encodeURIComponent(tok)}` : '';
+}
+
+// Count primitive leaf-values (string/number/boolean) in a JSON tree,
+// ignoring annotation siblings (keys starting with `_`). Used to display
+// the field-flow rate (in → out) on each stage node so the graph shows
+// where data expands/contracts.
+function countFieldLeaves(node) {
+  if (node == null) return 0;
+  if (Array.isArray(node)) {
+    let s = 0;
+    for (const v of node) s += countFieldLeaves(v);
+    return s;
+  }
+  if (typeof node === 'object') {
+    let total = 0;
+    for (const [k, v] of Object.entries(node)) {
+      if (k.startsWith('_')) continue;
+      if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+        if (String(v).length === 0) continue;
+        total += 1;
+      } else if (v && typeof v === 'object') {
+        total += countFieldLeaves(v);
+      }
+    }
+    return total;
+  }
+  return 0;
+}
+
+// Pick the most representative subtree from an arbitrary stage output, so
+// the field-counter behaves uniformly across the Quality-Trias + adjacent
+// stages without needing per-stage knowledge.
+function representativeOutputTree(output) {
+  if (!output || typeof output !== 'object') return null;
+  return output.extracted_with_spans
+      ?? output.extracted_with_codes
+      ?? output.validated
+      ?? output.extracted
+      ?? null;
+}
+
+// Resolve a workflow input-template (`"${stageId.field.sub}"`) against the
+// per-stage outputs we have on hand. The runner does the same substitution
+// at run-time; this is the read-only inspector flavour for the UI.
+function resolveInputRef(ref, stageOutputs) {
+  if (ref == null) return { kind: 'literal', value: ref };
+  if (typeof ref !== 'string') return { kind: 'literal', value: ref };
+  const m = ref.match(/^\$\{([^}]+)\}$/);
+  if (!m) return { kind: 'literal', value: ref };
+  const expr = m[1].trim();
+  // First segment names the source stage (or "input" for the workflow input).
+  const parts = expr.split('.');
+  const [stageId, ...path] = parts;
+  let cur = stageOutputs?.[stageId];
+  if (cur == null) return { kind: 'pending', ref: expr };
+  for (const p of path) {
+    if (cur == null || typeof cur !== 'object') return { kind: 'missing', ref: expr, partial: cur };
+    cur = cur[p];
+  }
+  return { kind: 'resolved', ref: expr, value: cur };
+}
+
+// Short, glanceable preview of any value for the inspector's input-table.
+function valuePreview(value) {
+  if (value == null) return '—';
+  if (typeof value === 'string') {
+    const trimmed = value.length > 240 ? value.slice(0, 240) + '…' : value;
+    return trimmed;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return `[${value.length} Elemente]`;
+  if (typeof value === 'object') {
+    const keys = Object.keys(value).filter(k => !k.startsWith('_'));
+    return `{${keys.length} Felder}`;
+  }
+  return String(value);
+}
+
 /* ------------------------------------------------------------
    Topo-Layout: aus stages + edges x/y-Positionen berechnen.
    Spalten = Topo-Layer; parallele Stages stapeln sich vertikal.
@@ -66,6 +150,18 @@ function StageNode({ data, selected }) {
       <div className="sturm-node-state">{stateLabel}</div>
       <div className="sturm-node-title">{data.label}</div>
       {data.sub && <div className="sturm-node-sub">{data.sub}</div>}
+      {(data.fieldsIn != null || data.fieldsOut != null) && (
+        <div className="sturm-node-flow" title="Business-Felder (primitive Leaf-Werte) rein → raus, ohne Audit-Annotationen">
+          <span className="sturm-node-flow-in">
+            {data.fieldsIn != null ? data.fieldsIn : '·'}
+          </span>
+          <span className="sturm-node-flow-arrow">→</span>
+          <span className="sturm-node-flow-out">
+            {data.fieldsOut != null ? data.fieldsOut : '·'}
+          </span>
+          <span className="sturm-node-flow-label">Felder</span>
+        </div>
+      )}
       {kpis.length > 0 && (
         <div className="sturm-node-kpis">
           {kpis.map((k, i) => (
@@ -1030,7 +1126,9 @@ function StageChipBar({ stageId, stageName, stageState, stageMs, kpis, events, d
   );
 }
 
-function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, stageKpis, selectedStage, runId, stageUses, collapsed, onToggleCollapsed, resultModel }) {
+function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, stageKpis, selectedStage, runId, stageUses, collapsed, onToggleCollapsed, resultModel,
+                  previousRuns, compareRunId, onCompareChange, diffModel,
+                  pdfAvailable, pdfShown, onTogglePdf, hoverPath, onHoverPath }) {
   const [tab, setTab] = useState('events');
   const [autoFlipped, setAutoFlipped] = useState(false);
   // Auto-flip to result when:
@@ -1119,7 +1217,20 @@ function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, 
 
       {!collapsed && tab === 'result' && (
         <div className="sturm-drawer-body">
-          <ResultPanel model={resultModel} />
+          <ResultPanel
+            model={resultModel}
+            runId={runId}
+            workflowId={workflowId}
+            previousRuns={previousRuns}
+            compareRunId={compareRunId}
+            onCompareChange={onCompareChange}
+            diffModel={diffModel}
+            pdfAvailable={pdfAvailable}
+            pdfShown={pdfShown}
+            onTogglePdf={onTogglePdf}
+            hoverPath={hoverPath}
+            onHoverPath={onHoverPath}
+          />
         </div>
       )}
 
@@ -1276,11 +1387,125 @@ function formatValue(value, datentyp, formatRegex) {
 }
 
 /**
+ * Render the raw extraction value into every form the ELSTER submission
+ * could accept under its `formatRegex`. The container's `formatRegex`
+ * describes the SUBMISSION shape (often integer euros, e.g. `\d{1,5}`),
+ * not the human-readable OCR form like "6.544,01 €". Coercion drives
+ * formatValid; without it, every Euro-Wert with a decimal would flag.
+ */
+function canonicalSubmissionForms(value, datentyp, formatRegex) {
+  const raw = value == null ? '' : String(value);
+  const out = new Set([raw, raw.trim()]);
+  const dt = datentyp || '';
+  const isCurrency = dt === 'currency' || dt === 'GeldBetrag' || dt === 'geldbetrag';
+  if (isCurrency) {
+    const cleaned = raw.replace(/[€$£\s]/g, '');
+    // Detect German format (last comma after last dot) → US-normalize.
+    const lastComma = cleaned.lastIndexOf(',');
+    const lastDot = cleaned.lastIndexOf('.');
+    let n;
+    if (typeof value === 'number') n = value;
+    else if (cleaned.includes(',') && lastDot < lastComma) {
+      n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
+    } else n = Number(cleaned);
+    if (isFinite(n)) {
+      const intStr = String(Math.trunc(n));
+      const intRound = String(Math.round(n));
+      const dec = n.toFixed(2);
+      const decGer = dec.replace('.', ',');
+      out.add(intStr);
+      out.add(intRound);
+      out.add(dec);
+      out.add(decGer);
+      // Negative variants — the regex sometimes allows a leading `-`.
+      if (n < 0) {
+        out.add(intStr);   // already negative
+      }
+    }
+  } else if (dt === 'date' || dt === 'date-iso' || dt === 'date-de' || dt === 'Datum') {
+    // ISO ↔ German
+    const m1 = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) { out.add(`${m1[1]}-${m1[2]}-${m1[3]}`); out.add(`${m1[3]}.${m1[2]}.${m1[1]}`); }
+    const m2 = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if (m2) {
+      const d = m2[1].padStart(2, '0'), mo = m2[2].padStart(2, '0');
+      out.add(`${d}.${mo}.${m2[3]}`);
+      out.add(`${m2[3]}-${mo}-${d}`);
+    }
+  } else if (dt === 'iban' || dt === 'IBAN' || dt === 'idnr' || dt === 'identifikationsnummer') {
+    out.add(raw.replace(/\s+/g, '').toUpperCase());
+    out.add(raw.replace(/\s+/g, ''));
+  }
+  return Array.from(out).filter(s => s.length > 0);
+}
+
+/**
  * Walk extracted_with_codes (output of container-field-mapper) and flatten
  * into rows. The sibling _meta_<leaf> / _span_<leaf> / _ecode_<leaf> keys
  * embed everything we need on the leaf's parent.
  */
-function buildResultModel({ fieldMapper, spanLinker, crossValidator, critic, workflow }) {
+/**
+ * v5/v5.1 Result-Model — baut rows[] aus phase5-merge.canonical_layer.
+ * Shape kompatibel mit PdfSidePanel.hoverPath-Highlighting.
+ * row.span.snippet = evidence_line von phase1Regex → besserer Search-Needle
+ * als der bare value (currency-Werte sind oft mehrdeutig im Dokument).
+ */
+function buildResultModelFromCanonical({ phase5Merge, workflow }) {
+  if (!phase5Merge || !phase5Merge.canonical_layer) return null;
+  const canonical = phase5Merge.canonical_layer; // { eCode → CanonicalValue }
+  const stats = phase5Merge.stats || {};
+  const rows = [];
+  for (const [eCode, cv] of Object.entries(canonical)) {
+    const path = `${cv.anlage || 'X'}.${eCode}`;
+    rows.push({
+      path,
+      group: cv.anlage || 'X',
+      leaf: eCode,
+      label: cv.drucktext || eCode,
+      value: cv.value,
+      formatted: cv.normalized != null ? String(cv.normalized) : (cv.value != null ? String(cv.value) : ''),
+      ecode: eCode,
+      anlage: cv.anlage,
+      vordruckzeile: cv.vordruckzeile,
+      datentyp: cv.datentyp,
+      pflicht: null,
+      formatRegex: null,
+      formatValid: null,
+      // PdfSidePanel reads span.snippet first (long, unique) then falls back to value
+      span: cv.evidence_line ? { snippet: cv.evidence_line, page: null, origin: cv.origin } : null,
+      issues: [],
+      violations: [],
+      matchMethod: cv.origin, // REGEX_100% | REGEX_3F | LLM_FSM
+      anleitung: null,
+    });
+  }
+  // Group by Anlage
+  const groupsMap = new Map();
+  for (const row of rows) {
+    const arr = groupsMap.get(row.group) || [];
+    arr.push(row);
+    groupsMap.set(row.group, arr);
+  }
+  const groups = Array.from(groupsMap.entries()).map(([key, rs]) => ({
+    key, label: key, rows: rs,
+  }));
+  return {
+    rows,
+    groups,
+    meta: {
+      totalFields: rows.length,
+      spanLinked: rows.filter(r => r.span).length,
+      flagged: 0,
+      fromRegex: stats.from_regex ?? rows.filter(r => r.matchMethod !== 'LLM_FSM').length,
+      fromLlm: stats.from_llm ?? rows.filter(r => r.matchMethod === 'LLM_FSM').length,
+      source: 'phase5-merge',
+      dokumenttypId: null,
+      workflowId: workflow?.id || null,
+    },
+  };
+}
+
+function buildResultModel({ fieldMapper, spanLinker, crossValidator, critic, workflow, kpiReport }) {
   if (!fieldMapper) return null;
   // Walk the decorated tree, collecting leaves with their sibling meta/span
   const rows = [];
@@ -1323,9 +1548,18 @@ function buildResultModel({ fieldMapper, spanLinker, crossValidator, critic, wor
           const dataType = meta.datentyp || null;
           const group = childPath.split('.')[0];
           const fmtRegex = meta.formatRegex || null;
+          // The container's formatRegex describes the ELSTER SUBMISSION shape
+          // (e.g. integer euros for "ohne Cent"-fields), NOT the human-readable
+          // OCR form. Coerce the raw value to its canonical submission shape
+          // before testing — otherwise "6.544,01" always fails a `\d{1,5}` regex
+          // even though the field is valid (it'd be submitted as 6544).
           let formatValid = null;
           if (fmtRegex) {
-            try { formatValid = new RegExp(fmtRegex).test(String(v)); } catch { formatValid = null; }
+            const candidates = canonicalSubmissionForms(v, dataType, fmtRegex);
+            try {
+              const re = new RegExp(fmtRegex);
+              formatValid = candidates.some(c => re.test(c));
+            } catch { formatValid = null; }
           }
           const fieldIssues = issuesByField.get(childPath) || [];
           const fieldViolations = violationsByField.get(childPath) || [];
@@ -1371,8 +1605,51 @@ function buildResultModel({ fieldMapper, spanLinker, crossValidator, critic, wor
   const spanLinked = rows.filter(r => r.span).length;
   const flagged = rows.filter(r => r.issues.length > 0 || r.violations.length > 0).length;
 
+  // ── Summary derivation: doc-type, person, key amounts ──────────────────────
+  const rowByPath = new Map(rows.map(r => [r.path, r]));
+  const findRow = (suffix) => {
+    // exact path or end-with-segment match
+    if (rowByPath.has(suffix)) return rowByPath.get(suffix);
+    for (const r of rows) {
+      if (r.path === suffix || r.path.endsWith('.' + suffix) || r.leaf === suffix) return r;
+    }
+    return null;
+  };
+  // Doc-type from workflow's field-mapper stage config
+  const fieldMapperStage = workflow?.stages?.find?.(s => s.uses === 'quality/container-field-mapper');
+  const dokumenttypId = fieldMapper?.dokumenttyp_id
+    || fieldMapperStage?.config?.dokumenttyp_id
+    || null;
+  const dokumenttypLabel = (() => {
+    if (!dokumenttypId) return null;
+    return String(dokumenttypId)
+      .split('_').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  })();
+  // Pull required-fields from kpi config in workflow def, fallback to defaults
+  const kpiStage = workflow?.stages?.find?.(s => s.uses === 'eval/kpi');
+  const requiredFields = (kpiStage?.config?.requiredFields)
+    || ['steuer_id', 'bruttoarbeitslohn', 'lohnsteuer_einbehalten'];
+  const keyAmounts = requiredFields.map(f => findRow(f)).filter(Boolean).map(r => ({
+    label: r.label,
+    formatted: r.formatted,
+    valid: r.formatValid,
+    span: r.span,
+    datentyp: r.datentyp,
+  }));
+  const person = {
+    familienname: findRow('familienname')?.value || findRow('nachname')?.value || null,
+    vorname:      findRow('vorname')?.value || null,
+    steuer_id:    findRow('steuer_id')?.formatted || findRow('idnr')?.formatted || null,
+  };
+
   return {
     groups,
+    rows,                                     // flat list (for Export-CSV + Diff)
+    extracted: fieldMapper?.extracted || null,// raw extracted tree (clean, no annotations)
+    extractedAudit: spanLinker?.extracted_with_spans
+                 || fieldMapper?.extracted_with_codes
+                 || fieldMapper?.extracted || null, // with _ecode_/_meta_/_span_ siblings
+    summary: { dokumenttypId, dokumenttypLabel, person, keyAmounts },
     meta: {
       workflowName: workflow?.name || workflow?.id || '—',
       totalFields: rows.length,
@@ -1381,15 +1658,648 @@ function buildResultModel({ fieldMapper, spanLinker, crossValidator, critic, wor
       criticScore: critic?.score,
       criticAccept: critic?.accept,
       validatorPass: crossValidator?.pass,
+      spanCoverage: typeof spanLinker?.coverage === 'number' ? spanLinker.coverage : null,
+      kpiScore: typeof kpiReport?.score === 'number' ? kpiReport.score : null,
+      kpiPass: typeof kpiReport?.pass === 'boolean' ? kpiReport.pass : null,
     },
   };
 }
 
+/* ─── Helpers for Export / JSON-Viewer / Diff ─────────────────────────────── */
+
+// Strip `_ecode_*`, `_meta_*`, `_span_*` annotation siblings from a tree.
+function stripAnnotations(node) {
+  if (Array.isArray(node)) return node.map(stripAnnotations);
+  if (node && typeof node === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (k.startsWith('_')) continue;
+      out[k] = stripAnnotations(v);
+    }
+    return out;
+  }
+  return node;
+}
+
+// Trigger a client-side download.
+function downloadBlob(filename, mime, content) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// CSV-quote a single cell.
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/[",\n;]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+// Flatten resultModel rows to CSV string.
+function rowsToCsv(rows) {
+  const head = ['path', 'label', 'ecode', 'anlage', 'vordruckzeile', 'value_formatted', 'datentyp', 'pflicht', 'formatValid', 'page', 'snippet'];
+  const lines = [head.join(';')];
+  for (const r of rows) {
+    lines.push([
+      r.path, r.label, r.ecode || '', r.anlage || '', r.vordruckzeile || '',
+      r.formatted, r.datentyp || '', r.pflicht ? '1' : '',
+      r.formatValid === true ? '1' : r.formatValid === false ? '0' : '',
+      r.span?.page ?? '', r.span?.snippet || '',
+    ].map(csvCell).join(';'));
+  }
+  return lines.join('\n');
+}
+
+// Minimal JSON syntax-highlight → HTML string (no library, ~30 lines).
+function jsonToHtml(node, depth = 0, opts = {}) {
+  const ind = '  '.repeat(depth);
+  if (node === null) return '<span class="sturm-json-null">null</span>';
+  if (typeof node === 'boolean') return `<span class="sturm-json-bool">${node}</span>`;
+  if (typeof node === 'number') return `<span class="sturm-json-num">${node}</span>`;
+  if (typeof node === 'string') return `<span class="sturm-json-str">${JSON.stringify(node)}</span>`;
+  if (Array.isArray(node)) {
+    if (node.length === 0) return '[]';
+    const items = node.map(v => ind + '  ' + jsonToHtml(v, depth + 1, opts)).join(',\n');
+    return `[\n${items}\n${ind}]`;
+  }
+  if (typeof node === 'object') {
+    const keys = Object.keys(node);
+    if (keys.length === 0) return '{}';
+    const lines = keys.map(k => {
+      const dim = k.startsWith('_') ? ' sturm-json-key--dim' : '';
+      return `${ind}  <span class="sturm-json-key${dim}">${JSON.stringify(k)}</span>: ${jsonToHtml(node[k], depth + 1, opts)}`;
+    });
+    return `{\n${lines.join(',\n')}\n${ind}}`;
+  }
+  return String(node);
+}
+
+// Per-run diff: { added[], removed[], changed[], unchanged[] } over flat row paths.
+function buildDiffModel(current, previous) {
+  if (!current || !previous) return null;
+  const aByPath = new Map(current.rows.map(r => [r.path, r]));
+  const bByPath = new Map(previous.rows.map(r => [r.path, r]));
+  const allPaths = new Set([...aByPath.keys(), ...bByPath.keys()]);
+  const items = [];
+  for (const p of allPaths) {
+    const a = aByPath.get(p);
+    const b = bByPath.get(p);
+    let kind;
+    if (a && !b) kind = 'added';
+    else if (!a && b) kind = 'removed';
+    else if (String(a.value) !== String(b.value)) kind = 'changed';
+    else kind = 'unchanged';
+    items.push({
+      path: p,
+      kind,
+      group: (a || b).group,
+      label: (a || b).label,
+      ecode: (a || b).ecode,
+      current: a ? a.formatted : null,
+      previous: b ? b.formatted : null,
+    });
+  }
+  // Group by first segment, preserving current's group order
+  const groupsMap = new Map();
+  for (const it of items) {
+    const arr = groupsMap.get(it.group) || [];
+    arr.push(it);
+    groupsMap.set(it.group, arr);
+  }
+  const groups = Array.from(groupsMap.entries()).map(([k, rows]) => ({ key: k, label: groupLabel(k), rows }));
+  const changed = items.filter(i => i.kind === 'changed').length;
+  const added = items.filter(i => i.kind === 'added').length;
+  const removed = items.filter(i => i.kind === 'removed').length;
+  return {
+    groups,
+    counts: { changed, added, removed, unchanged: items.length - changed - added - removed },
+    deltas: {
+      kpi: numDelta(current.meta.kpiScore, previous.meta.kpiScore),
+      coverage: numDelta(current.meta.spanCoverage, previous.meta.spanCoverage),
+      critic: numDelta(current.meta.criticScore, previous.meta.criticScore),
+    },
+  };
+}
+
+function numDelta(a, b) {
+  if (typeof a !== 'number' || typeof b !== 'number') return null;
+  return { current: a, previous: b, diff: a - b };
+}
+
 /* ------------------------------------------------------------
-   ResultPanel — renders the joined model as grouped tables.
+   SummaryCard — Doc-Profile, person chips, key amounts, KPI badge.
    ------------------------------------------------------------ */
-function ResultPanel({ model }) {
+function SummaryCard({ summary, meta }) {
+  if (!summary) return null;
+  const { dokumenttypLabel, person, keyAmounts } = summary;
+  // Show only when we have at least one signal
+  if (!dokumenttypLabel && !person.familienname && !person.vorname && !person.steuer_id && keyAmounts.length === 0 && meta.kpiScore == null) {
+    return null;
+  }
+  const kpiTone = meta.kpiScore == null ? null
+    : meta.kpiScore >= 0.85 ? 'ok'
+    : meta.kpiScore >= 0.70 ? 'warn'
+    : 'err';
+  return (
+    <div className="sturm-result-card">
+      <div className="sturm-result-card-main">
+        {dokumenttypLabel && <div className="sturm-result-card-doctype">{dokumenttypLabel}</div>}
+        {(person.vorname || person.familienname || person.steuer_id) && (
+          <div className="sturm-result-card-person">
+            {(person.vorname || person.familienname) && (
+              <span className="sturm-result-card-chip">
+                {[person.vorname, person.familienname].filter(Boolean).join(' ')}
+              </span>
+            )}
+            {person.steuer_id && (
+              <span className="sturm-result-card-chip" title="Steuer-Identifikationsnummer">
+                IDNr {person.steuer_id}
+              </span>
+            )}
+          </div>
+        )}
+        {keyAmounts.length > 0 && (
+          <div className="sturm-result-card-amounts">
+            {keyAmounts.map((a, i) => (
+              <div key={i} className={`sturm-result-card-amount ${a.valid === false ? 'is-invalid' : ''}`}>
+                <div className="sturm-result-card-amount-label">{a.label}</div>
+                <div className="sturm-result-card-amount-value">{a.formatted}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="sturm-result-card-side">
+        {meta.kpiScore != null && (
+          <div className={`sturm-result-card-kpi tone-${kpiTone}`}>
+            <div className="sturm-result-card-kpi-num">{(meta.kpiScore * 100).toFixed(1)}%</div>
+            <div className="sturm-result-card-kpi-label">KPI</div>
+          </div>
+        )}
+        <div className="sturm-result-card-stats">
+          {meta.spanCoverage != null && <span>Quelle <strong>{(meta.spanCoverage * 100).toFixed(0)}%</strong></span>}
+          {meta.criticScore != null && <span>Critic <strong>{(meta.criticScore * 100).toFixed(0)}%</strong> {meta.criticAccept ? '✓' : '✗'}</span>}
+          {meta.validatorPass != null && <span>Validator {meta.validatorPass ? '✓' : '✗'}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------
+   ExportBar — Download JSON / Audit-JSON / CSV. Diff-Run-Picker if previous.
+   ------------------------------------------------------------ */
+function ExportBar({ model, runId, workflowId, previousRuns, compareRunId, onCompareChange }) {
+  const doExport = (kind) => {
+    const base = runId ? `${workflowId}-${runId}` : `${workflowId}`;
+    if (kind === 'json') {
+      downloadBlob(`${base}.json`, 'application/json',
+        JSON.stringify(stripAnnotations(model.extracted ?? {}), null, 2));
+    } else if (kind === 'audit') {
+      downloadBlob(`${base}-audit.json`, 'application/json',
+        JSON.stringify(model.extractedAudit ?? {}, null, 2));
+    } else if (kind === 'csv') {
+      downloadBlob(`${base}.csv`, 'text/csv;charset=utf-8',
+        '﻿' + rowsToCsv(model.rows));
+    }
+  };
+  const otherRuns = (previousRuns || []).filter(r => r.runId !== runId && r.state === 'ok');
+  return (
+    <div className="sturm-result-export">
+      <div className="sturm-result-export-buttons">
+        <button className="sturm-btn sturm-btn-ghost sturm-btn-xs" onClick={() => doExport('json')} title="Sauberes JSON ohne Audit-Annotationen">JSON ↓</button>
+        <button className="sturm-btn sturm-btn-ghost sturm-btn-xs" onClick={() => doExport('audit')} title="JSON inkl. _ecode_/_meta_/_span_ Annotationen">Audit-JSON ↓</button>
+        <button className="sturm-btn sturm-btn-ghost sturm-btn-xs" onClick={() => doExport('csv')} title="Flache CSV mit eCode + Anlage + Span">CSV ↓</button>
+      </div>
+      {otherRuns.length > 0 && (
+        <label className="sturm-result-compare">
+          <span>Vergleichen mit</span>
+          <select value={compareRunId || ''} onChange={e => onCompareChange(e.target.value || null)}>
+            <option value="">— kein Vergleich —</option>
+            {otherRuns.slice(0, 12).map(r => (
+              <option key={r.runId} value={r.runId}>
+                {r.runId} · {r.kpiScore != null ? (r.kpiScore * 100).toFixed(0) + '%' : '—'} · {r.state}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------
+   RawJsonViewer — collapsible per-group JSON view.
+   ------------------------------------------------------------ */
+function RawJsonViewer({ subtree }) {
+  const html = useMemo(() => jsonToHtml(subtree ?? null), [subtree]);
+  return (
+    <pre
+      className="sturm-json-viewer"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+/* ------------------------------------------------------------
+   DiffPanel — pre-result banner + diff rows.
+   ------------------------------------------------------------ */
+function DiffPanel({ diffModel, compareRunId }) {
+  if (!diffModel) return null;
+  const { counts, deltas, groups } = diffModel;
+  const fmtDelta = (d, asPct) => {
+    if (!d) return null;
+    const pct = asPct ? '%' : '';
+    const sign = d.diff > 0 ? '+' : '';
+    const value = asPct ? (d.diff * 100).toFixed(1) : d.diff.toFixed(2);
+    const tone = d.diff > 0 ? 'pos' : d.diff < 0 ? 'neg' : 'zero';
+    return <span className={`sturm-result-diff-delta tone-${tone}`}>{sign}{value}{pct}</span>;
+  };
+  return (
+    <div className="sturm-result-diff">
+      <div className="sturm-result-diff-banner">
+        <div className="sturm-result-diff-counts">
+          <span className="tone-changed"><strong>{counts.changed}</strong> geändert</span>
+          <span className="tone-added"><strong>{counts.added}</strong> neu</span>
+          <span className="tone-removed"><strong>{counts.removed}</strong> entfernt</span>
+          <span className="tone-unchanged"><strong>{counts.unchanged}</strong> gleich</span>
+        </div>
+        <div className="sturm-result-diff-deltas">
+          {deltas.kpi && <span>KPI {fmtDelta(deltas.kpi, true)}</span>}
+          {deltas.coverage && <span>Quelle {fmtDelta(deltas.coverage, true)}</span>}
+          {deltas.critic && <span>Critic {fmtDelta(deltas.critic, true)}</span>}
+        </div>
+        <div className="sturm-result-diff-ref">vs. <code>{compareRunId}</code></div>
+      </div>
+      {groups.map(group => {
+        const interesting = group.rows.filter(r => r.kind !== 'unchanged');
+        if (interesting.length === 0) return null;
+        return (
+          <div key={group.key} className="sturm-result-group">
+            <div className="sturm-result-group-head">
+              <span className="sturm-result-group-label">{group.label}</span>
+              <span className="sturm-result-group-count">{interesting.length} Änderungen</span>
+            </div>
+            <div className="sturm-result-diff-rows">
+              {interesting.map(r => (
+                <div key={r.path} className={`sturm-result-diff-row kind-${r.kind}`}>
+                  <div className="sturm-result-diff-row-label">
+                    <span className="sturm-result-diff-kind">{r.kind === 'added' ? '+' : r.kind === 'removed' ? '−' : '≠'}</span>
+                    {r.label}
+                    {r.ecode && <span className="sturm-result-cite">{r.ecode}</span>}
+                  </div>
+                  <div className="sturm-result-diff-row-values">
+                    {r.kind !== 'added' && <span className="sturm-result-diff-prev">{r.previous ?? '—'}</span>}
+                    {r.kind === 'changed' && <span className="sturm-result-diff-arrow">→</span>}
+                    {r.kind !== 'removed' && <span className="sturm-result-diff-curr">{r.current ?? '—'}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------
+   StageInspectorPanel — bottom-of-canvas panel that opens when
+   a node is clicked. Shows three sections:
+     · Eingaben — resolved ${stageId.field} refs with live values
+     · Was passiert — description + config
+     · Ausgaben — raw output tree (collapsed JSON viewer)
+   ------------------------------------------------------------ */
+function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, stageFieldFlow, onClose }) {
+  const [collapsed, setCollapsed] = useState(false);
+  if (!stageId || !workflow) return null;
+  const stage = workflow.stages.find(s => s.id === stageId);
+  if (!stage) return null;
+  const state = stageStates[stageId] || {};
+  const output = stageOutputs[stageId];
+  const flow = stageFieldFlow[stageId];
+  const inputs = stage.inputs || {};
+  const cfg = stage.config || {};
+
+  const stateLabel = {
+    idle: 'wartet', running: 'läuft', ok: 'fertig', error: 'fehler', skipped: 'übersprungen',
+  }[state.state || 'idle'] || state.state;
+
+  return (
+    <div className={`sturm-inspector ${collapsed ? 'is-collapsed' : ''}`}>
+      <div className="sturm-inspector-head">
+        <button
+          type="button"
+          className="sturm-inspector-collapse"
+          onClick={() => setCollapsed(v => !v)}
+          title={collapsed ? 'Aufklappen' : 'Einklappen'}
+        >{collapsed ? '▲' : '▼'}</button>
+        <div className="sturm-inspector-title">
+          <span className="sturm-inspector-pill">Node</span>
+          <span className="sturm-inspector-name">{stage.name || stage.id}</span>
+          <code className="sturm-inspector-uses">{stage.uses}</code>
+        </div>
+        <div className="sturm-inspector-meta">
+          {state.state && <span className={`sturm-inspector-state is-${state.state}`}>{stateLabel}</span>}
+          {state.ms != null && <span className="sturm-inspector-time">{fmtDur(state.ms)}</span>}
+          {flow && (flow.in != null || flow.out != null) && (
+            <span className="sturm-inspector-flow">
+              {flow.in != null ? flow.in : '·'} → {flow.out != null ? flow.out : '·'} Felder
+            </span>
+          )}
+          <button type="button" className="sturm-icon-btn" onClick={onClose} title="Schließen">✕</button>
+        </div>
+      </div>
+
+      {!collapsed && (
+        <div className="sturm-inspector-body">
+          <section className="sturm-inspector-section">
+            <h4>Eingaben</h4>
+            {Object.keys(inputs).length === 0 ? (
+              <div className="sturm-inspector-empty">Diese Node deklariert keine Eingaben.</div>
+            ) : (
+              <table className="sturm-inspector-table">
+                <thead><tr><th>Key</th><th>Quelle</th><th>Wert</th></tr></thead>
+                <tbody>
+                  {Object.entries(inputs).map(([k, ref]) => {
+                    const r = resolveInputRef(ref, stageOutputs);
+                    return (
+                      <tr key={k}>
+                        <td className="sturm-inspector-key">{k}</td>
+                        <td className="sturm-inspector-ref">
+                          {r.kind === 'literal' && <em>literal</em>}
+                          {r.kind !== 'literal' && <code>{'${' + r.ref + '}'}</code>}
+                        </td>
+                        <td className="sturm-inspector-val">
+                          {r.kind === 'pending'  && <span className="sturm-inspector-val-pending">noch nicht verfügbar</span>}
+                          {r.kind === 'missing'  && <span className="sturm-inspector-val-missing">nicht gefunden</span>}
+                          {(r.kind === 'literal' || r.kind === 'resolved') && (
+                            <span className="sturm-inspector-val-preview" title={typeof r.value === 'string' ? r.value : ''}>
+                              {valuePreview(r.value)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section className="sturm-inspector-section">
+            <h4>Was passiert</h4>
+            {stage.description && (
+              <p className="sturm-inspector-desc">{stage.description}</p>
+            )}
+            {Object.keys(cfg).length > 0 && (
+              <pre
+                className="sturm-json-viewer"
+                style={{ marginLeft: 0, marginRight: 0, maxHeight: 200 }}
+                dangerouslySetInnerHTML={{ __html: jsonToHtml(cfg) }}
+              />
+            )}
+            {!stage.description && Object.keys(cfg).length === 0 && (
+              <div className="sturm-inspector-empty">Keine zusätzliche Konfiguration. Stage-Logik in <code>{stage.uses}</code>.</div>
+            )}
+          </section>
+
+          <section className="sturm-inspector-section">
+            <h4>
+              Ausgaben
+              {flow?.out != null && <span className="sturm-inspector-tag">{flow.out} Felder</span>}
+            </h4>
+            {state.error && (
+              <div className="sturm-inspector-error">{String(state.error)}</div>
+            )}
+            {output ? (
+              <pre
+                className="sturm-json-viewer"
+                style={{ marginLeft: 0, marginRight: 0, maxHeight: 280 }}
+                dangerouslySetInnerHTML={{ __html: jsonToHtml(output) }}
+              />
+            ) : state.state === 'running' ? (
+              <div className="sturm-inspector-empty">Läuft gerade …</div>
+            ) : state.state === 'ok' ? (
+              <div className="sturm-inspector-empty">Output wird geladen …</div>
+            ) : (
+              <div className="sturm-inspector-empty">Noch kein Output — die Stage wurde noch nicht ausgeführt.</div>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------
+   PdfSidePanel — lazy-loaded PDF.js viewer with hover-highlight.
+   Sits to the LEFT of the drawer, doesn't move the canvas — the
+   designer area shrinks to make room. Closes via onClose or by
+   toggling pdfShown back off.
+   ------------------------------------------------------------ */
+let __pdfJsPromise = null;
+function loadPdfJs() {
+  if (__pdfJsPromise) return __pdfJsPromise;
+  const CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
+  const WORKER = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+  __pdfJsPromise = import(/* webpackIgnore: true */ CDN)
+    .then(mod => {
+      mod.GlobalWorkerOptions.workerSrc = WORKER;
+      return mod;
+    })
+    .catch(err => { __pdfJsPromise = null; throw err; });
+  return __pdfJsPromise;
+}
+
+function PdfSidePanel({ pdfUrl, hoverPath, resultModel, onClose }) {
+  const containerRef = useRef(null);
+  const [error, setError] = useState(null);
+  // pageState[i] = { canvas, charIndex: [{item, start, end, transform, width, height, fontHeight}] }
+  const pageStateRef = useRef([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!pdfUrl || !containerRef.current) return;
+    let cancelled = false;
+    setError(null);
+    setReady(false);
+    pageStateRef.current = [];
+    const root = containerRef.current;
+    root.innerHTML = '';
+    loadPdfJs().then(async (pdfjs) => {
+      try {
+        const loadingTask = pdfjs.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          if (cancelled) return;
+          const viewport = page.getViewport({ scale: 1.4 });
+          const pageWrap = document.createElement('div');
+          pageWrap.className = 'sturm-pdf-page';
+          pageWrap.style.width = viewport.width + 'px';
+          pageWrap.style.height = viewport.height + 'px';
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          pageWrap.appendChild(canvas);
+          const overlay = document.createElement('div');
+          overlay.className = 'sturm-pdf-overlay';
+          pageWrap.appendChild(overlay);
+          root.appendChild(pageWrap);
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          if (cancelled) return;
+          const textContent = await page.getTextContent();
+          // Build a cumulative char-index across the page (matches OCR markdown order roughly).
+          const charIndex = [];
+          let cursor = 0;
+          for (const item of textContent.items) {
+            const str = item.str || '';
+            // pdfjs transform: [a, b, c, d, e, f] — e,f are x,y; width/height in viewport units
+            charIndex.push({
+              start: cursor,
+              end: cursor + str.length,
+              str,
+              transform: item.transform,
+              width: item.width,
+              height: item.height,
+            });
+            cursor += str.length;
+            // newline as soft-break — approximate; OCR text differs anyway
+            if (item.hasEOL) cursor += 1;
+          }
+          pageStateRef.current.push({ wrap: pageWrap, overlay, viewport, charIndex, totalChars: cursor });
+        }
+        if (!cancelled) setReady(true);
+      } catch (e) {
+        if (!cancelled) setError(e.message || String(e));
+      }
+    }).catch(e => { if (!cancelled) setError('PDF.js konnte nicht geladen werden'); });
+    return () => { cancelled = true; };
+  }, [pdfUrl]);
+
+  // Hover-highlight: when hoverPath changes, search across pages for the row's
+  // value and draw overlay rects on every match. Scroll the FIRST match into
+  // view. The span.page hint from OCR is used as a search-priority bias, not
+  // a hard filter — OCR page-indexing can drift from the PDF text-layer.
+  useEffect(() => {
+    if (!ready) return;
+    // Clear all overlays first.
+    for (const ps of pageStateRef.current) ps.overlay.innerHTML = '';
+    if (!hoverPath || !resultModel) return;
+    const row = resultModel.rows.find(r => r.path === hoverPath);
+    if (!row) return;
+    // v5/v5.1: prefer the OCR evidence_line (snippet) — it's longer and more
+    // unique than the bare value, which is critical for currency/dates that
+    // appear many times in a multi-doc bundle. Fall back to row.value.
+    const snippet = (row.span && typeof row.span.snippet === 'string') ? row.span.snippet.trim() : '';
+    const valueStr = (row.value != null ? String(row.value) : '').trim();
+    const target = snippet || valueStr;
+    if (!target) return;
+    const needle = target.toLowerCase();
+
+    // Search-order: indicated page first, then the rest. Picks up matches
+    // wherever they actually live in the PDF text-layer.
+    const order = [];
+    const hintIdx = row.span && typeof row.span.page === 'number' && row.span.page > 0
+      ? row.span.page - 1
+      : -1;
+    if (hintIdx >= 0 && hintIdx < pageStateRef.current.length) order.push(hintIdx);
+    for (let i = 0; i < pageStateRef.current.length; i++) {
+      if (i !== hintIdx) order.push(i);
+    }
+
+    let firstHitPageWrap = null;
+    let firstHitTopInPage = null;
+
+    for (const pIdx of order) {
+      const ps = pageStateRef.current[pIdx];
+      if (!ps) continue;
+      const fullText = ps.charIndex.map(ci => ci.str).join('');
+      const fullLower = fullText.toLowerCase();
+
+      // Find all occurrences on this page (not just first). Important for
+      // values like "0" or "01.01.2024" which may appear in many rows.
+      let from = 0;
+      const ranges = [];
+      while (true) {
+        const at = fullLower.indexOf(needle, from);
+        if (at < 0) break;
+        ranges.push([at, at + needle.length]);
+        from = at + Math.max(1, needle.length);
+      }
+      if (ranges.length === 0) continue;
+
+      // For each range, walk through items, accumulating char offsets, and
+      // draw a rect for each item that overlaps the range.
+      for (const [hitStart, hitEnd] of ranges) {
+        let off = 0;
+        for (const item of ps.charIndex) {
+          const itemStart = off;
+          const itemEnd = off + item.str.length;
+          off = itemEnd;
+          if (itemEnd <= hitStart || itemStart >= hitEnd) continue;
+          const [, , , d, e, f] = item.transform;
+          const w = item.width;
+          const h = item.height || Math.abs(d) || 12;
+          const [vx1, vy1, vx2, vy2] = ps.viewport.convertToViewportRectangle([e, f, e + w, f + h]);
+          const left = Math.min(vx1, vx2);
+          const top = Math.min(vy1, vy2);
+          const width = Math.abs(vx2 - vx1);
+          const height = Math.abs(vy2 - vy1);
+          const box = document.createElement('div');
+          box.className = 'sturm-pdf-hit';
+          box.style.left = left + 'px';
+          box.style.top = top + 'px';
+          box.style.width = width + 'px';
+          box.style.height = height + 'px';
+          ps.overlay.appendChild(box);
+          if (firstHitPageWrap == null) {
+            firstHitPageWrap = ps.wrap;
+            firstHitTopInPage = top;
+          }
+        }
+      }
+      // Stop after the first page that produced any match — keeps the
+      // highlight focused on one page rather than scattering across many.
+      if (firstHitPageWrap) break;
+    }
+
+    if (firstHitPageWrap && firstHitPageWrap.parentElement) {
+      const scroller = firstHitPageWrap.parentElement;
+      const containerRect = scroller.getBoundingClientRect();
+      const pageRect = firstHitPageWrap.getBoundingClientRect();
+      const hitTopAbs = pageRect.top + (firstHitTopInPage || 0) - containerRect.top + scroller.scrollTop;
+      scroller.scrollTo({ top: Math.max(0, hitTopAbs - 80), behavior: 'smooth' });
+    }
+  }, [hoverPath, ready, resultModel]);
+
+  return (
+    <aside className="sturm-pdf-side">
+      <div className="sturm-pdf-side-head">
+        <span>PDF</span>
+        <button className="sturm-icon-btn" onClick={onClose} title="Schließen">✕</button>
+      </div>
+      {error && <div className="sturm-pdf-side-error">PDF konnte nicht geladen werden: {error}</div>}
+      <div className="sturm-pdf-side-pages" ref={containerRef} />
+    </aside>
+  );
+}
+
+/* ------------------------------------------------------------
+   ResultPanel — Card + Export + (Diff?) + grouped tables with JSON-toggle.
+   ------------------------------------------------------------ */
+function ResultPanel({ model, runId, workflowId, previousRuns, compareRunId, onCompareChange, diffModel,
+                      pdfAvailable, pdfShown, onTogglePdf, hoverPath, onHoverPath }) {
   const [openPath, setOpenPath] = useState(null);
+  const [rawJsonGroup, setRawJsonGroup] = useState({}); // { [groupKey]: bool }
   if (!model) {
     return (
       <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
@@ -1406,33 +2316,74 @@ function ResultPanel({ model }) {
   }
   return (
     <div className="sturm-result-panel">
+      <SummaryCard summary={model.summary} meta={model.meta} />
+      <ExportBar
+        model={model}
+        runId={runId}
+        workflowId={workflowId}
+        previousRuns={previousRuns}
+        compareRunId={compareRunId}
+        onCompareChange={onCompareChange}
+      />
+      {onTogglePdf && (
+        <div className="sturm-result-toolbar">
+          <button
+            className={`sturm-btn sturm-btn-ghost sturm-btn-xs ${pdfShown ? 'is-active' : ''}`}
+            onClick={onTogglePdf}
+            disabled={!pdfAvailable}
+            title={pdfAvailable ? 'PDF neben den Feldern anzeigen' : 'PDF-Viewer nicht verfügbar (kein PDF-Input oder PDF.js nicht geladen)'}
+          >
+            {pdfShown ? '← PDF ausblenden' : 'PDF anzeigen →'}
+          </button>
+        </div>
+      )}
       <div className="sturm-result-meta">
         <span><strong>{model.meta.totalFields}</strong> Felder</span>
         <span><strong>{model.meta.spanLinked}</strong> ✓ Quelle</span>
         {model.meta.flagged > 0 && <span style={{ color: 'var(--color-amber)' }}>⚠ <strong>{model.meta.flagged}</strong> markiert</span>}
-        {model.meta.criticScore != null && (
-          <span>Critic <strong>{(model.meta.criticScore * 100).toFixed(0)}%</strong> {model.meta.criticAccept ? '✓' : '✗'}</span>
-        )}
       </div>
-      {model.groups.map(group => (
-        <div key={group.key} className="sturm-result-group">
-          <div className="sturm-result-group-head">
-            <span className="sturm-result-group-label">{group.label}</span>
-            <span className="sturm-result-group-count">{group.rows.length} Felder</span>
-          </div>
-          <div className="sturm-result-rows">
-            {group.rows.map(row => (
-              <ResultRow key={row.path} row={row} expanded={openPath === row.path}
-                         onToggle={() => setOpenPath(openPath === row.path ? null : row.path)} />
-            ))}
-          </div>
-        </div>
-      ))}
+      {diffModel
+        ? <DiffPanel diffModel={diffModel} compareRunId={compareRunId} />
+        : model.groups.map(group => {
+            const isJson = !!rawJsonGroup[group.key];
+            const toggleJson = () => setRawJsonGroup(m => ({ ...m, [group.key]: !m[group.key] }));
+            const subtree = isJson ? (model.extractedAudit?.[group.key] ?? null) : null;
+            return (
+              <div key={group.key} className="sturm-result-group">
+                <div className="sturm-result-group-head">
+                  <span className="sturm-result-group-label">{group.label}</span>
+                  <span className="sturm-result-group-count">{group.rows.length} Felder</span>
+                  <button
+                    type="button"
+                    className={`sturm-result-group-jsonbtn ${isJson ? 'is-active' : ''}`}
+                    onClick={toggleJson}
+                    title={isJson ? 'Tabellen-Ansicht' : 'Raw JSON anzeigen'}
+                  >{isJson ? '⊞' : '⟨/⟩'}</button>
+                </div>
+                {isJson
+                  ? <RawJsonViewer subtree={subtree} />
+                  : (
+                    <div className="sturm-result-rows">
+                      {group.rows.map(row => (
+                        <ResultRow
+                          key={row.path}
+                          row={row}
+                          expanded={openPath === row.path}
+                          onToggle={() => setOpenPath(openPath === row.path ? null : row.path)}
+                          onHover={onHoverPath}
+                          hovered={hoverPath === row.path}
+                        />
+                      ))}
+                    </div>
+                  )}
+              </div>
+            );
+          })}
     </div>
   );
 }
 
-function ResultRow({ row, expanded, onToggle }) {
+function ResultRow({ row, expanded, onToggle, onHover, hovered }) {
   const hasIssues = row.issues.length > 0 || row.violations.length > 0;
   const sevTone = (() => {
     if (row.issues.some(i => i.severity === 'block') || row.violations.some(v => v.severity === 'block')) return 'err';
@@ -1444,7 +2395,12 @@ function ResultRow({ row, expanded, onToggle }) {
     ? `${row.ecode}${row.anlage ? ` · ${row.anlage}` : ''}${row.vordruckzeile ? ` Z.${row.vordruckzeile}` : ''}`
     : null;
   return (
-    <div className={`sturm-result-row ${expanded ? 'is-expanded' : ''}`} data-tone={sevTone}>
+    <div
+      className={`sturm-result-row ${expanded ? 'is-expanded' : ''} ${hovered ? 'is-hovered' : ''}`}
+      data-tone={sevTone}
+      onMouseEnter={onHover ? () => onHover(row.path) : undefined}
+      onMouseLeave={onHover ? () => onHover(null) : undefined}
+    >
       <button type="button" className="sturm-result-row-main" onClick={onToggle}>
         <div className="sturm-result-row-top">
           <span className="sturm-result-row-label">
@@ -1746,7 +2702,23 @@ function App() {
     spanLinker: null,
     crossValidator: null,
     critic: null,
+    phase5Merge: null, // v5/v5.1: canonical_layer source for the Result tab
   });
+  // Per-stage raw outputs (lazy-fetched after a stage finishes). Used by
+  // the field-flow counter on each StageNode (in → out) and could be reused
+  // by any future inspector that wants the same data without re-fetching.
+  const [stageOutputs, setStageOutputs] = useState({}); // { [stageId]: outputJson }
+  // Result-tab UX extras: previous runs (Diff-dropdown), compare-run data, PDF-Split, Hover-link.
+  const [previousRuns, setPreviousRuns] = useState([]);
+  const [compareRunId, setCompareRunId] = useState(() => {
+    return new URLSearchParams(location.search).get('compare') || null;
+  });
+  const [compareArtifacts, setCompareArtifacts] = useState({
+    fieldMapper: null, spanLinker: null, crossValidator: null, critic: null, kpiReport: null,
+  });
+  const [inputMeta, setInputMeta] = useState(null); // { filename, mime }
+  const [pdfShown, setPdfShown] = useState(false);
+  const [hoverPath, setHoverPath] = useState(null);
 
   // Workflow-ID aus URL — akzeptiert ?workflow= UND ?wf= (Alias, vom Designer benutzt)
   // Replay support: ?run=<runId> loads a completed run's artefacts so the
@@ -1846,19 +2818,138 @@ function App() {
     fetchArtifact(spanLinkerStage, 'spanLinker');
     fetchArtifact(crossValidatorStage, 'crossValidator');
     fetchArtifact(criticStage, 'critic');
-  }, [workflow, runId, status]);
+    // v5/v5.1: phase5-merge produces the canonical_layer for citation-verify
+    const phase5Stage = workflow.stages.find(s => s.uses === 'elster-v5/phase5-merge');
+    fetchArtifact(phase5Stage, 'phase5Merge');
+    // Per-stage outputs for the field-flow counter on each node. Only pull
+    // for stages that finished OK and we haven't fetched yet. Loop is cheap
+    // for small graphs; for big ones the natural state-tick re-entry
+    // de-dups via the `stageOutputs[id]` guard.
+    for (const s of workflow.stages) {
+      if (stageStates[s.id]?.state !== 'ok') continue;
+      if (stageOutputs[s.id]) continue;
+      fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/stages/${encodeURIComponent(s.id)}/output`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(j => { if (j) setStageOutputs(prev => prev[s.id] ? prev : ({ ...prev, [s.id]: j })); })
+        .catch(() => {});
+    }
+  }, [workflow, runId, status, stageStates]);
+
+  // Compute per-stage field-flow counts: out = leaves in this stage's
+  // representative tree; in = sum of upstream stages' out. Containers don't
+  // count as predecessors here — they're configuration, not field-flow.
+  const stageFieldFlow = useMemo(() => {
+    const flow = {};
+    if (!workflow) return flow;
+    // First pass: out-count per stage.
+    for (const s of workflow.stages) {
+      const out = stageOutputs[s.id];
+      const tree = representativeOutputTree(out);
+      const cnt = tree ? countFieldLeaves(tree) : null;
+      flow[s.id] = { in: null, out: cnt };
+    }
+    // Second pass: in-count = sum of upstream out-counts.
+    for (const [from, to] of workflow.edges) {
+      if (!flow[to]) continue;
+      const u = flow[from]?.out;
+      if (typeof u !== 'number') continue;
+      flow[to].in = (flow[to].in ?? 0) + u;
+    }
+    return flow;
+  }, [workflow, stageOutputs]);
 
   // Build the joined result model from the four artefacts.
+  // v5/v5.1 fallback: phase5-merge.canonical_layer when no fieldMapper present.
   const resultModel = useMemo(() => {
-    if (!qualityArtifacts.fieldMapper) return null;
+    if (qualityArtifacts.fieldMapper) {
+      return buildResultModel({
+        fieldMapper: qualityArtifacts.fieldMapper,
+        spanLinker: qualityArtifacts.spanLinker,
+        crossValidator: qualityArtifacts.crossValidator,
+        critic: qualityArtifacts.critic,
+        workflow,
+        kpiReport,
+      });
+    }
+    if (qualityArtifacts.phase5Merge) {
+      return buildResultModelFromCanonical({
+        phase5Merge: qualityArtifacts.phase5Merge,
+        workflow,
+      });
+    }
+    return null;
+  }, [qualityArtifacts, workflow, kpiReport]);
+
+  // ── Previous-runs listing (for Diff-dropdown) ──
+  useEffect(() => {
+    if (!workflow) return;
+    fetch(`/api/workflows/${encodeURIComponent(workflow.id)}/runs`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(list => setPreviousRuns(Array.isArray(list) ? list : []))
+      .catch(() => setPreviousRuns([]));
+  }, [workflow, runId]);
+
+  // ── Compare-run artefacts ──
+  useEffect(() => {
+    if (!workflow || !compareRunId) {
+      setCompareArtifacts({ fieldMapper: null, spanLinker: null, crossValidator: null, critic: null, kpiReport: null });
+      return;
+    }
+    const headers = authHeaders();
+    const fmStage = workflow.stages.find(s => s.uses === 'quality/container-field-mapper');
+    const slStage = workflow.stages.find(s => s.uses === 'extract/span-linker');
+    const cvStage = workflow.stages.find(s => s.uses === 'extract/cross-validator');
+    const ccStage = workflow.stages.find(s => s.uses === 'eval/critic-llm');
+    const kpiStage = workflow.stages.find(s => s.uses === 'eval/kpi');
+    const fetchStage = (stage) => stage
+      ? fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(compareRunId)}/stages/${encodeURIComponent(stage.id)}/output`, { headers })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null);
+    Promise.all([fetchStage(fmStage), fetchStage(slStage), fetchStage(cvStage), fetchStage(ccStage), fetchStage(kpiStage)])
+      .then(([fm, sl, cv, cc, kp]) => setCompareArtifacts({
+        fieldMapper: fm, spanLinker: sl, crossValidator: cv, critic: cc, kpiReport: kp,
+      }));
+  }, [workflow, compareRunId]);
+
+  const compareModel = useMemo(() => {
+    if (!compareArtifacts.fieldMapper) return null;
     return buildResultModel({
-      fieldMapper: qualityArtifacts.fieldMapper,
-      spanLinker: qualityArtifacts.spanLinker,
-      crossValidator: qualityArtifacts.crossValidator,
-      critic: qualityArtifacts.critic,
+      fieldMapper: compareArtifacts.fieldMapper,
+      spanLinker: compareArtifacts.spanLinker,
+      crossValidator: compareArtifacts.crossValidator,
+      critic: compareArtifacts.critic,
       workflow,
+      kpiReport: compareArtifacts.kpiReport,
     });
-  }, [qualityArtifacts, workflow]);
+  }, [compareArtifacts, workflow]);
+
+  const diffModel = useMemo(() => {
+    if (!resultModel || !compareModel) return null;
+    return buildDiffModel(resultModel, compareModel);
+  }, [resultModel, compareModel]);
+
+  // Update URL when compare changes (deeplinkable diff).
+  useEffect(() => {
+    if (!runId) return;
+    const url = new URL(location.href);
+    if (compareRunId) url.searchParams.set('compare', compareRunId);
+    else url.searchParams.delete('compare');
+    history.replaceState(null, '', url.toString());
+  }, [compareRunId, runId]);
+
+  // ── Input meta (filename + mime) — used to gate the PDF-toggle ──
+  useEffect(() => {
+    if (!workflow || !runId) { setInputMeta(null); return; }
+    fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/_input.json`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => setInputMeta(j || null))
+      .catch(() => setInputMeta(null));
+  }, [workflow, runId]);
+
+  const pdfAvailable = !!inputMeta && (inputMeta.mime === 'application/pdf' || /\.pdf$/i.test(inputMeta.filename || ''));
+  const pdfUrl = (pdfAvailable && workflow && runId)
+    ? `/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/_input/${encodeURIComponent(inputMeta.filename)}${authTokenQuery()}`
+    : null;
 
   useEffect(() => {
     if (events.length > 0 || issues.length > 0) setDrawerCollapsed(false);
@@ -1928,6 +3019,8 @@ function App() {
           kpis: stageKpis[s.id]?.kpis || [],
           progress: stageKpis[s.id]?.progress || null,
           branches: isFanout ? branches : undefined,
+          fieldsIn:  stageFieldFlow[s.id]?.in  ?? null,
+          fieldsOut: stageFieldFlow[s.id]?.out ?? null,
         },
         draggable: true,
       };
@@ -1955,7 +3048,7 @@ function App() {
       draggable: true, // operator can move containers around the canvas
     }));
     return [...stageNodes, ...containerNodes];
-  }, [workflow, layout, stageStates, stageKpis, branchStates]);
+  }, [workflow, layout, stageStates, stageKpis, branchStates, stageFieldFlow, nodePosOverrides]);
 
   const edges = useMemo(() => {
     if (!workflow) return [];
@@ -1991,7 +3084,8 @@ function App() {
     setRunning(true); setStatus('running');
     setRunId(null); setEvents([]); setStageStates({}); setStageKpis({});
     setBranchStates({}); setKpiReport(null); setFanoutOutput(null);
-    setQualityArtifacts({ fieldMapper: null, spanLinker: null, crossValidator: null, critic: null });
+    setQualityArtifacts({ fieldMapper: null, spanLinker: null, crossValidator: null, critic: null, phase5Merge: null });
+    setStageOutputs({});
 
     const onEvent = (name, env) => {
       const t = new Date().toLocaleTimeString();
@@ -2137,6 +3231,16 @@ function App() {
                   )}
                 </RF.ReactFlowProvider>
               </div>
+              {selectedStage && (
+                <StageInspectorPanel
+                  stageId={selectedStage}
+                  workflow={workflow}
+                  stageStates={stageStates}
+                  stageOutputs={stageOutputs}
+                  stageFieldFlow={stageFieldFlow}
+                  onClose={() => setSelectedStage(null)}
+                />
+              )}
               {kpiReport && <KpiPanel report={kpiReport} fanoutOutput={fanoutOutput} />}
             </>
           ) : (
@@ -2161,7 +3265,24 @@ function App() {
         collapsed={drawerCollapsed}
         onToggleCollapsed={setDrawerCollapsed}
         resultModel={resultModel}
+        previousRuns={previousRuns}
+        compareRunId={compareRunId}
+        onCompareChange={setCompareRunId}
+        diffModel={diffModel}
+        pdfAvailable={pdfAvailable}
+        pdfShown={pdfShown}
+        onTogglePdf={() => setPdfShown(v => !v)}
+        hoverPath={hoverPath}
+        onHoverPath={setHoverPath}
       />
+      {pdfShown && pdfUrl && (
+        <PdfSidePanel
+          pdfUrl={pdfUrl}
+          hoverPath={hoverPath}
+          resultModel={resultModel}
+          onClose={() => setPdfShown(false)}
+        />
+      )}
     </div>
   );
 }

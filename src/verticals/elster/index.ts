@@ -123,8 +123,10 @@ export function buildElsterV2WorkflowWithSchema() {
     },
     edges: [
       ['ocr', 'klassifizierung'],
+      ['ocr', 'extraktion'],
       ['klassifizierung', 'extraktion'],
       ['extraktion', 'funnel'],
+      ['klassifizierung', 'funnel'],
       ['funnel', 'validator'],
     ],
   });

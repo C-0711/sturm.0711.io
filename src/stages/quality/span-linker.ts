@@ -29,9 +29,13 @@ export interface SpanLinkerInput {
    * Optional per-leaf metadata from container-field-mapper. When provided, the
    * linker uses `datentyp` to generate format-aware search variants — turns
    * `69291.8` into ALSO searching for `"69.291,80"`, `"69.291,80 €"`, etc.
+   * Plus `drucktext` + `vordruckzeile` to disambiguate when the same value
+   * appears multiple times (e.g. Arbeitgeber- AND Arbeitnehmeranteil
+   * = 6.544,01 €) — picks the occurrence whose preceding context contains
+   * the most field-specific keywords.
    * Boosts coverage on numeric/currency/date fields from ~0.6 to >0.95.
    */
-  field_meta?: Record<string, { datentyp?: string } | null>;
+  field_meta?: Record<string, { datentyp?: string; drucktext?: string; vordruckzeile?: string } | null>;
 }
 
 export interface Span {
@@ -92,11 +96,85 @@ function jaccard(a: string, b: string): number {
   return union === 0 ? 0 : inter / union;
 }
 
-function findExactOrFuzzy(needle: string, haystack: string, fuzziness: number): { start: number; end: number } | null {
+// Find ALL exact occurrences of needle in haystack.
+function findAllOccurrences(needle: string, haystack: string): Array<{ start: number; end: number }> {
+  const out: Array<{ start: number; end: number }> = [];
+  if (!needle) return out;
+  let from = 0;
+  while (true) {
+    const ix = haystack.indexOf(needle, from);
+    if (ix < 0) break;
+    out.push({ start: ix, end: ix + needle.length });
+    from = ix + Math.max(1, needle.length);
+  }
+  return out;
+}
+
+// Build a set of "locator tokens" from the field's drucktext — the words
+// that uniquely identify this field in the document context (≥4 chars,
+// not common stopwords).
+const LOCATOR_STOPWORDS = new Set([
+  'laut', 'oder', 'eine', 'einer', 'einen', 'dieser', 'aus', 'der', 'die',
+  'das', 'des', 'dem', 'und', 'mit', 'von', 'zur', 'zum', 'als', 'auf',
+  'für', 'bei', 'wegen', 'nach', 'gemäß', 'sowie', 'ohne', 'gegen',
+  'nicht', 'sind', 'wurde', 'wurden', 'einer', 'einem',
+]);
+function locatorTokens(drucktext: string | undefined): string[] {
+  if (!drucktext) return [];
+  return drucktext.toLowerCase()
+    .split(/[\s.,;:/()|\-]+/)
+    .filter((t) => t.length >= 4 && !LOCATOR_STOPWORDS.has(t));
+}
+
+/**
+ * When the same value appears multiple times in the source (e.g. AG-Anteil
+ * AND AN-Anteil = 6.544,01 €), pick the occurrence whose preceding window
+ * contains the most field-specific keywords. Falls back to the first
+ * occurrence when no disambiguation signal is available.
+ */
+function pickBestOccurrence(
+  occurrences: Array<{ start: number; end: number }>,
+  meta: { drucktext?: string; vordruckzeile?: string } | undefined,
+  haystack: string,
+): { start: number; end: number } {
+  if (occurrences.length <= 1) return occurrences[0];
+  const tokens = locatorTokens(meta?.drucktext);
+  const vz = meta?.vordruckzeile?.trim();
+  // No locator signal at all → fall back to first occurrence.
+  if (tokens.length === 0 && !vz) return occurrences[0];
+  let best = occurrences[0];
+  let bestScore = -Infinity;
+  for (const occ of occurrences) {
+    // 300-char window BEFORE the value match — that's where the row-label sits.
+    const wStart = Math.max(0, occ.start - 300);
+    const window = haystack.slice(wStart, occ.start).toLowerCase();
+    let score = 0;
+    for (const tok of tokens) {
+      if (window.includes(tok)) score += 1;
+    }
+    // Strong bonus when the field's vordruckzeile marker sits in the window
+    // (e.g. " 23." or "| 23. |"). Pattern is forgiving of whitespace/pipes.
+    if (vz) {
+      const pat = new RegExp(`(^|[^0-9])${vz}\\.`);
+      if (pat.test(window)) score += 3;
+    }
+    // Tie-breaker: earlier wins by a hair (deterministic).
+    score -= occ.start / Math.max(1, haystack.length) * 0.001;
+    if (score > bestScore) { bestScore = score; best = occ; }
+  }
+  return best;
+}
+
+function findExactOrFuzzy(
+  needle: string,
+  haystack: string,
+  fuzziness: number,
+  meta?: { drucktext?: string; vordruckzeile?: string },
+): { start: number; end: number } | null {
   if (!needle) return null;
-  // 1. Exact substring (cheap and most common path)
-  const ix = haystack.indexOf(needle);
-  if (ix >= 0) return { start: ix, end: ix + needle.length };
+  // 1. ALL exact occurrences — pick the best by locator-context.
+  const occ = findAllOccurrences(needle, haystack);
+  if (occ.length > 0) return pickBestOccurrence(occ, meta, haystack);
   // 2. Fuzzy windowed scan — only for needles >= 4 chars (avoid junk matches)
   if (needle.length < 4) return null;
   const windowLen = needle.length;
@@ -224,13 +302,14 @@ export const spanLinkerStage = defineStage<SpanLinkerInput, SpanLinkerOutput, Sp
       // Container-aware: when we have datentyp metadata for this path, generate
       // type-aware search variants (e.g. for currency: "69291.8" → also "69.291,80",
       // "69.291,80 €"). Falls back to the plain stringified value otherwise.
-      const datentyp = fieldMeta[path]?.datentyp;
+      const meta = fieldMeta[path] ?? undefined;
+      const datentyp = meta?.datentyp;
       const variants = datentyp
         ? searchVariants(rawValue, datentyp)
         : [String(rawValue)];
       for (const v of variants) {
         const needle = normalizeValue(v, caseSensitive);
-        const f = findExactOrFuzzy(needle, normSource, fuzziness);
+        const f = findExactOrFuzzy(needle, normSource, fuzziness, meta);
         if (f) {
           const page = pageMap.pageOf(f.start);
           const snippet = includeSnippet

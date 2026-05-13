@@ -14,6 +14,7 @@ import { crossValidatorStage } from './quality/cross-validator.ts';
 import { containerFieldMapperStage } from './quality/container-field-mapper.ts';
 import { ocrConsensusMergeStage } from './ocr-consensus-merge.ts';
 import { autoSourceSplitStage } from './auto-source-split.ts';
+import { mistralSmallOcrStage } from './mistral-small-ocr.ts';
 
 export function registerAllStages(): void {
   registerStage(mistralOcrStage);
@@ -35,6 +36,7 @@ export function registerAllStages(): void {
   registerStage(ocrConsensusMergeStage);
   // Auto-source-split — adaptive page-fanout based on dynamic prompt budget
   registerStage(autoSourceSplitStage);
+  registerStage(mistralSmallOcrStage);
 }
 
 export {
