@@ -88,7 +88,7 @@ function attrEscape(s: string | null | undefined): string {
   return xmlEscape((s ?? '').toString());
 }
 
-function buildEricXml(canonical: Record<string, CanonicalValue>): string {
+export function buildEricXml(canonical: Record<string, CanonicalValue>): string {
   const lines: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Erklaerung art="ESt" schema="0711:elster:bmf:jahresdok-2024:v1">',

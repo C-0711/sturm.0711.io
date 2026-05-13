@@ -18,7 +18,7 @@
  */
 import { defineStage } from '../../../core/stage.ts';
 import { BmfMcpClient, canonicalLayerToElsterFelder, type BmfSteuerErgebnis } from '../../../lib/bmf-mcp-client.ts';
-import type { CanonicalValue } from './phase5-merge.ts';
+import { buildEricXml, type CanonicalValue } from './phase5-merge.ts';
 
 /** Map: MCP-Output-Key → ELSTER eCode + Drucktext + Anlage.
  *  Konservative Auswahl der wichtigsten BMF-Ausgabewerte. Erweitern wenn
@@ -42,6 +42,19 @@ export interface BmfRechnerComputeOutput {
   computed_layer: Record<string, CanonicalValue>;
   /** MCP-Originalantwort als Audit-Artefakt. */
   mcp_raw?: BmfSteuerErgebnis;
+  /** ERiC-XML re-emittiert nach BMF-Compute, enthält declared + computed. */
+  xml_payload?: string;
+  /** CanonicalLayer-Shape für den nachgelagerten Validator (src/lib/canonical-layer.ts).
+   *  codes-Map enthält die WIRE-Werte (normalized) als Primitives, nicht die
+   *  full CanonicalValue-Objekte. */
+  canonicalLayer?: {
+    schemaId: string;
+    version: string;
+    codes: Record<string, string | null>;
+    traces: Array<{ code: string; value: string | null; cascadeStage?: string; confidence?: number; reasoning?: string }>;
+    unmapped: never[];
+    validator: { passes: number; warnings: never[]; errors: never[] };
+  };
   stats: {
     declared_in: number;
     computed_out: number;
@@ -186,8 +199,49 @@ export const bmfRechnerComputeStage = defineStage<
     result.stats.computed_out = Object.keys(result.computed_layer).length;
     result.stats.ms = Date.now() - t0;
 
+    // Re-emit ERiC-XML mit declared+computed eCodes (phase5 hat nur declared).
+    // Überschreibt eric_payload.xml absichtlich — endgültiger Wahrheitsstand.
+    const xml = buildEricXml(result.canonical_layer);
+    result.xml_payload = xml;
+
+    // CanonicalLayer-Shape für den Validator: flatten CanonicalValue → normalized.
+    const flatCodes: Record<string, string | null> = {};
+    const traces: Array<{ code: string; value: string | null; cascadeStage?: string; confidence?: number; reasoning?: string }> = [];
+    for (const [eCode, cv] of Object.entries(result.canonical_layer)) {
+      flatCodes[eCode] = cv.normalized ?? cv.value ?? null;
+      traces.push({
+        code: eCode,
+        value: cv.normalized ?? cv.value ?? null,
+        cascadeStage: cv.origin,
+        confidence: cv.origin === 'REGEX_100%' ? 1.0 : cv.origin === 'REGEX_3F' ? 0.9 : cv.origin === 'BMF_RECHNER' ? 1.0 : 0.75,
+        reasoning: cv.formula_string || cv.evidence_line || undefined,
+      });
+    }
+    result.canonicalLayer = {
+      schemaId: 'elster',
+      version: 'Jahresdokumentation_10_2024',
+      codes: flatCodes,
+      traces,
+      unmapped: [],
+      validator: { passes: 0, warnings: [], errors: [] },
+    };
+
     await ctx.artifacts.write('bmf_rechner_response.json', mcpResponse);
     await ctx.artifacts.write('computed_layer.json', result.computed_layer);
+    await ctx.artifacts.write('eric_payload.xml', xml);
+    await ctx.artifacts.write('canonical_layer_final.json', result.canonical_layer);
+
+    // Health-Gate: warn loud wenn Coverage absurd niedrig
+    if (declaredCount < 5) {
+      ctx.emit('kpi_warning', {
+        stage: 'bmf-rechner-compute',
+        reason: 'low-extraction-coverage',
+        declared_count: declaredCount,
+        hint: 'phase1+phase3+phase4 lieferten <5 deklarierte eCodes. ' +
+              'BMF-Output ist mit so wenig Input fachlich unzuverlässig. ' +
+              'Prüfe felder-katalog, OCR-Qualität und Klassifizierung.',
+      });
+    }
 
     ctx.emit('bmf_rechner_done', {
       declared: declaredCount,

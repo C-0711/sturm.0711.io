@@ -399,7 +399,7 @@ export function buildElsterV4Workflow() {
       klassifizierung: {
         uses: 'elster/klassifizierung',
         config: {
-          llmFallbackWhen: 'zero-or-one',
+          llmFallbackWhen: 'zero',
         },
         inputs: {
           text: '${ocr.text}',
@@ -520,7 +520,7 @@ export function buildElsterV5Workflow() {
       },
       klassifizierung: {
         uses: 'elster/klassifizierung',
-        config: { llmFallbackWhen: 'zero-or-one' },
+        config: { llmFallbackWhen: 'zero' },
         inputs: { text: '${ocr.text}' },
       },
       felderKatalog: {
@@ -628,7 +628,7 @@ export function buildElsterV51Workflow() {
       },
       klassifizierung: {
         uses: 'elster/klassifizierung',
-        config: { llmFallbackWhen: 'zero-or-one' },
+        config: { llmFallbackWhen: 'zero' },
         inputs: { text: '${ocr.text}' },
       },
       felderKatalog: {
@@ -907,7 +907,7 @@ export function buildElsterV52Workflow() {
       },
       klassifizierung: {
         uses: 'elster/klassifizierung',
-        config: { llmFallbackWhen: 'zero-or-one' },
+        config: { llmFallbackWhen: 'zero' },
         inputs: { text: '${ocr.text}' },
       },
       felderKatalog: {
@@ -975,6 +975,11 @@ export function buildElsterV52Workflow() {
         },
         inputs: { canonical_layer: '${phase5Merge.canonical_layer}' },
       },
+      phase7Validator: {
+        uses: 'elster/validator',
+        config: { skipUnsupported: true },
+        inputs: { canonicalLayer: '${phase6BmfRechner.canonicalLayer}' },
+      },
     },
     edges: [
       ['ocr', 'klassifizierung'],
@@ -991,6 +996,7 @@ export function buildElsterV52Workflow() {
       ['phase1Regex', 'phase5Merge'],
       ['phase4Disambig', 'phase5Merge'],
       ['phase5Merge', 'phase6BmfRechner'],
+      ['phase6BmfRechner', 'phase7Validator'],
     ],
     containers: [
       {

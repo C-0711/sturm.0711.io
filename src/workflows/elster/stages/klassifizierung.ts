@@ -123,31 +123,68 @@ function runRegex(text: string, allowed: Set<string>): Record<string, number> {
   return hits;
 }
 
+/** Evidence-required LLM classify. Anders als zuvor ("welche Anlagen sind vorhanden?")
+ *  fordert dieser Prompt PRO Anlage eine wörtliche OCR-Zitatzeile. Server-side
+ *  filtern wir Anlagen deren `evidence`-Snippet NICHT als substring im OCR-Text
+ *  vorkommt — schließt LLM-Halluzinationen ("KAP weil Sparkasse erwähnt") aus. */
 async function llmClassify(
   text: string,
   anlagenNames: string[],
   model: string,
   temperature: number,
   signal?: AbortSignal,
-): Promise<string[]> {
+): Promise<{ names: string[]; rejected: Array<{ name: string; reason: string; evidence?: string }> }> {
   const prompt = [
-    'Du bekommst den Text einer gescannten Einkommensteuererklärung.',
-    'Welche der folgenden ELSTER-Anlagen kommen im Dokument vor?',
-    'Antworte ausschließlich mit einem JSON-Objekt der Form {"anlagen": ["NAME1", ...]}.',
-    'Gib nur Namen aus dieser Liste zurück:',
+    'Du bekommst den Text eines Steuerdokuments (OCR).',
+    'Für JEDE Anlage die TATSÄCHLICH im Dokument vorkommt, zitiere genau EINE',
+    'wörtliche Textstelle (10-200 Zeichen) die ihre Präsenz beweist.',
+    'WICHTIG: NUR Anlagen aufnehmen für die du eine echte Textstelle zitieren kannst.',
+    'KEINE Anlagen aufgrund von Vermutungen, Erwähnungen anderer Begriffe',
+    '(z.B. „Sparkasse" beweist NICHT Anlage KAP), oder Boilerplate.',
+    '',
+    'Antworte als JSON: {"anlagen": [{"name": "<CODE>", "evidence": "<exakte OCR-Zeile>"}, ...]}.',
+    'Erlaubte Anlagen-Codes:',
     anlagenNames.join(', '),
     '',
-    '--- Dokument ---',
+    '--- OCR-Volltext ---',
     text.slice(0, 30_000),
   ].join('\n');
 
-  const { parsed } = await chatJson<{ anlagen?: string[] }>(prompt, {
+  const { parsed } = await chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(prompt, {
     model,
     temperature,
     signal,
   });
+
   const allowed = new Set(anlagenNames);
-  return (parsed.anlagen ?? []).filter((n) => allowed.has(n));
+  const lowerText = text.toLowerCase();
+  const names: string[] = [];
+  const rejected: Array<{ name: string; reason: string; evidence?: string }> = [];
+
+  for (const entry of parsed.anlagen ?? []) {
+    if (!entry || typeof entry !== 'object') continue;
+    const name = String(entry.name ?? '').trim();
+    const evidence = typeof entry.evidence === 'string' ? entry.evidence.trim() : '';
+    if (!allowed.has(name)) {
+      rejected.push({ name, reason: 'name_not_in_catalog', evidence });
+      continue;
+    }
+    if (!evidence || evidence.length < 10) {
+      rejected.push({ name, reason: 'evidence_too_short', evidence });
+      continue;
+    }
+    // Substring-Check: das LLM-zitierte Snippet muss tatsächlich (oder mit
+    // moderater Toleranz) im OCR vorkommen. Wir prüfen die ersten 30 chars —
+    // genug Spezifität, tolerant gegenüber zitiertem Trailing-Whitespace.
+    const probe = evidence.toLowerCase().slice(0, 30).replace(/\s+/g, ' ').trim();
+    const probeFound = probe.length >= 6 && lowerText.includes(probe);
+    if (!probeFound) {
+      rejected.push({ name, reason: 'evidence_not_in_ocr', evidence });
+      continue;
+    }
+    names.push(name);
+  }
+  return { names, rejected };
 }
 
 export const klassifizierungStage = defineStage<
@@ -208,23 +245,36 @@ export const klassifizierungStage = defineStage<
     const regexNames = Object.keys(regexHits);
     ctx.emit('regex_hits', { anlagen: regexNames, counts: regexHits });
 
-    const mode = ctx.config.llmFallbackWhen ?? 'zero-or-one';
+    // Default verschärft: 'zero' statt 'zero-or-one' — LLM-Fallback NUR
+    // wenn der Regex GAR NICHTS findet. Bei 1+ Regex-Hits trauen wir der
+    // deterministischen Erkennung und vermeiden Phantom-Anlagen.
+    const mode = ctx.config.llmFallbackWhen ?? 'zero';
     const shouldLlm =
-      mode === 'always' || (mode === 'zero-or-one' && regexNames.length <= 1);
+      mode === 'always' ||
+      (mode === 'zero-or-one' && regexNames.length <= 1) ||
+      (mode === 'zero' && regexNames.length === 0);
 
     let llmNames: string[] = [];
+    let llmRejected: Array<{ name: string; reason: string; evidence?: string }> = [];
     let usedLlm = false;
     if (shouldLlm) {
       try {
-        llmNames = await llmClassify(
+        const r = await llmClassify(
           input.text,
           anlagenNames,
           ctx.config.model ?? 'mistral-small-latest',
           ctx.config.temperature ?? 0,
           ctx.signal,
         );
+        llmNames = r.names;
+        llmRejected = r.rejected;
         usedLlm = true;
-        ctx.emit('llm_hits', { anlagen: llmNames });
+        ctx.emit('llm_hits', { anlagen: llmNames, rejected: llmRejected.length });
+        if (llmRejected.length > 0) {
+          ctx.logger.info('LLM-Klassifizierung: rejected phantom anlagen', {
+            rejected: llmRejected,
+          });
+        }
       } catch (err) {
         ctx.logger.warn('LLM fallback failed, keeping regex-only result', {
           error: (err as Error).message,
@@ -237,6 +287,7 @@ export const klassifizierungStage = defineStage<
       erkannte_anlagen: union,
       regex_hits: regexHits,
       llm_hits: llmNames,
+      llm_rejected: llmRejected,
     });
 
     return {

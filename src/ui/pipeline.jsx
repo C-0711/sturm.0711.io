@@ -1592,16 +1592,24 @@ function canonicalSubmissionForms(value, datentyp, formatRegex) {
  * row.span.snippet = evidence_line von phase1Regex → besserer Search-Needle
  * als der bare value (currency-Werte sind oft mehrdeutig im Dokument).
  */
-function buildResultModelFromCanonical({ phase5Merge, workflow }) {
-  if (!phase5Merge || !phase5Merge.canonical_layer) return null;
-  const canonical = phase5Merge.canonical_layer; // { eCode → CanonicalValue }
-  const stats = phase5Merge.stats || {};
+function buildResultModelFromCanonical({ phase5Merge, bmfRechner, validator, workflow }) {
+  // Source-priority: phase6 (with BMF-computed) > phase5 (declared only).
+  // bmfRechner.canonical_layer enthält declared + computed; phase5 nur declared.
+  const source = bmfRechner?.canonical_layer ? bmfRechner : phase5Merge;
+  if (!source || !source.canonical_layer) return null;
+  const canonical = source.canonical_layer;
+  const stats = phase5Merge?.stats || {};
+
   const rows = [];
   for (const [eCode, cv] of Object.entries(canonical)) {
-    const path = `${cv.anlage || 'X'}.${eCode}`;
+    const isComputed = cv.origin === 'BMF_RECHNER';
+    // Computed values get their own group at the top of the result. Declared
+    // values stay grouped by Anlage like before.
+    const group = isComputed ? '_bmf_rechner' : (cv.anlage || 'X');
+    const path = `${group}.${eCode}`;
     rows.push({
       path,
-      group: cv.anlage || 'X',
+      group,
       leaf: eCode,
       label: cv.drucktext || eCode,
       value: cv.value,
@@ -1617,30 +1625,62 @@ function buildResultModelFromCanonical({ phase5Merge, workflow }) {
       span: cv.evidence_line ? { snippet: cv.evidence_line, page: null, origin: cv.origin } : null,
       issues: [],
       violations: [],
-      matchMethod: cv.origin, // REGEX_100% | REGEX_3F | LLM_FSM
+      matchMethod: cv.origin, // REGEX_100% | REGEX_3F | LLM_FSM | BMF_RECHNER
+      // Audit-Trail-Felder für BMF_RECHNER-Origin (vom phase6-Stage gesetzt)
+      rechnerId: cv.rechner_id || null,
+      formulaString: cv.formula_string || null,
+      paragraphEstg: cv.paragraph_estg || null,
+      inputsUsed: cv.inputs_used || null,
       anleitung: null,
     });
   }
-  // Group by Anlage
+  // Group by Anlage (BMF first via _bmf_rechner key); validator-issues anschließen
   const groupsMap = new Map();
+  // Ensure BMF computed group renders first if present
   for (const row of rows) {
     const arr = groupsMap.get(row.group) || [];
     arr.push(row);
     groupsMap.set(row.group, arr);
   }
-  const groups = Array.from(groupsMap.entries()).map(([key, rs]) => ({
-    key, label: key, rows: rs,
-  }));
+  const groups = Array.from(groupsMap.entries())
+    .sort((a, b) => {
+      if (a[0] === '_bmf_rechner') return -1;
+      if (b[0] === '_bmf_rechner') return 1;
+      return a[0].localeCompare(b[0]);
+    })
+    .map(([key, rs]) => ({
+      key,
+      label: key === '_bmf_rechner' ? 'Berechnete Werte (Lane-1 BMF)' : key,
+      rows: rs,
+    }));
+
+  // Validator-Output aus phase7Validator.stats (rulesFired/passed/skipped/...)
+  const validatorStats = validator?.stats ?? null;
+  const validatorIssues = bmfRechner?.canonicalLayer?.validator
+    ? bmfRechner.canonicalLayer.validator
+    : null;
+  // Phase7 returns updated layer with validator field populated — prefer that.
+  const validatorBox = validator?.canonicalLayer?.validator ?? validatorIssues ?? null;
+
+  const computedCount = rows.filter(r => r.matchMethod === 'BMF_RECHNER').length;
+  const declaredCount = rows.length - computedCount;
+
   return {
     rows,
     groups,
     meta: {
       totalFields: rows.length,
+      declaredCount,
+      computedCount,
       spanLinked: rows.filter(r => r.span).length,
-      flagged: 0,
-      fromRegex: stats.from_regex ?? rows.filter(r => r.matchMethod !== 'LLM_FSM').length,
+      flagged: validatorBox?.warnings?.length ?? 0,
+      errors: validatorBox?.errors?.length ?? 0,
+      fromRegex: stats.from_regex ?? rows.filter(r => r.matchMethod !== 'LLM_FSM' && r.matchMethod !== 'BMF_RECHNER').length,
       fromLlm: stats.from_llm ?? rows.filter(r => r.matchMethod === 'LLM_FSM').length,
-      source: 'phase5-merge',
+      fromBmf: computedCount,
+      source: bmfRechner ? 'phase6-bmf' : 'phase5-merge',
+      validatorStats,
+      validator: validatorBox,
       dokumenttypId: null,
       workflowId: workflow?.id || null,
     },
@@ -2904,6 +2944,8 @@ function App() {
     crossValidator: null,
     critic: null,
     phase5Merge: null, // v5/v5.1: canonical_layer source for the Result tab
+    bmfRechner: null,  // v5.2: declared + BMF-computed canonical_layer
+    validator: null,   // v5.2 phase7: ELSTER Hinweisregeln output
   });
   // Per-stage raw outputs (lazy-fetched after a stage finishes). Used by
   // the field-flow counter on each StageNode (in → out) and could be reused
@@ -3022,6 +3064,11 @@ function App() {
     // v5/v5.1: phase5-merge produces the canonical_layer for citation-verify
     const phase5Stage = workflow.stages.find(s => s.uses === 'elster-v5/phase5-merge');
     fetchArtifact(phase5Stage, 'phase5Merge');
+    // v5.2: BMF-Rechner-Output (canonical_layer mit computed eCodes) + Validator
+    const bmfStage = workflow.stages.find(s => s.uses === 'elster-v5_2/bmf-rechner-compute');
+    fetchArtifact(bmfStage, 'bmfRechner');
+    const validatorStage = workflow.stages.find(s => s.uses === 'elster/validator');
+    fetchArtifact(validatorStage, 'validator');
     // Per-stage outputs for the field-flow counter on each node. Only pull
     // for stages that finished OK and we haven't fetched yet. Loop is cheap
     // for small graphs; for big ones the natural state-tick re-entry
@@ -3072,9 +3119,11 @@ function App() {
         kpiReport,
       });
     }
-    if (qualityArtifacts.phase5Merge) {
+    if (qualityArtifacts.phase5Merge || qualityArtifacts.bmfRechner) {
       return buildResultModelFromCanonical({
         phase5Merge: qualityArtifacts.phase5Merge,
+        bmfRechner: qualityArtifacts.bmfRechner,
+        validator: qualityArtifacts.validator,
         workflow,
       });
     }
@@ -3285,7 +3334,7 @@ function App() {
     setRunning(true); setStatus('running');
     setRunId(null); setEvents([]); setStageStates({}); setStageKpis({});
     setBranchStates({}); setKpiReport(null); setFanoutOutput(null);
-    setQualityArtifacts({ fieldMapper: null, spanLinker: null, crossValidator: null, critic: null, phase5Merge: null });
+    setQualityArtifacts({ fieldMapper: null, spanLinker: null, crossValidator: null, critic: null, phase5Merge: null, bmfRechner: null, validator: null });
     setStageOutputs({});
 
     const onEvent = (name, env) => {

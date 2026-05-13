@@ -77,8 +77,15 @@ export interface Phase1RegexConfig {
    *  Drucktexts. Default true. Mindest-Länge für 3-Faktor: minDrucktextLength3F. */
   threeFaktorFallback?: boolean;
   /** Mindestlänge des Drucktexts für 3-Faktor-Fallback (ambig-resistent).
-   *  Default 12 — z.B. "Bruttoarbeitslohn", "Identifikationsnummer". */
+   *  Default 8 — kurz genug für "Lohnsteuer" (10) und "Konfession" (10),
+   *  lang genug um false positives wie "Art" / "Nr." zu blocken.
+   *  Word-Boundary-Matching kompensiert die niedrigere Grenze. */
   minDrucktextLength3F?: number;
+  /** Bei mehreren Atomen mit identischem (drucktext+vordruckzeile+datentyp):
+   *  alle matchen statt nur das erste (Default true). BMF hat Duplikate
+   *  wie E0200201/202/203/204 für "Bruttoarbeitslohn" – jede Variante
+   *  bezieht sich auf einen anderen Kontext (Person A/B, sum/einz). */
+  matchDuplicateECodes?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -87,6 +94,39 @@ export interface Phase1RegexConfig {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Build a drucktext-Regex that matches as a "label" — preceded by start-of-
+ *  line, whitespace, table-pipe, or a digit-dot (like "3."). Avoids matching
+ *  drucktext as a fragment inside another word.
+ *  Example: drucktext "Lohnsteuer" matches "| Lohnsteuer |" and "4. Lohnsteuer"
+ *  but NOT "Bauernlohnsteuer" (theoretically). */
+function buildDrucktextRegex(drucktext: string): RegExp {
+  // Tolerate single trailing punctuation in stored drucktexts (some BMF
+  // strings end in ":" or "-").
+  const cleaned = drucktext.replace(/[\s:.;,-]+$/, '');
+  const escaped = escapeRegex(cleaned);
+  // Boundary: start-of-string, whitespace, pipe, dot+space (table prefix
+  // like "4. Lohnsteuer"), or word boundary fallback.
+  return new RegExp(`(?:^|[\\s|]|\\d+\\.\\s)${escaped}\\b`, 'i');
+}
+
+/** Markdown-table-aware extraction: for lines of shape
+ *    `| <cellPrefix> | <drucktext> | <value> |`
+ *  return the cell content AFTER the drucktext-cell, regardless of where
+ *  drucktextEnd lands. Falls back to slice-after-drucktext for non-table lines. */
+function extractTableCellAfterDrucktext(line: string, drucktextEnd: number): string | null {
+  if (!line.includes('|')) return null;
+  // Find the cell boundary AFTER drucktextEnd: the next "|" delimits the
+  // drucktext-cell; the cell that follows is the value-cell.
+  const sliceFromDt = line.slice(drucktextEnd);
+  const firstPipeAfter = sliceFromDt.indexOf('|');
+  if (firstPipeAfter < 0) return null;
+  const rest = sliceFromDt.slice(firstPipeAfter + 1);
+  // Value cell ends at next "|" or end-of-line
+  const nextPipe = rest.indexOf('|');
+  const valueCell = (nextPipe < 0 ? rest : rest.slice(0, nextPipe)).trim();
+  return valueCell.length > 0 ? valueCell : null;
 }
 
 /** Versucht in einer OCR-Zeile einen typ-passenden Wert nach dem Drucktext zu finden. */
@@ -115,16 +155,56 @@ function extractRawValueAfter(line: string, drucktextEnd: number, datentyp: Anla
   }
 }
 
-/** Validiert: normalized erfüllt formatRegex + Längen-Grenzen. */
-function passesFormat(normalized: string, atom: AnlagenFeld): boolean {
-  if (atom.minLaenge !== undefined && normalized.length < atom.minLaenge) return false;
-  if (atom.maxLaenge !== undefined && normalized.length > atom.maxLaenge) return false;
-  try {
-    return new RegExp(atom.formatRegex).test(normalized);
-  } catch {
-    return false;
-  }
+/** BMF-formatRegex enthält Perl-Style `\Q...\E` (literal-Block) für Enum-
+ *  Felder (z.B. Konfession `\Q11\E|\Q03\E|…`). JS-Regex versteht das nicht
+ *  und matched es wörtlich. Wir konvertieren zu `(?:11|03|…)`. */
+function normalizeFormatRegex(re: string): string {
+  return re.replace(/\\Q([\s\S]*?)\\E/g, (_, inner) =>
+    inner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  );
 }
+
+/** BMF hat zwei Currency-Wire-Formats nebeneinander:
+ *  • Cents-Form  (E0200201 etc.):  "^(?=.{1,12}$)(?!0\d)\d{1,12}$"          → 753200
+ *  • DE-Decimal  (E0200301 etc.):  "^(?=.{4,15}$)(?!0\d)\d{1,12}(,\d{2,2})$" → 7532,00
+ *  Wir geben dem Format-Check beide Kandidaten und nehmen den der passt. */
+function currencyCandidates(centsNormalized: string): string[] {
+  if (!/^-?\d+$/.test(centsNormalized)) return [centsNormalized];
+  const neg = centsNormalized.startsWith('-');
+  const abs = neg ? centsNormalized.slice(1) : centsNormalized;
+  if (abs.length < 1) return [centsNormalized];
+  const euros = abs.length > 2 ? abs.slice(0, -2) : '0';
+  const cents = abs.length > 2 ? abs.slice(-2) : abs.padStart(2, '0');
+  const deDec = `${neg ? '-' : ''}${euros},${cents}`;
+  return [centsNormalized, deDec];
+}
+
+/** Validiert: normalized erfüllt formatRegex + Längen-Grenzen.
+ *  Gibt die akzeptierte Form zurück (manchmal != input wenn das Atom DE-
+ *  Decimal statt Cents verlangt). Null = passt nicht. */
+function passesFormatWithCoercion(
+  normalized: string,
+  atom: AnlagenFeld,
+): string | null {
+  const safeRegexSource = normalizeFormatRegex(atom.formatRegex);
+  let re: RegExp;
+  try { re = new RegExp(safeRegexSource); } catch { return null; }
+  const candidates = atom.datentyp === 'currency'
+    ? currencyCandidates(normalized)
+    : [normalized];
+  for (const c of candidates) {
+    if (atom.minLaenge !== undefined && c.length < atom.minLaenge) continue;
+    if (atom.maxLaenge !== undefined && c.length > atom.maxLaenge) continue;
+    if (re.test(c)) return c;
+  }
+  return null;
+}
+
+/** Legacy alias for callers that only need boolean. */
+function passesFormat(normalized: string, atom: AnlagenFeld): boolean {
+  return passesFormatWithCoercion(normalized, atom) !== null;
+}
+void passesFormat; // wird vom externen Code referenziert; kein toter Export
 
 // ─────────────────────────────────────────────────────────────────────────
 // Stage
@@ -157,7 +237,11 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
     const cfg = ctx.config ?? {};
     const minLen = cfg.minDrucktextLength ?? 5;
     const threeFaktor = cfg.threeFaktorFallback ?? true;
-    const minLen3F = cfg.minDrucktextLength3F ?? 12;
+    const minLen3F = cfg.minDrucktextLength3F ?? 8;
+    // Duplikat-eCode-Match ist heute strukturell schon gegeben (jeder eCode hat
+    // seine eigene Schleife). Flag bleibt für zukünftige Dedup-Variante reserviert.
+    const _matchDuplicates = cfg.matchDuplicateECodes ?? true;
+    void _matchDuplicates;
 
     if (typeof input.text !== 'string' || input.text.length === 0) {
       throw new Error('phase1-regex: input.text required');
@@ -180,69 +264,65 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
           continue;
         }
 
-        const druckRx = new RegExp(escapeRegex(feld.drucktext), 'i');
+        // Word-boundary-Drucktext-Match (verhindert Substring-False-Positives:
+        // "Lohnsteuer" matched nicht mehr versehentlich in "Lohnsteuerbescheinigung").
+        // Plus: Markdown-Table-Cell-Aware value extraction für VaSt-Layouts.
+        const druckRx = buildDrucktextRegex(feld.drucktext);
         const hasZeile = feld.vordruckzeile && /^\d+$/.test(feld.vordruckzeile);
         const zeileRx = hasZeile ? new RegExp(`\\b${feld.vordruckzeile}\\b`) : null;
-        let hit: Phase1RegexHit | null = null;
 
-        // Pass A — 4-Faktor (streng): vordruckzeile + drucktext + value + format
-        if (hasZeile && zeileRx) {
-          for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (line.length === 0) continue;
-            if (!zeileRx.test(line)) continue;
-            const m = druckRx.exec(line);
-            if (!m) continue;
-            const druckEnd = m.index + m[0].length;
-            const rawValue = extractRawValueAfter(line, druckEnd, feld.datentyp);
-            if (!rawValue) continue;
-            const normalized = normalizeForElster(rawValue, feld.datentyp);
-            if (normalized === null) continue;
-            if (!passesFormat(normalized, feld)) continue;
-            hit = {
-              eCode: feld.eCode,
-              value: rawValue,
-              normalized,
-              origin: 'REGEX_100%',
-              evidence_line: line,
-              kontextPath: feld.einkunftsart,
-              anlage,
-              drucktext: feld.drucktext,
-              vordruckzeile: feld.vordruckzeile,
-              datentyp: feld.datentyp,
-            };
-            break;
+        /** Try one line, return hit if matches all factors (or null). */
+        const tryLine = (rawLine: string, requireZeile: boolean, origin: 'REGEX_100%' | 'REGEX_3F'): Phase1RegexHit | null => {
+          const line = rawLine.trim();
+          if (line.length === 0) return null;
+          if (requireZeile && zeileRx && !zeileRx.test(line)) return null;
+          const m = druckRx.exec(line);
+          if (!m) return null;
+          const druckEnd = m.index + m[0].length;
+          // First try table-cell-aware extraction (handles VaSt "| label | value |")
+          // then fall back to slice-after-drucktext.
+          let rawValue: string | null = extractTableCellAfterDrucktext(line, druckEnd);
+          if (rawValue) {
+            // Validate it's typgerecht — re-run the type-regex on the cell content.
+            const m2 = extractRawValueAfter(`X ${rawValue}`, 2, feld.datentyp);
+            rawValue = m2 ?? rawValue;
+          } else {
+            rawValue = extractRawValueAfter(line, druckEnd, feld.datentyp);
+          }
+          if (!rawValue) return null;
+          const baseNormalized = normalizeForElster(rawValue, feld.datentyp);
+          if (baseNormalized === null) return null;
+          // Coerce to the atom's expected wire format (cents OR DE-decimal)
+          // depending on what its formatRegex accepts; also fixes \Q…\E.
+          const accepted = passesFormatWithCoercion(baseNormalized, feld);
+          if (accepted === null) return null;
+          return {
+            eCode: feld.eCode,
+            value: rawValue,
+            normalized: accepted,
+            origin,
+            evidence_line: line,
+            kontextPath: feld.einkunftsart,
+            anlage,
+            drucktext: feld.drucktext,
+            vordruckzeile: feld.vordruckzeile,
+            datentyp: feld.datentyp,
+          };
+        };
+
+        let hit: Phase1RegexHit | null = null;
+        // Pass A — 4-Faktor (streng)
+        if (hasZeile) {
+          for (const rl of lines) {
+            const h = tryLine(rl, true, 'REGEX_100%');
+            if (h) { hit = h; break; }
           }
         }
-
-        // Pass B — 3-Faktor (Fallback für Quellbelege ohne ELSTER-Zeilenanker):
-        // nur Drucktext + Value + Format. Erfordert genug langen, ambig-resistenten
-        // Drucktext (Default ≥12 Zeichen), z.B. "Bruttoarbeitslohn".
+        // Pass B — 3-Faktor (Quellbelege ohne ELSTER-Zeilenanker)
         if (!hit && threeFaktor && feld.drucktext.length >= minLen3F) {
-          for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (line.length === 0) continue;
-            const m = druckRx.exec(line);
-            if (!m) continue;
-            const druckEnd = m.index + m[0].length;
-            const rawValue = extractRawValueAfter(line, druckEnd, feld.datentyp);
-            if (!rawValue) continue;
-            const normalized = normalizeForElster(rawValue, feld.datentyp);
-            if (normalized === null) continue;
-            if (!passesFormat(normalized, feld)) continue;
-            hit = {
-              eCode: feld.eCode,
-              value: rawValue,
-              normalized,
-              origin: 'REGEX_3F',
-              evidence_line: line,
-              kontextPath: feld.einkunftsart,
-              anlage,
-              drucktext: feld.drucktext,
-              vordruckzeile: feld.vordruckzeile,
-              datentyp: feld.datentyp,
-            };
-            break;
+          for (const rl of lines) {
+            const h = tryLine(rl, false, 'REGEX_3F');
+            if (h) { hit = h; break; }
           }
         }
 
