@@ -117,9 +117,35 @@ export const bmfRechnerComputeStage = defineStage<
       stats: { declared_in: declaredCount, computed_out: 0, fall_id: null, ms: 0 },
     };
 
+    // Always emit a valid canonicalLayer-shape, even on early return (validator
+    // downstream crasht sonst). Wird im success-path mit traces gefüllt.
+    const ensureCanonicalLayer = () => {
+      const flatCodes: Record<string, string | null> = {};
+      const traces: Array<{ code: string; value: string | null; cascadeStage?: string; confidence?: number; reasoning?: string }> = [];
+      for (const [eCode, cv] of Object.entries(result.canonical_layer)) {
+        flatCodes[eCode] = cv.normalized ?? cv.value ?? null;
+        traces.push({
+          code: eCode,
+          value: cv.normalized ?? cv.value ?? null,
+          cascadeStage: cv.origin,
+          confidence: cv.origin === 'REGEX_100%' ? 1.0 : cv.origin === 'REGEX_3F' ? 0.9 : cv.origin === 'BMF_RECHNER' ? 1.0 : 0.75,
+          reasoning: cv.formula_string || cv.evidence_line || undefined,
+        });
+      }
+      result.canonicalLayer = {
+        schemaId: 'elster',
+        version: 'Jahresdokumentation_10_2024',
+        codes: flatCodes,
+        traces,
+        unmapped: [],
+        validator: { passes: 0, warnings: [], errors: [] },
+      };
+    };
+
     if (declaredCount === 0) {
       ctx.emit('bmf_rechner_skip', { reason: 'empty canonical_layer' });
       result.stats.ms = Date.now() - t0;
+      ensureCanonicalLayer();
       return result;
     }
 
@@ -144,6 +170,7 @@ export const bmfRechnerComputeStage = defineStage<
       ctx.emit('kpi_warning', { stage: 'bmf-rechner-compute', reason: 'mcp-unreachable', error: msg });
       result.stats.error = msg;
       result.stats.ms = Date.now() - t0;
+      ensureCanonicalLayer();
       if (failHard) throw err;
       return result;
     }
@@ -153,6 +180,7 @@ export const bmfRechnerComputeStage = defineStage<
       ctx.emit('kpi_warning', { stage: 'bmf-rechner-compute', reason: 'mcp-error', error: msg });
       result.stats.error = msg;
       result.stats.ms = Date.now() - t0;
+      ensureCanonicalLayer();
       if (failHard) throw new Error(msg);
       return result;
     }
@@ -204,27 +232,8 @@ export const bmfRechnerComputeStage = defineStage<
     const xml = buildEricXml(result.canonical_layer);
     result.xml_payload = xml;
 
-    // CanonicalLayer-Shape für den Validator: flatten CanonicalValue → normalized.
-    const flatCodes: Record<string, string | null> = {};
-    const traces: Array<{ code: string; value: string | null; cascadeStage?: string; confidence?: number; reasoning?: string }> = [];
-    for (const [eCode, cv] of Object.entries(result.canonical_layer)) {
-      flatCodes[eCode] = cv.normalized ?? cv.value ?? null;
-      traces.push({
-        code: eCode,
-        value: cv.normalized ?? cv.value ?? null,
-        cascadeStage: cv.origin,
-        confidence: cv.origin === 'REGEX_100%' ? 1.0 : cv.origin === 'REGEX_3F' ? 0.9 : cv.origin === 'BMF_RECHNER' ? 1.0 : 0.75,
-        reasoning: cv.formula_string || cv.evidence_line || undefined,
-      });
-    }
-    result.canonicalLayer = {
-      schemaId: 'elster',
-      version: 'Jahresdokumentation_10_2024',
-      codes: flatCodes,
-      traces,
-      unmapped: [],
-      validator: { passes: 0, warnings: [], errors: [] },
-    };
+    // CanonicalLayer-Shape für den Validator (helper handles both paths)
+    ensureCanonicalLayer();
 
     await ctx.artifacts.write('bmf_rechner_response.json', mcpResponse);
     await ctx.artifacts.write('computed_layer.json', result.computed_layer);

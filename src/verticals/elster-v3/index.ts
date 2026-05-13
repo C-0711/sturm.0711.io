@@ -968,7 +968,9 @@ export function buildElsterV52Workflow() {
       phase6BmfRechner: {
         uses: 'elster-v5_2/bmf-rechner-compute',
         config: {
-          mcpUrl: 'http://localhost:12010/mcp',
+          // mcpUrl bewusst NICHT hardcoded: lass env BMF_MCP_URL bestimmen.
+          // Lokal (Mac dev): http://localhost:12010/mcp (via SSH-Tunnel)
+          // Prod (Docker):  http://host.docker.internal:12010/mcp (via add-host)
           veranlagungsjahr: 2024,
           timeoutMs: 15_000,
           failHard: false,
