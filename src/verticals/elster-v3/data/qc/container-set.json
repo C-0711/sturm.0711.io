@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "baseDir": ".",
+  "_note": "Locked version-triple this sturm build ships. Loader (src/lib/quantum-container-loader.ts) verifies cross-refs at startup.",
+  "catalog": { "type": "catalog", "version": "v1.0.0" },
+  "encoder": { "type": "encoder", "version": "v0.6.0" },
+  "context": { "type": "context", "version": "v1.0.0" }
+}

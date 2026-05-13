@@ -1,0 +1,32 @@
+{
+  "id": "0711:elster:bmf:jahresdok-2024:v1",
+  "schema_version": 5,
+  "version": "1.0.0",
+  "type": "catalog",
+  "namespace": "0711",
+  "identifier": "elster:bmf:jahresdok-2024",
+  "display_name": "ELSTER eCode Catalog (v5.5-clean, citation_excerpt = value for all atoms)",
+  "description": "2287 ELSTER eCodes from BMF Jahresdokumentation 10/2024. Cleaned to v5.5 baseline: all citation_excerpts equal their value. Per-atom disambiguation hints live separately in 0711:elster:context:citation-excerpts:v1.",
+  "created_at": "2026-05-13T00:00:00Z",
+  "lockState": "draft",
+  "qcp_version": "1.0",
+  "data": {
+    "atoms_count": 2287,
+    "catalog_version": "Jahresdokumentation_10_2024 1.xml (v5.5-clean)",
+    "anlagen_count": 35
+  },
+  "artifacts": {
+    "data/atoms.json": {
+      "sha256": "6f23768b6c438310d8c54a32d3f334868ac7835f9d1b191f3f5ce9a33c413415",
+      "bytes": 2703406
+    }
+  },
+  "blueprint_repo": "github.com/C-0711/Quantum-Container",
+  "source_repo": "github.com/C-0711/Quantum-Container-Elster",
+  "source_tag": "catalog-v1.0.0",
+  "signature": null,
+  "issuer_fingerprint": null,
+  "anchor_block_number": null,
+  "anchor_tx_hash": null,
+  "anchor_chain": null
+}

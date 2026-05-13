@@ -73,14 +73,29 @@ function packIndicesBigEndian(indices: Uint8Array, b: number): Uint8Array {
 
 function atomText(a: any): string {
   // The embeddable string. EmbeddingGemma's document prefix wraps this:
-  //   `title: none | text: <atomText>`.
-  // We pack the user-visible bezeichnung + drucktext (form label) which
-  // gives the model both the canonical identifier and the field's printed
-  // name — important for German tax forms where Drucktext is what users
-  // and OCR actually see.
+  //   `title: <atomTitle> | text: <atomText>`.
+  //
+  // v2 (post-bench-2026-05): the original packed only `bezeichnung — drucktext`
+  // which collapses 1319/2287 atoms (57%) to identical embeddings whenever
+  // multiple eCodes share a drucktext + anlage (e.g. E0100081 vs E0100082 both
+  // "Identifikationsnummer" in ESt1A — same vector, cascade cannot disambiguate).
+  // tieRecall@10 was 0.76 because of this collapse.
+  //
+  // We now include vordruckzeile + kontextPaths[0] + the eCode itself, so each
+  // atom gets a unique semantic anchor. The trailing eCode token is the
+  // canonical content-addressed identifier — even if all human-readable fields
+  // collide between two atoms, the eCode still differs.
   const dt = a.metadata?.drucktext;
   const base = a.value ?? a.citation_excerpt ?? a.field_name;
-  return dt && dt !== base ? `${base} — ${dt}` : base;
+  const labelStr = dt && dt !== base ? `${base} — ${dt}` : base;
+  const zeile = a.metadata?.vordruckzeile;
+  const ctx = (a.metadata?.kontextPaths ?? [])[0];
+  const ecode = a.field_name;
+  const parts = [labelStr];
+  if (zeile) parts.push(`(Zeile ${zeile})`);
+  if (ctx) parts.push(`[${ctx}]`);
+  if (ecode) parts.push(ecode);
+  return parts.join(' ');
 }
 
 function atomTitle(a: any): string | undefined {

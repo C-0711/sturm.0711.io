@@ -25,8 +25,10 @@ RUN npm ci --no-audit --no-fund
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-# git is needed at runtime: simple-git invokes the binary for bare-repo ops.
-RUN apk add --no-cache git tini \
+# git: simple-git invokes the binary for bare-repo ops.
+# poppler-utils: pdftotext (pdf-text-layer stage) + pdftoppm (rasterization
+#   for lighton-ocr, paddleocr-vl, mistral-small-ocr).
+RUN apk add --no-cache git tini poppler-utils \
  && addgroup -S sturm \
  && adduser  -S -G sturm sturm
 

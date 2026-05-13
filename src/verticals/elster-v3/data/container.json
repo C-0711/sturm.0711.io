@@ -6,10 +6,10 @@
   "namespace": "elster",
   "identifier": "jahresdok-2024",
   "display_name": "ELSTER Jahresdokumentation 2024 (10/2024)",
-  "description": "2287 eCodes across 35 Anlagen, sourced from official BMF Jahresdokumentation_10_2024.xml.",
-  "catalog_version": "Jahresdokumentation_10_2024 1.xml",
+  "description": "2287 eCodes across 35 Anlagen, sourced from official BMF Jahresdokumentation_10_2024.xml. v5.6: citation_excerpt curated for Stammdaten (Person A/B disambig) and LStB-Bescheinigungs-Modi (Sum 1-5, Einz 1-5, Sum 6+, Einz 6+). atom_id+value unchanged → merkle_root unverändert.",
+  "catalog_version": "Jahresdokumentation_10_2024 1.xml (citation-curated v5.6)",
   "created_at": "2026-05-06T08:00:36.938Z",
-  "updated_at": "2026-05-06T08:00:36.938Z",
+  "updated_at": "2026-05-13T09:30:00.000Z",
   "stats": {
     "atoms_total": 2287,
     "anlagen_count": 35,
@@ -21,7 +21,7 @@
     }
   },
   "merkle_root": "66e8ddf58ea9861de6bd8cb9051e32ec3c44d0a07be9c013296a3bc1b76157bd",
-  "container_sha256": "de938e468a7d85488906bf88af067160edeb08dc52d4399e2416df6760652bcc",
+  "container_sha256": "a742aa348fea8b9f00f4a5f8070e21f6ffacd4cc628aefa101a56781843b89a3",
   "embeddings": {
     "model": "bge-m3",
     "provider": "ollama",

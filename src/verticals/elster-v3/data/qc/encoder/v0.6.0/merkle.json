@@ -1,0 +1,43 @@
+{
+  "algorithm": "sha256",
+  "encoding": "hex",
+  "leaves": [
+    {
+      "name": "embeddings.gemma4.bench.json",
+      "sha256": "106f8489e811fd94976c795daa8deed03914f3572564d7de41badd2a6dc93537"
+    },
+    {
+      "name": "embeddings.gemma4.cascade.json",
+      "sha256": "8d4f5adf5a7988ca9d007339a25bbe6b2b5d6d264cd3424f9d978466c2b255d6"
+    },
+    {
+      "name": "embeddings.gemma4.fp32.bin",
+      "sha256": "0e77570259255f6c2a32208cedb4db77a6d5444139c79e9594e9d4b54e1a66c7"
+    },
+    {
+      "name": "embeddings.gemma4.meta.json",
+      "sha256": "d9451f113e674b955c8108a4b95f13ea7f4bd8717afc6d9e0b82fefdbae6fc4c"
+    },
+    {
+      "name": "embeddings.gemma4.projection_seed.bin",
+      "sha256": "e8a4b2ee7ede79a3afb332b5b6cc3d952a65fd8cffb897f5d18016577c33d7cc"
+    },
+    {
+      "name": "embeddings.gemma4.tq-d128-b2.bin",
+      "sha256": "4db65bac91dde3bd52d02c711ff1eb40060cbf0385b9d802cef8e46c5749f701"
+    },
+    {
+      "name": "embeddings.gemma4.tq-d256-b3.bin",
+      "sha256": "11899e4996610b9b5827e25ff170f94285aecaae0faa8faf901b7683fc5ec860"
+    },
+    {
+      "name": "embeddings.gemma4.tq-d512-b3.bin",
+      "sha256": "6aaffca9dd94459300b48d07e658f2385ef4c7f45c1d78fe32e83abff5665a86"
+    },
+    {
+      "name": "embeddings.gemma4.tq-d768-b3.bin",
+      "sha256": "e5b2b82f084a654ea9900bbd4fefa5183f18c849ad07341e6bfbab2beb19bf62"
+    }
+  ],
+  "root": "8e7028ae70fb425f0b582f27041783cef9721aa5629049b7446088f622b18ed5"
+}

@@ -6,16 +6,26 @@
  * German included), 2K-token context, Matryoshka output (768 → 512 → 256 → 128).
  * Top of the MTEB <500M class.
  *
- * Why Ollama, not vLLM:
- *   • Already running on H200V :11434 (memory: reference_h200v.md).
- *   • Fits in GPU 1's 3.9 GB free VRAM headroom without re-sharding Gemma-4.
- *   • Same client shape as the existing `nomic-embed-text` path.
+ * Why Ollama (and ONLY Ollama):
+ *   • The v0.5.8 catalog was built against Ollama's BF16 GGUF variant
+ *     (`embeddinggemma:300m-bf16`, gemma3 architecture, pooling_type=1=MEAN).
+ *   • Ollama's llama.cpp tokenizer auto-prepends BOS + appends EOS
+ *     (`add_bos_token=true, add_eos_token=true`). A vLLM-served instance of
+ *     the same `google/embeddinggemma-300m` does NOT add those by default,
+ *     so the same input text produces different token sequences and
+ *     therefore different embeddings — cosines drop ~0.2 across the board.
+ *   • Bottom line: catalog and query embed MUST come from the same backend.
+ *     The catalog is sealed at v0.5.8; query side stays on Ollama.
  *
- * One-time host setup: `ollama pull embeddinggemma`.
+ * Setup (one-time on H200V):
+ *   ssh h200v 'curl -X POST localhost:11434/api/pull -d "{\"name\":\"embeddinggemma\"}"'
+ *
+ * Container path: `OLLAMA_URL=http://host.docker.internal:11434` in env.
  */
 
 const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 const DEFAULT_MODEL = process.env.EMBED_MODEL ?? 'embeddinggemma';
+const DEFAULT_FETCH_TIMEOUT_MS = Number(process.env.EMBED_FETCH_TIMEOUT_MS ?? 30000);
 /** Native EmbeddingGemma dim. Matryoshka truncation to 512/256/128 is allowed. */
 export const EMBEDDINGGEMMA_DIM = 768;
 
@@ -28,13 +38,13 @@ export interface GemmaEmbedOptions {
   /** Truncate input to model context length instead of erroring. Default true. */
   truncate?: boolean;
   /**
-   * Force CPU inference (`options.num_gpu = 0`). Needed on H200V right now —
-   * vLLM Gemma-4 + LightOn saturate both GPUs (<900 MiB free), so the Ollama
-   * runner OOMs at GPU load. CPU is fast enough for embedding workloads
-   * (~50ms / atom for embeddinggemma-300m on Xeon-class hosts).
+   * Force CPU inference (`options.num_gpu = 0`). Needed when GPUs are
+   * saturated by vLLM Gemma-4 — Ollama embed OOMs on GPU load.
    * Defaults to env `EMBED_CPU=1` if set.
    */
   cpuOnly?: boolean;
+  /** Per-fetch timeout in ms. Default 30000 (env EMBED_FETCH_TIMEOUT_MS). */
+  fetchTimeoutMs?: number;
 }
 
 interface EmbedResponse {
@@ -45,12 +55,30 @@ interface EmbedResponse {
   prompt_eval_count?: number;
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(new Error(`embed fetch timeout after ${timeoutMs}ms`)), timeoutMs);
+  const onExternalAbort = () => ctrl.abort(externalSignal?.reason ?? new Error('aborted'));
+  externalSignal?.addEventListener('abort', onExternalAbort);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
+  }
+}
+
 export async function embedBatch(
   texts: string[],
   opts: GemmaEmbedOptions = {},
 ): Promise<Float32Array[]> {
   if (texts.length === 0) return [];
-  const url = opts.url ?? DEFAULT_OLLAMA_URL;
+  const url = (opts.url ?? DEFAULT_OLLAMA_URL).replace(/\/$/, '');
   const model = opts.model ?? DEFAULT_MODEL;
   const body: Record<string, unknown> = {
     model,
@@ -61,12 +89,17 @@ export async function embedBatch(
   const cpuOnly = opts.cpuOnly ?? process.env.EMBED_CPU === '1';
   if (cpuOnly) body.options = { num_gpu: 0 };
 
-  const res = await fetch(`${url}/api/embed`, {
-    method: 'POST',
-    signal: opts.signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = opts.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  const res = await fetchWithTimeout(
+    `${url}/api/embed`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+    opts.signal,
+  );
   if (!res.ok) {
     throw new Error(
       `ollama /api/embed ${res.status}: ${(await res.text()).slice(0, 200)}`,

@@ -1,0 +1,91 @@
+{
+  "artifacts": {
+    "data/embeddings.gemma4.bench.json": {
+      "bytes": 270,
+      "sha256": "106f8489e811fd94976c795daa8deed03914f3572564d7de41badd2a6dc93537"
+    },
+    "data/embeddings.gemma4.cascade.json": {
+      "bytes": 2961,
+      "sha256": "8d4f5adf5a7988ca9d007339a25bbe6b2b5d6d264cd3424f9d978466c2b255d6"
+    },
+    "data/embeddings.gemma4.fp32.bin": {
+      "bytes": 7025664,
+      "sha256": "0e77570259255f6c2a32208cedb4db77a6d5444139c79e9594e9d4b54e1a66c7"
+    },
+    "data/embeddings.gemma4.meta.json": {
+      "bytes": 262763,
+      "sha256": "d9451f113e674b955c8108a4b95f13ea7f4bd8717afc6d9e0b82fefdbae6fc4c"
+    },
+    "data/embeddings.gemma4.projection_seed.bin": {
+      "bytes": 4,
+      "sha256": "e8a4b2ee7ede79a3afb332b5b6cc3d952a65fd8cffb897f5d18016577c33d7cc"
+    },
+    "data/embeddings.gemma4.tq-d128-b2.bin": {
+      "bytes": 128104,
+      "sha256": "4db65bac91dde3bd52d02c711ff1eb40060cbf0385b9d802cef8e46c5749f701"
+    },
+    "data/embeddings.gemma4.tq-d256-b3.bin": {
+      "bytes": 311064,
+      "sha256": "11899e4996610b9b5827e25ff170f94285aecaae0faa8faf901b7683fc5ec860"
+    },
+    "data/embeddings.gemma4.tq-d512-b3.bin": {
+      "bytes": 603800,
+      "sha256": "6aaffca9dd94459300b48d07e658f2385ef4c7f45c1d78fe32e83abff5665a86"
+    },
+    "data/embeddings.gemma4.tq-d768-b3.bin": {
+      "bytes": 896536,
+      "sha256": "e5b2b82f084a654ea9900bbd4fefa5183f18c849ad07341e6bfbab2beb19bf62"
+    }
+  },
+  "created_at": "2026-05-13T00:00:00Z",
+  "data": {
+    "catalog_id_ref": "0711:elster:bmf:jahresdok-2024:v1",
+    "embedder": {
+      "api_endpoint": "${OLLAMA_URL:-http://localhost:11434}/api/embed",
+      "backend": "ollama",
+      "backend_version": ">=0.5.0",
+      "context_length": 2048,
+      "embedding_length": 768,
+      "family": "gemma3",
+      "model_digest_sha256": "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+      "model_name": "embeddinggemma",
+      "output": {
+        "dim": 768,
+        "dtype": "float32",
+        "l2_normalized_by_server": true
+      },
+      "parameter_size": "307.58M",
+      "pooling_type": 1,
+      "quantization": "BF16",
+      "tokenizer": {
+        "add_bos_token": true,
+        "add_eos_token": true,
+        "add_space_prefix": false,
+        "kind": "llama"
+      }
+    }
+  },
+  "id": "0711:elster:gemma4-tq:embeddings:v1",
+  "identifier": "gemma4-tq:embeddings",
+  "lockState": "draft",
+  "merkle_root": "8e7028ae70fb425f0b582f27041783cef9721aa5629049b7446088f622b18ed5",
+  "namespace": "elster",
+  "schema_version": 5,
+  "type": "encoder",
+  "version": "0.6.0",
+  "source_repo": "github.com/C-0711/Quantum-Container-Elster",
+  "source_tag": "encoder-v0.6.0",
+  "release_url": "https://github.com/C-0711/Quantum-Container-Elster/releases/tag/encoder-v0.6.0",
+  "blueprint_repo": "github.com/C-0711/Quantum-Container",
+  "built_with": {
+    "recipe": "encoder-embeddinggemma-300m",
+    "recipe_version": "1.0.0",
+    "blueprint_tag": "blueprint-1.2",
+    "catalog_id_ref": "0711:elster:bmf:jahresdok-2024:v1",
+    "catalog_atoms_sha256": "6f23768b6c438310d8c54a32d3f334868ac7835f9d1b191f3f5ce9a33c413415"
+  },
+  "signature": null,
+  "anchor_block_number": null,
+  "anchor_tx_hash": null,
+  "anchor_chain": null
+}

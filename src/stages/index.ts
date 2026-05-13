@@ -7,6 +7,7 @@ import { evalKpiStage } from './eval-kpi.ts';
 import { pdfTextLayerStage } from './pdf-text-layer.ts';
 import { lightonOcrStage } from './lighton-ocr.ts';
 import { paddleOcrVlStage } from './paddleocr-vl.ts';
+import { mistralSmallOcrStage } from './mistral-small-ocr.ts';
 import { schemaGuardedLlmStage } from './quality/schema-guarded-llm.ts';
 import { criticLlmStage } from './quality/critic-llm.ts';
 import { spanLinkerStage } from './quality/span-linker.ts';
@@ -24,6 +25,7 @@ export function registerAllStages(): void {
   registerStage(pdfTextLayerStage);
   registerStage(lightonOcrStage);
   registerStage(paddleOcrVlStage);
+  registerStage(mistralSmallOcrStage);
   // Quality-Trias — defensible-extraction node family
   registerStage(schemaGuardedLlmStage);
   registerStage(criticLlmStage);
@@ -46,6 +48,7 @@ export {
   pdfTextLayerStage,
   lightonOcrStage,
   paddleOcrVlStage,
+  mistralSmallOcrStage,
   schemaGuardedLlmStage,
   criticLlmStage,
   spanLinkerStage,

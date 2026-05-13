@@ -13,7 +13,7 @@ import {
 } from './steuerbelege/index.ts';
 import { registerAllVerticals } from '../verticals/index.ts';
 import { buildElsterV2WorkflowWithSchema } from '../verticals/elster/index.ts';
-import { buildElsterV3WorkflowWithSchema } from '../verticals/elster-v3/index.ts';
+import { buildElsterV3WorkflowWithSchema, buildElsterV3LightWorkflow, buildElsterV4StrickerWorkflow } from '../verticals/elster-v3/index.ts';
 import { registerElsterV3MultiStages, buildElsterV3MultiWorkflowWithSchema } from '../verticals/elster-v3/multi.ts';
 import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc/index.ts';
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
@@ -28,6 +28,8 @@ export function registerAllWorkflows(): void {
   registerAllVerticals();
   registerWorkflow(buildElsterV2WorkflowWithSchema());
   registerWorkflow(buildElsterV3WorkflowWithSchema());
+  registerWorkflow(buildElsterV3LightWorkflow());
+  registerWorkflow(buildElsterV4StrickerWorkflow());
   registerElsterV3MultiStages();
   registerWorkflow(buildElsterV3MultiWorkflowWithSchema());
   registerWorkflow(buildOcrShootoutWorkflow());

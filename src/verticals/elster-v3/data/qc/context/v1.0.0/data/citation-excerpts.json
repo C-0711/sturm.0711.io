@@ -1,0 +1,180 @@
+{
+  "id": "0711:elster:context:citation-excerpts:v1",
+  "schema_version": 5,
+  "version": "1.0.0",
+  "type": "context",
+  "namespace": "0711",
+  "identifier": "elster:context:citation-excerpts",
+  "display_name": "ELSTER Citation-Excerpts (Person-A/B + LStB-Modi disambig)",
+  "description": "27 curated disambiguation hints for ELSTER atoms, consumed only by the LLM-Disambig stage. References catalog atoms by atom_id.",
+  "created_at": "2026-05-13T00:00:00Z",
+  "lockState": "draft",
+  "catalog_id_ref": "0711:elster:bmf:jahresdok-2024:v1",
+  "data": {
+    "entries_count": 27,
+    "entries": [
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-7",
+        "field_name": "E0100081",
+        "original_value": "Identifikationsnummer",
+        "disambig_excerpt": "Identifikationsnummer (Person A — Steuerpflichtige/r, Zeile 8)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-8",
+        "field_name": "E0100082",
+        "original_value": "Identifikationsnummer",
+        "disambig_excerpt": "Identifikationsnummer (Person B — Ehegatte/in oder Lebenspartner/in, Zeile 20)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-9",
+        "field_name": "E0100201",
+        "original_value": "Name",
+        "disambig_excerpt": "Name / Familienname (Person A — Steuerpflichtige/r, Zeile 9)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-10",
+        "field_name": "E0100301",
+        "original_value": "Vorname",
+        "disambig_excerpt": "Vorname (Person A — Steuerpflichtige/r, Zeile 10)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-13",
+        "field_name": "E0100402",
+        "original_value": "Religion",
+        "disambig_excerpt": "Religion / Religionszugehörigkeit (Person A — Steuerpflichtige/r, Zeile 11)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-40",
+        "field_name": "E0100601",
+        "original_value": "Postleitzahl (Inland)",
+        "disambig_excerpt": "Name / Familienname (Person B — Ehegatte/in oder Lebenspartner/in, Zeile 19)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-42",
+        "field_name": "E0100701",
+        "original_value": "Verheiratet / Lebenspartnerschaft begründet seit dem",
+        "disambig_excerpt": "Verheiratet / Lebenspartnerschaft begründet seit dem (Person A, Zeile 18)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-46",
+        "field_name": "E0100801",
+        "original_value": "Vorname",
+        "disambig_excerpt": "Vorname (Person B — Ehegatte/in oder Lebenspartner/in, Zeile 22)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-50",
+        "field_name": "E0101002",
+        "original_value": "Religion",
+        "disambig_excerpt": "Religion / Religionszugehörigkeit (Person B — Ehegatte/in oder Lebenspartner/in, Zeile 23)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-78",
+        "field_name": "E0102402",
+        "original_value": "Ehefrau / Person B",
+        "disambig_excerpt": "Ehefrau / Person B — Name/Vorname (Kontenhalter/Empfangsberechtigte/r)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-362",
+        "field_name": "E0200201",
+        "original_value": "Bruttoarbeitslohn",
+        "disambig_excerpt": "Bruttoarbeitslohn — Summe aus 1.-5. Lohnsteuerbescheinigung (LStB_1_5_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-363",
+        "field_name": "E0200202",
+        "original_value": "Bruttoarbeitslohn",
+        "disambig_excerpt": "Bruttoarbeitslohn — einzelne 6. (oder höhere) Lohnsteuerbescheinigung (LStB_6_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-364",
+        "field_name": "E0200203",
+        "original_value": "Bruttoarbeitslohn",
+        "disambig_excerpt": "Bruttoarbeitslohn — Summe aus 6. (und weiteren) Lohnsteuerbescheinigungen (LStB_6_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-365",
+        "field_name": "E0200204",
+        "original_value": "Bruttoarbeitslohn",
+        "disambig_excerpt": "Bruttoarbeitslohn — einzelne 1.-5. Lohnsteuerbescheinigung (LStB_1_5_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-366",
+        "field_name": "E0200301",
+        "original_value": "Lohnsteuer",
+        "disambig_excerpt": "Einbehaltene Lohnsteuer — Summe aus 1.-5. Lohnsteuerbescheinigung (LStB_1_5_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-367",
+        "field_name": "E0200302",
+        "original_value": "Lohnsteuer",
+        "disambig_excerpt": "Einbehaltene Lohnsteuer — einzelne 6. (oder höhere) Lohnsteuerbescheinigung (LStB_6_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-368",
+        "field_name": "E0200303",
+        "original_value": "Lohnsteuer",
+        "disambig_excerpt": "Einbehaltene Lohnsteuer — Summe aus 6. (und weiteren) Lohnsteuerbescheinigungen (LStB_6_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-369",
+        "field_name": "E0200304",
+        "original_value": "Lohnsteuer",
+        "disambig_excerpt": "Einbehaltene Lohnsteuer — einzelne 1.-5. Lohnsteuerbescheinigung (LStB_1_5_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-370",
+        "field_name": "E0200401",
+        "original_value": "Solidaritätszuschlag",
+        "disambig_excerpt": "Einbehaltener Solidaritätszuschlag — Summe aus 1.-5. Lohnsteuerbescheinigung (LStB_1_5_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-371",
+        "field_name": "E0200402",
+        "original_value": "Solidaritätszuschlag",
+        "disambig_excerpt": "Einbehaltener Solidaritätszuschlag — einzelne 6.+ Bescheinigung (LStB_6_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-372",
+        "field_name": "E0200403",
+        "original_value": "Solidaritätszuschlag",
+        "disambig_excerpt": "Einbehaltener Solidaritätszuschlag — Summe aus 6.+ Bescheinigungen (LStB_6_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-373",
+        "field_name": "E0200404",
+        "original_value": "Solidaritätszuschlag",
+        "disambig_excerpt": "Einbehaltener Solidaritätszuschlag — einzelne 1.-5. Bescheinigung (LStB_1_5_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-374",
+        "field_name": "E0200501",
+        "original_value": "Kirchensteuer des Arbeitnehmers",
+        "disambig_excerpt": "Einbehaltene Kirchensteuer des Arbeitnehmers — Summe aus 1.-5. LStB (LStB_1_5_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-375",
+        "field_name": "E0200502",
+        "original_value": "Kirchensteuer des Arbeitnehmers",
+        "disambig_excerpt": "Einbehaltene Kirchensteuer des Arbeitnehmers — einzelne 6.+ LStB (LStB_6_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-376",
+        "field_name": "E0200503",
+        "original_value": "Kirchensteuer des Arbeitnehmers",
+        "disambig_excerpt": "Einbehaltene Kirchensteuer des Arbeitnehmers — Summe aus 6.+ LStB (LStB_6_Sum)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-377",
+        "field_name": "E0200504",
+        "original_value": "Kirchensteuer des Arbeitnehmers",
+        "disambig_excerpt": "Einbehaltene Kirchensteuer des Arbeitnehmers — einzelne 1.-5. LStB (LStB_1_5_Einz)"
+      },
+      {
+        "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-381",
+        "field_name": "E0200604",
+        "original_value": "Kirchensteuer für den Ehegatten / Lebenspartner (nur bei Konfessionsverschiedenheit)",
+        "disambig_excerpt": "Kirchensteuer für Ehegatten bei Konfessionsverschiedenheit — einzelne 1.-5. LStB (LStB_1_5_Einz)"
+      }
+    ]
+  }
+}
