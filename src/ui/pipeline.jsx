@@ -763,6 +763,148 @@ const KPI_BUILDERS = {
     }
     return acc;
   },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // elster-v5 / v5.1 / v5.2 family — Regex-First + LLM-Lückenfüller + BMF
+  // ────────────────────────────────────────────────────────────────────────
+
+  // Phase 1: 4-/3-Faktor Regex über die Felder-Kataloge der erkannten Anlagen
+  'elster-v5/phase1-regex': (acc, name, p) => {
+    if (name === 'phase1_done') {
+      const hits = p?.totalHits ?? 0;
+      const miss = p?.totalMissing ?? 0;
+      const an = p?.anlagen ?? 0;
+      const ratio = hits + miss > 0 ? (hits / (hits + miss)) * 100 : 0;
+      return {
+        kpis: [
+          { label: 'Hits', value: fmtInt(hits), tone: hits > 0 ? 'ok' : 'warn' },
+          { label: 'Miss', value: fmtInt(miss) },
+          { label: 'Coverage', value: `${ratio.toFixed(0)}%`, tone: ratio >= 30 ? 'ok' : 'warn' },
+          { label: 'Anlagen', value: fmtInt(an), tone: 'accent' },
+        ],
+        progress: null,
+      };
+    }
+    return acc;
+  },
+
+  // Phase 3: vLLM Gemma-4 strict-JSON Lückenfüller pro Anlage
+  'elster-v5/phase3-llm-fill': (acc, name, p) => {
+    const st = acc._st || { total: 0, done: 0, filled: 0 };
+    if (name === 'phase3_start') {
+      st.total = p?.anlagen ?? 0;
+      return { _st: st, kpis: [{ label: 'Anlagen', value: `0/${st.total}`, tone: 'accent' }], progress: { value: 0 } };
+    }
+    if (name === 'phase3_anlage_done') {
+      st.done += 1;
+      st.filled += p?.filled ?? 0;
+      return {
+        _st: st,
+        kpis: [
+          { label: 'Anlagen', value: `${st.done}/${st.total}`, tone: 'accent' },
+          { label: 'Felder LLM', value: fmtInt(st.filled), tone: 'ok' },
+        ],
+        progress: st.total > 0 ? { value: st.done / st.total } : null,
+      };
+    }
+    if (name === 'phase3_done' || (name === 'stage_done' && p?.output?.totalFilled != null)) {
+      const filled = p?.totalFilled ?? p?.output?.totalFilled ?? st.filled;
+      return {
+        _st: st,
+        kpis: [{ label: 'Felder LLM', value: fmtInt(filled), tone: filled > 0 ? 'ok' : 'warn' }],
+        progress: null,
+      };
+    }
+    return acc;
+  },
+
+  // Phase 4: Layer-2 Disambiguierung — Mini-Calls pro PFLICHT-Restfeld
+  'elster-v5_1/phase4-entity-disambig': (acc, name, p) => {
+    const st = acc._st || { todo: 0, filled: 0, skipped: 0 };
+    if (name === 'phase4_start') {
+      st.todo = p?.tasks ?? 0;
+      return { _st: st, kpis: [{ label: 'Disambig', value: `0/${st.todo}`, tone: 'accent' }], progress: { value: 0 } };
+    }
+    if (name === 'phase4_field_fill') {
+      st.filled += 1;
+      return {
+        _st: st,
+        kpis: [{ label: 'Disambig', value: `${st.filled}/${st.todo}`, tone: 'ok' }],
+        progress: st.todo > 0 ? { value: (st.filled + st.skipped) / st.todo } : null,
+      };
+    }
+    if (name === 'phase4_field_skip') {
+      st.skipped += 1;
+      return { _st: st, kpis: [{ label: 'Disambig', value: `${st.filled}/${st.todo}`, tone: 'accent' }], progress: st.todo > 0 ? { value: (st.filled + st.skipped) / st.todo } : null };
+    }
+    if (name === 'phase4_done' || (name === 'stage_done' && p?.output?.totalFilled != null)) {
+      const filled = p?.totalFilled ?? p?.output?.totalFilled ?? st.filled;
+      return {
+        _st: st,
+        kpis: [{ label: 'Layer-2 fills', value: fmtInt(filled), tone: filled > 0 ? 'ok' : 'accent' }],
+        progress: null,
+      };
+    }
+    return acc;
+  },
+
+  // Phase 5: Canonical Merge — vereint phase1 (regex) + phase3+4 (llm)
+  'elster-v5/phase5-merge': (acc, name, p) => {
+    if (name === 'phase5_done' || (name === 'stage_done' && p?.output?.canonical_layer)) {
+      const total = p?.total ?? Object.keys(p?.output?.canonical_layer ?? {}).length;
+      const fromR = p?.from_regex ?? p?.output?.stats?.from_regex ?? 0;
+      const fromL = p?.from_llm ?? p?.output?.stats?.from_llm ?? 0;
+      return {
+        kpis: [
+          { label: 'Total', value: fmtInt(total), tone: total > 0 ? 'ok' : 'warn' },
+          { label: 'Regex', value: fmtInt(fromR), tone: 'accent' },
+          { label: 'LLM', value: fmtInt(fromL) },
+        ],
+        progress: null,
+      };
+    }
+    return acc;
+  },
+
+  // Phase 6: Lane-1 BMF Steuerberechnung — eingehende eCodes → berechnete
+  'elster-v5_2/bmf-rechner-compute': (acc, name, p) => {
+    if (name === 'bmf_rechner_start') {
+      return { kpis: [{ label: 'BMF MCP', value: 'läuft', tone: 'accent' }], progress: { value: 0.1 } };
+    }
+    if (name === 'bmf_rechner_compute') {
+      return acc;
+    }
+    if (name === 'bmf_rechner_done' || (name === 'stage_done' && p?.output?.stats)) {
+      const decl = p?.declared ?? p?.output?.stats?.declared_in ?? 0;
+      const comp = p?.computed ?? p?.output?.stats?.computed_out ?? 0;
+      return {
+        kpis: [
+          { label: 'eCodes in', value: fmtInt(decl), tone: 'accent' },
+          { label: 'berechnet', value: fmtInt(comp), tone: comp > 0 ? 'ok' : 'warn' },
+        ],
+        progress: null,
+      };
+    }
+    if (name === 'kpi_warning' && p?.stage === 'bmf-rechner-compute') {
+      return { kpis: [{ label: 'BMF', value: 'unreachable', tone: 'warn' }], progress: null };
+    }
+    return acc;
+  },
+
+  // Felder-Katalog: Container-Lookup, eCodes pro erkannter Anlage
+  'elster-v4/felder-katalog': (acc, name, p) => {
+    if (name === 'stage_done' && p?.output) {
+      const o = p.output;
+      return {
+        kpis: [
+          { label: 'Anlagen', value: fmtInt(Object.keys(o.per_anlage || {}).length), tone: 'accent' },
+          { label: 'Felder', value: fmtInt(o.total_felder ?? 0), tone: 'ok' },
+        ],
+        progress: null,
+      };
+    }
+    return acc;
+  },
 };
 
 // compare/fanout — show branch ok/err tally on the node
@@ -1975,7 +2117,7 @@ function DiffPanel({ diffModel, compareRunId }) {
      · Was passiert — description + config
      · Ausgaben — raw output tree (collapsed JSON viewer)
    ------------------------------------------------------------ */
-function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, stageFieldFlow, onClose }) {
+function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, stageFieldFlow, stageKpis, onClose }) {
   const [collapsed, setCollapsed] = useState(false);
   if (!stageId || !workflow) return null;
   const stage = workflow.stages.find(s => s.id === stageId);
@@ -1983,8 +2125,15 @@ function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, sta
   const state = stageStates[stageId] || {};
   const output = stageOutputs[stageId];
   const flow = stageFieldFlow[stageId];
+  const kpis = (stageKpis && stageKpis[stageId]?.kpis) || [];
   const inputs = stage.inputs || {};
   const cfg = stage.config || {};
+  // Stage-Definition Metadata (from /api/workflows enrichment):
+  // - stage.description  : aus defineStage().description
+  // - stage.hints        : { inputs, outputs, inputPorts[], outputPorts[], configExample }
+  const hints = stage.hints || {};
+  const inputPorts = Array.isArray(hints.inputPorts) ? hints.inputPorts : null;
+  const outputPorts = Array.isArray(hints.outputPorts) ? hints.outputPorts : null;
 
   const stateLabel = {
     idle: 'wartet', running: 'läuft', ok: 'fertig', error: 'fehler', skipped: 'übersprungen',
@@ -2018,6 +2167,64 @@ function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, sta
 
       {!collapsed && (
         <div className="sturm-inspector-body">
+
+          {/* ─── Transformation: was die Stage tut + Ports ─── */}
+          {(stage.description || inputPorts || outputPorts) && (
+            <section className="sturm-inspector-section sturm-inspector-transform">
+              <h4>Transformation</h4>
+              {stage.description && (
+                <p className="sturm-inspector-desc">{stage.description}</p>
+              )}
+              {(inputPorts || outputPorts) && (
+                <div className="sturm-inspector-ports">
+                  {inputPorts && inputPorts.length > 0 && (
+                    <div className="sturm-inspector-ports-col">
+                      <div className="sturm-inspector-ports-label">empfängt</div>
+                      <ul className="sturm-inspector-ports-list">
+                        {inputPorts.map((p, i) => (
+                          <li key={`in-${i}`}>
+                            <code>{p.name}</code>
+                            {p.type && <span className="sturm-inspector-port-type">{p.type}</span>}
+                            {p.description && <span className="sturm-inspector-port-desc"> — {p.description}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {outputPorts && outputPorts.length > 0 && (
+                    <div className="sturm-inspector-ports-col">
+                      <div className="sturm-inspector-ports-label">produziert</div>
+                      <ul className="sturm-inspector-ports-list">
+                        {outputPorts.map((p, i) => (
+                          <li key={`out-${i}`}>
+                            <code>{p.name}</code>
+                            {p.type && <span className="sturm-inspector-port-type">{p.type}</span>}
+                            {p.description && <span className="sturm-inspector-port-desc"> — {p.description}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ─── KPIs vom laufenden/letzten Run ─── */}
+          {kpis.length > 0 && (
+            <section className="sturm-inspector-section">
+              <h4>KPIs</h4>
+              <div className="sturm-inspector-kpis">
+                {kpis.map((k, i) => (
+                  <div key={i} className={`sturm-inspector-kpi tone-${k.tone || 'default'}`}>
+                    <div className="sturm-inspector-kpi-label">{k.label}</div>
+                    <div className="sturm-inspector-kpi-value">{k.value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="sturm-inspector-section">
             <h4>Eingaben</h4>
             {Object.keys(inputs).length === 0 ? (
@@ -2052,22 +2259,16 @@ function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, sta
             )}
           </section>
 
-          <section className="sturm-inspector-section">
-            <h4>Was passiert</h4>
-            {stage.description && (
-              <p className="sturm-inspector-desc">{stage.description}</p>
-            )}
-            {Object.keys(cfg).length > 0 && (
+          {Object.keys(cfg).length > 0 && (
+            <section className="sturm-inspector-section">
+              <h4>Konfiguration</h4>
               <pre
                 className="sturm-json-viewer"
                 style={{ marginLeft: 0, marginRight: 0, maxHeight: 200 }}
                 dangerouslySetInnerHTML={{ __html: jsonToHtml(cfg) }}
               />
-            )}
-            {!stage.description && Object.keys(cfg).length === 0 && (
-              <div className="sturm-inspector-empty">Keine zusätzliche Konfiguration. Stage-Logik in <code>{stage.uses}</code>.</div>
-            )}
-          </section>
+            </section>
+          )}
 
           <section className="sturm-inspector-section">
             <h4>
@@ -3238,6 +3439,7 @@ function App() {
                   stageStates={stageStates}
                   stageOutputs={stageOutputs}
                   stageFieldFlow={stageFieldFlow}
+                  stageKpis={stageKpis}
                   onClose={() => setSelectedStage(null)}
                 />
               )}

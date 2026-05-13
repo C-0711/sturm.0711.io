@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { registerAllStages } from './stages/index.ts';
 import { registerAllWorkflows } from './workflows/index.ts';
-import { listWorkflows, getWorkflow, listStages } from './core/registry.ts';
+import { listWorkflows, getWorkflow, listStages, getStage } from './core/registry.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import type { WorkflowDef } from './core/types.ts';
@@ -142,9 +142,21 @@ function summarizeWorkflow(def: WorkflowDef) {
     name: def.name,
     description: def.description,
     input: def.input,
-    stages: Object.entries(def.stages).map(([id, s]) => ({
-      id, uses: s.uses, name: s.name ?? id, description: s.description ?? null,
-    })),
+    // Enrich each workflow stage with the underlying stage definition's
+    // description + hints (inputPorts, outputPorts, configExample). The UI
+    // uses this for the Inspector's "Transformation"-section and to label
+    // node-tiles meaningfully. Falls back gracefully if a uses-id is not
+    // registered (e.g. compose-only fanout branches).
+    stages: Object.entries(def.stages).map(([id, s]) => {
+      const def = getStage(s.uses);
+      return {
+        id,
+        uses: s.uses,
+        name: s.name ?? def?.name ?? id,
+        description: s.description ?? def?.description ?? null,
+        hints: def?.hints ?? null,
+      };
+    }),
     edges: def.edges,
     containers: def.containers ?? [],
   };
