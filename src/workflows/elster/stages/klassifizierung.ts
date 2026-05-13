@@ -159,6 +159,20 @@ export const klassifizierungStage = defineStage<
   name: 'Anlagen-Klassifizierung',
   description:
     'Erkennt über Regex gegen ELSTER-Drucktexte, welche Anlagen im OCR-Text vorkommen. Bei schwachem Regex-Ergebnis fragt sie ein kleines LLM mit der vollen Anlagen-Liste als Enum.',
+  hints: {
+    inputs: 'text (OCR-Volltext)',
+    outputs: 'erkannte_anlagen[], regex_hits, llm_hits, used_llm, ms',
+    configExample: '{"llmFallbackWhen":"zero-or-one","model":"mistral-small-latest"}',
+    inputPorts: [
+      { name: 'text', type: 'text', description: 'OCR-Volltext aus mistral-ocr' },
+    ],
+    outputPorts: [
+      { name: 'erkannte_anlagen', type: 'json', description: 'Liste der detektierten Anlagen-Codes (z.B. ["N","KAP","ESt1A"])' },
+      { name: 'regex_hits', type: 'json', description: 'Pro Anlage: Anzahl Pattern-Treffer im OCR' },
+      { name: 'llm_hits', type: 'json', description: 'Anlagen die das LLM-Fallback hinzugefügt hat (leer wenn Regex schon reichte)' },
+      { name: 'used_llm', type: 'json', description: 'true wenn LLM-Fallback gefeuert hat' },
+    ],
+  },
 
   async run(input, ctx) {
     const t0 = Date.now();

@@ -148,13 +148,18 @@ function summarizeWorkflow(def: WorkflowDef) {
     // node-tiles meaningfully. Falls back gracefully if a uses-id is not
     // registered (e.g. compose-only fanout branches).
     stages: Object.entries(def.stages).map(([id, s]) => {
-      const def = getStage(s.uses);
+      const stageDef = getStage(s.uses);
       return {
         id,
         uses: s.uses,
-        name: s.name ?? def?.name ?? id,
-        description: s.description ?? def?.description ?? null,
-        hints: def?.hints ?? null,
+        name: s.name ?? stageDef?.name ?? id,
+        description: s.description ?? stageDef?.description ?? null,
+        hints: stageDef?.hints ?? null,
+        // Workflow-stage wiring — needed by the Inspector to render the
+        // "Eingaben"-table (input slot → resolved value preview). Without
+        // these the inspector falsely claims "no inputs declared".
+        inputs: s.inputs ?? {},
+        config: s.config ?? {},
       };
     }),
     edges: def.edges,
