@@ -25,6 +25,7 @@ import {
 import { registerElsterV3MultiStages, buildElsterV3MultiWorkflowWithSchema } from '../verticals/elster-v3/multi.ts';
 import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc/index.ts';
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
+import { registerSealStages, buildSteuerfallSealWorkflow } from './steuerfall-seal/index.ts';
 
 export function registerAllWorkflows(): void {
   registerWorkflow(helloOcrWorkflow);
@@ -51,6 +52,9 @@ export function registerAllWorkflows(): void {
   registerWorkflow(buildMyopiaWorkflow());
   // Quality-Trias showcase — uses the new quality/* stages.
   registerWorkflow(buildElsterQualityDemoWorkflow());
+  // Steuerfall-Versiegelung: HMAC-Snapshot + Merkle + Anchor.
+  registerSealStages();
+  registerWorkflow(buildSteuerfallSealWorkflow());
 }
 
 export { helloOcrWorkflow };

@@ -259,8 +259,9 @@ app.post(
 );
 
 // ── POST /api/applications/:appId/instances/:caseId/seal ───────────────
-// Phase 5 wird die echte Implementierung liefern (steuerfall-seal Workflow).
-// Aktuell: 501 Stub, damit das UI den Button schon binden kann.
+// Triggert den steuerfall-seal Workflow. Liest die Instance + den letzten
+// extraction-Run, baut den master-Snapshot und reicht ihn als Input rein.
+// SSE-Stream identisch zum upload-Endpoint.
 app.post(
   '/api/applications/:appId/instances/:caseId/seal',
   express.json(),
@@ -273,13 +274,85 @@ app.post(
     const sealWorkflowId = app_.workflows.seal;
     if (!sealWorkflowId || !getWorkflow(sealWorkflowId)) {
       return res.status(501).json({
-        error: 'seal-workflow-not-yet-registered',
-        message: `Workflow "${sealWorkflowId ?? '<unset>'}" wird in Phase 5 ergänzt.`,
-        caseId, appId,
+        error: 'seal-workflow-not-registered',
+        message: `Workflow "${sealWorkflowId ?? '<unset>'}" nicht registriert.`,
       });
     }
-    // Echte Seal-Implementierung in Phase 5 (steuerfall-seal Workflow).
-    res.status(501).json({ error: 'seal-runner-not-yet-wired' });
+    if (inst.runs.length === 0) {
+      return res.status(409).json({ error: 'no-extraction-runs', message: 'Vor dem Versiegeln muss mindestens ein Dokument extrahiert worden sein.' });
+    }
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+
+    // Aus dem letzten Run: phase7Validator.canonicalLayer (oder phase5Merge.canonical_layer
+    // als Fallback) und phase5Merge.eric_xml lesen.
+    const lastRunId = inst.runs[inst.runs.length - 1];
+    const runDir = path.join(RUNS_DIR, extractionId, lastRunId);
+    async function readJson(rel: string): Promise<unknown | null> {
+      try { return JSON.parse(await fs.promises.readFile(path.join(runDir, rel), 'utf-8')); }
+      catch { return null; }
+    }
+    // Wir kennen die genauen Pfade aus elster-v5_2-rag-Stages.
+    const validatorOut = (await readJson('phase7Validator/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> } } | null;
+    const mergeOut = (await readJson('phase5Merge/output.json')) as { canonical_layer?: Record<string, unknown>; eric_xml?: string } | null;
+    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> }; eric_xml?: string } | null;
+
+    const canonical_layer =
+      validatorOut?.canonicalLayer?.codes ??
+      bmfOut?.canonicalLayer?.codes ??
+      mergeOut?.canonical_layer ??
+      null;
+    const eric_xml = bmfOut?.eric_xml ?? mergeOut?.eric_xml ?? '';
+
+    if (!canonical_layer || typeof canonical_layer !== 'object') {
+      return res.status(409).json({
+        error: 'extraction-incomplete',
+        message: `Run ${lastRunId} hat keinen canonical_layer geliefert.`,
+      });
+    }
+
+    const def = getWorkflow(sealWorkflowId)!;
+    const input = {
+      appId, caseId,
+      mandantId: inst.mandantId,
+      displayName: inst.displayName,
+      veranlagungsjahr: inst.veranlagungsjahr ?? null,
+      runId: lastRunId,
+      workspacePath: inst.workspacePath,
+      canonical_layer,
+      eric_xml,
+      validator_result: validatorOut ?? null,
+    };
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+    const unsub = run.bus.subscribe((env) => res.write(formatSseEvent(env)));
+    res.write(formatSseEvent({
+      name: 'run_meta',
+      runId: run.runId,
+      workflowId: def.id,
+      at: new Date().toISOString(),
+      payload: { stages: Object.keys(def.stages), appId, caseId },
+    }));
+
+    req.on('close', () => unsub());
+    try {
+      const result = await run.result;
+      // Wenn alle Stages OK: Instance auf 'versiegelt' setzen + Commit-Sha persistieren.
+      if (result.state === 'ok') {
+        const anchorOut = result.stages?.anchor?.output as { anchor?: { commit_hash?: string } } | undefined;
+        inst.status = 'versiegelt';
+        inst.sealedAt = new Date().toISOString();
+        inst.sealCommitSha = anchorOut?.anchor?.commit_hash;
+        await saveInstanceFile(APPLICATIONS_DIR, inst);
+      }
+    } catch { /* errors emitted as events */ }
+    finally { unsub(); res.end(); }
   },
 );
 

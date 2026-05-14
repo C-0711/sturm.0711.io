@@ -59,3 +59,6 @@ src/verticals/elster-v3/data/.backup-*
 
 # Persistente Application-Instances (Phase 4a)
 applications-data/
+
+# Application-Workspaces (per-case state — written at runtime)
+applications/
