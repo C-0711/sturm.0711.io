@@ -19,6 +19,7 @@ import {
   buildElsterV5Workflow,
   buildElsterV51Workflow,
   buildElsterV52Workflow,
+  buildElsterV52RagWorkflow,
   buildElsterV4StrickerWorkflow,
 } from '../verticals/elster-v3/index.ts';
 import { registerElsterV3MultiStages, buildElsterV3MultiWorkflowWithSchema } from '../verticals/elster-v3/multi.ts';
@@ -39,6 +40,7 @@ export function registerAllWorkflows(): void {
   registerWorkflow(buildElsterV5Workflow());
   registerWorkflow(buildElsterV51Workflow());
   registerWorkflow(buildElsterV52Workflow());
+  registerWorkflow(buildElsterV52RagWorkflow());
   registerWorkflow(buildElsterV4StrickerWorkflow());
   registerElsterV3MultiStages();
   registerWorkflow(buildElsterV3MultiWorkflowWithSchema());
