@@ -357,8 +357,10 @@ app.post(
 );
 
 // ── POST /api/applications/:appId/instances/:caseId/export ─────────────
-// Phase 6 wird den Lane-5 MCP-Client wiring. Aktuell: stub-Mode-Antwort,
-// passend zum Plan ("MCP unavailable" wenn ELSTER_MCP_URL unset ist).
+// Liest das versiegelte master.json aus dem Fall-Workspace, ruft den
+// Lane-5 ELSTER-MCP-Client. Wenn ELSTER_MCP_URL unset ist, antwortet der
+// Client deterministisch mit `mcp-unavailable` — keine Fehlerseite, weil
+// das genau der erwartete v1-Zustand ist.
 app.post(
   '/api/applications/:appId/instances/:caseId/export',
   express.json(),
@@ -375,11 +377,45 @@ app.post(
         status: inst.status,
       });
     }
-    return res.status(501).json({
-      erfolg: false,
-      reason: 'mcp-unavailable',
-      message: 'Lane-5 ELSTER-MCP-Client wird in Phase 6 ergänzt.',
+    // master.json aus dem Workspace lesen — gibt uns eric_xml + merkle.root.
+    let master: { eric_xml?: string; merkle?: { root?: string } } | null = null;
+    try {
+      const masterPath = path.join(
+        process.cwd(),
+        inst.workspacePath,
+        'seal',
+        'master.json',
+      );
+      master = JSON.parse(await fs.promises.readFile(masterPath, 'utf-8'));
+    } catch {
+      return res.status(409).json({
+        error: 'sealed-master-missing',
+        message: 'Versiegeltes master.json nicht gefunden. Versiegelung wiederholen.',
+      });
+    }
+    const ericXml = master?.eric_xml ?? '';
+    const merkleRoot = master?.merkle?.root;
+    const { ElsterMcpClient } = await import('./lib/elster-mcp-client.ts');
+    const client = new ElsterMcpClient();
+    const result = await client.einreichen({
+      eric_xml: ericXml,
+      fall_metadata: {
+        appId, caseId,
+        mandantId: inst.mandantId,
+        veranlagungsjahr: inst.veranlagungsjahr ?? null,
+        merkle_root: merkleRoot,
+      },
     });
+    if (result.erfolg && result.einreichungs_id) {
+      inst.status = 'eingereicht';
+      inst.exportedAt = new Date().toISOString();
+      inst.einreichungsId = result.einreichungs_id;
+      await saveInstanceFile(APPLICATIONS_DIR, inst);
+    }
+    // Status-Code: 200 wenn erfolgreich, 503 wenn MCP nicht erreichbar
+    // (so kann das UI sauber zwischen "Service down" und Fehler unterscheiden).
+    const status = result.erfolg ? 200 : (result.reason === 'mcp-unavailable' ? 503 : 502);
+    return res.status(status).json(result);
   },
 );
 

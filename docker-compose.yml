@@ -39,6 +39,9 @@ services:
       DATABASE_URL: postgres://sturm:${POSTGRES_PASSWORD:?must be set}@postgres:5432/sturm_gitchain
       GITCHAIN_DEFAULT_NAMESPACE: ctax
       GITCHAIN_DEFAULT_TENANT: ctax-0711
+      # Lane-5 ELSTER-MCP (Einreichung). Wenn nicht gesetzt, antwortet der
+      # Client deterministisch mit { erfolg: false, reason: 'mcp-unavailable' }.
+      ELSTER_MCP_URL: ${ELSTER_MCP_URL:-}
     volumes:
       # ── Stateful: bind-mount existing host data so we don't lose live
       #    workspaces / runs / schemas / gitchain repos on cutover.
