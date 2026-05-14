@@ -637,7 +637,7 @@ app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/pipeline.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
 app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
-app.get('/studio-ocr.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
+app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.use(express.static(UI_DIR));
 
 // Docs: /docs/WORKFLOW_TEMPLATE.md direkt ausliefern (plain text)
