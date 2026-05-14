@@ -240,6 +240,7 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<ChatProvider, string> = {
   vllm: 'gemma4-mm',
   mistral: 'mistral-large-latest',
   ollama: 'gemma4:31b-128k',
+  anthropic: 'claude-haiku-4-5',
 };
 
 // ─────────────────────────────────────────────────────────────────────────

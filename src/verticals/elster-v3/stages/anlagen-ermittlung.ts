@@ -279,6 +279,7 @@ export const anlagenErmittlungStage = defineStage<
       vllm: 'gemma4-mm',
       mistral: 'mistral-large-latest',
       ollama: 'gemma4:31b-128k',
+      anthropic: 'claude-haiku-4-5',
     };
     const modelName = cfg.model ?? defaultModelByProvider[provider];
     const maxKand = cfg.maxKandidatenECodes ?? 80;

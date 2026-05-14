@@ -1,13 +1,16 @@
 /**
- * Generic LLM JSON-chat wrapper. Two first-class providers:
- *   - 'mistral'  → api.mistral.ai/v1/chat/completions (cloud, billed,
- *                  best quality on German tax language)
- *   - 'ollama'   → {OLLAMA_URL}/api/chat (on-prem, free, GPU-accelerated;
- *                  default for dev / high-throughput)
+ * Generic LLM JSON-chat wrapper. Four first-class providers:
+ *   - 'mistral'    → api.mistral.ai/v1/chat/completions (cloud, billed)
+ *   - 'ollama'     → {OLLAMA_URL}/api/chat (on-prem, free, GPU-accelerated)
+ *   - 'vllm'       → {VLLM_URL}/v1/chat/completions (on-prem, schema-guided)
+ *   - 'anthropic'  → api.anthropic.com/v1/messages (cloud, billed) — used as
+ *                    a 4th independent vote in ensemble extraction.
  *
  * Default model per provider:
- *   mistral → 'mistral-small-latest' (fast/cheap), 'mistral-large-latest' (quality)
- *   ollama  → 'gemma4:e4b' (fast classify), 'gemma4:31b-128k' (quality Reason)
+ *   mistral    → 'mistral-small-latest' (fast/cheap), 'mistral-large-latest' (quality)
+ *   ollama     → 'gemma4:e4b' (fast classify), 'gemma4:31b-128k' (quality Reason)
+ *   vllm       → 'gemma4-mm' (H200V Gemma-4 31B)
+ *   anthropic  → 'claude-haiku-4-5' (fast/cheap), 'claude-sonnet-4-6' (quality)
  *
  * Standard verticals use this for cascade LLM-fallback, nested-JSON extraction
  * (Layer 1), entity-resolution (Layer 2), embed-cascade Reason (Layer 3 Stage E).
@@ -15,6 +18,7 @@
  */
 
 const MISTRAL_API_BASE = 'https://api.mistral.ai/v1';
+const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
 const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 
 function mistralKey(): string {
@@ -23,7 +27,13 @@ function mistralKey(): string {
   return key;
 }
 
-export type ChatProvider = 'mistral' | 'ollama' | 'vllm';
+function anthropicKey(): string {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY is not set');
+  return key;
+}
+
+export type ChatProvider = 'mistral' | 'ollama' | 'vllm' | 'anthropic';
 
 export interface ChatJsonOptions {
   provider?: ChatProvider;
@@ -71,9 +81,64 @@ export async function chatJson<T = unknown>(
       return chatJsonOllama<T>(prompt, opts);
     case 'vllm':
       return chatJsonVllm<T>(prompt, opts);
+    case 'anthropic':
+      return chatJsonAnthropic<T>(prompt, opts);
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);
   }
+}
+
+/**
+ * Anthropic /v1/messages endpoint. Anthropic does not have a native JSON-mode;
+ * we instruct via system + parse-best-effort, same approach as the vLLM path.
+ */
+async function chatJsonAnthropic<T>(
+  prompt: string,
+  opts: ChatJsonOptions,
+): Promise<ChatJsonResult<T>> {
+  const model = opts.model ?? 'claude-haiku-4-5';
+  const system = (opts.system ? opts.system + '\n\n' : '') +
+    'Antworte ausschließlich mit gültigem JSON ohne Markdown-Codeblöcke und ' +
+    'ohne Erklärungstext davor oder danach.';
+  const res = await fetch(`${ANTHROPIC_API_BASE}/messages`, {
+    method: 'POST',
+    signal: opts.signal,
+    headers: {
+      'x-api-key': anthropicKey(),
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: opts.maxTokens ?? 1024,
+      temperature: opts.temperature ?? 0,
+      system,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Anthropic chat ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as {
+    content?: Array<{ type: string; text?: string }>;
+    usage?: unknown;
+  };
+  const raw = (data.content ?? [])
+    .filter((c) => c.type === 'text' && typeof c.text === 'string')
+    .map((c) => c.text)
+    .join('') || '{}';
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  let parsed: T;
+  if (start >= 0 && end > start) {
+    try { parsed = JSON.parse(stripped.slice(start, end + 1)) as T; }
+    catch { parsed = {} as T; }
+  } else {
+    parsed = {} as T;
+  }
+  return { parsed, raw, usage: data.usage };
 }
 
 /**

@@ -352,6 +352,7 @@ export const layer1ExtractStage = defineStage<Layer1Input, Layer1Output, Layer1C
       vllm: 'gemma4-mm',
       mistral: 'mistral-large-latest',
       ollama: 'gemma4:31b-128k',
+      anthropic: 'claude-haiku-4-5',
     };
     const modelName = ctx.config.model ?? defaultModelByProvider[provider];
     const overheadChars = rahmenBlock.length + kandidatenBlock.length
