@@ -61,8 +61,43 @@ function makeCaseId(displayName: string, veranlagungsjahr?: number): string {
 }
 
 export interface ApplicationsRouterOptions {
-  /** Root-Verzeichnis für persistente Instanzen (z.B. <cwd>/applications). */
+  /** Root-Verzeichnis für persistente Instanzen (z.B. <cwd>/applications-data). */
   dir: string;
+}
+
+/** Pfad zur Instanz-Datei für (appId, caseId). */
+export function instanceFilePath(rootDir: string, appId: string, caseId: string): string {
+  return path.join(rootDir, appId, `${caseId}.json`);
+}
+
+/** Liest eine Instanz oder null bei nicht-existent. */
+export async function loadInstanceFile(
+  rootDir: string,
+  appId: string,
+  caseId: string,
+): Promise<ApplicationInstance | null> {
+  try {
+    const raw = await fs.readFile(instanceFilePath(rootDir, appId, caseId), 'utf-8');
+    return JSON.parse(raw) as ApplicationInstance;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw e;
+  }
+}
+
+/** Schreibt eine Instanz (legt das Verzeichnis bei Bedarf an). */
+export async function saveInstanceFile(
+  rootDir: string,
+  inst: ApplicationInstance,
+): Promise<void> {
+  const dir = path.join(rootDir, inst.appId);
+  await fs.mkdir(dir, { recursive: true });
+  inst.updatedAt = new Date().toISOString();
+  await fs.writeFile(
+    instanceFilePath(rootDir, inst.appId, inst.caseId),
+    JSON.stringify(inst, null, 2),
+    'utf-8',
+  );
 }
 
 export function createApplicationsRouter(opts: ApplicationsRouterOptions): Router {
@@ -76,21 +111,11 @@ export function createApplicationsRouter(opts: ApplicationsRouterOptions): Route
   }
 
   async function loadInstance(appId: string, caseId: string): Promise<ApplicationInstance | null> {
-    const file = path.join(ROOT, appId, `${caseId}.json`);
-    try {
-      const raw = await fs.readFile(file, 'utf-8');
-      return JSON.parse(raw) as ApplicationInstance;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw e;
-    }
+    return loadInstanceFile(ROOT, appId, caseId);
   }
 
   async function saveInstance(inst: ApplicationInstance): Promise<void> {
-    const dir = await instancesDir(inst.appId);
-    const file = path.join(dir, `${inst.caseId}.json`);
-    inst.updatedAt = new Date().toISOString();
-    await fs.writeFile(file, JSON.stringify(inst, null, 2), 'utf-8');
+    return saveInstanceFile(ROOT, inst);
   }
 
   // ── GET /api/applications/:appId/instances ─────────────────────────────

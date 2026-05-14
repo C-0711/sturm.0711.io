@@ -24,7 +24,7 @@ import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
-import { createApplicationsRouter } from './server/applications.ts';
+import { createApplicationsRouter, loadInstanceFile, saveInstanceFile } from './server/applications.ts';
 import {
   applyOverrides,
   deleteStageOverride,
@@ -199,6 +199,116 @@ app.get('/api/applications/:id', (req, res) => {
 
 // Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
 app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
+
+// ── POST /api/applications/:appId/instances/:caseId/upload ─────────────
+// Multipart file upload triggert den extraction-Workflow der Anwendung
+// (z.B. elster-v5_2-rag). SSE-Stream wie /api/workflows/:id/run. Run-ID
+// wird nach Erfolg in instance.runs angehängt.
+app.post(
+  '/api/applications/:appId/instances/:caseId/upload',
+  upload.single('file'),
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) { res.status(409).json({ error: `application ${appId} has no extraction workflow configured` }); return; }
+    const baseDef = getWorkflow(extractionId);
+    if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
+    if (!req.file) { res.status(400).json({ error: 'file fehlt (multipart field "file")' }); return; }
+
+    const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
+    const input: Record<string, unknown> = {
+      filePath: req.file.path,
+      filename: req.file.originalname,
+      size: req.file.size,
+      mime: req.file.mimetype,
+      mandant_id: inst.mandantId,
+      case_id: inst.caseId,
+    };
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+    void persistInputForRun(def.id, run.runId, req.file.path, req.file.originalname, req.file.size, req.file.mimetype);
+
+    // Run-ID sofort am Instance-Datensatz festhalten — auch wenn der Client
+    // SSE abbricht, läuft der Workflow zu Ende.
+    inst.runs.push(run.runId);
+    inst.status = 'in_bearbeitung';
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+
+    const unsub = run.bus.subscribe((env) => res.write(formatSseEvent(env)));
+    res.write(formatSseEvent({
+      name: 'run_meta',
+      runId: run.runId,
+      workflowId: def.id,
+      at: new Date().toISOString(),
+      payload: { stages: Object.keys(def.stages), appId, caseId },
+    }));
+    req.on('close', () => unsub());
+    try { await run.result; } catch { /* errors emitted as events */ }
+    finally { unsub(); res.end(); }
+  },
+);
+
+// ── POST /api/applications/:appId/instances/:caseId/seal ───────────────
+// Phase 5 wird die echte Implementierung liefern (steuerfall-seal Workflow).
+// Aktuell: 501 Stub, damit das UI den Button schon binden kann.
+app.post(
+  '/api/applications/:appId/instances/:caseId/seal',
+  express.json(),
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    const sealWorkflowId = app_.workflows.seal;
+    if (!sealWorkflowId || !getWorkflow(sealWorkflowId)) {
+      return res.status(501).json({
+        error: 'seal-workflow-not-yet-registered',
+        message: `Workflow "${sealWorkflowId ?? '<unset>'}" wird in Phase 5 ergänzt.`,
+        caseId, appId,
+      });
+    }
+    // Echte Seal-Implementierung in Phase 5 (steuerfall-seal Workflow).
+    res.status(501).json({ error: 'seal-runner-not-yet-wired' });
+  },
+);
+
+// ── POST /api/applications/:appId/instances/:caseId/export ─────────────
+// Phase 6 wird den Lane-5 MCP-Client wiring. Aktuell: stub-Mode-Antwort,
+// passend zum Plan ("MCP unavailable" wenn ELSTER_MCP_URL unset ist).
+app.post(
+  '/api/applications/:appId/instances/:caseId/export',
+  express.json(),
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    if (inst.status !== 'versiegelt' && inst.status !== 'eingereicht') {
+      return res.status(409).json({
+        error: 'must-seal-first',
+        message: 'Export ist erst nach erfolgreicher Versiegelung möglich.',
+        status: inst.status,
+      });
+    }
+    return res.status(501).json({
+      erfolg: false,
+      reason: 'mcp-unavailable',
+      message: 'Lane-5 ELSTER-MCP-Client wird in Phase 6 ergänzt.',
+    });
+  },
+);
 
 // ============ Stage catalog (workflow designer metadata) ============
 
