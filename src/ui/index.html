@@ -12,12 +12,15 @@
     /* Tool switcher — drei große Karten als primäre Modus-Wahl */
     .sturm-tools {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
       width: 100%;
-      max-width: 960px;
+      max-width: 1100px;
       margin: 4px auto 28px;
       padding: 0 24px;
+    }
+    @media (max-width: 880px) {
+      .sturm-tools { grid-template-columns: repeat(2, 1fr); }
     }
     .sturm-tool {
       display: flex;
@@ -179,6 +182,11 @@
 
       <div class="sturm-sb-section"><span>Werkzeuge</span></div>
       <nav class="sturm-sb-nav">
+        <a class="sturm-sb-item" href="/anwendungen.html" style="text-decoration:none;">
+          <i data-lucide="boxes"></i>
+          <span>Anwendungen</span>
+          <span class="sturm-sb-item-meta">apps</span>
+        </a>
         <a class="sturm-sb-item" href="/pipeline.html" style="text-decoration:none;">
           <i data-lucide="play"></i>
           <span>Pipeline-Runner</span>
@@ -233,8 +241,15 @@
           </p>
         </div>
 
-        <!-- Drei Modi: Runner / Designer / Studio -->
+        <!-- Vier Modi: Anwendungen / Runner / Designer / Studio -->
         <div class="sturm-tools">
+          <a class="sturm-tool" href="/anwendungen.html">
+            <div class="sturm-tool-head">
+              <span class="sturm-tool-icon"><i data-lucide="boxes"></i></span>
+              <h3 class="sturm-tool-title">Anwendungen</h3>
+            </div>
+            <p class="sturm-tool-sub">Vollanwendungen — persistente Fälle, RAG + MCPs, Versiegelung. Aktuell: Steuerfall ESt.</p>
+          </a>
           <a class="sturm-tool" href="/pipeline.html">
             <div class="sturm-tool-head">
               <span class="sturm-tool-icon"><i data-lucide="play"></i></span>

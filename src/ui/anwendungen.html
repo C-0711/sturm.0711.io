@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Anwendungen · STURM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .app-section { width: 100%; max-width: 960px; padding: 0 24px; }
+    .app-section + .app-section { margin-top: 18px; }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .app-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      margin: 0;
+    }
+    .app-header-sub {
+      font-size: 12.5px;
+      color: var(--color-text-secondary);
+    }
+    .app-new-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border: 1px solid var(--color-accent);
+      border-radius: 8px;
+      background: var(--color-accent);
+      color: var(--color-bg-primary, #000);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .app-new-btn:hover { filter: brightness(1.05); }
+
+    .case-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      background: var(--color-bg-card, transparent);
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .12s, background .12s;
+    }
+    .case-row:hover { border-color: var(--color-accent); background: var(--color-bg-hover); }
+    .case-row + .case-row { margin-top: 8px; }
+    .case-title {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--color-text-primary);
+      margin: 0;
+    }
+    .case-sub {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin: 2px 0 0;
+    }
+    .case-meta {
+      font-size: 11.5px;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+    .case-status {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+    .case-status.in_bearbeitung { color: var(--color-text-primary); border-color: var(--color-accent); }
+    .case-status.review { color: #d97706; border-color: #d97706; }
+    .case-status.versiegelt { color: #059669; border-color: #059669; }
+    .case-status.eingereicht { color: #2563eb; border-color: #2563eb; }
+
+    .empty {
+      padding: 32px 24px;
+      text-align: center;
+      color: var(--color-text-tertiary);
+      font-size: 13px;
+      border: 1px dashed var(--color-border);
+      border-radius: 12px;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 440px;
+      background: var(--color-bg-card, #1a1a1a);
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .modal h3 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      color: var(--color-text-primary);
+    }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label {
+      display: block;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+    .modal-field input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 7px;
+      background: var(--color-bg-primary, #000);
+      color: var(--color-text-primary);
+      font-size: 13px;
+    }
+    .modal-field input:focus { outline: 1px solid var(--color-accent); border-color: var(--color-accent); }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .modal-btn {
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--color-border);
+      background: transparent;
+      color: var(--color-text-secondary);
+    }
+    .modal-btn.primary {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: var(--color-bg-primary, #000);
+    }
+    .modal-btn:hover { filter: brightness(1.1); }
+    .modal-err {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 8px;
+      min-height: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="sturm-app">
+    <aside class="sturm-sidebar" id="sidebar">
+      <div class="sturm-sb-head">
+        <div class="sturm-sb-brand">
+          <a href="/" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px;">
+            <span class="sturm-mark">S</span>
+            <span class="sturm-brand-word">STURM</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="sturm-sb-section"><span>Werkzeuge</span></div>
+      <nav class="sturm-sb-nav">
+        <a class="sturm-sb-item" href="/" style="text-decoration:none;">
+          <i data-lucide="layout-grid"></i>
+          <span>Workflows</span>
+        </a>
+        <a class="sturm-sb-item is-active" href="/anwendungen.html" style="text-decoration:none;">
+          <i data-lucide="boxes"></i>
+          <span>Anwendungen</span>
+        </a>
+        <a class="sturm-sb-item" href="/pipeline.html" style="text-decoration:none;">
+          <i data-lucide="play"></i>
+          <span>Pipeline-Runner</span>
+        </a>
+        <a class="sturm-sb-item" href="/designer.html" style="text-decoration:none;">
+          <i data-lucide="layout-grid"></i>
+          <span>Designer</span>
+        </a>
+        <a class="sturm-sb-item" href="/studio-ocr.html" style="text-decoration:none;">
+          <i data-lucide="sliders-horizontal"></i>
+          <span>OCR Studio</span>
+        </a>
+      </nav>
+
+      <div class="sturm-sb-foot">
+        <div class="sturm-avatar">C</div>
+        <div>
+          <div class="sturm-sb-user-name">Christoph</div>
+          <div class="sturm-sb-user-plan">0711 Intelligence</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="sturm-main">
+      <header class="sturm-topbar">
+        <div class="sturm-topbar-l">
+          <span class="sturm-topbar-title">Anwendungen</span>
+        </div>
+        <div class="sturm-topbar-r">
+          <button class="sturm-icon-btn" id="theme-btn" aria-label="Theme umschalten">
+            <i data-lucide="sun" id="theme-icon"></i>
+          </button>
+        </div>
+      </header>
+
+      <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center; padding-bottom: 32px;">
+        <div class="sturm-welcome">
+          <div class="sturm-welcome-glyph">
+            <i data-lucide="boxes" style="width:22px; height:22px;"></i>
+          </div>
+          <h1 class="sturm-welcome-title">Anwendungen</h1>
+          <p class="sturm-welcome-sub">
+            Vollanwendungen mit persistenter Fall-State — Workflows + RAG + MCPs
+            orchestriert um langlebige Domänen-Objekte. Wähle eine Anwendung
+            oder starte einen neuen Fall.
+          </p>
+        </div>
+
+        <div id="app-list">
+          <!-- pro Anwendung ein Block (.app-section) -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create-Modal -->
+  <div class="modal-backdrop" id="create-modal">
+    <div class="modal">
+      <h3 id="create-modal-title">Neuer Fall</h3>
+      <div class="modal-field">
+        <label for="m-display">Anzeigename</label>
+        <input id="m-display" placeholder="z.B. Mustermann 2024" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="m-mandant">Mandant-ID</label>
+        <input id="m-mandant" placeholder="z.B. mustermann-max" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="m-jahr">Veranlagungsjahr</label>
+        <input id="m-jahr" type="number" placeholder="2024" autocomplete="off">
+      </div>
+      <div class="modal-err" id="m-err"></div>
+      <div class="modal-actions">
+        <button class="modal-btn" id="m-cancel">Abbrechen</button>
+        <button class="modal-btn primary" id="m-create">Anlegen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function applyTheme(mode) {
+      const html = document.documentElement;
+      const isDark = mode === 'dark';
+      html.classList.toggle('dark', isDark);
+      const old = document.getElementById('theme-icon');
+      if (old && old.parentNode) {
+        const fresh = document.createElement('i');
+        fresh.id = 'theme-icon';
+        fresh.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+        old.parentNode.replaceChild(fresh, old);
+        window.lucide && window.lucide.createIcons();
+      }
+      localStorage.setItem('sturm-theme', mode);
+    }
+    (function () {
+      const saved = localStorage.getItem('sturm-theme');
+      if (saved === 'light') document.documentElement.classList.remove('dark');
+    })();
+    function toggleTheme() {
+      const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+      applyTheme(next);
+    }
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtDate(s) {
+      if (!s) return '';
+      try { return new Date(s).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); }
+      catch { return s; }
+    }
+    function fmtCategory(c) {
+      return ({ tax: 'Steuer', document: 'Dokument', medical: 'Medizin', other: 'Allgemein' })[c] ?? c;
+    }
+
+    let activeApp = null;
+
+    async function loadApps() {
+      const apps = await fetch('/api/applications').then(r => r.json());
+      const host = document.getElementById('app-list');
+      if (!Array.isArray(apps) || apps.length === 0) {
+        host.innerHTML = '<div class="app-section"><div class="empty">Keine Anwendungen registriert.</div></div>';
+        return;
+      }
+      const sections = await Promise.all(apps.map(async (app) => {
+        const cases = await fetch(`/api/applications/${encodeURIComponent(app.id)}/instances`)
+          .then(r => r.ok ? r.json() : []);
+        const rows = cases.length === 0
+          ? '<div class="empty">Noch keine Fälle. Lege oben einen neuen Fall an.</div>'
+          : cases.map(c => `
+            <a class="case-row" href="/steuerfall.html?app=${encodeURIComponent(app.id)}&case=${encodeURIComponent(c.caseId)}">
+              <div>
+                <p class="case-title">${escapeHtml(c.displayName)}</p>
+                <p class="case-sub">${escapeHtml(c.caseId)} · Mandant ${escapeHtml(c.mandantId || '—')}</p>
+              </div>
+              <span class="case-meta">${c.runs?.length ?? 0} Run${(c.runs?.length ?? 0) === 1 ? '' : 's'}</span>
+              <span class="case-meta">${fmtDate(c.createdAt)}</span>
+              <span class="case-status ${escapeHtml(c.status)}">${escapeHtml(c.status)}</span>
+            </a>
+          `).join('');
+        return `
+          <section class="app-section">
+            <div class="app-header">
+              <div>
+                <h2>${escapeHtml(app.name)} <span class="app-header-sub">· ${fmtCategory(app.category)}</span></h2>
+                <p class="app-header-sub" style="margin:4px 0 0;">${escapeHtml(app.description)}</p>
+              </div>
+              <button class="app-new-btn" data-app="${escapeHtml(app.id)}" data-action="new-case">
+                <i data-lucide="plus"></i><span>Neuer Fall</span>
+              </button>
+            </div>
+            ${rows}
+          </section>
+        `;
+      }));
+      host.innerHTML = sections.join('');
+      window.lucide && window.lucide.createIcons();
+
+      host.querySelectorAll('[data-action="new-case"]').forEach(btn => {
+        btn.addEventListener('click', () => openCreateModal(btn.dataset.app));
+      });
+    }
+
+    function openCreateModal(appId) {
+      activeApp = appId;
+      document.getElementById('m-err').textContent = '';
+      document.getElementById('m-display').value = '';
+      document.getElementById('m-mandant').value = '';
+      document.getElementById('m-jahr').value = new Date().getFullYear() - 1;
+      document.getElementById('create-modal-title').textContent = `Neuer Fall · ${appId}`;
+      document.getElementById('create-modal').classList.add('open');
+      setTimeout(() => document.getElementById('m-display').focus(), 50);
+    }
+    function closeCreateModal() {
+      document.getElementById('create-modal').classList.remove('open');
+      activeApp = null;
+    }
+    async function submitCreate() {
+      if (!activeApp) return;
+      const displayName = document.getElementById('m-display').value.trim();
+      const mandant_id = document.getElementById('m-mandant').value.trim();
+      const jahrStr = document.getElementById('m-jahr').value.trim();
+      const veranlagungsjahr = jahrStr ? Number(jahrStr) : undefined;
+      const err = document.getElementById('m-err');
+      err.textContent = '';
+      if (!displayName) { err.textContent = 'Anzeigename ist Pflicht.'; return; }
+      if (!mandant_id) { err.textContent = 'Mandant-ID ist Pflicht.'; return; }
+      try {
+        const res = await fetch(`/api/applications/${encodeURIComponent(activeApp)}/instances`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ displayName, mandant_id, veranlagungsjahr }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          err.textContent = j.error || `HTTP ${res.status}`;
+          return;
+        }
+        const inst = await res.json();
+        closeCreateModal();
+        location.href = `/steuerfall.html?app=${encodeURIComponent(activeApp)}&case=${encodeURIComponent(inst.caseId)}`;
+      } catch (e) {
+        err.textContent = String(e?.message || e);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      window.lucide && window.lucide.createIcons();
+      loadApps();
+      document.getElementById('theme-btn').addEventListener('click', toggleTheme);
+      document.getElementById('m-cancel').addEventListener('click', closeCreateModal);
+      document.getElementById('m-create').addEventListener('click', submitCreate);
+      document.getElementById('create-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'create-modal') closeCreateModal();
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeCreateModal();
+      });
+    });
+  </script>
+</body>
+</html>

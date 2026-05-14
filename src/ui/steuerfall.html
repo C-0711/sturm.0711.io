@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Steuerfall · STURM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .fall-wrap { width: 100%; max-width: 960px; padding: 0 24px 32px; }
+    .fall-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 16px 0 20px;
+    }
+    .fall-head h1 {
+      margin: 0;
+      font-size: 18px;
+      color: var(--color-text-primary);
+    }
+    .fall-head .meta {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin-top: 4px;
+    }
+    .fall-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .fall-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 12.5px;
+      cursor: pointer;
+    }
+    .fall-btn:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+    .fall-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .fall-btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg-primary, #000); }
+
+    .panel {
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 16px;
+      background: var(--color-bg-card, transparent);
+      margin-bottom: 16px;
+    }
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      letter-spacing: 0.02em;
+    }
+    .panel-sub {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin-bottom: 12px;
+    }
+
+    .drop {
+      border: 2px dashed var(--color-border);
+      border-radius: 10px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .drop:hover, .drop.dragging { border-color: var(--color-accent); background: var(--color-bg-hover); }
+    .drop input[type=file] { display: none; }
+    .drop-hint { font-size: 13px; color: var(--color-text-secondary); }
+    .drop-sub { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+    .run-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 12.5px;
+    }
+    .run-row + .run-row { margin-top: 6px; }
+    .run-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 5px;
+      background: var(--color-bg-hover);
+    }
+    .run-id { color: var(--color-text-tertiary); font-family: ui-monospace, monospace; font-size: 11px; }
+    .run-meta { color: var(--color-text-tertiary); font-size: 11px; }
+
+    .events {
+      max-height: 240px;
+      overflow-y: auto;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-primary, #000);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .layer-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .layer-table th, .layer-table td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .layer-table th {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--color-text-tertiary);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .layer-table tr:hover td { background: var(--color-bg-hover); }
+    .origin-pill {
+      font-size: 10.5px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--color-bg-hover);
+      color: var(--color-text-secondary);
+      font-family: ui-monospace, monospace;
+    }
+    .origin-pill.REGEX_100\% { background: rgba(5, 150, 105, .12); color: #059669; }
+    .origin-pill.LLM_FSM { background: rgba(37, 99, 235, .12); color: #2563eb; }
+    .origin-pill.BMF_RECHNER { background: rgba(217, 119, 6, .12); color: #d97706; }
+    .origin-pill.ENSEMBLE_TIE { background: rgba(239, 68, 68, .12); color: #ef4444; }
+
+    .empty { color: var(--color-text-tertiary); font-size: 12.5px; padding: 12px 0; }
+    .err { color: #ef4444; font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="sturm-app">
+    <aside class="sturm-sidebar" id="sidebar">
+      <div class="sturm-sb-head">
+        <div class="sturm-sb-brand">
+          <a href="/" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px;">
+            <span class="sturm-mark">S</span>
+            <span class="sturm-brand-word">STURM</span>
+          </a>
+        </div>
+      </div>
+      <div class="sturm-sb-section"><span>Werkzeuge</span></div>
+      <nav class="sturm-sb-nav">
+        <a class="sturm-sb-item" href="/" style="text-decoration:none;"><i data-lucide="layout-grid"></i><span>Workflows</span></a>
+        <a class="sturm-sb-item is-active" href="/anwendungen.html" style="text-decoration:none;"><i data-lucide="boxes"></i><span>Anwendungen</span></a>
+        <a class="sturm-sb-item" href="/pipeline.html" style="text-decoration:none;"><i data-lucide="play"></i><span>Pipeline-Runner</span></a>
+        <a class="sturm-sb-item" href="/designer.html" style="text-decoration:none;"><i data-lucide="layout-grid"></i><span>Designer</span></a>
+        <a class="sturm-sb-item" href="/studio-ocr.html" style="text-decoration:none;"><i data-lucide="sliders-horizontal"></i><span>OCR Studio</span></a>
+      </nav>
+    </aside>
+
+    <div class="sturm-main">
+      <header class="sturm-topbar">
+        <div class="sturm-topbar-l">
+          <a href="/anwendungen.html" style="color: var(--color-text-tertiary); text-decoration:none; font-size:12px;">← Anwendungen</a>
+          <span style="margin: 0 6px; color: var(--color-text-tertiary);">/</span>
+          <span class="sturm-topbar-title" id="case-title">Lade…</span>
+        </div>
+        <div class="sturm-topbar-r">
+          <button class="sturm-icon-btn" id="theme-btn"><i data-lucide="sun" id="theme-icon"></i></button>
+        </div>
+      </header>
+
+      <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center;">
+        <div class="fall-wrap">
+          <div class="fall-head">
+            <div>
+              <h1 id="case-display">…</h1>
+              <div class="meta" id="case-meta">…</div>
+            </div>
+            <div class="fall-actions">
+              <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
+              <button class="fall-btn primary" id="btn-export" disabled><i data-lucide="send"></i><span>An ELSTER</span></button>
+            </div>
+          </div>
+
+          <section class="panel">
+            <h3>Dokument hochladen</h3>
+            <p class="panel-sub">Beim Upload wird der extraction-Workflow der Anwendung gestartet (z.B. elster-v5_2-rag mit TurboQuant + 4-LLM-Ensemble).</p>
+            <label class="drop" id="drop">
+              <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg">
+              <div class="drop-hint"><i data-lucide="upload" style="vertical-align: middle;"></i> Datei hier ablegen oder klicken</div>
+              <div class="drop-sub">PDF · PNG · JPG (max 25 MB)</div>
+            </label>
+            <div class="err" id="upload-err"></div>
+          </section>
+
+          <section class="panel" id="events-panel" hidden>
+            <h3>Live-Events</h3>
+            <div class="events" id="events"></div>
+          </section>
+
+          <section class="panel">
+            <h3>Run-Historie</h3>
+            <div id="runs"></div>
+          </section>
+
+          <section class="panel" id="layer-panel" hidden>
+            <h3>Canonical Layer (letzter Run)</h3>
+            <p class="panel-sub" id="layer-sub"></p>
+            <table class="layer-table">
+              <thead><tr><th>eCode</th><th>Anlage</th><th>Wert</th><th>Origin</th></tr></thead>
+              <tbody id="layer-rows"></tbody>
+            </table>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function applyTheme(mode) {
+      const html = document.documentElement;
+      const isDark = mode === 'dark';
+      html.classList.toggle('dark', isDark);
+      const old = document.getElementById('theme-icon');
+      if (old && old.parentNode) {
+        const fresh = document.createElement('i');
+        fresh.id = 'theme-icon';
+        fresh.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+        old.parentNode.replaceChild(fresh, old);
+        window.lucide && window.lucide.createIcons();
+      }
+      localStorage.setItem('sturm-theme', mode);
+    }
+    (function () {
+      const saved = localStorage.getItem('sturm-theme');
+      if (saved === 'light') document.documentElement.classList.remove('dark');
+    })();
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtDate(s) {
+      if (!s) return '';
+      try { return new Date(s).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); } catch { return s; }
+    }
+
+    const params = new URLSearchParams(location.search);
+    const APP_ID = params.get('app');
+    const CASE_ID = params.get('case');
+
+    if (!APP_ID || !CASE_ID) {
+      document.body.innerHTML = '<p style="padding:40px; color: #ef4444;">Fehler: ?app= und ?case= Parameter fehlen.</p>';
+      throw new Error('missing params');
+    }
+
+    let instance = null;
+
+    async function loadInstance() {
+      const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}`);
+      if (!res.ok) {
+        document.getElementById('case-display').textContent = 'Fall nicht gefunden';
+        return;
+      }
+      instance = await res.json();
+      document.getElementById('case-title').textContent = instance.displayName;
+      document.getElementById('case-display').textContent = instance.displayName;
+      document.getElementById('case-meta').textContent =
+        `${instance.caseId} · Mandant ${instance.mandantId || '—'} · ${instance.veranlagungsjahr ?? '—'} · ${instance.status}`;
+      renderRuns();
+      // Buttons-Logik
+      const canSeal = instance.runs.length > 0 && instance.status === 'in_bearbeitung';
+      const canExport = instance.status === 'versiegelt';
+      document.getElementById('btn-seal').disabled = !canSeal;
+      document.getElementById('btn-export').disabled = !canExport;
+      // Letzter Run → canonical_layer laden, falls vorhanden
+      if (instance.runs.length > 0) {
+        loadLastLayer(instance.runs[instance.runs.length - 1]);
+      }
+    }
+
+    function renderRuns() {
+      const host = document.getElementById('runs');
+      if (!instance.runs.length) {
+        host.innerHTML = '<div class="empty">Noch keine Runs. Lade ein Dokument hoch, um den extraction-Workflow zu starten.</div>';
+        return;
+      }
+      host.innerHTML = instance.runs.slice().reverse().map((rid, i) => `
+        <div class="run-row">
+          <span class="run-state"><i data-lucide="play"></i></span>
+          <div>
+            <div>Run ${instance.runs.length - i}</div>
+            <div class="run-id">${escapeHtml(rid)}</div>
+          </div>
+          <span class="run-meta">extraction</span>
+          <a class="run-meta" href="/pipeline.html?workflow=${encodeURIComponent('elster-v5_2-rag')}&run=${encodeURIComponent(rid)}" style="text-decoration:underline;">öffnen</a>
+        </div>
+      `).join('');
+      window.lucide && window.lucide.createIcons();
+    }
+
+    async function loadLastLayer(runId) {
+      try {
+        // Versuch: phase5Merge oder phase7Validator artifact aus dem Run lesen.
+        const candidates = ['phase7Validator', 'phase6BmfRechner', 'phase5Merge'];
+        for (const stageId of candidates) {
+          const url = `/api/workflows/elster-v5_2-rag/runs/${encodeURIComponent(runId)}/stages/${stageId}/output`;
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const layer = data?.canonicalLayer?.codes ?? data?.canonical_layer ?? null;
+          if (layer && typeof layer === 'object') {
+            renderLayer(layer, stageId);
+            return;
+          }
+        }
+        document.getElementById('layer-panel').hidden = false;
+        document.getElementById('layer-sub').textContent = 'Run-Artefakte noch nicht verfügbar.';
+        document.getElementById('layer-rows').innerHTML = '';
+      } catch { /* silent */ }
+    }
+
+    function renderLayer(layer, fromStage) {
+      document.getElementById('layer-panel').hidden = false;
+      document.getElementById('layer-sub').textContent = `aus Stage: ${fromStage} · ${Object.keys(layer).length} eCodes`;
+      const rows = Object.entries(layer).slice(0, 200).map(([eCode, v]) => {
+        const value = v?.normalized ?? v?.value ?? '';
+        const anlage = v?.anlage ?? '';
+        const origin = v?.origin ?? '';
+        const safeOrigin = String(origin).replace(/[^A-Za-z0-9_%]/g, '_');
+        return `<tr>
+          <td style="font-family: ui-monospace, monospace; font-size: 11.5px;">${escapeHtml(eCode)}</td>
+          <td>${escapeHtml(anlage)}</td>
+          <td>${escapeHtml(value)}</td>
+          <td><span class="origin-pill ${safeOrigin}">${escapeHtml(origin)}</span></td>
+        </tr>`;
+      }).join('');
+      document.getElementById('layer-rows').innerHTML = rows || '<tr><td colspan="4" style="color: var(--color-text-tertiary);">Layer leer.</td></tr>';
+    }
+
+    // ── Upload + SSE ────────────────────────────────────────────────────
+    const drop = document.getElementById('drop');
+    const fileInput = document.getElementById('file');
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragging'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('dragging');
+      if (e.dataTransfer.files?.[0]) startUpload(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => {
+      if (e.target.files?.[0]) startUpload(e.target.files[0]);
+    });
+
+    async function startUpload(file) {
+      document.getElementById('upload-err').textContent = '';
+      document.getElementById('events').textContent = '';
+      document.getElementById('events-panel').hidden = false;
+
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/upload`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        document.getElementById('upload-err').textContent = j.error || `HTTP ${res.status}`;
+        return;
+      }
+      // Stream SSE
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      const ev = document.getElementById('events');
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const p of parts) {
+          const m = /^data:\s*(.+)$/m.exec(p);
+          if (!m) continue;
+          try {
+            const obj = JSON.parse(m[1]);
+            ev.textContent += `[${obj.stageId ?? '·'}] ${obj.name}\n`;
+            ev.scrollTop = ev.scrollHeight;
+          } catch { /* ignore */ }
+        }
+      }
+      // Re-load instance & layer after run finishes
+      await loadInstance();
+    }
+
+    // ── Seal / Export ───────────────────────────────────────────────────
+    document.getElementById('btn-seal').addEventListener('click', async () => {
+      const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/seal`, { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (res.status === 501) {
+        alert(`Versiegelung noch nicht verfügbar: ${j.message || j.error}`);
+      } else if (res.ok) {
+        alert('Fall versiegelt.');
+        await loadInstance();
+      } else {
+        alert(`Fehler: ${j.error || res.status}`);
+      }
+    });
+
+    document.getElementById('btn-export').addEventListener('click', async () => {
+      const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/export`, { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (j.erfolg === false) {
+        alert(`Export nicht möglich: ${j.message || j.reason}`);
+      } else if (res.ok) {
+        alert(`An ELSTER gesendet: Einreichungs-ID ${j.einreichungs_id}`);
+        await loadInstance();
+      } else {
+        alert(`Fehler: ${j.error || res.status}`);
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      window.lucide && window.lucide.createIcons();
+      loadInstance();
+      document.getElementById('theme-btn').addEventListener('click', () => {
+        const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+        applyTheme(next);
+      });
+    });
+  </script>
+</body>
+</html>
