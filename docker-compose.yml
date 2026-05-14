@@ -66,6 +66,20 @@ services:
       retries: 3
       start_period: 20s
 
+  # ──────────────────────────────────────────────────────────────────
+  # postgres — DORMANT as of 2026-05-14
+  #
+  # Container runs healthy but the DB has zero tables and the sturm
+  # container is not connecting to it. Current gitchain integration runs
+  # file-based out of GITCHAIN_REPO_ROOT (~/gitchain-repos on h200v),
+  # and src/lib/gitchain-client.ts reads GITCHAIN_DATABASE_URL — not the
+  # DATABASE_URL set below. Kept running so the DB-backed registry path
+  # is one env-var fix away from active when needed; not removed because
+  # the named volume + healthcheck are cheap.
+  #
+  # When you do wire it up: either rename DATABASE_URL below to
+  # GITCHAIN_DATABASE_URL, or update the code to read DATABASE_URL.
+  # ──────────────────────────────────────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg17
     container_name: sturm-postgres
@@ -75,10 +89,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?must be set}
       POSTGRES_DB: sturm_gitchain
     volumes:
-      # Postgres can stay in a named volume — fresh install fine, gitchain
-      # client will create its own tables. If you want to import the
-      # existing gitchain registry (ctax-postgres on h200v), do that as a
-      # separate `pg_dump | pg_restore` step pre-cutover.
       - sturm_postgres:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5444:5432"
