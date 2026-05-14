@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 import { registerAllStages } from './stages/index.ts';
 import { registerAllWorkflows } from './workflows/index.ts';
-import { listWorkflows, getWorkflow, listStages, getStage } from './core/registry.ts';
+import { registerAllApplications } from './applications/index.ts';
+import { listWorkflows, getWorkflow, listStages, getStage, listApplications, getApplication } from './core/registry.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import type { WorkflowDef } from './core/types.ts';
@@ -57,6 +58,8 @@ fs.mkdirSync(USER_WORKFLOWS_DIR, { recursive: true });
 // Bootstrap-Registries
 registerAllStages();
 registerAllWorkflows();
+// Anwendungen *nach* Workflows registrieren, damit Workflow-Refs validierbar sind.
+registerAllApplications();
 // Snapshot built-in IDs BEFORE user-workflows get registered. The workflows-user
 // router uses this to decide what's a "true" built-in vs what's user-owned.
 const builtInWorkflowIds = new Set(listWorkflows().map((w) => w.id));
@@ -175,6 +178,20 @@ app.get('/api/workflows/:id', (req, res) => {
   const def = getWorkflow(req.params.id);
   if (!def) return res.status(404).json({ error: `workflow not found: ${req.params.id}` });
   res.json(summarizeWorkflow(def));
+});
+
+// ============ Applications (Anwendungen) ============
+// Orchestrierung über Workflows: persistente Fall-State, RAG, MCP-Komposition,
+// Lifecycle. Instance-Management folgt in einer späteren Phase.
+
+app.get('/api/applications', (_req, res) => {
+  res.json(listApplications());
+});
+
+app.get('/api/applications/:id', (req, res) => {
+  const def = getApplication(req.params.id);
+  if (!def) return res.status(404).json({ error: `application not found: ${req.params.id}` });
+  res.json(def);
 });
 
 // ============ Stage catalog (workflow designer metadata) ============
@@ -653,8 +670,9 @@ app.get('/docs/:file', (req, res) => {
 const port = Number(process.env.PORT ?? 7800);
 app.listen(port, () => {
   console.log(`STURM · http://localhost:${port}`);
-  console.log(`  Workflows: ${listWorkflows().map(w => w.id).join(', ') || '(keine)'}`);
-  console.log(`  Studio:    http://localhost:${port}/studio-ocr.html`);
+  console.log(`  Workflows:    ${listWorkflows().map(w => w.id).join(', ') || '(keine)'}`);
+  console.log(`  Anwendungen:  ${listApplications().map(a => a.id).join(', ') || '(keine)'}`);
+  console.log(`  Studio:       http://localhost:${port}/studio-ocr.html`);
 });
 
 // Janitor — runs in-process, sweeps uploads/ + run _input/ folders.

@@ -1,7 +1,9 @@
 import type { StageDefinition, WorkflowDef } from './types.ts';
+import type { ApplicationDef } from './application.ts';
 
 const stageRegistry = new Map<string, StageDefinition<any, any, any>>();
 const workflowRegistry = new Map<string, WorkflowDef>();
+const applicationRegistry = new Map<string, ApplicationDef>();
 
 export function registerStage(stage: StageDefinition<any, any, any>): void {
   if (stageRegistry.has(stage.id)) {
@@ -44,4 +46,30 @@ export function getWorkflow(id: string): WorkflowDef | undefined {
 
 export function listWorkflows(): WorkflowDef[] {
   return Array.from(workflowRegistry.values());
+}
+
+/**
+ * Registriert eine Anwendung. Referenzierte Workflows werden *weich* validiert
+ * (Console-Warning), damit phasenweises Hinzukommen funktioniert.
+ */
+export function registerApplication(def: ApplicationDef): void {
+  if (applicationRegistry.has(def.id)) {
+    throw new Error(`application already registered: ${def.id}`);
+  }
+  for (const [trigger, workflowId] of Object.entries(def.workflows)) {
+    if (workflowId && !workflowRegistry.has(workflowId)) {
+      console.warn(
+        `[application:${def.id}] trigger "${trigger}" referenziert Workflow "${workflowId}" — noch nicht registriert`,
+      );
+    }
+  }
+  applicationRegistry.set(def.id, def);
+}
+
+export function getApplication(id: string): ApplicationDef | undefined {
+  return applicationRegistry.get(id);
+}
+
+export function listApplications(): ApplicationDef[] {
+  return Array.from(applicationRegistry.values());
 }
