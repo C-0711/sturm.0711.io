@@ -24,6 +24,7 @@ import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
+import { createApplicationsRouter } from './server/applications.ts';
 import {
   applyOverrides,
   deleteStageOverride,
@@ -46,6 +47,7 @@ const UPLOADS_DIR = path.join(ROOT, 'uploads');
 const RUNS_DIR = path.join(ROOT, 'runs');
 const WORKSPACES_DIR = path.join(ROOT, 'workspaces');
 const USER_WORKFLOWS_DIR = path.join(ROOT, 'workflows-user');
+const APPLICATIONS_DIR = path.join(ROOT, 'applications-data');
 const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
 const PIPELINES_DIR = path.join(__dirname, 'pipelines-seed');
 const UI_DIR = path.join(__dirname, 'ui');
@@ -54,6 +56,7 @@ fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(RUNS_DIR, { recursive: true });
 fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 fs.mkdirSync(USER_WORKFLOWS_DIR, { recursive: true });
+fs.mkdirSync(APPLICATIONS_DIR, { recursive: true });
 
 // Bootstrap-Registries
 registerAllStages();
@@ -193,6 +196,9 @@ app.get('/api/applications/:id', (req, res) => {
   if (!def) return res.status(404).json({ error: `application not found: ${req.params.id}` });
   res.json(def);
 });
+
+// Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
+app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
 
 // ============ Stage catalog (workflow designer metadata) ============
 

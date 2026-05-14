@@ -56,3 +56,6 @@ src/verticals/elster-v3/data/.backup-*
 
 # editor settings — local only
 .claude/settings.json
+
+# Persistente Application-Instances (Phase 4a)
+applications-data/
