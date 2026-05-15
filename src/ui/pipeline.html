@@ -170,6 +170,23 @@
   <div id="root"></div>
 
 
+  <!-- ============ Auth: bearer-token bootstrap (?token=… → localStorage) ============
+       Spiegelt das studio-ocr.js Muster: einmaliges ?token=… aus der URL in
+       localStorage übertragen, dann aus der URL entfernen. authHeaders() im
+       Bundle liest dann von dort. -->
+  <script>
+    (function bootstrapToken() {
+      try {
+        const u = new URL(window.location.href);
+        const t = u.searchParams.get('token');
+        if (t) {
+          localStorage.setItem('sturm-token', t);
+          u.searchParams.delete('token');
+          window.history.replaceState({}, '', u.toString());
+        }
+      } catch (e) { console.warn('[pipeline] token bootstrap failed:', e); }
+    })();
+  </script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
