@@ -200,6 +200,64 @@ app.get('/api/applications/:id', (req, res) => {
 // Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
 app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
 
+// ── GET /api/applications/:appId/instances/:caseId/result ──────────────
+// Liefert das Aggregat des letzten extraction-Runs eines Falls:
+//   • canonical_layer (aus phase7Validator → phase6BmfRechner → phase5Merge,
+//     in dieser Priorität)
+//   • eric_xml (aus phase6 oder phase5)
+//   • Stats (Anzahl Felder, Origin-Verteilung)
+//
+// Bewusst ohne requireBearerToken — die Application-Oberfläche ist die
+// öffentliche Front, alle gefährlichen Aktionen (run, seal, export) haben
+// ihre eigenen Guards/Lifecycle-Checks. Lesen eines bereits gelaufenen
+// Falls braucht keinen Token.
+app.get(
+  '/api/applications/:appId/instances/:caseId/result',
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    if (inst.runs.length === 0) {
+      return res.json({ runId: null, canonical_layer: null, eric_xml: null, source: null });
+    }
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+    const lastRunId = inst.runs[inst.runs.length - 1];
+    const runDir = path.join(RUNS_DIR, extractionId, lastRunId);
+
+    async function readJson(rel: string): Promise<unknown | null> {
+      try { return JSON.parse(await fs.promises.readFile(path.join(runDir, rel), 'utf-8')); }
+      catch { return null; }
+    }
+
+    const validatorOut = (await readJson('phase7Validator/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> } } | null;
+    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> }; eric_xml?: string } | null;
+    const mergeOut = (await readJson('phase5Merge/output.json')) as { canonical_layer?: Record<string, unknown>; eric_xml?: string } | null;
+
+    let layer: Record<string, unknown> | null = null;
+    let source: string | null = null;
+    if (validatorOut?.canonicalLayer?.codes) { layer = validatorOut.canonicalLayer.codes; source = 'phase7Validator'; }
+    else if (bmfOut?.canonicalLayer?.codes) { layer = bmfOut.canonicalLayer.codes; source = 'phase6BmfRechner'; }
+    else if (mergeOut?.canonical_layer) { layer = mergeOut.canonical_layer; source = 'phase5Merge'; }
+
+    const eric_xml = bmfOut?.eric_xml ?? mergeOut?.eric_xml ?? null;
+
+    // Origin-Verteilung als Statistik (REGEX_100% / REGEX_3F / LLM_FSM /
+    // BMF_RECHNER / ENSEMBLE_*).
+    const stats: { totalFields: number; byOrigin: Record<string, number> } = { totalFields: 0, byOrigin: {} };
+    if (layer) {
+      for (const v of Object.values(layer)) {
+        stats.totalFields++;
+        const o = (v as { origin?: string })?.origin ?? 'unknown';
+        stats.byOrigin[o] = (stats.byOrigin[o] ?? 0) + 1;
+      }
+    }
+    res.json({ runId: lastRunId, canonical_layer: layer, eric_xml, source, stats });
+  },
+);
+
 // ── POST /api/applications/:appId/instances/:caseId/upload ─────────────
 // Multipart file upload triggert den extraction-Workflow der Anwendung
 // (z.B. elster-v5_2-rag). SSE-Stream wie /api/workflows/:id/run. Run-ID

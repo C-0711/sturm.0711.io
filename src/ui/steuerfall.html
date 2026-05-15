@@ -69,17 +69,69 @@
     }
 
     .drop {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       border: 2px dashed var(--color-border);
       border-radius: 10px;
-      padding: 28px;
+      padding: 32px 24px;
       text-align: center;
       cursor: pointer;
-      transition: border-color .15s, background .15s;
+      transition: border-color .15s, background .15s, transform .1s;
+      position: relative;
     }
     .drop:hover, .drop.dragging { border-color: var(--color-accent); background: var(--color-bg-hover); }
+    .drop.busy { opacity: 0.7; cursor: progress; border-style: solid; }
     .drop input[type=file] { display: none; }
-    .drop-hint { font-size: 13px; color: var(--color-text-secondary); }
-    .drop-sub { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 4px; }
+    .drop-icon {
+      display: inline-flex;
+      width: 40px; height: 40px;
+      align-items: center; justify-content: center;
+      border-radius: 10px;
+      background: var(--color-bg-hover);
+      margin-bottom: 4px;
+    }
+    .drop-icon i { width: 20px; height: 20px; }
+    .drop-hint { font-size: 13.5px; color: var(--color-text-secondary); }
+    .drop-hint strong { color: var(--color-text-primary); }
+    .drop-sub { font-size: 11.5px; color: var(--color-text-tertiary); }
+    .drop-file {
+      margin-top: 10px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--color-text-primary);
+      padding: 5px 10px;
+      border-radius: 5px;
+      background: var(--color-bg-hover);
+      display: inline-block;
+    }
+    .drop-progress {
+      width: 100%;
+      max-width: 320px;
+      height: 4px;
+      background: var(--color-border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .drop-progress-fill {
+      height: 100%;
+      background: var(--color-accent);
+      width: 30%;
+      animation: drop-progress 1.4s ease-in-out infinite;
+    }
+    @keyframes drop-progress {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(340%); }
+    }
+    .drop-result {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #059669;
+    }
+    .drop-result.err { color: #ef4444; }
 
     .run-row {
       display: grid;
@@ -199,8 +251,12 @@
             <p class="panel-sub">Beim Upload wird der extraction-Workflow der Anwendung gestartet (z.B. elster-v5_2-rag mit TurboQuant + 4-LLM-Ensemble).</p>
             <label class="drop" id="drop">
               <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg">
-              <div class="drop-hint"><i data-lucide="upload" style="vertical-align: middle;"></i> Datei hier ablegen oder klicken</div>
+              <span class="drop-icon"><i data-lucide="upload"></i></span>
+              <div class="drop-hint"><strong>Datei hier ablegen</strong> oder klicken</div>
               <div class="drop-sub">PDF · PNG · JPG (max 25 MB)</div>
+              <div class="drop-file" id="drop-file" hidden></div>
+              <div class="drop-progress" id="drop-progress" hidden><div class="drop-progress-fill"></div></div>
+              <div class="drop-result" id="drop-result" hidden></div>
             </label>
             <div class="err" id="upload-err"></div>
           </section>
@@ -219,7 +275,7 @@
             <h3>Canonical Layer (letzter Run)</h3>
             <p class="panel-sub" id="layer-sub"></p>
             <table class="layer-table">
-              <thead><tr><th>eCode</th><th>Anlage</th><th>Wert</th><th>Origin</th></tr></thead>
+              <thead><tr><th>eCode</th><th>Feld</th><th>Anlage</th><th>Wert</th><th>Origin</th></tr></thead>
               <tbody id="layer-rows"></tbody>
             </table>
           </section>
@@ -317,7 +373,7 @@
       document.getElementById('btn-export').disabled = !canExport;
       // Letzter Run → canonical_layer laden, falls vorhanden
       if (instance.runs.length > 0) {
-        loadLastLayer(instance.runs[instance.runs.length - 1]);
+        loadLastLayer();
       }
     }
 
@@ -341,56 +397,101 @@
       window.lucide && window.lucide.createIcons();
     }
 
-    async function loadLastLayer(runId) {
+    async function loadLastLayer() {
       try {
-        // Versuch: phase5Merge oder phase7Validator artifact aus dem Run lesen.
-        const candidates = ['phase7Validator', 'phase6BmfRechner', 'phase5Merge'];
-        for (const stageId of candidates) {
-          const url = `/api/workflows/elster-v5_2-rag/runs/${encodeURIComponent(runId)}/stages/${stageId}/output`;
-          const res = await fetch(url);
-          if (!res.ok) continue;
-          const data = await res.json();
-          const layer = data?.canonicalLayer?.codes ?? data?.canonical_layer ?? null;
-          if (layer && typeof layer === 'object') {
-            renderLayer(layer, stageId);
-            return;
-          }
+        const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/result`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.canonical_layer || typeof data.canonical_layer !== 'object') {
+          document.getElementById('layer-panel').hidden = true;
+          return;
         }
-        document.getElementById('layer-panel').hidden = false;
-        document.getElementById('layer-sub').textContent = 'Run-Artefakte noch nicht verfügbar.';
-        document.getElementById('layer-rows').innerHTML = '';
-      } catch { /* silent */ }
+        renderLayer(data.canonical_layer, data.source, data.stats);
+      } catch (e) {
+        console.warn('result load failed:', e);
+      }
     }
 
-    function renderLayer(layer, fromStage) {
+    function renderLayer(layer, fromStage, stats) {
       document.getElementById('layer-panel').hidden = false;
-      document.getElementById('layer-sub').textContent = `aus Stage: ${fromStage} · ${Object.keys(layer).length} eCodes`;
-      const rows = Object.entries(layer).slice(0, 200).map(([eCode, v]) => {
-        const value = v?.normalized ?? v?.value ?? '';
+      const ecodes = Object.keys(layer).length;
+      const originSummary = stats?.byOrigin
+        ? Object.entries(stats.byOrigin).map(([o, n]) => `${o}=${n}`).join(' · ')
+        : '';
+      document.getElementById('layer-sub').textContent =
+        `aus Stage: ${fromStage} · ${ecodes} eCodes${originSummary ? ' · ' + originSummary : ''}`;
+
+      // Dedupe identischer eCode-Varianten (E0200201..04 → eine Zeile)
+      // analog zum pipeline.jsx-Verhalten. Gruppieren nach (anlage,
+      // vordruckzeile, drucktext, normalized-Wert).
+      const grouped = new Map();
+      for (const [eCode, v] of Object.entries(layer)) {
+        const label = v?.drucktext || eCode;
+        const value = v?.normalized != null ? String(v.normalized) : (v?.value ?? '');
         const anlage = v?.anlage ?? '';
+        const vz = v?.vordruckzeile ?? '';
         const origin = v?.origin ?? '';
-        const safeOrigin = String(origin).replace(/[^A-Za-z0-9_%]/g, '_');
+        const key = `${anlage}|${vz}|${label}|${value}|${origin}`;
+        const ex = grouped.get(key);
+        if (!ex) {
+          grouped.set(key, { primary: eCode, additional: [], label, value, anlage, vz, origin });
+        } else {
+          ex.additional.push(eCode);
+        }
+      }
+
+      const rows = Array.from(grouped.values()).slice(0, 200).map(g => {
+        const safeOrigin = String(g.origin).replace(/[^A-Za-z0-9_%]/g, '_');
+        const codeBadge = g.additional.length > 0
+          ? `${g.primary} (+${g.additional.length})`
+          : g.primary;
+        const codeTitle = g.additional.length > 0
+          ? `eCode-Varianten: ${[g.primary, ...g.additional].join(', ')}`
+          : '';
         return `<tr>
-          <td style="font-family: ui-monospace, monospace; font-size: 11.5px;">${escapeHtml(eCode)}</td>
-          <td>${escapeHtml(anlage)}</td>
-          <td>${escapeHtml(value)}</td>
-          <td><span class="origin-pill ${safeOrigin}">${escapeHtml(origin)}</span></td>
+          <td style="font-family: ui-monospace, monospace; font-size: 11.5px;" title="${escapeHtml(codeTitle)}">${escapeHtml(codeBadge)}</td>
+          <td>${escapeHtml(g.label)}</td>
+          <td>${escapeHtml(g.anlage)}${g.vz ? ' Z.' + escapeHtml(g.vz) : ''}</td>
+          <td>${escapeHtml(g.value)}</td>
+          <td><span class="origin-pill ${safeOrigin}">${escapeHtml(g.origin)}</span></td>
         </tr>`;
       }).join('');
-      document.getElementById('layer-rows').innerHTML = rows || '<tr><td colspan="4" style="color: var(--color-text-tertiary);">Layer leer.</td></tr>';
+      document.getElementById('layer-rows').innerHTML = rows || '<tr><td colspan="5" style="color: var(--color-text-tertiary);">Layer leer.</td></tr>';
     }
 
     // ── Upload + SSE ────────────────────────────────────────────────────
     const drop = document.getElementById('drop');
     const fileInput = document.getElementById('file');
-    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragging'); });
+    const dropFile = document.getElementById('drop-file');
+    const dropProgress = document.getElementById('drop-progress');
+    const dropResult = document.getElementById('drop-result');
+
+    function resetDropZone() {
+      drop.classList.remove('busy');
+      dropFile.hidden = true; dropFile.textContent = '';
+      dropProgress.hidden = true;
+      dropResult.hidden = true; dropResult.textContent = '';
+      dropResult.classList.remove('err');
+      fileInput.value = '';
+    }
+    function showSelectedFile(file) {
+      dropFile.hidden = false;
+      dropFile.textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+    }
+
+    drop.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!drop.classList.contains('busy')) drop.classList.add('dragging');
+    });
     drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
     drop.addEventListener('drop', e => {
       e.preventDefault();
       drop.classList.remove('dragging');
+      if (drop.classList.contains('busy')) return;
       if (e.dataTransfer.files?.[0]) startUpload(e.dataTransfer.files[0]);
     });
     fileInput.addEventListener('change', e => {
+      if (drop.classList.contains('busy')) return;
       if (e.target.files?.[0]) startUpload(e.target.files[0]);
     });
 
@@ -399,15 +500,32 @@
       document.getElementById('events').textContent = '';
       document.getElementById('events-panel').hidden = false;
 
+      resetDropZone();
+      drop.classList.add('busy');
+      showSelectedFile(file);
+      dropProgress.hidden = false;
+
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/upload`, {
-        method: 'POST',
-        body: fd,
-      });
+      let res;
+      try {
+        res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/upload`, {
+          method: 'POST',
+          body: fd,
+        });
+      } catch (e) {
+        dropProgress.hidden = true;
+        drop.classList.remove('busy');
+        dropResult.hidden = false; dropResult.classList.add('err');
+        dropResult.textContent = `Netzwerk-Fehler: ${e?.message || e}`;
+        return;
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        document.getElementById('upload-err').textContent = j.error || `HTTP ${res.status}`;
+        dropProgress.hidden = true;
+        drop.classList.remove('busy');
+        dropResult.hidden = false; dropResult.classList.add('err');
+        dropResult.textContent = j.error || `HTTP ${res.status}`;
         return;
       }
       // Stream SSE
@@ -415,6 +533,9 @@
       const decoder = new TextDecoder();
       let buf = '';
       const ev = document.getElementById('events');
+      let stagesDone = 0;
+      let lastStage = '';
+      let runState = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -428,8 +549,22 @@
             const obj = JSON.parse(m[1]);
             ev.textContent += `[${obj.stageId ?? '·'}] ${obj.name}\n`;
             ev.scrollTop = ev.scrollHeight;
+            if (obj.name === 'stage_done') { stagesDone++; lastStage = obj.stageId || lastStage; }
+            if (obj.name === 'run_done') runState = 'ok';
+            if (obj.name === 'run_error') runState = 'error';
           } catch { /* ignore */ }
         }
+      }
+      // Result-Summary in der Drop-Zone
+      dropProgress.hidden = true;
+      drop.classList.remove('busy');
+      dropResult.hidden = false;
+      if (runState === 'ok') {
+        dropResult.classList.remove('err');
+        dropResult.textContent = `✓ Extraktion abgeschlossen · ${stagesDone} Stages`;
+      } else {
+        dropResult.classList.add('err');
+        dropResult.textContent = runState === 'error' ? '✕ Extraktion fehlgeschlagen (siehe Events)' : '⚠ Stream unerwartet beendet';
       }
       // Re-load instance & layer after run finishes
       await loadInstance();
