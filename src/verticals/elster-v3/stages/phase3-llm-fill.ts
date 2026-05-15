@@ -99,18 +99,42 @@ async function vllmStreamExtract(
   const timer = setTimeout(() => ac.abort(new Error(`vLLM timeout after ${timeoutMs}ms`)), timeoutMs);
   const onParentAbort = () => ac.abort(opts.signal?.reason);
   opts.signal?.addEventListener('abort', onParentAbort, { once: true });
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      signal: ac.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
+  // Retry-Schleife für transiente fetch-Fehler (undici connection-pool
+  // saturation, vLLM ECONNRESET unter Burst). Bei 4xx weiter fail-fast.
+  // Stricker-Bulk-E2E: 5 parallele JPGs + 2 PDFs => 7 streams gleichzeitig
+  // → "fetch failed". Mit Retry stabil.
+  const MAX_RETRIES = 2;
+  let res: Response | null = null;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        signal: ac.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) break;
+      // 4xx → fail-fast, kein retry
+      if (res.status >= 400 && res.status < 500) break;
+      lastErr = new Error(`vLLM stream ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+      if (opts.signal?.aborted || ac.signal.aborted) {
+        clearTimeout(timer);
+        opts.signal?.removeEventListener('abort', onParentAbort);
+        throw err;
+      }
+    }
+    if (attempt < MAX_RETRIES) {
+      const backoff = 500 * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  if (!res) {
     clearTimeout(timer);
     opts.signal?.removeEventListener('abort', onParentAbort);
-    throw err;
+    throw new Error(`vLLM stream: ${(lastErr as Error)?.message || 'unbekannter Fehler'} (nach ${MAX_RETRIES + 1} Versuchen)`);
   }
   if (!res.ok) {
     clearTimeout(timer);
