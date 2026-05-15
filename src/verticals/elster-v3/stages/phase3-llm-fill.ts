@@ -19,7 +19,7 @@
  * Output-Shape spiegelt phase1: per_anlage mit llm_hits map.
  */
 import { defineStage } from '../../../core/stage.ts';
-import { chatJson, type ChatProvider } from '../../../lib/llm-chat.ts';
+import { chatJson, onpremFetch, type ChatProvider } from '../../../lib/llm-chat.ts';
 import {
   loadContainerBrief,
   paragraphFuer,
@@ -108,7 +108,7 @@ async function vllmStreamExtract(
   let lastErr: unknown = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      res = await onpremFetch(`${baseUrl}/v1/chat/completions`, {
         method: 'POST',
         signal: ac.signal,
         headers: { 'Content-Type': 'application/json' },

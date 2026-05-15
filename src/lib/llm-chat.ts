@@ -17,9 +17,39 @@
  * The contract is intentionally small: text in, JSON out.
  */
 
+import { Agent, fetch as undiciFetch } from 'undici';
+
 const MISTRAL_API_BASE = 'https://api.mistral.ai/v1';
 const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
 const DEFAULT_OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
+
+/**
+ * Expliziter undici-Agent für on-prem LLM-Endpoints (vLLM, Ollama).
+ * Default-Node-Fetch hat eine schmale Connection-Pool-Cap pro Origin, was bei
+ * 5+ parallelen Streams zu "fetch failed" führt (Stricker-Bulk-E2E 2026-05-15).
+ * Mit 64 Connections + no header/body-Timeout halten Streams + Bursts durch.
+ *
+ * Cloud-Anbieter (Mistral, Anthropic) bleiben am Default-Fetch — die haben
+ * Cloud-Loadbalancer, keine local-pool-Sättigung.
+ */
+const ONPREM_LLM_AGENT = new Agent({
+  connections: 64,
+  pipelining: 1,
+  keepAliveTimeout: 60_000,
+  keepAliveMaxTimeout: 600_000,
+  headersTimeout: 0,
+  bodyTimeout: 0,
+});
+
+/** Node-Global-fetch (Node 24's bundled undici) ist mit undici@8.x Agents
+ *  inkompatibel — `dispatcher: <agent>` produziert UND_ERR_INVALID_ARG. Wir
+ *  routen on-prem-LLM-Calls daher direkt über `undici.fetch` mit explizitem
+ *  Dispatcher. Cloud-Anbieter bleiben am Global-fetch. */
+function onpremFetch(url: string, init: RequestInit & { signal?: AbortSignal }): Promise<Response> {
+  return undiciFetch(url, { ...(init as any), dispatcher: ONPREM_LLM_AGENT }) as unknown as Promise<Response>;
+}
+
+export { ONPREM_LLM_AGENT, onpremFetch };
 
 function mistralKey(): string {
   const key = process.env.MISTRAL_API_KEY;
@@ -191,7 +221,7 @@ async function chatJsonVllm<T>(
   let lastErr: unknown = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      res = await onpremFetch(`${baseUrl}/v1/chat/completions`, {
         method: 'POST',
         signal: opts.signal,
         headers: { 'Content-Type': 'application/json' },
@@ -283,7 +313,7 @@ async function chatJsonOllama<T>(
   const messages: Array<{ role: string; content: string }> = [];
   if (opts.system) messages.push({ role: 'system', content: opts.system });
   messages.push({ role: 'user', content: prompt });
-  const res = await fetch(`${baseUrl}/api/chat`, {
+  const res = await onpremFetch(`${baseUrl}/api/chat`, {
     method: 'POST',
     signal: opts.signal,
     headers: { 'Content-Type': 'application/json' },
