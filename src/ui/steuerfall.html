@@ -256,12 +256,44 @@
     }
 
     const params = new URLSearchParams(location.search);
-    const APP_ID = params.get('app');
-    const CASE_ID = params.get('case');
+    // Akzeptiere nur echte Werte — die String-Literale "null"/"undefined"
+    // entstehen, wenn z.B. ein Programm undefined per encodeURIComponent
+    // serialisiert oder ein Bookmark mit unresolved Template-Variable
+    // geteilt wird. Lieber sauber abfangen als kryptische 404.
+    function cleanParam(v) {
+      if (typeof v !== 'string') return null;
+      const t = v.trim();
+      if (!t || t === 'null' || t === 'undefined') return null;
+      return t;
+    }
+    const APP_ID = cleanParam(params.get('app'));
+    const CASE_ID = cleanParam(params.get('case'));
 
     if (!APP_ID || !CASE_ID) {
-      document.body.innerHTML = '<p style="padding:40px; color: #ef4444;">Fehler: ?app= und ?case= Parameter fehlen.</p>';
-      throw new Error('missing params');
+      // Replace the main content with a helpful redirect — Sidebar bleibt
+      // sichtbar, der Topbar-Link funktioniert weiterhin.
+      const main = document.querySelector('.sturm-main');
+      if (main) {
+        main.innerHTML = `
+          <header class="sturm-topbar">
+            <div class="sturm-topbar-l">
+              <a href="/anwendungen.html" style="color: var(--color-text-tertiary); text-decoration:none; font-size:12px;">← Anwendungen</a>
+            </div>
+          </header>
+          <div style="flex:1; display:flex; align-items:center; justify-content:center; padding: 32px;">
+            <div style="max-width: 480px; text-align: center;">
+              <h2 style="margin: 0 0 12px; color: var(--color-text-primary);">Kein Fall ausgewählt</h2>
+              <p style="color: var(--color-text-secondary); margin: 0 0 20px; line-height: 1.55;">
+                Diese Seite braucht einen aktiven Fall (URL: <code>?app=…&amp;case=…</code>).
+                Wähle einen bestehenden Fall aus oder lege einen neuen an.
+              </p>
+              <a href="/anwendungen.html" style="display:inline-block; padding: 9px 16px; border-radius: 8px; background: var(--color-accent); color: var(--color-bg-primary, #000); text-decoration: none; font-weight: 500;">Zu den Anwendungen</a>
+            </div>
+          </div>
+        `;
+      }
+      window.lucide && window.lucide.createIcons();
+      throw new Error('missing or invalid app/case params');
     }
 
     let instance = null;
