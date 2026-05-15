@@ -149,70 +149,8 @@
 <body>
   <div class="sturm-app">
 
-    <!-- ============ Sidebar ============ -->
-    <aside class="sturm-sidebar" id="sidebar">
-      <div class="sturm-sb-head">
-        <div class="sturm-sb-brand">
-          <span class="sturm-mark">S</span>
-          <span class="sturm-brand-word">STURM</span>
-        </div>
-        <button class="sturm-sb-toggle" aria-label="Sidebar umschalten" onclick="toggleSidebar()">
-          <i data-lucide="panel-left"></i>
-        </button>
-      </div>
-
-      <a class="sturm-sb-new" id="sb-new-link" href="/pipeline.html" style="text-decoration:none;">
-        <i data-lucide="play"></i><span>Workflow starten</span>
-        <span class="sturm-kbd">⌘N</span>
-      </a>
-
-      <div class="sturm-sb-search">
-        <i data-lucide="search"></i>
-        <input id="sb-search-input" placeholder="Suchen" autocomplete="off">
-        <span class="sturm-kbd">⌘K</span>
-      </div>
-
-      <div class="sturm-sb-section">
-        <span>Workflows</span>
-        <span class="sturm-kbd" id="sb-workflow-count" style="margin-left:0;">…</span>
-      </div>
-      <div id="sb-workflow-categories" class="sturm-sb-nav-scroll">
-        <!-- dynamisch gefüllt: pro Kategorie ein Block (.sturm-sb-cat) -->
-      </div>
-
-      <div class="sturm-sb-section"><span>Werkzeuge</span></div>
-      <nav class="sturm-sb-nav">
-        <a class="sturm-sb-item" href="/anwendungen.html" style="text-decoration:none;">
-          <i data-lucide="boxes"></i>
-          <span>Anwendungen</span>
-          <span class="sturm-sb-item-meta">apps</span>
-        </a>
-        <a class="sturm-sb-item" href="/pipeline.html" style="text-decoration:none;">
-          <i data-lucide="play"></i>
-          <span>Pipeline-Runner</span>
-          <span class="sturm-sb-item-meta">run</span>
-        </a>
-        <a class="sturm-sb-item" href="/designer.html" style="text-decoration:none;">
-          <i data-lucide="layout-grid"></i>
-          <span>Designer</span>
-          <span class="sturm-sb-item-meta">build</span>
-        </a>
-        <a class="sturm-sb-item" href="/studio-ocr.html" style="text-decoration:none;">
-          <i data-lucide="sliders-horizontal"></i>
-          <span>OCR Studio</span>
-          <span class="sturm-sb-item-meta">tune</span>
-        </a>
-      </nav>
-
-
-      <div class="sturm-sb-foot">
-        <div class="sturm-avatar">C</div>
-        <div>
-          <div class="sturm-sb-user-name">Christoph</div>
-          <div class="sturm-sb-user-plan">0711 Intelligence</div>
-        </div>
-      </div>
-    </aside>
+    <!-- ============ Sidebar (shared via /nav.js) ============ -->
+    <aside id="sturm-nav-host"></aside>
 
     <!-- ============ Main ============ -->
     <div class="sturm-main">
@@ -239,38 +177,6 @@
           <p class="sturm-welcome-sub">
             Jeder Workflow ist ein Graph aus Stages — von OCR bis Bewertung. Dokument rein, Ergebnis raus, jeder Schritt nachvollziehbar.
           </p>
-        </div>
-
-        <!-- Vier Modi: Anwendungen / Runner / Designer / Studio -->
-        <div class="sturm-tools">
-          <a class="sturm-tool" href="/anwendungen.html">
-            <div class="sturm-tool-head">
-              <span class="sturm-tool-icon"><i data-lucide="boxes"></i></span>
-              <h3 class="sturm-tool-title">Anwendungen</h3>
-            </div>
-            <p class="sturm-tool-sub">Vollanwendungen — persistente Fälle, RAG + MCPs, Versiegelung. Aktuell: Steuerfall ESt.</p>
-          </a>
-          <a class="sturm-tool" href="/pipeline.html">
-            <div class="sturm-tool-head">
-              <span class="sturm-tool-icon"><i data-lucide="play"></i></span>
-              <h3 class="sturm-tool-title">Pipeline-Runner</h3>
-            </div>
-            <p class="sturm-tool-sub">Workflow auswählen, Dokument hochladen, Lauf live mitverfolgen.</p>
-          </a>
-          <a class="sturm-tool" href="/designer.html">
-            <div class="sturm-tool-head">
-              <span class="sturm-tool-icon"><i data-lucide="layout-grid"></i></span>
-              <h3 class="sturm-tool-title">Designer</h3>
-            </div>
-            <p class="sturm-tool-sub">Workflows visuell bauen — Stages aus der Palette ziehen, verbinden, speichern.</p>
-          </a>
-          <a class="sturm-tool" href="/studio-ocr.html">
-            <div class="sturm-tool-head">
-              <span class="sturm-tool-icon"><i data-lucide="sliders-horizontal"></i></span>
-              <h3 class="sturm-tool-title">OCR Studio</h3>
-            </div>
-            <p class="sturm-tool-sub">OCR-Profile gezielt tunen — Templates, Bounding-Boxen, Vergleich.</p>
-          </a>
         </div>
 
         <!-- Kategorie-Filter: wirken auf Karten unten -->
@@ -327,9 +233,6 @@
     }
 
     // ============ UI helpers ============
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('is-collapsed');
-    }
     function applyTheme(mode) {
       const html = document.documentElement;
       const isDark = mode === 'dark';
@@ -379,48 +282,7 @@
     let activeQuery = '';
 
     // ============ Rendering ============
-    function renderSidebar(byCat) {
-      const host = document.getElementById('sb-workflow-categories');
-      if (!host) return;
-      host.innerHTML = CATEGORIES.filter(c => (byCat[c.id] || []).length > 0).map((cat, idx) => {
-        const items = byCat[cat.id] || [];
-        const rows = items.map((w, i) => {
-          const id = w.id || '';
-          const name = w.name || id;
-          const shortName = name.split('—')[0].trim() || id;
-          const versionMatch = id.match(/(v[\d_]+)$/);
-          const version = versionMatch ? versionMatch[1].replace('_', '.') : '';
-          const search = (shortName + ' ' + id + ' ' + name).toLowerCase();
-          return `<a class="sturm-sb-item${idx === 0 && i === 0 ? ' is-active' : ''}"
-                     href="/pipeline.html?workflow=${encodeURIComponent(id)}"
-                     style="text-decoration:none;"
-                     data-search="${escapeHtml(search)}"
-                     data-category="${cat.id}">
-            <i data-lucide="${pickIcon(id)}"></i>
-            <span>${escapeHtml(shortName)}</span>
-            <span class="sturm-sb-item-meta">${escapeHtml(version)}</span>
-          </a>`;
-        }).join('');
-        return `<div class="sturm-sb-cat" data-cat-block="${cat.id}">
-          <div class="sturm-sb-cat-head" role="button" tabindex="0">
-            <span>${escapeHtml(cat.label)}</span>
-            <span style="display:inline-flex; align-items:center; gap:8px;">
-              <span class="sturm-kbd" style="margin:0;">${items.length}</span>
-              <i data-lucide="chevron-down" class="sturm-sb-cat-chev"></i>
-            </span>
-          </div>
-          <nav class="sturm-sb-nav">${rows}</nav>
-        </div>`;
-      }).join('');
-
-      // Kategorie-Klappverhalten
-      host.querySelectorAll('.sturm-sb-cat-head').forEach(head => {
-        head.addEventListener('click', () => head.parentElement.classList.toggle('is-collapsed'));
-        head.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); head.click(); }
-        });
-      });
-    }
+    // (Sidebar wird zentral von /nav.js gerendert; hier nur Main-Grid + Chips.)
 
     function renderCategoryChips(byCat, total) {
       const host = document.getElementById('cat-chips');
@@ -509,22 +371,6 @@
         const newCard = document.getElementById('new-workflow-card');
         if (newCard) newCard.style.display = (cat === '*' && !q) ? '' : 'none';
       }
-      // Sidebar-Suche
-      const nav = document.getElementById('sb-workflow-categories');
-      let visibleSb = 0;
-      if (nav) {
-        for (const block of nav.querySelectorAll('[data-cat-block]')) {
-          let blockVisible = 0;
-          for (const el of block.querySelectorAll('[data-search]')) {
-            const match = !q || el.dataset.search.includes(q);
-            el.style.display = match ? '' : 'none';
-            if (match) { blockVisible++; visibleSb++; }
-          }
-          block.style.display = blockVisible > 0 ? '' : 'none';
-        }
-      }
-      const cnt = document.getElementById('sb-workflow-count');
-      if (cnt) cnt.textContent = String(visibleSb);
       if (empty) empty.hidden = visibleCards > 0;
     }
 
@@ -543,48 +389,31 @@
           (byCat[cat] || byCat.lab).push(w);
         }
 
-        renderSidebar(byCat);
         renderCategoryChips(byCat, wfs.length);
         renderGrid(wfs);
         window.lucide && window.lucide.createIcons();
         applyFilter();
-
-        const cnt = document.getElementById('sb-workflow-count');
-        if (cnt) cnt.textContent = String(wfs.length);
       } catch (err) {
         console.error('Workflow-Liste konnte nicht geladen werden:', err);
-        const cnt = document.getElementById('sb-workflow-count');
-        if (cnt) cnt.textContent = '!';
       }
     }
+
+    import('/nav.js').then(({ renderSturmNav, contextRendererWorkflows }) => {
+      renderSturmNav({ activeNav: 'workflows', contextHeading: 'Workflow-Kategorien', contextRenderer: contextRendererWorkflows });
+    });
 
     window.addEventListener('DOMContentLoaded', () => {
       window.lucide && window.lucide.createIcons();
       loadWorkflows();
-      document.getElementById('sb-search-input')?.addEventListener('input', (e) => {
-        activeQuery = e.target.value || '';
-        applyFilter();
-      });
       document.getElementById('theme-btn')?.addEventListener('click', toggleTheme);
     });
 
-    // Tastatur-Shortcuts
+    // Tastatur-Shortcuts: ⌘N → Pipeline, ⌘K → Suche im Tile-Grid focus
     window.addEventListener('keydown', (e) => {
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        document.getElementById('sb-search-input')?.focus();
-      } else if (mod && (e.key === 'n' || e.key === 'N')) {
+      if (mod && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
         location.href = '/pipeline.html';
-      } else if (e.key === 'Escape') {
-        const input = document.getElementById('sb-search-input');
-        if (input && document.activeElement === input) {
-          input.value = '';
-          activeQuery = '';
-          applyFilter();
-          input.blur();
-        }
       }
     });
   </script>

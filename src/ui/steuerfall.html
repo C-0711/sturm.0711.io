@@ -287,24 +287,7 @@
 </head>
 <body>
   <div class="sturm-app">
-    <aside class="sturm-sidebar" id="sidebar">
-      <div class="sturm-sb-head">
-        <div class="sturm-sb-brand">
-          <a href="/" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px;">
-            <span class="sturm-mark">S</span>
-            <span class="sturm-brand-word">STURM</span>
-          </a>
-        </div>
-      </div>
-      <div class="sturm-sb-section"><span>Werkzeuge</span></div>
-      <nav class="sturm-sb-nav">
-        <a class="sturm-sb-item" href="/" style="text-decoration:none;"><i data-lucide="layout-grid"></i><span>Workflows</span></a>
-        <a class="sturm-sb-item is-active" href="/anwendungen.html" style="text-decoration:none;"><i data-lucide="boxes"></i><span>Anwendungen</span></a>
-        <a class="sturm-sb-item" href="/pipeline.html" style="text-decoration:none;"><i data-lucide="play"></i><span>Pipeline-Runner</span></a>
-        <a class="sturm-sb-item" href="/designer.html" style="text-decoration:none;"><i data-lucide="layout-grid"></i><span>Designer</span></a>
-        <a class="sturm-sb-item" href="/studio-ocr.html" style="text-decoration:none;"><i data-lucide="sliders-horizontal"></i><span>OCR Studio</span></a>
-      </nav>
-    </aside>
+    <aside id="sturm-nav-host"></aside>
 
     <div class="sturm-main">
       <header class="sturm-topbar">
@@ -515,6 +498,8 @@
       if (instance.runs.length > 0) {
         loadLastLayer();
       }
+      // Sidebar-Context aktualisieren mit den Fall-Daten
+      if (window.__sturmNavRefresh) window.__sturmNavRefresh(instance);
     }
 
     // Run-Detail-Cache, damit das Modal flott aufgeht beim zweiten Klick.
@@ -968,6 +953,24 @@
       } else {
         alert(`Fehler: ${j.error || res.status}`);
       }
+    });
+
+    // Sidebar einmal rendern, Context-Refresh wenn die Instance da ist.
+    import('/nav.js').then(({ renderSturmNav, contextRendererSteuerfall }) => {
+      let lastInstance = null;
+      window.__sturmNavRefresh = (inst) => {
+        lastInstance = inst;
+        const ctxHost = document.getElementById('sturm-nav-context');
+        if (ctxHost) {
+          contextRendererSteuerfall(ctxHost, { appId: APP_ID, caseId: CASE_ID, instance: inst });
+          window.lucide && window.lucide.createIcons();
+        }
+      };
+      renderSturmNav({
+        activeNav: 'anwendungen',
+        contextHeading: 'Steuerfall',
+        contextRenderer: (host) => contextRendererSteuerfall(host, { appId: APP_ID, caseId: CASE_ID, instance: lastInstance }),
+      });
     });
 
     window.addEventListener('DOMContentLoaded', () => {

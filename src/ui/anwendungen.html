@@ -232,48 +232,7 @@
 </head>
 <body>
   <div class="sturm-app">
-    <aside class="sturm-sidebar" id="sidebar">
-      <div class="sturm-sb-head">
-        <div class="sturm-sb-brand">
-          <a href="/" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px;">
-            <span class="sturm-mark">S</span>
-            <span class="sturm-brand-word">STURM</span>
-          </a>
-        </div>
-      </div>
-
-      <div class="sturm-sb-section"><span>Werkzeuge</span></div>
-      <nav class="sturm-sb-nav">
-        <a class="sturm-sb-item" href="/" style="text-decoration:none;">
-          <i data-lucide="layout-grid"></i>
-          <span>Workflows</span>
-        </a>
-        <a class="sturm-sb-item is-active" href="/anwendungen.html" style="text-decoration:none;">
-          <i data-lucide="boxes"></i>
-          <span>Anwendungen</span>
-        </a>
-        <a class="sturm-sb-item" href="/pipeline.html" style="text-decoration:none;">
-          <i data-lucide="play"></i>
-          <span>Pipeline-Runner</span>
-        </a>
-        <a class="sturm-sb-item" href="/designer.html" style="text-decoration:none;">
-          <i data-lucide="layout-grid"></i>
-          <span>Designer</span>
-        </a>
-        <a class="sturm-sb-item" href="/studio-ocr.html" style="text-decoration:none;">
-          <i data-lucide="sliders-horizontal"></i>
-          <span>OCR Studio</span>
-        </a>
-      </nav>
-
-      <div class="sturm-sb-foot">
-        <div class="sturm-avatar">C</div>
-        <div>
-          <div class="sturm-sb-user-name">Christoph</div>
-          <div class="sturm-sb-user-plan">0711 Intelligence</div>
-        </div>
-      </div>
-    </aside>
+    <aside id="sturm-nav-host"></aside>
 
     <div class="sturm-main">
       <header class="sturm-topbar">
@@ -577,6 +536,10 @@
         err.textContent = String(e?.message || e);
       }
     }
+
+    import('/nav.js').then(({ renderSturmNav, contextRendererAnwendungen }) => {
+      renderSturmNav({ activeNav: 'anwendungen', contextHeading: 'Registrierte Anwendungen', contextRenderer: contextRendererAnwendungen });
+    });
 
     window.addEventListener('DOMContentLoaded', () => {
       window.lucide && window.lucide.createIcons();
