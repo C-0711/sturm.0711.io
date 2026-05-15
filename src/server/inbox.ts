@@ -14,6 +14,22 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { CaseDocument } from './applications.ts';
 
+// Per-Case-Mutex: serialisiert Manifest-Reads + -Writes für denselben Fall.
+// Concurrent-Uploads im Bulk-Endpoint würden sonst race-conditions im
+// _manifest.json verursachen (zwei Worker lesen das leere Manifest, jeder
+// schreibt seinen einen Eintrag zurück → einer überschreibt den anderen).
+const caseLocks = new Map<string, Promise<unknown>>();
+function withCaseLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = caseLocks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  // Cleanup: lock entfernen wenn diese Operation fertig ist und niemand
+  // anderes mehr in der Queue hängt (gleicher Promise-Ref).
+  caseLocks.set(key, next.finally(() => {
+    if (caseLocks.get(key) === next) caseLocks.delete(key);
+  }));
+  return next;
+}
+
 export interface InboxManifest {
   version: 1;
   caseId: string;
@@ -98,38 +114,42 @@ export async function persistUploadToInbox(
   },
   runId: string,
 ): Promise<CaseDocument> {
+  // Datei + sha256 außerhalb des Locks lesen (I/O-parallel ok)
   const buf = await fs.readFile(upload.tempPath);
   const sha256 = createHash('sha256').update(buf).digest('hex');
-
-  const m = await readManifest(rootCwd, instance);
-  // Idempotenz: wenn schon im Manifest, alten Eintrag updaten (neuer runId)
-  // statt neuer Datei.
-  const existingIdx = m.documents.findIndex((d) => d.sha256 === sha256);
-  if (existingIdx >= 0) {
-    const existing = m.documents[existingIdx];
-    existing.runId = runId; // letzten Run als aktuellen merken
-    await writeManifest(rootCwd, instance, m);
-    return existing;
-  }
-
   const targetName = `${isoSlug()}_${safeFilenamePart(upload.originalname)}`;
   const inboxAbs = inboxDirFor(rootCwd, instance);
   await fs.mkdir(inboxAbs, { recursive: true });
   const targetAbs = path.join(inboxAbs, targetName);
-  await fs.writeFile(targetAbs, buf);
 
-  const doc: CaseDocument = {
-    runId,
-    filename: upload.originalname,
-    inboxPath: path.join('inbox', targetName), // workspace-relativ
-    sha256,
-    size: upload.size,
-    uploadedAt: new Date().toISOString(),
-    mimeType: upload.mimetype,
-  };
-  m.documents.push(doc);
-  await writeManifest(rootCwd, instance, m);
-  return doc;
+  const lockKey = `${instance.appId}|${instance.caseId}`;
+  return withCaseLock(lockKey, async () => {
+    const m = await readManifest(rootCwd, instance);
+    // Idempotenz: wenn schon im Manifest, alten Eintrag updaten.
+    const existingIdx = m.documents.findIndex((d) => d.sha256 === sha256);
+    if (existingIdx >= 0) {
+      const existing = m.documents[existingIdx];
+      existing.runId = runId;
+      await writeManifest(rootCwd, instance, m);
+      return existing;
+    }
+    // Datei in Inbox schreiben (innerhalb des Locks, damit das Manifest
+    // konsistent bleibt — bei einem Crash mittendrin gibt es zwar eine
+    // verwaiste Datei, aber keinen toten Manifest-Eintrag).
+    await fs.writeFile(targetAbs, buf);
+    const doc: CaseDocument = {
+      runId,
+      filename: upload.originalname,
+      inboxPath: path.join('inbox', targetName),
+      sha256,
+      size: upload.size,
+      uploadedAt: new Date().toISOString(),
+      mimeType: upload.mimetype,
+    };
+    m.documents.push(doc);
+    await writeManifest(rootCwd, instance, m);
+    return doc;
+  });
 }
 
 /**
@@ -142,10 +162,13 @@ export async function recordDocumentRunCompletion(
   runId: string,
   details: { anlagen?: string[]; fieldsExtracted?: number },
 ): Promise<void> {
-  const m = await readManifest(rootCwd, instance);
-  const doc = m.documents.find((d) => d.runId === runId);
-  if (!doc) return;
-  if (details.anlagen) doc.anlagen = details.anlagen;
-  if (typeof details.fieldsExtracted === 'number') doc.fieldsExtracted = details.fieldsExtracted;
-  await writeManifest(rootCwd, instance, m);
+  const lockKey = `${instance.appId}|${instance.caseId}`;
+  await withCaseLock(lockKey, async () => {
+    const m = await readManifest(rootCwd, instance);
+    const doc = m.documents.find((d) => d.runId === runId);
+    if (!doc) return;
+    if (details.anlagen) doc.anlagen = details.anlagen;
+    if (typeof details.fieldsExtracted === 'number') doc.fieldsExtracted = details.fieldsExtracted;
+    await writeManifest(rootCwd, instance, m);
+  });
 }
