@@ -611,7 +611,22 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
     const nWorkers = Math.min(concurrency, anlagen.length);
     await Promise.all(Array.from({ length: nWorkers }, () => worker()));
 
-    ctx.emit('phase3_done', { anlagen: anlagen.length, totalFilled });
+    // Wenn ALLE Anlagen einen LLM-Error hatten und 0 Hits → das ist ein
+    // echter Stage-Fehler, kein "leiser Erfolg". Emittieren als phase3_warn
+    // und werfen am Ende, damit der Workflow-State 'partial' wird. Wenn
+    // wenigstens eine Anlage etwas geliefert hat, bleibt die Stage 'ok'
+    // aber liefert per_anlage.<x>.error im Output (für Debugging).
+    const failedAnlagen = Object.values(results).filter((r) => r.error);
+    const okAnlagen = anlagen.length - failedAnlagen.length;
+    if (failedAnlagen.length === anlagen.length && totalFilled === 0 && anlagen.length > 0) {
+      ctx.emit('phase3_warn', {
+        reason: 'all_anlagen_failed',
+        anlagen: anlagen.length,
+        errors: failedAnlagen.map((r) => ({ anlage: r.anlage, error: r.error })),
+      });
+      throw new Error(`Phase 3 LLM-Fill: alle ${anlagen.length} Anlage(n) fehlgeschlagen — ${failedAnlagen[0].error}`);
+    }
+    ctx.emit('phase3_done', { anlagen: anlagen.length, totalFilled, okAnlagen, failedAnlagen: failedAnlagen.length });
     return { per_anlage: results, totalFilled, ms: Date.now() - t0 };
   },
 });

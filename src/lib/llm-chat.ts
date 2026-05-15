@@ -182,15 +182,39 @@ async function chatJsonVllm<T>(
       },
     };
   }
-  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: 'POST',
-    signal: opts.signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`vLLM chat ${res.status}: ${text.slice(0, 200)}`);
+  // Retry-Schleife: vLLM kann unter Concurrency-Spike "fetch failed" /
+  // ECONNRESET liefern (Stricker-Bulk-E2E: 5 parallele JPGs → alle fielen
+  // gleichzeitig auf vLLM). Bei Netzwerk- oder 5xx-Fehlern bis zu 2× mit
+  // exponentiellem Backoff retry'en.
+  const MAX_RETRIES = 2;
+  let res: Response | null = null;
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        signal: opts.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) break;
+      // 5xx → retry, 4xx → fail-fast
+      if (res.status >= 400 && res.status < 500) {
+        const text = await res.text();
+        throw new Error(`vLLM chat ${res.status}: ${text.slice(0, 200)}`);
+      }
+      lastErr = new Error(`vLLM chat ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+      if (opts.signal?.aborted) throw err;
+    }
+    if (attempt < MAX_RETRIES) {
+      const backoff = 500 * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  if (!res || !res.ok) {
+    throw new Error(`vLLM chat: ${(lastErr as Error)?.message || 'unbekannter Fehler'} (nach ${MAX_RETRIES + 1} Versuchen)`);
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;

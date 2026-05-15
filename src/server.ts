@@ -380,7 +380,11 @@ app.post(
     if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     if (files.length === 0) { res.status(400).json({ error: 'mindestens eine Datei erforderlich (multipart field "files")' }); return; }
-    const concurrency = Math.max(1, Math.min(5, Number(req.query.concurrency) || 3));
+    // Default 2 statt 3: 3 parallele Workflow-Runs × 3 vLLM-Calls pro Anlage
+    // überlasteten vLLM im Stricker-Bulk-E2E (5 JPGs gleichzeitig → alle
+    // mit "fetch failed"). Kann pro Aufruf via ?concurrency= überschrieben
+    // werden.
+    const concurrency = Math.max(1, Math.min(5, Number(req.query.concurrency) || 2));
 
     const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
 
