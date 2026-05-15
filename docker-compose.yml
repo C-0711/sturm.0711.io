@@ -42,6 +42,22 @@ services:
       # Lane-5 ELSTER-MCP (Einreichung). Wenn nicht gesetzt, antwortet der
       # Client deterministisch mit { erfolg: false, reason: 'mcp-unavailable' }.
       ELSTER_MCP_URL: ${ELSTER_MCP_URL:-}
+      # ── LLM-Backends auf dem Host ───────────────────────────────────
+      # `host.docker.internal` ist auf Linux nicht automatisch gemappt —
+      # extra_hosts (unten) legt host-gateway als Alias an. Damit erreicht
+      # der Container den Host-eigenen Ollama (11434) + vLLM (11435), die
+      # für elster-v3/quantum-ground (EmbeddingGemma) und phase3-llm-fill
+      # (Gemma-4) gebraucht werden.
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      VLLM_URL: ${VLLM_URL:-http://host.docker.internal:11435}
+      EMBED_MODEL: ${EMBED_MODEL:-embeddinggemma}
+      # BMF Lane-1 MCP — gleiches Muster (host-gateway).
+      BMF_MCP_URL: ${BMF_MCP_URL:-http://host.docker.internal:12010/mcp}
+    extra_hosts:
+      # Docker for Linux: maps host.docker.internal → host-gateway-IP,
+      # damit Container outbound auf am Host gebundene Services zugreifen
+      # können (Ollama, vLLM, BMF-MCP). Auf Mac/Windows ohnehin Standard.
+      - "host.docker.internal:host-gateway"
     volumes:
       # ── Stateful: bind-mount existing host data so we don't lose live
       #    workspaces / runs / schemas / gitchain repos on cutover.
