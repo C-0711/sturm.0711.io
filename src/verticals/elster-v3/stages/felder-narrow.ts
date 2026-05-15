@@ -32,6 +32,12 @@ export interface FelderNarrowConfig {
   pflichtAlwaysKeep?: boolean;
   /** Wenn RAG leer/null: Input unverändert durchreichen. Default true. */
   passthroughOnEmptyRag?: boolean;
+  /** Minimum-Felder pro Anlage nach Narrow. Wenn weniger übrig sind,
+   *  füllen wir aus dem Original-Katalog auf (geordnet wie geliefert,
+   *  i.d.R. Pflicht zuerst, dann Vordruckzeile). Schützt vor RAG-Hunger
+   *  + Katalogen ohne Pflicht-Flags (z.B. Anlage N hat 0 pflicht-Atome).
+   *  Default 30. Auf 0 setzen, um die Aufstockung zu deaktivieren. */
+  minPerAnlage?: number;
 }
 
 export interface FelderNarrowOutput {
@@ -41,6 +47,7 @@ export interface FelderNarrowOutput {
     outputFelder: number;
     pflichtKept: number;
     ragKept: number;
+    floorTopUp: number;
     droppedNonPflicht: number;
   };
   ms: number;
@@ -74,6 +81,7 @@ export const felderNarrowStage = defineStage<
     const cfg = ctx.config ?? {};
     const pflichtAlwaysKeep = cfg.pflichtAlwaysKeep ?? true;
     const passthroughOnEmptyRag = cfg.passthroughOnEmptyRag ?? true;
+    const minPerAnlage = cfg.minPerAnlage ?? 30;
 
     const fpa = input.felder_per_anlage ?? {};
     const kandidaten = Array.isArray(input.kandidatenECodes) ? input.kandidatenECodes : [];
@@ -89,6 +97,7 @@ export const felderNarrowStage = defineStage<
           outputFelder: inputFelder,
           pflichtKept: 0,
           ragKept: 0,
+          floorTopUp: 0,
           droppedNonPflicht: 0,
         },
         ms: Date.now() - t0,
@@ -104,19 +113,38 @@ export const felderNarrowStage = defineStage<
     const narrowed: Record<string, AnlagenFelderListe> = {};
     let pflichtKept = 0;
     let ragKept = 0;
+    let floorTopUp = 0;
     let droppedNonPflicht = 0;
 
     for (const [anlage, liste] of Object.entries(fpa)) {
-      const kept = (liste.felder ?? []).filter((f) => {
+      const origFelder = liste.felder ?? [];
+      const kept = origFelder.filter((f) => {
         if (pflichtAlwaysKeep && f.pflicht) { pflichtKept++; return true; }
         if (ragSet.has(f.eCode)) { ragKept++; return true; }
         droppedNonPflicht++;
         return false;
       });
+
+      // Floor-Aufstockung: wenn pro Anlage zu wenig Felder übrig sind
+      // (häufig bei Anlagen ohne pflicht-Flags + dünner RAG-Treffer), aus
+      // dem Original-Katalog (welcher schon pflicht-zuerst + Vordruckzeile-
+      // sortiert ist) auffüllen, bis minPerAnlage erreicht ist.
+      if (minPerAnlage > 0 && kept.length < minPerAnlage && origFelder.length > kept.length) {
+        const have = new Set(kept.map((f) => f.eCode));
+        for (const f of origFelder) {
+          if (kept.length >= minPerAnlage) break;
+          if (have.has(f.eCode)) continue;
+          kept.push(f);
+          have.add(f.eCode);
+          floorTopUp++;
+          droppedNonPflicht = Math.max(0, droppedNonPflicht - 1);
+        }
+      }
+
       narrowed[anlage] = { anlage: liste.anlage, felder: kept };
       ctx.emit('felder_narrow_anlage', {
         anlage,
-        inputFelder: liste.felder?.length ?? 0,
+        inputFelder: origFelder.length,
         outputFelder: kept.length,
       });
     }
@@ -128,12 +156,13 @@ export const felderNarrowStage = defineStage<
       outputFelder,
       pflichtKept,
       ragKept,
+      floorTopUp,
       droppedNonPflicht,
     });
 
     return {
       felder_per_anlage: narrowed,
-      stats: { inputFelder, outputFelder, pflichtKept, ragKept, droppedNonPflicht },
+      stats: { inputFelder, outputFelder, pflichtKept, ragKept, floorTopUp, droppedNonPflicht },
       ms: Date.now() - t0,
     };
   },
