@@ -431,7 +431,7 @@ app.post(
         runId: run.runId,
         workflowId: def.id,
         at: new Date().toISOString(),
-        payload: { idx, filename: file.originalname, runId: run.runId, totalStages: Object.keys(def.stages).length },
+        payload: { docIdx: idx, filename: file.originalname, runId: run.runId, totalStages: Object.keys(def.stages).length },
       }));
 
       // Stage-Events mit doc:idx:-Prefix re-emitten — die UI demultiplexed
@@ -462,7 +462,7 @@ app.post(
             runId: run.runId,
             workflowId: def.id,
             at: new Date().toISOString(),
-            payload: { idx, runId: run.runId, state: 'ok', fields: layer ? Object.keys(layer).length : 0, anlagen: klass?.erkannte_anlagen ?? [] },
+            payload: { docIdx: idx, runId: run.runId, state: 'ok', fields: layer ? Object.keys(layer).length : 0, anlagen: klass?.erkannte_anlagen ?? [] },
           }));
         } else {
           res.write(formatSseEvent({
@@ -470,7 +470,7 @@ app.post(
             runId: run.runId,
             workflowId: def.id,
             at: new Date().toISOString(),
-            payload: { idx, runId: run.runId, state: result.state },
+            payload: { docIdx: idx, runId: run.runId, state: result.state },
           }));
         }
       } catch (err) {
@@ -479,7 +479,7 @@ app.post(
           runId: run.runId,
           workflowId: def.id,
           at: new Date().toISOString(),
-          payload: { idx, runId: run.runId, error: (err as Error).message },
+          payload: { docIdx: idx, runId: run.runId, error: (err as Error).message },
         }));
       } finally {
         unsub();
