@@ -14,6 +14,24 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { listApplications, getApplication } from '../core/registry.ts';
 
+export interface CaseDocument {
+  /** Workflow-Run-ID, der dieses Dokument extrahiert hat. */
+  runId: string;
+  /** Originaldateiname wie hochgeladen. */
+  filename: string;
+  /** Workspace-relativer Pfad im inbox-Ordner. */
+  inboxPath: string;
+  /** SHA256-Hex des Dateiinhalts (Audit / Re-Run-Detection). */
+  sha256: string;
+  size: number;
+  uploadedAt: string;
+  /** Erkannte ELSTER-Anlagen aus dem Run (kopiert vom Klassifizierer). */
+  anlagen?: string[];
+  /** Anzahl extrahierter eCodes (kopiert nach Run-Ende). */
+  fieldsExtracted?: number;
+  mimeType?: string;
+}
+
 export interface ApplicationInstance {
   caseId: string;
   appId: string;
@@ -25,6 +43,8 @@ export interface ApplicationInstance {
   updatedAt: string;
   /** Run-IDs des extraction-Workflows, jüngste zuletzt. */
   runs: string[];
+  /** Per-Dokument-Metadaten — befüllt von /upload + /upload-bulk. */
+  documents?: CaseDocument[];
   /** Pfad zum Workspace-Verzeichnis (uploads, artifacts). Relativ zum Server-Cwd. */
   workspacePath: string;
   sealedAt?: string;

@@ -159,6 +159,115 @@
       min-height: 14px;
     }
     .drop-stage strong { color: var(--color-text-primary); font-weight: 500; }
+
+    /* Bulk-Upload-Queue */
+    .bulk-queue-list { display: flex; flex-direction: column; gap: 6px; }
+    .bulk-doc {
+      display: grid;
+      grid-template-columns: 18px 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 12.5px;
+      background: var(--color-bg-card, transparent);
+    }
+    .bulk-doc-state {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--color-text-tertiary);
+    }
+    .bulk-doc-state.running { background: #d97706; animation: bulk-pulse 1.2s ease-in-out infinite; }
+    .bulk-doc-state.ok { background: #059669; }
+    .bulk-doc-state.error { background: #ef4444; }
+    @keyframes bulk-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    .bulk-doc-name { color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bulk-doc-stage { color: var(--color-text-tertiary); font-size: 11px; font-family: ui-monospace, monospace; }
+    .bulk-doc-fields { color: var(--color-text-secondary); font-size: 11px; }
+
+    /* Gesamt-Panel: BMF-Tiles */
+    .bmf-tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .bmf-tile {
+      padding: 12px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg-card, transparent);
+    }
+    .bmf-tile-label { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 4px; }
+    .bmf-tile-value { font-size: 18px; font-weight: 600; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+    .bmf-tile-sub { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 2px; }
+    .bmf-tile.empty .bmf-tile-value { color: var(--color-text-tertiary); font-size: 14px; font-weight: 400; }
+
+    /* Pflicht-Coverage-Bar */
+    .coverage-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg-card, transparent);
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .coverage-track {
+      flex: 1;
+      height: 8px;
+      background: var(--color-bg-hover);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .coverage-fill {
+      height: 100%;
+      background: #059669;
+      transition: width .3s ease;
+    }
+    .coverage-fill.warn { background: #d97706; }
+    .coverage-fill.err { background: #ef4444; }
+    .coverage-label { white-space: nowrap; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+    .coverage-meta { color: var(--color-text-tertiary); font-size: 11px; }
+
+    /* Missing/Conflict-Liste */
+    .missing-list, .conflict-list { margin-top: 8px; }
+    .missing-list summary, .conflict-list summary {
+      cursor: pointer;
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+    .missing-list summary:hover, .conflict-list summary:hover { background: var(--color-bg-hover); }
+    .missing-list[open] summary, .conflict-list[open] summary { border-radius: 8px 8px 0 0; }
+    .missing-row, .conflict-row {
+      display: grid;
+      grid-template-columns: 110px 1fr auto;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-top: 0;
+      font-size: 12px;
+      align-items: center;
+    }
+    .missing-ecode, .conflict-ecode {
+      font-family: ui-monospace, monospace;
+      font-size: 11.5px;
+      color: var(--color-text-tertiary);
+    }
+    .missing-suggest { color: var(--color-text-secondary); font-size: 11px; }
+    .conflict-row { background: rgba(239, 68, 68, 0.04); }
+    .conflict-cands { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+    .conflict-cand {
+      display: flex; gap: 8px; align-items: center;
+      font-size: 11.5px;
+    }
+    .conflict-cand-value { font-family: ui-monospace, monospace; }
+    .conflict-cand-sources { color: var(--color-text-tertiary); font-size: 11px; }
+    .conflict-cand.is-winner { color: #059669; }
+    .conflict-cand.is-winner::before { content: '✓ '; }
     .drop-result {
       margin-top: 8px;
       font-size: 12px;
@@ -318,19 +427,40 @@
           </div>
 
           <section class="panel">
-            <h3>Dokument hochladen</h3>
-            <p class="panel-sub">Beim Upload wird der extraction-Workflow der Anwendung gestartet (z.B. elster-v5_2-rag mit TurboQuant + 4-LLM-Ensemble).</p>
+            <h3>Belege hochladen</h3>
+            <p class="panel-sub">Alle Belege des Falls auf einmal hochladen — Lohnsteuerbescheinigung, Spendenquittungen, Versicherungs-Bescheinigungen etc. Pro Datei läuft ein eigener Extraction-Workflow parallel; am Ende wird der Gesamt-Layer aller Belege zusammengeführt.</p>
             <label class="drop" id="drop">
-              <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg">
+              <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg" multiple>
               <span class="drop-icon"><i data-lucide="upload"></i></span>
-              <div class="drop-hint"><strong>Datei hier ablegen</strong> oder klicken</div>
-              <div class="drop-sub">PDF · PNG · JPG (max 25 MB)</div>
+              <div class="drop-hint"><strong>Dateien hier ablegen</strong> oder klicken</div>
+              <div class="drop-sub">PDF · PNG · JPG · max 25 MB pro Datei · max 20 Dateien</div>
               <div class="drop-file" id="drop-file" hidden></div>
               <div class="drop-progress" id="drop-progress" hidden><div class="drop-progress-fill" id="drop-progress-fill"></div></div>
               <div class="drop-stage" id="drop-stage" hidden></div>
               <div class="drop-result" id="drop-result" hidden></div>
             </label>
+            <div id="bulk-queue" hidden style="margin-top: 12px;"></div>
             <div class="err" id="upload-err"></div>
+          </section>
+
+          <section class="panel" id="aggregate-panel" hidden>
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;">
+              <div>
+                <h3 style="margin:0 0 4px;">Gesamterklärung</h3>
+                <p class="panel-sub" id="aggregate-sub" style="margin:0;"></p>
+              </div>
+              <button class="fall-btn" id="btn-aggregate-refresh"><i data-lucide="refresh-cw"></i><span>Aktualisieren</span></button>
+            </div>
+            <div class="bmf-tiles" id="bmf-tiles"></div>
+            <div class="coverage-bar" id="coverage-bar"></div>
+            <details class="missing-list" id="missing-list" hidden>
+              <summary id="missing-summary"></summary>
+              <div id="missing-body"></div>
+            </details>
+            <details class="conflict-list" id="conflict-list" hidden>
+              <summary id="conflict-summary"></summary>
+              <div id="conflict-body"></div>
+            </details>
           </section>
 
           <section class="panel" id="events-panel" hidden>
@@ -496,7 +626,9 @@
       dlEric.href = `${base}/eric.xml`;
       // Letzter Run → canonical_layer laden, falls vorhanden
       if (instance.runs.length > 0) {
-        loadLastLayer();
+        // Aggregate-View ist jetzt der canonical Pfad — zeigt den Fall
+        // als Ganzes statt nur den letzten Run.
+        loadAggregate();
       }
       // Sidebar-Context aktualisieren mit den Fall-Daten
       if (window.__sturmNavRefresh) window.__sturmNavRefresh(instance);
@@ -726,11 +858,18 @@
       e.preventDefault();
       drop.classList.remove('dragging');
       if (drop.classList.contains('busy')) return;
-      if (e.dataTransfer.files?.[0]) startUpload(e.dataTransfer.files[0]);
+      const files = e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+      if (files.length === 0) return;
+      if (files.length === 1) startUpload(files[0]);
+      else startBulkUpload(files);
+      return;
     });
     fileInput.addEventListener('change', e => {
       if (drop.classList.contains('busy')) return;
-      if (e.target.files?.[0]) startUpload(e.target.files[0]);
+      const files = e.target.files ? Array.from(e.target.files) : [];
+      if (files.length === 0) return;
+      if (files.length === 1) startUpload(files[0]);
+      else startBulkUpload(files);
     });
 
     async function startUpload(file) {
@@ -846,7 +985,269 @@
       }
       // Re-load instance & layer after run finishes
       await loadInstance();
+      await loadAggregate();
     }
+
+    // ── Bulk-Upload (≥2 Dateien) ───────────────────────────────────────
+    async function startBulkUpload(files) {
+      document.getElementById('upload-err').textContent = '';
+      document.getElementById('events').textContent = '';
+      document.getElementById('events-panel').hidden = false;
+      resetDropZone();
+      drop.classList.add('busy');
+      dropFile.hidden = false;
+      dropFile.textContent = `${files.length} Dateien werden hochgeladen…`;
+      dropProgress.hidden = false;
+      dropProgress.classList.remove('indeterminate');
+      const fillEl = document.getElementById('drop-progress-fill');
+      const stageEl = document.getElementById('drop-stage');
+      stageEl.hidden = false;
+      stageEl.innerHTML = `<span>${files.length} parallele Extraction-Runs werden gestartet…</span>`;
+
+      // Bulk-Queue rendern
+      const queue = document.getElementById('bulk-queue');
+      queue.hidden = false;
+      const queueList = document.createElement('div');
+      queueList.className = 'bulk-queue-list';
+      const rows = files.map((f, idx) => {
+        const row = document.createElement('div');
+        row.className = 'bulk-doc';
+        row.dataset.idx = String(idx);
+        row.innerHTML = `
+          <span class="bulk-doc-state" data-state></span>
+          <span class="bulk-doc-name">${escapeHtml(f.name)} <span class="bulk-doc-stage" data-stage>· wartet</span></span>
+          <span class="bulk-doc-fields" data-fields></span>
+          <span class="bulk-doc-stage" data-result></span>
+        `;
+        queueList.appendChild(row);
+        return row;
+      });
+      queue.innerHTML = '';
+      queue.appendChild(queueList);
+
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+
+      let res;
+      try {
+        res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/upload-bulk`, {
+          method: 'POST',
+          body: fd,
+        });
+      } catch (e) {
+        drop.classList.remove('busy');
+        dropProgress.hidden = true;
+        document.getElementById('drop-result').hidden = false;
+        document.getElementById('drop-result').textContent = `Netzwerk-Fehler: ${e?.message || e}`;
+        document.getElementById('drop-result').classList.add('err');
+        return;
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        drop.classList.remove('busy');
+        dropProgress.hidden = true;
+        document.getElementById('drop-result').hidden = false;
+        document.getElementById('drop-result').textContent = j.error || `HTTP ${res.status}`;
+        document.getElementById('drop-result').classList.add('err');
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      const ev = document.getElementById('events');
+      let totalDocs = files.length;
+      let docsDone = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const p of parts) {
+          const m = /^data:\s*(.+)$/m.exec(p);
+          if (!m) continue;
+          try {
+            const obj = JSON.parse(m[1]);
+            ev.textContent += `[doc:${obj.payload?.docIdx ?? '·'}] [${obj.stageId ?? '·'}] ${obj.name}\n`;
+            ev.scrollTop = ev.scrollHeight;
+            const idx = obj.payload?.docIdx;
+            const row = typeof idx === 'number' ? rows[idx] : null;
+            if (row) {
+              const stateEl = row.querySelector('[data-state]');
+              const stageElCell = row.querySelector('[data-stage]');
+              const fieldsEl = row.querySelector('[data-fields]');
+              const resultEl = row.querySelector('[data-result]');
+              if (obj.name === 'doc_start' && stateEl) { stateEl.className = 'bulk-doc-state running'; }
+              if (obj.name === 'stage_start' && stageElCell) { stageElCell.textContent = `· ${obj.stageId} läuft`; }
+              if (obj.name === 'stage_done' && stageElCell) { stageElCell.textContent = `· ${obj.stageId} ✓`; }
+              if (obj.name === 'doc_done') {
+                docsDone++;
+                const okState = obj.payload?.state === 'ok';
+                if (stateEl) stateEl.className = `bulk-doc-state ${okState ? 'ok' : 'error'}`;
+                if (stageElCell) stageElCell.textContent = '';
+                if (fieldsEl) fieldsEl.textContent = `${obj.payload?.fields ?? 0} Felder`;
+                if (resultEl) resultEl.textContent = (obj.payload?.anlagen ?? []).join(', ');
+                const pct = Math.round((docsDone / totalDocs) * 100);
+                fillEl.style.width = pct + '%';
+                stageEl.innerHTML = `<span>Dokument <strong>${docsDone}/${totalDocs}</strong> fertig — Ensemble-Aggregation läuft beim letzten…</span>`;
+              }
+              if (obj.name === 'doc_error') {
+                docsDone++;
+                if (stateEl) stateEl.className = 'bulk-doc-state error';
+                if (resultEl) resultEl.textContent = obj.payload?.error?.slice(0, 60) ?? 'Fehler';
+              }
+            }
+            if (obj.name === 'bulk_done') {
+              fillEl.style.width = '100%';
+              stageEl.innerHTML = `<span>✓ Alle ${totalDocs} Belege extrahiert. Lade Gesamt-Aggregation…</span>`;
+            }
+          } catch { /* ignore */ }
+        }
+      }
+
+      drop.classList.remove('busy');
+      dropProgress.hidden = true;
+      const resultEl = document.getElementById('drop-result');
+      resultEl.hidden = false;
+      resultEl.classList.remove('err');
+      resultEl.textContent = `✓ ${docsDone}/${totalDocs} Belege verarbeitet`;
+      await loadInstance();
+      await loadAggregate();
+    }
+
+    // ── Aggregate-Panel ────────────────────────────────────────────────
+    async function loadAggregate() {
+      const panel = document.getElementById('aggregate-panel');
+      panel.hidden = false;
+      const sub = document.getElementById('aggregate-sub');
+      sub.textContent = 'Lade Gesamt-Aggregation…';
+      try {
+        const r = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/aggregate`);
+        if (!r.ok) {
+          sub.textContent = `Fehler: HTTP ${r.status}`;
+          return;
+        }
+        const data = await r.json();
+        renderAggregate(data);
+      } catch (e) {
+        sub.textContent = `Fehler: ${e?.message || e}`;
+      }
+    }
+
+    function fmtEur(cents) {
+      if (cents == null || isNaN(cents)) return '—';
+      const eur = Number(cents);
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(eur);
+    }
+
+    function renderAggregate(data) {
+      const sub = document.getElementById('aggregate-sub');
+      sub.textContent = `${data.stats.docs} Beleg${data.stats.docs === 1 ? '' : 'e'} · ${data.stats.eCodes} eCodes · ${data.stats.conflicts} Konflikt${data.stats.conflicts === 1 ? '' : 'e'}`;
+
+      // BMF-Tiles
+      const tilesEl = document.getElementById('bmf-tiles');
+      const bmf = data.bmf;
+      const daten = bmf?.daten;
+      tilesEl.innerHTML = '';
+      const tiles = [
+        { label: 'zu versteuerndes Einkommen', value: daten?.zve, sub: daten?.berechnungsdetails?.steuer_berechnung?.steuerzone },
+        { label: 'tarifliche Einkommensteuer', value: daten?.einkommensteuer, sub: daten?.grenzsteuersatz != null ? `Grenzsatz ${(daten.grenzsteuersatz * 100).toFixed(1)} %` : '' },
+        { label: 'Solidaritätszuschlag', value: daten?.solidaritaetszuschlag, sub: '' },
+        { label: 'festzusetzende Steuer', value: daten?.gesamtsteuer, sub: daten?.durchschnittssteuersatz != null ? `⌀ ${(daten.durchschnittssteuersatz * 100).toFixed(1)} %` : '' },
+      ];
+      for (const t of tiles) {
+        const div = document.createElement('div');
+        div.className = 'bmf-tile' + (t.value == null ? ' empty' : '');
+        div.innerHTML = `
+          <div class="bmf-tile-label">${escapeHtml(t.label)}</div>
+          <div class="bmf-tile-value">${t.value == null ? '— noch nicht berechnet' : fmtEur(t.value)}</div>
+          ${t.sub ? `<div class="bmf-tile-sub">${escapeHtml(t.sub)}</div>` : ''}
+        `;
+        tilesEl.appendChild(div);
+      }
+
+      // Pflicht-Coverage
+      const cov = data.pflicht_coverage;
+      const covEl = document.getElementById('coverage-bar');
+      if (!cov.measurable) {
+        covEl.innerHTML = `<span class="coverage-meta">Pflicht-Coverage nicht messbar — Katalog liefert für diese Anlage(n) keine Pflicht-Flags.</span>`;
+      } else {
+        const cls = cov.pct >= 100 ? '' : cov.pct >= 70 ? '' : cov.pct >= 40 ? 'warn' : 'err';
+        covEl.innerHTML = `
+          <div class="coverage-label">${cov.covered}/${cov.total}</div>
+          <div class="coverage-track"><div class="coverage-fill ${cls}" style="width: ${cov.pct}%"></div></div>
+          <div class="coverage-label">${cov.pct} %</div>
+          <div class="coverage-meta">Pflicht-Felder belegt</div>
+        `;
+      }
+
+      // Missing-Liste
+      const missingPanel = document.getElementById('missing-list');
+      if (data.pflicht_missing.length > 0) {
+        missingPanel.hidden = false;
+        document.getElementById('missing-summary').textContent = `Pflicht-Felder fehlend (${data.pflicht_missing.length})`;
+        const body = document.getElementById('missing-body');
+        body.innerHTML = data.pflicht_missing.slice(0, 50).map(m => `
+          <div class="missing-row">
+            <span class="missing-ecode">${escapeHtml(m.eCode)}</span>
+            <span>${escapeHtml(m.drucktext || '')} <span class="missing-suggest">· ${escapeHtml(m.anlage)} Z.${escapeHtml(m.vordruckzeile)}</span></span>
+            <span class="missing-suggest">${(m.suggestedDocs || []).slice(0, 2).map(escapeHtml).join(' · ') || '—'}</span>
+          </div>
+        `).join('');
+      } else {
+        missingPanel.hidden = true;
+      }
+
+      // Konflikt-Liste
+      const conflictPanel = document.getElementById('conflict-list');
+      if (data.conflicts.length > 0) {
+        conflictPanel.hidden = false;
+        document.getElementById('conflict-summary').textContent = `Konflikte (${data.conflicts.length}) — mehrere Belege liefern verschiedene Werte für denselben eCode`;
+        const body = document.getElementById('conflict-body');
+        body.innerHTML = data.conflicts.slice(0, 50).map(c => `
+          <div class="conflict-row">
+            <span class="conflict-ecode">${escapeHtml(c.eCode)}</span>
+            <div>
+              <div style="margin-bottom: 4px;">${escapeHtml(c.drucktext)} <span class="missing-suggest">· ${escapeHtml(c.anlage)}</span></div>
+              <div class="conflict-cands">
+                ${c.candidates.map(cand => `
+                  <div class="conflict-cand${cand.value === c.winner ? ' is-winner' : ''}">
+                    <span class="conflict-cand-value">${escapeHtml(cand.value || '—')}</span>
+                    <span class="conflict-cand-sources">aus ${cand.sources.map(s => escapeHtml(s.filename)).join(', ')} · ${escapeHtml(cand.origin)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <span class="missing-suggest">Trust-Sieger</span>
+          </div>
+        `).join('');
+      } else {
+        conflictPanel.hidden = true;
+      }
+
+      // Merged Layer als Layer-Tabelle anzeigen
+      // (rewrite vom existing renderLayer-Pfad — wir kapseln den merged_layer
+      // als CanonicalValue-Form, damit paintLayer den Dedup-Pfad nutzt)
+      const layerForTable = {};
+      for (const [eCode, m] of Object.entries(data.merged_layer)) {
+        layerForTable[eCode] = {
+          value: m.value, normalized: m.normalized, origin: m.origin,
+          anlage: m.anlage, drucktext: m.drucktext, vordruckzeile: m.vordruckzeile,
+          datentyp: m.datentyp,
+          _confidence: m.confidence_count,
+          _sources: m.confirmed_by,
+        };
+      }
+      const stats = { byOrigin: {} };
+      for (const v of Object.values(layerForTable)) {
+        stats.byOrigin[v.origin] = (stats.byOrigin[v.origin] || 0) + 1;
+      }
+      renderLayer(layerForTable, 'aggregate', stats);
+    }
+
+    document.getElementById('btn-aggregate-refresh').addEventListener('click', loadAggregate);
 
     // ── Seal / Export ───────────────────────────────────────────────────
     function showSealResult(html, kind /* 'ok' | 'err' | 'warn' */) {

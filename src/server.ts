@@ -25,6 +25,7 @@ import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware 
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
 import { createApplicationsRouter, loadInstanceFile, saveInstanceFile } from './server/applications.ts';
+import { persistUploadToInbox, recordDocumentRunCompletion } from './server/inbox.ts';
 import {
   applyOverrides,
   deleteStageOverride,
@@ -318,9 +319,19 @@ app.post(
     const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
     void persistInputForRun(def.id, run.runId, req.file.path, req.file.originalname, req.file.size, req.file.mimetype);
 
+    // Datei in den Workspace-Inbox kopieren + Manifest fortschreiben.
+    const doc = await persistUploadToInbox(ROOT, inst, {
+      tempPath: req.file.path,
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    }, run.runId);
+
     // Run-ID sofort am Instance-Datensatz festhalten — auch wenn der Client
     // SSE abbricht, läuft der Workflow zu Ende.
     inst.runs.push(run.runId);
+    inst.documents = inst.documents ?? [];
+    inst.documents.push(doc);
     inst.status = 'in_bearbeitung';
     await saveInstanceFile(APPLICATIONS_DIR, inst);
 
@@ -333,8 +344,176 @@ app.post(
       payload: { stages: Object.keys(def.stages), appId, caseId },
     }));
     req.on('close', () => unsub());
-    try { await run.result; } catch { /* errors emitted as events */ }
+    try {
+      const result = await run.result;
+      if (result.state === 'ok') {
+        // Per-Doc Anlagen + Felder-Anzahl aus den Stage-Outputs nachtragen
+        const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
+        const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+        const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+        const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
+        await recordDocumentRunCompletion(ROOT, inst, run.runId, {
+          anlagen: klass?.erkannte_anlagen,
+          fieldsExtracted: layer ? Object.keys(layer).length : 0,
+        });
+      }
+    } catch { /* errors emitted as events */ }
     finally { unsub(); res.end(); }
+  },
+);
+
+// ── POST /api/applications/:appId/instances/:caseId/upload-bulk ────────
+// Multi-File-Upload: N Dateien hochladen, pro Datei einen extraction-Run
+// starten (Concurrency-Limit), multiplexed SSE-Events mit doc-Index-Prefix.
+app.post(
+  '/api/applications/:appId/instances/:caseId/upload-bulk',
+  upload.array('files', 20),
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) { res.status(409).json({ error: `application ${appId} has no extraction workflow configured` }); return; }
+    const baseDef = getWorkflow(extractionId);
+    if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (files.length === 0) { res.status(400).json({ error: 'mindestens eine Datei erforderlich (multipart field "files")' }); return; }
+    const concurrency = Math.max(1, Math.min(5, Number(req.query.concurrency) || 3));
+
+    const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    let aborted = false;
+    req.on('close', () => { aborted = true; });
+
+    res.write(formatSseEvent({
+      name: 'bulk_start',
+      runId: '',
+      workflowId: def.id,
+      at: new Date().toISOString(),
+      payload: { fileCount: files.length, concurrency, filenames: files.map(f => f.originalname) },
+    }));
+
+    // Persist current instance state increments — load fresh inside the
+    // worker, append, save (lock-free since we serialize through one process).
+    const runIds: string[] = [];
+    const docsAdded: unknown[] = [];
+
+    const processOne = async (file: Express.Multer.File, idx: number) => {
+      const input: Record<string, unknown> = {
+        filePath: file.path,
+        filename: file.originalname,
+        size: file.size,
+        mime: file.mimetype,
+        mandant_id: inst.mandantId,
+        case_id: inst.caseId,
+      };
+      const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+      void persistInputForRun(def.id, run.runId, file.path, file.originalname, file.size, file.mimetype);
+      runIds.push(run.runId);
+
+      const doc = await persistUploadToInbox(ROOT, inst, {
+        tempPath: file.path,
+        originalname: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      }, run.runId);
+      docsAdded.push(doc);
+
+      res.write(formatSseEvent({
+        name: 'doc_start',
+        runId: run.runId,
+        workflowId: def.id,
+        at: new Date().toISOString(),
+        payload: { idx, filename: file.originalname, runId: run.runId, totalStages: Object.keys(def.stages).length },
+      }));
+
+      // Stage-Events mit doc:idx:-Prefix re-emitten — die UI demultiplexed
+      // per payload.docIdx.
+      const unsub = run.bus.subscribe((env) => {
+        if (aborted) return;
+        const wrapped = {
+          ...env,
+          name: env.name,
+          payload: { ...((env.payload as Record<string, unknown>) ?? {}), docIdx: idx, runId: run.runId },
+        };
+        res.write(formatSseEvent(wrapped));
+      });
+
+      try {
+        const result = await run.result;
+        if (result.state === 'ok') {
+          const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
+          const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+          const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+          const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
+          await recordDocumentRunCompletion(ROOT, inst, run.runId, {
+            anlagen: klass?.erkannte_anlagen,
+            fieldsExtracted: layer ? Object.keys(layer).length : 0,
+          });
+          res.write(formatSseEvent({
+            name: 'doc_done',
+            runId: run.runId,
+            workflowId: def.id,
+            at: new Date().toISOString(),
+            payload: { idx, runId: run.runId, state: 'ok', fields: layer ? Object.keys(layer).length : 0, anlagen: klass?.erkannte_anlagen ?? [] },
+          }));
+        } else {
+          res.write(formatSseEvent({
+            name: 'doc_done',
+            runId: run.runId,
+            workflowId: def.id,
+            at: new Date().toISOString(),
+            payload: { idx, runId: run.runId, state: result.state },
+          }));
+        }
+      } catch (err) {
+        res.write(formatSseEvent({
+          name: 'doc_error',
+          runId: run.runId,
+          workflowId: def.id,
+          at: new Date().toISOString(),
+          payload: { idx, runId: run.runId, error: (err as Error).message },
+        }));
+      } finally {
+        unsub();
+      }
+    };
+
+    // Concurrency-limited Pool
+    let nextIdx = 0;
+    async function worker() {
+      while (!aborted) {
+        const my = nextIdx++;
+        if (my >= files.length) return;
+        await processOne(files[my], my);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, () => worker()));
+
+    // Instance final speichern — runs[] + documents[] aggregiert
+    const freshInst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (freshInst) {
+      freshInst.runs = [...freshInst.runs, ...runIds];
+      freshInst.documents = [...(freshInst.documents ?? []), ...(docsAdded as never[])];
+      freshInst.status = 'in_bearbeitung';
+      await saveInstanceFile(APPLICATIONS_DIR, freshInst);
+    }
+
+    res.write(formatSseEvent({
+      name: 'bulk_done',
+      runId: '',
+      workflowId: def.id,
+      at: new Date().toISOString(),
+      payload: { runIds, fileCount: files.length },
+    }));
+    res.end();
   },
 );
 
@@ -479,6 +658,65 @@ app.post(
       }
     } catch { /* errors emitted as events */ }
     finally { unsub(); res.end(); }
+  },
+);
+
+// ── GET /api/applications/:appId/instances/:caseId/aggregate ──────────
+// Case-Level-Layer-Aggregation über alle hochgeladenen Belege des Falls.
+// Liefert merged_layer, conflicts, pflicht-coverage, missing-list +
+// optional BMF-Berechnung über den merged Layer.
+// Token-frei (analog zu /result).
+app.get(
+  '/api/applications/:appId/instances/:caseId/aggregate',
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+
+    const { aggregateCase } = await import('./server/aggregation.ts');
+    const { documentTypeHintsMap } = await import('./server/document-type-hints.ts');
+
+    const agg = await aggregateCase(inst, {
+      runsDir: RUNS_DIR,
+      extractionWorkflowId: extractionId,
+    });
+
+    // Doc-Type-Hints für die missing-Liste nachreichen
+    for (const m of agg.pflicht_missing) {
+      const sugg = documentTypeHintsMap([m.eCode])[m.eCode] ?? [];
+      m.suggestedDocs = sugg;
+    }
+
+    // BMF-Re-Compute über den merged Layer — wenn BMF-MCP erreichbar und
+    // mindestens 1 currency-Wert vorhanden ist.
+    const wantBmf = req.query.bmf !== '0';
+    if (wantBmf && Object.keys(agg.merged_layer).length > 0) {
+      try {
+        const { BmfMcpClient, canonicalLayerToElsterFelder } = await import('./lib/bmf-mcp-client.ts');
+        // canonical_layer → BMF-elster-felder Map (currency-Werte als "x,xx")
+        const felder = canonicalLayerToElsterFelder(
+          Object.fromEntries(Object.entries(agg.merged_layer).map(([k, v]) => [k, {
+            value: v.value,
+            normalized: v.normalized,
+            datentyp: (v.datentyp as 'string' | 'date' | 'currency') ?? 'string',
+          }])),
+        );
+        const client = new BmfMcpClient({ timeoutMs: 15_000 });
+        const bmfResult = await client.berechneVollstaendigeSteuerV2({
+          erklaerungsjahr: inst.veranlagungsjahr ?? 2024,
+          elster_felder: felder,
+        });
+        (agg as { bmf?: unknown }).bmf = bmfResult;
+      } catch (e) {
+        (agg as { bmf?: unknown }).bmf = { erfolg: false, reason: 'mcp-error', message: (e as Error).message };
+      }
+    }
+
+    res.json(agg);
   },
 );
 
