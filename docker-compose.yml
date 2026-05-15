@@ -2,9 +2,14 @@
 #
 # Brings up:
 #   - sturm        the Node service on :7800
-#   - postgres     gitchain registry (used by GitChainClient via pg)
 #
 # Mistral + Anthropic + Bearer-Tokens come from .env (gitignored).
+# Postgres wurde 2026-05-15 dekommissioniert (Iteration 3, I3.6):
+# 4 Tage Uptime, 0 Tabellen, kein einziger Workflow-Connect. Application-
+# Instances + Run-Artefakte sind file-backed (CLAUDE.md MVP-Regel). Falls
+# später eine echte gitchain-Registry gebraucht wird: separat hochfahren
+# und `GITCHAIN_DATABASE_URL` setzen — der Code in src/lib/gitchain-client.ts
+# liest diese env-Variable.
 # In production we map sturm.0711.io → :7800 via the existing nginx vhost
 # at ~/0711/0711-STURM/nginx/sturm.0711.io.conf (host nginx, NOT in compose).
 #
@@ -36,7 +41,8 @@ services:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:?must be set}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?must be set}
       STURM_INPUT_RETENTION_DAYS: "7"
-      DATABASE_URL: postgres://sturm:${POSTGRES_PASSWORD:?must be set}@postgres:5432/sturm_gitchain
+      # Optional: wenn gitchain (separater Service) live ist, env-Var setzen
+      # GITCHAIN_DATABASE_URL: postgresql://gitchain:…@gitchain-host:5432/gitchain
       GITCHAIN_DEFAULT_NAMESPACE: ctax
       GITCHAIN_DEFAULT_TENANT: ctax-0711
       # Lane-5 ELSTER-MCP (Einreichung). Wenn nicht gesetzt, antwortet der
@@ -75,9 +81,6 @@ services:
       # Optional — comment out if not yet provisioned.
       - ${STURM_DATA_ROOT:-./.local-state}/.anchor-api-key:/app/.anchor-api-key:ro
       - ${STURM_DATA_ROOT:-./.local-state}/.master-key.json:/app/.master-key.json:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7800/api/workflows"]
       interval: 30s
@@ -85,38 +88,9 @@ services:
       retries: 3
       start_period: 20s
 
-  # ──────────────────────────────────────────────────────────────────
-  # postgres — DORMANT as of 2026-05-14
-  #
-  # Container runs healthy but the DB has zero tables and the sturm
-  # container is not connecting to it. Current gitchain integration runs
-  # file-based out of GITCHAIN_REPO_ROOT (~/gitchain-repos on h200v),
-  # and src/lib/gitchain-client.ts reads GITCHAIN_DATABASE_URL — not the
-  # DATABASE_URL set below. Kept running so the DB-backed registry path
-  # is one env-var fix away from active when needed; not removed because
-  # the named volume + healthcheck are cheap.
-  #
-  # When you do wire it up: either rename DATABASE_URL below to
-  # GITCHAIN_DATABASE_URL, or update the code to read DATABASE_URL.
-  # ──────────────────────────────────────────────────────────────────
-  postgres:
-    image: pgvector/pgvector:pg17
-    container_name: sturm-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: sturm
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?must be set}
-      POSTGRES_DB: sturm_gitchain
-    volumes:
-      - sturm_postgres:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5444:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sturm -d sturm_gitchain"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-
-volumes:
-  sturm_postgres:
+# Postgres-Service entfernt am 2026-05-15 (Iteration 3, I3.6). Falls jemals
+# wieder eine eingebettete gitchain-DB gebraucht wird, hier wieder
+# einkommentieren. Das Volume `sturm_postgres` bleibt vorhanden, falls
+# das alte Daten-Volume wiederbelebt werden soll:
+#   volumes:
+#     sturm_postgres:

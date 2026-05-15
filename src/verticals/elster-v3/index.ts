@@ -35,6 +35,7 @@ import { phase4EntityDisambigStage } from './stages/phase4-entity-disambig.ts';
 import { phase5MergeStage } from './stages/phase5-merge.ts';
 import { bmfRechnerComputeStage } from './stages/bmf-rechner-compute.ts';
 import { felderNarrowStage } from './stages/felder-narrow.ts';
+import { phase3EnsembleMergeStage } from './stages/phase3-ensemble-merge.ts';
 // elster-v4-stricker: Light-Path Stages (citation-curated, slot-norm, 4-Tier MRL)
 import { labelValueParserStage } from './stages/label-value-parser.ts';
 import { atomsCascadeSearchStage } from './stages/atoms-cascade-search.ts';
@@ -84,6 +85,8 @@ export function registerElsterV3Stages(): void {
   registerStage(bmfRechnerComputeStage);
   // elster-v5_2-rag: RAG-gestützte Engführung des Felder-Katalogs
   registerStage(felderNarrowStage);
+  // elster-v5_2-rag-ensemble: N-Branch Consensus Merge über phase3-Outputs
+  registerStage(phase3EnsembleMergeStage);
   // elster-v4-stricker: Light-Path deterministic chain for text-layer PDFs (VAST exports)
   registerStage(labelValueParserStage);
   registerStage(atomsCascadeSearchStage);
@@ -1216,6 +1219,142 @@ export function buildElsterV52RagWorkflow() {
           '(`ctaxv1-postgres / ctax / lane1_bmf_calculator`). 40 MCP-Tools, ' +
           'eCode-nativer Input via `berechne_vollstaendige_steuer_v2`. ' +
           '§EStG-konform für Veranlagung 2024.',
+        kind: 'bmf-calculator',
+        readBy: ['phase6BmfRechner'],
+        lockState: 'sealed',
+      },
+    ],
+  });
+}
+
+/**
+ * Builds the elster-v5_2-rag-ensemble workflow — Variant of v5_2-rag where
+ * Phase 3 runs as a 4-model ensemble (vLLM Gemma + Mistral-S + Mistral-L +
+ * Claude Haiku). Voting per (anlage, eCode); ≥3 of 4 → ENSEMBLE_OK. Audit
+ * trail stored as `_ensemble_audit` on the merged output.
+ *
+ * Cloud-API costs: each run hits 3 cloud LLMs in addition to local vLLM.
+ * Use sparingly for high-stakes cases or for the recall-delta eval.
+ */
+export function buildElsterV52RagEnsembleWorkflow() {
+  return defineWorkflow({
+    id: 'elster-v5_2-rag-ensemble',
+    name: 'ELSTER v5.2-RAG + 4-LLM-Ensemble',
+    description:
+      'v5_2-rag mit 4-Modell-Konsens in Phase 3 (vLLM Gemma + Mistral-S + ' +
+      'Mistral-L + Claude Haiku parallel). Voting pro eCode, >=3 von 4 -> ' +
+      'ENSEMBLE_OK. ENSEMBLE_TIE/DISAGREE im Audit. ~3x Latenz vs v5_2-rag, ' +
+      'dafuer hoehere Robustheit. Cloud-API-Kosten beachten.',
+    input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
+    stages: {
+      ocr: { uses: 'mistral-ocr', inputs: { filePath: '${input.filePath}', filename: '${input.filename}' } },
+      klassifizierung: { uses: 'elster/klassifizierung', config: { llmFallbackWhen: 'zero' }, inputs: { text: '${ocr.text}' } },
+      felderKatalog: { uses: 'elster-v4/felder-katalog', config: {}, inputs: { erkannte_anlagen: '${klassifizierung.erkannte_anlagen}' } },
+      quantumGround: {
+        uses: 'elster-v3/quantum-ground',
+        config: { maxPhrasen: 30, proPhraseK: 10, finalK: 50, pflichtScaffold: true },
+        inputs: { text: '${ocr.text}', anlagen: '${klassifizierung.erkannte_anlagen}' },
+      },
+      felderNarrow: {
+        uses: 'elster-v5_2-rag/felder-narrow',
+        config: { pflichtAlwaysKeep: true, passthroughOnEmptyRag: true },
+        inputs: { felder_per_anlage: '${felderKatalog.per_anlage}', kandidatenECodes: '${quantumGround.kandidatenECodes}' },
+      },
+      phase1Regex: {
+        uses: 'elster-v5/phase1-regex',
+        config: { minDrucktextLength: 5 },
+        inputs: { text: '${ocr.text}', per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      phase3Vllm: {
+        uses: 'elster-v5/phase3-llm-fill',
+        config: { provider: 'vllm', model: 'gemma4-mm', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000, typedSchema: true },
+        inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      phase3MistralS: {
+        uses: 'elster-v5/phase3-llm-fill',
+        config: { provider: 'mistral', model: 'mistral-small-latest', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000 },
+        inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      phase3MistralL: {
+        uses: 'elster-v5/phase3-llm-fill',
+        config: { provider: 'mistral', model: 'mistral-large-latest', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000 },
+        inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      phase3Claude: {
+        uses: 'elster-v5/phase3-llm-fill',
+        config: { provider: 'anthropic', model: 'claude-haiku-4-5', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000 },
+        inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      phase3Ensemble: {
+        uses: 'elster-v5_2-rag-ensemble/phase3-ensemble-merge',
+        config: { minAgreement: 3 },
+        inputs: {
+          vllm: '${phase3Vllm}',
+          mistral_small: '${phase3MistralS}',
+          mistral_large: '${phase3MistralL}',
+          claude_haiku: '${phase3Claude}',
+        },
+      },
+      phase4Disambig: {
+        uses: 'elster-v5_1/phase4-entity-disambig',
+        config: { provider: 'vllm', vllmUrl: 'http://localhost:11435', model: 'gemma4-mm', temperature: 0, confidenceThreshold: 0.7, topK: 5, concurrency: 5, perCallTimeoutMs: 20_000 },
+        inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', phase3_per_anlage: '${phase3Ensemble.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      phase5Merge: {
+        uses: 'elster-v5/phase5-merge',
+        config: {},
+        inputs: { phase1_per_anlage: '${phase1Regex.per_anlage}', phase3_per_anlage: '${phase4Disambig.per_anlage}' },
+      },
+      phase6BmfRechner: {
+        uses: 'elster-v5_2/bmf-rechner-compute',
+        config: { veranlagungsjahr: 2024, timeoutMs: 15_000, failHard: false },
+        inputs: { canonical_layer: '${phase5Merge.canonical_layer}' },
+      },
+      phase7Validator: {
+        uses: 'elster/validator',
+        config: { skipUnsupported: true },
+        inputs: { canonicalLayer: '${phase6BmfRechner.canonicalLayer}' },
+      },
+    },
+    edges: [
+      ['ocr', 'klassifizierung'],
+      ['klassifizierung', 'felderKatalog'],
+      ['klassifizierung', 'quantumGround'],
+      ['ocr', 'quantumGround'],
+      ['felderKatalog', 'felderNarrow'],
+      ['quantumGround', 'felderNarrow'],
+      ['felderNarrow', 'phase1Regex'],
+      ['ocr', 'phase1Regex'],
+      ['phase1Regex', 'phase3Vllm'], ['felderNarrow', 'phase3Vllm'], ['ocr', 'phase3Vllm'],
+      ['phase1Regex', 'phase3MistralS'], ['felderNarrow', 'phase3MistralS'], ['ocr', 'phase3MistralS'],
+      ['phase1Regex', 'phase3MistralL'], ['felderNarrow', 'phase3MistralL'], ['ocr', 'phase3MistralL'],
+      ['phase1Regex', 'phase3Claude'], ['felderNarrow', 'phase3Claude'], ['ocr', 'phase3Claude'],
+      ['phase3Vllm', 'phase3Ensemble'],
+      ['phase3MistralS', 'phase3Ensemble'],
+      ['phase3MistralL', 'phase3Ensemble'],
+      ['phase3Claude', 'phase3Ensemble'],
+      ['phase1Regex', 'phase4Disambig'],
+      ['phase3Ensemble', 'phase4Disambig'],
+      ['felderNarrow', 'phase4Disambig'],
+      ['ocr', 'phase4Disambig'],
+      ['phase1Regex', 'phase5Merge'],
+      ['phase4Disambig', 'phase5Merge'],
+      ['phase5Merge', 'phase6BmfRechner'],
+      ['phase6BmfRechner', 'phase7Validator'],
+    ],
+    containers: [
+      {
+        id: '0711:elster:bmf:jahresdok-2024:v1',
+        displayName: 'ELSTER eCode Catalog (citation-curated)',
+        description: 'BMF Jahresdokumentation 10/2024 - 2287 eCodes, 35 Anlagen.',
+        kind: 'elster-catalog',
+        readBy: ['felderKatalog', 'quantumGround', 'felderNarrow', 'phase1Regex', 'phase3Vllm', 'phase3MistralS', 'phase3MistralL', 'phase3Claude', 'phase4Disambig'],
+        lockState: 'sealed',
+      },
+      {
+        id: 'lane1:bmf:rechner:2024:v1',
+        displayName: 'Lane-1 BMF Steuerrechner (MCP v1.27.0)',
+        description: '199 Formeln, 309 Parameter, 163 Thresholds.',
         kind: 'bmf-calculator',
         readBy: ['phase6BmfRechner'],
         lockState: 'sealed',
