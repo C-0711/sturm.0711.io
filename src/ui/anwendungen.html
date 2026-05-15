@@ -47,19 +47,34 @@
 
     .case-row {
       display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: 1fr auto auto auto auto;
       align-items: center;
       gap: 12px;
       padding: 12px 14px;
       border: 1px solid var(--color-border);
       border-radius: 10px;
       background: var(--color-bg-card, transparent);
-      text-decoration: none;
       color: inherit;
       transition: border-color .12s, background .12s;
+      position: relative;
     }
     .case-row:hover { border-color: var(--color-accent); background: var(--color-bg-hover); }
     .case-row + .case-row { margin-top: 8px; }
+    .case-row-link { color: inherit; text-decoration: none; display: contents; }
+    .case-row-del {
+      background: transparent;
+      border: 1px solid transparent;
+      width: 26px; height: 26px;
+      border-radius: 6px;
+      color: var(--color-text-tertiary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .1s, color .1s, border-color .1s;
+    }
+    .case-row-del:hover { background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+    .case-row-del i { width: 14px; height: 14px; }
     .case-title {
       font-size: 13.5px;
       font-weight: 500;
@@ -88,6 +103,53 @@
     .case-status.review { color: #d97706; border-color: #d97706; }
     .case-status.versiegelt { color: #059669; border-color: #059669; }
     .case-status.eingereicht { color: #2563eb; border-color: #2563eb; }
+    .case-status.archiviert { color: var(--color-text-tertiary); border-color: var(--color-border); opacity: 0.7; }
+
+    /* Filter chips */
+    .case-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .case-filter-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 11.5px;
+      cursor: pointer;
+    }
+    .case-filter-chip:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+    .case-filter-chip.active {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: var(--color-bg-primary, #000);
+    }
+    .case-filter-chip-count {
+      font-size: 10.5px;
+      padding: 0 5px;
+      border-radius: 4px;
+      background: var(--color-bg-hover);
+      color: var(--color-text-tertiary);
+      min-width: 14px;
+      text-align: center;
+    }
+    .case-filter-chip.active .case-filter-chip-count { background: rgba(0,0,0,.18); color: inherit; }
+    .case-filter-search {
+      margin-left: auto;
+      padding: 4px 9px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--color-text-primary);
+      font-size: 12px;
+      min-width: 180px;
+    }
+    .case-filter-search:focus { outline: 1px solid var(--color-accent); border-color: var(--color-accent); }
 
     .empty {
       padding: 32px 24px;
@@ -305,32 +367,85 @@
     }
 
     let activeApp = null;
+    // Cache pro App: Liste aller Fälle. Filtern + Suchen ohne Server-Roundtrip.
+    const casesByApp = new Map();
+    const filterState = { status: '*', search: '' };
 
-    async function loadApps() {
-      const apps = await fetch('/api/applications').then(r => r.json());
-      const host = document.getElementById('app-list');
-      if (!Array.isArray(apps) || apps.length === 0) {
-        host.innerHTML = '<div class="app-section"><div class="empty">Keine Anwendungen registriert.</div></div>';
-        return;
-      }
-      const sections = await Promise.all(apps.map(async (app) => {
-        const cases = await fetch(`/api/applications/${encodeURIComponent(app.id)}/instances`)
-          .then(r => r.ok ? r.json() : []);
-        const rows = cases.length === 0
+    function statusLabel(s) {
+      return ({ in_bearbeitung: 'In Bearbeitung', review: 'Review', versiegelt: 'Versiegelt', eingereicht: 'Eingereicht', archiviert: 'Archiviert' })[s] ?? s;
+    }
+
+    function caseMatches(c) {
+      if (filterState.status !== '*' && c.status !== filterState.status) return false;
+      const q = filterState.search.trim().toLowerCase();
+      if (!q) return true;
+      return (c.displayName || '').toLowerCase().includes(q)
+        || (c.mandantId || '').toLowerCase().includes(q)
+        || (c.caseId || '').toLowerCase().includes(q);
+    }
+
+    function renderCaseRow(appId, c) {
+      const safeId = encodeURIComponent(c.caseId);
+      const safeApp = encodeURIComponent(appId);
+      const trashIcon = c.status === 'in_bearbeitung' ? 'trash-2' : 'archive';
+      const title = c.status === 'in_bearbeitung' ? 'Fall löschen' : 'Fall archivieren';
+      return `
+        <div class="case-row" data-case="${escapeHtml(c.caseId)}">
+          <a class="case-row-link" href="/steuerfall.html?app=${safeApp}&case=${safeId}">
+            <div>
+              <p class="case-title">${escapeHtml(c.displayName)}</p>
+              <p class="case-sub">${escapeHtml(c.caseId)} · Mandant ${escapeHtml(c.mandantId || '—')}</p>
+            </div>
+            <span class="case-meta">${c.runs?.length ?? 0} Run${(c.runs?.length ?? 0) === 1 ? '' : 's'}</span>
+            <span class="case-meta">${fmtDate(c.createdAt)}</span>
+            <span class="case-status ${escapeHtml(c.status)}">${escapeHtml(statusLabel(c.status))}</span>
+          </a>
+          <button class="case-row-del" data-action="del-case"
+                  data-app="${escapeHtml(appId)}"
+                  data-case="${escapeHtml(c.caseId)}"
+                  data-status="${escapeHtml(c.status)}"
+                  title="${title}">
+            <i data-lucide="${trashIcon}"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    function renderFilterChips(allCases) {
+      const counts = { '*': allCases.length, in_bearbeitung: 0, versiegelt: 0, eingereicht: 0, archiviert: 0 };
+      for (const c of allCases) { if (counts[c.status] !== undefined) counts[c.status]++; }
+      const labels = [
+        { id: '*', label: 'Alle' },
+        { id: 'in_bearbeitung', label: 'In Bearbeitung' },
+        { id: 'versiegelt', label: 'Versiegelt' },
+        { id: 'eingereicht', label: 'Eingereicht' },
+        { id: 'archiviert', label: 'Archiviert' },
+      ];
+      const chips = labels.map(l => `
+        <button class="case-filter-chip ${filterState.status === l.id ? 'active' : ''}" data-filter-status="${escapeHtml(l.id)}">
+          <span>${escapeHtml(l.label)}</span>
+          <span class="case-filter-chip-count">${counts[l.id] || 0}</span>
+        </button>
+      `).join('');
+      return `
+        <div class="case-filter">
+          ${chips}
+          <input class="case-filter-search" type="search" placeholder="Suche (Name, Mandant, ID)…" value="${escapeHtml(filterState.search)}">
+        </div>
+      `;
+    }
+
+    function paintSections(host, apps) {
+      const sections = apps.map((app) => {
+        const all = casesByApp.get(app.id) || [];
+        const filtered = all.filter(caseMatches);
+        const rowsHtml = all.length === 0
           ? '<div class="empty">Noch keine Fälle. Lege oben einen neuen Fall an.</div>'
-          : cases.map(c => `
-            <a class="case-row" href="/steuerfall.html?app=${encodeURIComponent(app.id)}&case=${encodeURIComponent(c.caseId)}">
-              <div>
-                <p class="case-title">${escapeHtml(c.displayName)}</p>
-                <p class="case-sub">${escapeHtml(c.caseId)} · Mandant ${escapeHtml(c.mandantId || '—')}</p>
-              </div>
-              <span class="case-meta">${c.runs?.length ?? 0} Run${(c.runs?.length ?? 0) === 1 ? '' : 's'}</span>
-              <span class="case-meta">${fmtDate(c.createdAt)}</span>
-              <span class="case-status ${escapeHtml(c.status)}">${escapeHtml(c.status)}</span>
-            </a>
-          `).join('');
+          : filtered.length === 0
+            ? '<div class="empty">Keine Fälle mit diesen Filtern.</div>'
+            : filtered.map(c => renderCaseRow(app.id, c)).join('');
         return `
-          <section class="app-section">
+          <section class="app-section" data-app="${escapeHtml(app.id)}">
             <div class="app-header">
               <div>
                 <h2>${escapeHtml(app.name)} <span class="app-header-sub">· ${fmtCategory(app.category)}</span></h2>
@@ -340,16 +455,79 @@
                 <i data-lucide="plus"></i><span>Neuer Fall</span>
               </button>
             </div>
-            ${rows}
+            ${renderFilterChips(all)}
+            <div style="margin-top: 14px;">${rowsHtml}</div>
           </section>
         `;
-      }));
-      host.innerHTML = sections.join('');
+      }).join('');
+      host.innerHTML = sections;
       window.lucide && window.lucide.createIcons();
 
       host.querySelectorAll('[data-action="new-case"]').forEach(btn => {
         btn.addEventListener('click', () => openCreateModal(btn.dataset.app));
       });
+      host.querySelectorAll('[data-action="del-case"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDelete(btn.dataset.app, btn.dataset.case, btn.dataset.status);
+        });
+      });
+      host.querySelectorAll('[data-filter-status]').forEach(chip => {
+        chip.addEventListener('click', () => {
+          filterState.status = chip.dataset.filterStatus;
+          paintSections(host, apps);
+        });
+      });
+      host.querySelectorAll('.case-filter-search').forEach(input => {
+        input.addEventListener('input', (e) => {
+          filterState.search = e.target.value;
+          // Nur Body neu zeichnen, Fokus im Eingabefeld behalten
+          paintSections(host, apps);
+          const fresh = host.querySelector('.case-filter-search');
+          if (fresh) { fresh.focus(); fresh.setSelectionRange(filterState.search.length, filterState.search.length); }
+        });
+      });
+    }
+
+    async function handleDelete(appId, caseId, status) {
+      const isArchive = status !== 'in_bearbeitung';
+      const verb = isArchive ? 'archivieren' : 'löschen';
+      if (!confirm(`Fall "${caseId}" wirklich ${verb}?`)) return;
+      const res = await fetch(`/api/applications/${encodeURIComponent(appId)}/instances/${encodeURIComponent(caseId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(`Fehler: ${j.error || res.status}`);
+        return;
+      }
+      const j = await res.json().catch(() => ({}));
+      const arr = casesByApp.get(appId) || [];
+      if (j.deleted) {
+        casesByApp.set(appId, arr.filter(c => c.caseId !== caseId));
+      } else if (j.archived) {
+        const idx = arr.findIndex(c => c.caseId === caseId);
+        if (idx >= 0) arr[idx] = { ...arr[idx], status: 'archiviert' };
+      }
+      const apps = window.__loadedApps || [];
+      paintSections(document.getElementById('app-list'), apps);
+    }
+
+    async function loadApps() {
+      const apps = await fetch('/api/applications').then(r => r.json());
+      window.__loadedApps = apps;
+      const host = document.getElementById('app-list');
+      if (!Array.isArray(apps) || apps.length === 0) {
+        host.innerHTML = '<div class="app-section"><div class="empty">Keine Anwendungen registriert.</div></div>';
+        return;
+      }
+      await Promise.all(apps.map(async (app) => {
+        const cases = await fetch(`/api/applications/${encodeURIComponent(app.id)}/instances`)
+          .then(r => r.ok ? r.json() : []);
+        casesByApp.set(app.id, cases);
+      }));
+      paintSections(host, apps);
     }
 
     function openCreateModal(appId) {

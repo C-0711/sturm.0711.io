@@ -48,6 +48,27 @@
     .fall-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .fall-btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg-primary, #000); }
 
+    .mcp-dots {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      background: var(--color-bg-card, transparent);
+    }
+    .mcp-dot {
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .mcp-dot-orb {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--color-text-tertiary);
+      flex-shrink: 0;
+    }
+    .mcp-dot-orb.alive { background: #059669; }
+    .mcp-dot-orb.dead { background: #ef4444; }
+    .mcp-dot-orb.unconfigured { background: var(--color-text-tertiary); opacity: 0.5; }
+
     .panel {
       border: 1px solid var(--color-border);
       border-radius: 12px;
@@ -109,29 +130,93 @@
     }
     .drop-progress {
       width: 100%;
-      max-width: 320px;
+      max-width: 360px;
       height: 4px;
       background: var(--color-border);
       border-radius: 2px;
       overflow: hidden;
       margin-top: 8px;
     }
+    .drop-progress.indeterminate .drop-progress-fill {
+      animation: drop-progress 1.4s ease-in-out infinite;
+      width: 30%;
+    }
     .drop-progress-fill {
       height: 100%;
       background: var(--color-accent);
-      width: 30%;
-      animation: drop-progress 1.4s ease-in-out infinite;
+      width: 0%;
+      transition: width .25s ease;
     }
     @keyframes drop-progress {
       0%   { transform: translateX(-100%); }
       100% { transform: translateX(340%); }
     }
+    .drop-stage {
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: var(--color-text-secondary);
+      font-family: ui-monospace, monospace;
+      min-height: 14px;
+    }
+    .drop-stage strong { color: var(--color-text-primary); font-weight: 500; }
     .drop-result {
       margin-top: 8px;
       font-size: 12px;
       color: #059669;
     }
     .drop-result.err { color: #ef4444; }
+
+    .run-state-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 1px 7px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 500;
+    }
+    .run-state-badge.ok { background: rgba(5, 150, 105, .15); color: #059669; }
+    .run-state-badge.error { background: rgba(239, 68, 68, .15); color: #ef4444; }
+    .run-state-badge.partial { background: rgba(217, 119, 6, .15); color: #d97706; }
+    .run-state-badge.unknown { background: var(--color-bg-hover); color: var(--color-text-tertiary); }
+
+    /* Run-Detail-Modal */
+    .run-detail-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 200;
+      padding: 24px;
+    }
+    .run-detail-backdrop.open { display: flex; }
+    .run-detail-modal {
+      width: 100%; max-width: 720px;
+      max-height: 80vh;
+      overflow: auto;
+      background: var(--color-bg-card, #1a1a1a);
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .run-detail-modal h3 { margin: 0 0 4px; font-size: 15px; }
+    .run-detail-meta { font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 14px; }
+    .run-detail-stages { display: flex; flex-direction: column; gap: 4px; }
+    .run-detail-stage {
+      display: grid;
+      grid-template-columns: 18px 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .run-detail-stage-state {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--color-text-tertiary);
+    }
+    .run-detail-stage-state.ok { background: #059669; }
+    .run-detail-stage-state.error { background: #ef4444; }
+    .run-detail-stage-state.skipped { background: var(--color-text-tertiary); }
+    .run-detail-stage-id { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-text-primary); }
+    .run-detail-stage-ms { color: var(--color-text-tertiary); font-size: 11px; }
 
     .run-row {
       display: grid;
@@ -241,6 +326,7 @@
               <div class="meta" id="case-meta">…</div>
             </div>
             <div class="fall-actions">
+              <div class="mcp-dots" id="mcp-dots" title="MCP-Health"></div>
               <a class="fall-btn" id="btn-dl-master" hidden download><i data-lucide="file-down"></i><span>master.json</span></a>
               <a class="fall-btn" id="btn-dl-eric" hidden download><i data-lucide="file-code"></i><span>eric.xml</span></a>
               <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
@@ -257,7 +343,8 @@
               <div class="drop-hint"><strong>Datei hier ablegen</strong> oder klicken</div>
               <div class="drop-sub">PDF · PNG · JPG (max 25 MB)</div>
               <div class="drop-file" id="drop-file" hidden></div>
-              <div class="drop-progress" id="drop-progress" hidden><div class="drop-progress-fill"></div></div>
+              <div class="drop-progress" id="drop-progress" hidden><div class="drop-progress-fill" id="drop-progress-fill"></div></div>
+              <div class="drop-stage" id="drop-stage" hidden></div>
               <div class="drop-result" id="drop-result" hidden></div>
             </label>
             <div class="err" id="upload-err"></div>
@@ -278,10 +365,22 @@
             <div id="runs"></div>
           </section>
 
+          <div class="run-detail-backdrop" id="run-detail" role="dialog" aria-modal="true">
+            <div class="run-detail-modal" id="run-detail-body"></div>
+          </div>
+
           <section class="panel" id="layer-panel" hidden>
-            <h3>Canonical Layer (letzter Run)</h3>
-            <p class="panel-sub" id="layer-sub"></p>
-            <table class="layer-table">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+              <div>
+                <h3 style="margin:0 0 4px;">Canonical Layer (letzter Run)</h3>
+                <p class="panel-sub" id="layer-sub" style="margin:0;"></p>
+              </div>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--color-text-secondary); cursor:pointer;">
+                <input type="checkbox" id="layer-show-all" style="cursor:pointer;">
+                <span>Format-Varianten zeigen</span>
+              </label>
+            </div>
+            <table class="layer-table" style="margin-top:12px;">
               <thead><tr><th>eCode</th><th>Feld</th><th>Anlage</th><th>Wert</th><th>Origin</th></tr></thead>
               <tbody id="layer-rows"></tbody>
             </table>
@@ -361,6 +460,30 @@
 
     let instance = null;
 
+    async function loadMcpHealth() {
+      const host = document.getElementById('mcp-dots');
+      if (!host) return;
+      try {
+        const r = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/mcps/health`);
+        if (!r.ok) { host.innerHTML = ''; return; }
+        const data = await r.json();
+        if (!Array.isArray(data.mcps) || data.mcps.length === 0) { host.innerHTML = ''; return; }
+        host.innerHTML = data.mcps.map(m => {
+          const klass = !m.configured ? 'unconfigured' : (m.alive ? 'alive' : 'dead');
+          const lat = m.latencyMs != null ? ` · ${m.latencyMs}ms` : '';
+          const title = !m.configured
+            ? `${m.name}: nicht konfiguriert (env ${m.name === 'bmf-lane1' ? 'BMF_MCP_URL' : 'ELSTER_MCP_URL'} fehlt)`
+            : `${m.name}: ${m.alive ? 'online' : 'offline'} · ${m.url}${m.error ? ' · ' + m.error : ''}`;
+          return `<span class="mcp-dot" title="${escapeHtml(title)}">
+            <span class="mcp-dot-orb ${klass}"></span>
+            <span>${escapeHtml(m.name)}${lat}</span>
+          </span>`;
+        }).join('');
+      } catch {
+        host.innerHTML = '';
+      }
+    }
+
     async function loadInstance() {
       const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}`);
       if (!res.ok) {
@@ -394,24 +517,107 @@
       }
     }
 
+    // Run-Detail-Cache, damit das Modal flott aufgeht beim zweiten Klick.
+    const runSummaryCache = new Map();
+    async function loadRunSummary(runId) {
+      if (runSummaryCache.has(runId)) return runSummaryCache.get(runId);
+      const r = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/runs/${encodeURIComponent(runId)}/summary`);
+      if (!r.ok) return null;
+      const data = await r.json();
+      runSummaryCache.set(runId, data);
+      return data;
+    }
+
+    function fmtMs(ms) {
+      if (ms == null) return '—';
+      if (ms < 1000) return `${ms} ms`;
+      return `${(ms / 1000).toFixed(1)} s`;
+    }
+    function stateClass(s) {
+      return s === 'ok' ? 'ok' : s === 'error' ? 'error' : s === 'partial' ? 'partial' : 'unknown';
+    }
+
     function renderRuns() {
       const host = document.getElementById('runs');
       if (!instance.runs.length) {
         host.innerHTML = '<div class="empty">Noch keine Runs. Lade ein Dokument hoch, um den extraction-Workflow zu starten.</div>';
         return;
       }
+      // Erst rohe Run-Zeilen rendern, danach Summaries async laden + nachfüllen.
       host.innerHTML = instance.runs.slice().reverse().map((rid, i) => `
-        <div class="run-row">
+        <div class="run-row" data-run-id="${escapeHtml(rid)}">
           <span class="run-state"><i data-lucide="play"></i></span>
           <div>
             <div>Run ${instance.runs.length - i}</div>
             <div class="run-id">${escapeHtml(rid)}</div>
+            <div class="run-meta" data-run-when>…</div>
           </div>
-          <span class="run-meta">extraction</span>
-          <a class="run-meta" href="/pipeline.html?workflow=${encodeURIComponent('elster-v5_2-rag')}&run=${encodeURIComponent(rid)}" style="text-decoration:underline;">öffnen</a>
+          <span class="run-meta" data-run-fields>…</span>
+          <span class="run-state-badge unknown" data-run-state>…</span>
+          <button class="run-meta" data-run-detail="${escapeHtml(rid)}"
+                  style="background:transparent; border:1px solid var(--color-border); padding:3px 9px; border-radius:5px; cursor:pointer; color: var(--color-text-secondary);">Details</button>
         </div>
       `).join('');
       window.lucide && window.lucide.createIcons();
+
+      // Summaries asynchron nachladen + Zellen befüllen.
+      for (const rid of instance.runs) {
+        loadRunSummary(rid).then(sum => {
+          if (!sum) return;
+          const row = host.querySelector(`[data-run-id="${CSS.escape(rid)}"]`);
+          if (!row) return;
+          row.querySelector('[data-run-when]').textContent =
+            (sum.startedAt ? new Date(sum.startedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' }) : '—')
+            + (sum.totalMs != null ? ` · ${fmtMs(sum.totalMs)}` : '');
+          row.querySelector('[data-run-fields]').textContent = `${sum.fields ?? 0} Felder`;
+          const badge = row.querySelector('[data-run-state]');
+          badge.className = `run-state-badge ${stateClass(sum.state)}`;
+          badge.textContent = sum.state || '—';
+        }).catch(() => { /* tolerant */ });
+      }
+
+      // Modal-Trigger
+      host.querySelectorAll('[data-run-detail]').forEach(btn => {
+        btn.addEventListener('click', () => openRunDetail(btn.dataset.runDetail));
+      });
+    }
+
+    async function openRunDetail(runId) {
+      const modal = document.getElementById('run-detail');
+      const body = document.getElementById('run-detail-body');
+      body.innerHTML = '<p style="color: var(--color-text-tertiary);">Lade…</p>';
+      modal.classList.add('open');
+      const sum = await loadRunSummary(runId);
+      if (!sum) {
+        body.innerHTML = '<p style="color: #ef4444;">Run-Zusammenfassung nicht ladbar.</p>';
+        return;
+      }
+      const stagesHtml = (sum.stages || []).map(st => `
+        <div class="run-detail-stage">
+          <span class="run-detail-stage-state ${escapeHtml(st.state)}"></span>
+          <span class="run-detail-stage-id">${escapeHtml(st.id)}</span>
+          <span class="run-detail-stage-ms">${fmtMs(st.ms)}</span>
+          <span class="run-state-badge ${stateClass(st.state === 'ok' ? 'ok' : st.state === 'error' ? 'error' : 'unknown')}">${escapeHtml(st.state)}</span>
+        </div>
+        ${st.error ? `<div style="font-size:11.5px; color:#ef4444; padding: 4px 14px;">${escapeHtml(st.error)}</div>` : ''}
+      `).join('');
+      body.innerHTML = `
+        <h3>${escapeHtml(sum.workflowId || '?')}</h3>
+        <p class="run-detail-meta">
+          ${escapeHtml(runId)} ·
+          ${sum.startedAt ? new Date(sum.startedAt).toLocaleString('de-DE') : '—'} ·
+          ${fmtMs(sum.totalMs)} ·
+          <span class="run-state-badge ${stateClass(sum.state)}">${escapeHtml(sum.state || '—')}</span> ·
+          ${sum.fields ?? 0} Felder
+        </p>
+        <div class="run-detail-stages">${stagesHtml || '<p style="color: var(--color-text-tertiary);">Keine Stage-Informationen.</p>'}</div>
+        <div style="margin-top: 14px; text-align: right;">
+          <a class="fall-btn" href="/pipeline.html?workflow=${encodeURIComponent(sum.workflowId || '')}&run=${encodeURIComponent(runId)}" target="_blank">In Pipeline öffnen ↗</a>
+        </div>
+      `;
+    }
+    function closeRunDetail() {
+      document.getElementById('run-detail').classList.remove('open');
     }
 
     async function loadLastLayer() {
@@ -429,18 +635,24 @@
       }
     }
 
-    function renderLayer(layer, fromStage, stats) {
-      document.getElementById('layer-panel').hidden = false;
-      const ecodes = Object.keys(layer).length;
-      const originSummary = stats?.byOrigin
-        ? Object.entries(stats.byOrigin).map(([o, n]) => `${o}=${n}`).join(' · ')
-        : '';
-      document.getElementById('layer-sub').textContent =
-        `aus Stage: ${fromStage} · ${ecodes} eCodes${originSummary ? ' · ' + originSummary : ''}`;
+    // Letzter Layer wird gecached, damit der "Format-Varianten zeigen"-
+    // Toggle nicht jedes Mal /result neu laden muss.
+    let lastLayer = null;
+    let lastLayerFromStage = null;
+    let lastLayerStats = null;
 
-      // Dedupe identischer eCode-Varianten (E0200201..04 → eine Zeile)
-      // analog zum pipeline.jsx-Verhalten. Gruppieren nach (anlage,
-      // vordruckzeile, drucktext, normalized-Wert).
+    function buildLayerRows(layer, showAllVariants) {
+      if (showAllVariants) {
+        // Original-Reihenfolge: alle eCodes einzeln.
+        return Object.entries(layer).slice(0, 400).map(([eCode, v]) => ({
+          primary: eCode, additional: [],
+          label: v?.drucktext || eCode,
+          value: v?.normalized != null ? String(v.normalized) : (v?.value ?? ''),
+          anlage: v?.anlage ?? '',
+          vz: v?.vordruckzeile ?? '',
+          origin: v?.origin ?? '',
+        }));
+      }
       const grouped = new Map();
       for (const [eCode, v] of Object.entries(layer)) {
         const label = v?.drucktext || eCode;
@@ -456,12 +668,24 @@
           ex.additional.push(eCode);
         }
       }
+      return Array.from(grouped.values());
+    }
 
-      const rows = Array.from(grouped.values()).slice(0, 200).map(g => {
+    function paintLayer() {
+      if (!lastLayer) return;
+      const showAll = document.getElementById('layer-show-all').checked;
+      const groups = buildLayerRows(lastLayer, showAll);
+      const totalSourceCodes = Object.keys(lastLayer).length;
+      const originSummary = lastLayerStats?.byOrigin
+        ? Object.entries(lastLayerStats.byOrigin).map(([o, n]) => `${o}=${n}`).join(' · ')
+        : '';
+      document.getElementById('layer-sub').textContent =
+        `aus Stage: ${lastLayerFromStage} · ${totalSourceCodes} eCodes` +
+        (showAll ? '' : ` · ${groups.length} sichtbar nach Dedup`) +
+        (originSummary ? ` · ${originSummary}` : '');
+      const rows = groups.slice(0, 400).map(g => {
         const safeOrigin = String(g.origin).replace(/[^A-Za-z0-9_%]/g, '_');
-        const codeBadge = g.additional.length > 0
-          ? `${g.primary} (+${g.additional.length})`
-          : g.primary;
+        const codeBadge = g.additional.length > 0 ? `${g.primary} (+${g.additional.length})` : g.primary;
         const codeTitle = g.additional.length > 0
           ? `eCode-Varianten: ${[g.primary, ...g.additional].join(', ')}`
           : '';
@@ -476,6 +700,14 @@
       document.getElementById('layer-rows').innerHTML = rows || '<tr><td colspan="5" style="color: var(--color-text-tertiary);">Layer leer.</td></tr>';
     }
 
+    function renderLayer(layer, fromStage, stats) {
+      document.getElementById('layer-panel').hidden = false;
+      lastLayer = layer;
+      lastLayerFromStage = fromStage;
+      lastLayerStats = stats || null;
+      paintLayer();
+    }
+
     // ── Upload + SSE ────────────────────────────────────────────────────
     const drop = document.getElementById('drop');
     const fileInput = document.getElementById('file');
@@ -487,6 +719,10 @@
       drop.classList.remove('busy');
       dropFile.hidden = true; dropFile.textContent = '';
       dropProgress.hidden = true;
+      dropProgress.classList.remove('indeterminate');
+      document.getElementById('drop-progress-fill').style.width = '0%';
+      const stageEl = document.getElementById('drop-stage');
+      stageEl.hidden = true; stageEl.innerHTML = '';
       dropResult.hidden = true; dropResult.textContent = '';
       dropResult.classList.remove('err');
       fileInput.value = '';
@@ -521,6 +757,11 @@
       drop.classList.add('busy');
       showSelectedFile(file);
       dropProgress.hidden = false;
+      dropProgress.classList.add('indeterminate');
+      const stageEl = document.getElementById('drop-stage');
+      const fillEl = document.getElementById('drop-progress-fill');
+      stageEl.hidden = false;
+      stageEl.innerHTML = '<span>Datei wird hochgeladen…</span>';
 
       const fd = new FormData();
       fd.append('file', file);
@@ -553,6 +794,9 @@
       let stagesDone = 0;
       let lastStage = '';
       let runState = null;
+      let stageCount = 0;       // wird mit run_meta gesetzt
+      let activeStage = null;   // aktuell laufende Stage-ID
+      let stageStartedAt = 0;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -566,9 +810,41 @@
             const obj = JSON.parse(m[1]);
             ev.textContent += `[${obj.stageId ?? '·'}] ${obj.name}\n`;
             ev.scrollTop = ev.scrollHeight;
-            if (obj.name === 'stage_done') { stagesDone++; lastStage = obj.stageId || lastStage; }
-            if (obj.name === 'run_done') runState = 'ok';
-            if (obj.name === 'run_error') runState = 'error';
+            // Live-Stage-Indikator
+            if (obj.name === 'run_meta') {
+              stageCount = (obj.payload?.stages || []).length || 0;
+              dropProgress.classList.remove('indeterminate');
+              fillEl.style.width = '0%';
+              stageEl.innerHTML = `<span>Workflow gestartet · ${stageCount} Stages</span>`;
+            }
+            if (obj.name === 'stage_start') {
+              activeStage = obj.stageId;
+              stageStartedAt = Date.now();
+              const idx = stagesDone + 1;
+              const pct = stageCount ? Math.min(100, Math.round((stagesDone / stageCount) * 100)) : 30;
+              fillEl.style.width = pct + '%';
+              stageEl.innerHTML = `<span>Phase <strong>${idx}${stageCount ? '/' + stageCount : ''}</strong> · <strong>${escapeHtml(activeStage || '')}</strong> läuft…</span>`;
+            }
+            if (obj.name === 'stage_done') {
+              stagesDone++;
+              const pct = stageCount ? Math.min(100, Math.round((stagesDone / stageCount) * 100)) : 50;
+              fillEl.style.width = pct + '%';
+              lastStage = obj.stageId || lastStage;
+              const ms = Date.now() - stageStartedAt;
+              stageEl.innerHTML = `<span>Phase <strong>${stagesDone}${stageCount ? '/' + stageCount : ''}</strong> · ${escapeHtml(obj.stageId || '')} fertig <span style="color: var(--color-text-tertiary);">(${ms} ms)</span></span>`;
+            }
+            if (obj.name === 'stage_error') {
+              fillEl.style.background = '#ef4444';
+              stageEl.innerHTML = `<span style="color: #ef4444;">Stage <strong>${escapeHtml(obj.stageId || '')}</strong>: Fehler — ${escapeHtml(JSON.stringify(obj.payload?.error || obj.payload || {}).slice(0, 120))}</span>`;
+            }
+            if (obj.name === 'run_done') {
+              runState = 'ok';
+              fillEl.style.width = '100%';
+            }
+            if (obj.name === 'run_error') {
+              runState = 'error';
+              fillEl.style.background = '#ef4444';
+            }
           } catch { /* ignore */ }
         }
       }
@@ -697,10 +973,20 @@
     window.addEventListener('DOMContentLoaded', () => {
       window.lucide && window.lucide.createIcons();
       loadInstance();
+      loadMcpHealth();
       document.getElementById('theme-btn').addEventListener('click', () => {
         const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
         applyTheme(next);
       });
+      // Run-Detail-Modal schließen: Klick außerhalb der Box oder Esc.
+      document.getElementById('run-detail').addEventListener('click', (e) => {
+        if (e.target.id === 'run-detail') closeRunDetail();
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeRunDetail();
+      });
+      // Dedup-Toggle
+      document.getElementById('layer-show-all').addEventListener('change', paintLayer);
     });
   </script>
 </body>

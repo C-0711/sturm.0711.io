@@ -20,7 +20,7 @@ export interface ApplicationInstance {
   displayName: string;
   mandantId: string;
   veranlagungsjahr?: number;
-  status: 'in_bearbeitung' | 'review' | 'versiegelt' | 'eingereicht';
+  status: 'in_bearbeitung' | 'review' | 'versiegelt' | 'eingereicht' | 'archiviert';
   createdAt: string;
   updatedAt: string;
   /** Run-IDs des extraction-Workflows, jüngste zuletzt. */
@@ -150,6 +150,41 @@ export function createApplicationsRouter(opts: ApplicationsRouterOptions): Route
     const inst = await loadInstance(appId, caseId);
     if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
     res.json(inst);
+  });
+
+  // ── DELETE /api/applications/:appId/instances/:caseId ──────────────────
+  // Verhalten je nach Lifecycle:
+  //   in_bearbeitung   → komplett löschen (JSON + Workspace inkl. Inbox)
+  //   versiegelt       → nur archivieren (Status `archiviert`, readonly).
+  //                       Wir behalten master.json + Anchor + Run-Artefakte —
+  //                       die sind das Audit-Resultat des Falls.
+  //   eingereicht      → analog versiegelt, nur archivieren.
+  // Force-Flag `?force=1` kann auch versiegelte Fälle löschen (Aufräum-Hilfe).
+  router.delete('/:appId/instances/:caseId', async (req, res) => {
+    const { appId, caseId } = req.params;
+    if (!getApplication(appId)) {
+      return res.status(404).json({ error: `application not found: ${appId}` });
+    }
+    const inst = await loadInstance(appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    const force = req.query.force === '1' || req.query.force === 'true';
+    if (!force && inst.status !== 'in_bearbeitung') {
+      // Archivieren (Status-Übergang, kein Löschen)
+      inst.status = 'archiviert' as ApplicationInstance['status'];
+      await saveInstance(inst);
+      return res.json({ archived: true, caseId, prevStatus: inst.status });
+    }
+    // Echt löschen: Instance-JSON + Workspace-Dir (relativ zur cwd)
+    try {
+      await fs.rm(instanceFilePath(ROOT, appId, caseId), { force: true });
+    } catch { /* tolerant */ }
+    const wsAbs = path.isAbsolute(inst.workspacePath)
+      ? inst.workspacePath
+      : path.join(process.cwd(), inst.workspacePath);
+    try {
+      await fs.rm(wsAbs, { recursive: true, force: true });
+    } catch { /* tolerant */ }
+    return res.json({ deleted: true, caseId, workspaceRemoved: wsAbs });
   });
 
   // ── POST /api/applications/:appId/instances ────────────────────────────

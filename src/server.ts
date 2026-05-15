@@ -482,6 +482,107 @@ app.post(
   },
 );
 
+// ── GET /api/applications/:appId/mcps/health ───────────────────────────
+// Health-Check für alle in der Application-Definition gelisteten MCPs.
+// Pro MCP: { name, url, configured, alive, latencyMs, error }.
+// Wird im /steuerfall.html Header für Health-Dots gepingt. Token-frei,
+// weil nur Health-Probe (kein Tool-Call).
+app.get('/api/applications/:appId/mcps/health', async (req, res) => {
+  const { appId } = req.params;
+  const app_ = getApplication(appId);
+  if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+  const mcps = app_.mcps ?? {};
+  const checks = await Promise.all(Object.entries(mcps).map(async ([name, ref]) => {
+    const url = process.env[ref.envVar] ?? ref.url ?? null;
+    const configured = typeof url === 'string' && url.length > 0;
+    if (!configured) {
+      return { name, configured: false, alive: false, url: null, latencyMs: null, error: 'not-configured', tools: ref.tools };
+    }
+    const t0 = Date.now();
+    try {
+      // Probe via JSON-RPC tools/list — Standard-MCP-Endpoint. 3s Hard-Timeout.
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(new Error('timeout')), 3000);
+      const r = await fetch(url, {
+        method: 'POST',
+        signal: ac.signal,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      });
+      clearTimeout(timer);
+      const alive = r.ok;
+      return {
+        name, configured: true, alive,
+        url, latencyMs: Date.now() - t0,
+        error: alive ? null : `HTTP ${r.status}`,
+        tools: ref.tools,
+      };
+    } catch (e) {
+      return {
+        name, configured: true, alive: false,
+        url, latencyMs: Date.now() - t0,
+        error: (e as Error).message,
+        tools: ref.tools,
+      };
+    }
+  }));
+  res.json({ mcps: checks });
+});
+
+// ── GET /api/applications/:appId/instances/:caseId/runs/:runId/summary ──
+// Liefert eine kompakte Zusammenfassung eines Runs, ohne dass der Client
+// einen Bearer-Token braucht. Liest `_result.json` + `_meta.json` aus dem
+// runs/<workflowId>/<runId>/-Ordner und korreliert mit der Instance, damit
+// nur Runs ausgeliefert werden, die wirklich zum Fall gehören.
+app.get(
+  '/api/applications/:appId/instances/:caseId/runs/:runId/summary',
+  async (req, res) => {
+    const { appId, caseId, runId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    if (!inst.runs.includes(runId)) {
+      return res.status(404).json({ error: 'run not in case', caseRuns: inst.runs.length });
+    }
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+    const runDir = path.join(RUNS_DIR, extractionId, runId);
+    async function readJson(rel: string): Promise<unknown | null> {
+      try { return JSON.parse(await fs.promises.readFile(path.join(runDir, rel), 'utf-8')); }
+      catch { return null; }
+    }
+    const meta = (await readJson('_meta.json')) as { runId?: string; workflowId?: string; startedAt?: string } | null;
+    const result = (await readJson('_result.json')) as {
+      state?: 'ok' | 'error' | 'partial';
+      ms?: number;
+      stages?: Record<string, { state: string; ms?: number; error?: { message?: string } }>;
+    } | null;
+    const mergeOut = (await readJson('phase5Merge/output.json')) as { canonical_layer?: Record<string, unknown> } | null;
+    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as { canonical_layer?: Record<string, unknown> } | null;
+    const layer = bmfOut?.canonical_layer ?? mergeOut?.canonical_layer ?? null;
+    const fields = layer ? Object.keys(layer).length : 0;
+
+    const stages = result?.stages
+      ? Object.entries(result.stages).map(([id, s]) => ({
+          id,
+          state: s.state,
+          ms: s.ms ?? null,
+          error: s.error?.message ?? null,
+        }))
+      : [];
+    res.json({
+      runId,
+      workflowId: meta?.workflowId ?? extractionId,
+      startedAt: meta?.startedAt ?? null,
+      state: result?.state ?? null,
+      totalMs: result?.ms ?? null,
+      stages,
+      fields,
+    });
+  },
+);
+
 // ── GET /api/applications/:appId/instances/:caseId/download/:artifact ──
 // Liefert die versiegelten Artefakte des Falls zum Download. Wir erlauben
 // genau zwei: master.json (signierter Snapshot, master.signed-Variante aus
