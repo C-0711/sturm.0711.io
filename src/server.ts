@@ -497,11 +497,16 @@ app.post(
     }
     await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, () => worker()));
 
-    // Instance final speichern — runs[] + documents[] aggregiert
+    // Instance final speichern — runs[] aggregiert, documents[] aus dem
+    // Manifest (das die Dedup-Wahrheit ist).
     const freshInst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (freshInst) {
       freshInst.runs = [...freshInst.runs, ...runIds];
-      freshInst.documents = [...(freshInst.documents ?? []), ...(docsAdded as never[])];
+      // Documents aus dem (gerade frisch geschriebenen) Manifest spiegeln,
+      // damit identische Dateien nicht doppelt in instance.documents stehen.
+      const { readManifest } = await import('./server/inbox.ts');
+      const manifest = await readManifest(ROOT, freshInst);
+      freshInst.documents = manifest.documents;
       freshInst.status = 'in_bearbeitung';
       await saveInstanceFile(APPLICATIONS_DIR, freshInst);
     }
