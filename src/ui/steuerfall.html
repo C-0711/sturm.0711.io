@@ -241,6 +241,8 @@
               <div class="meta" id="case-meta">…</div>
             </div>
             <div class="fall-actions">
+              <a class="fall-btn" id="btn-dl-master" hidden download><i data-lucide="file-down"></i><span>master.json</span></a>
+              <a class="fall-btn" id="btn-dl-eric" hidden download><i data-lucide="file-code"></i><span>eric.xml</span></a>
               <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
               <button class="fall-btn primary" id="btn-export" disabled><i data-lucide="send"></i><span>An ELSTER</span></button>
             </div>
@@ -264,6 +266,11 @@
           <section class="panel" id="events-panel" hidden>
             <h3>Live-Events</h3>
             <div class="events" id="events"></div>
+          </section>
+
+          <section class="panel" id="seal-panel" hidden>
+            <h3>Versiegelung</h3>
+            <div id="seal-result"></div>
           </section>
 
           <section class="panel">
@@ -369,8 +376,18 @@
       // Buttons-Logik
       const canSeal = instance.runs.length > 0 && instance.status === 'in_bearbeitung';
       const canExport = instance.status === 'versiegelt';
+      const isSealed = instance.status === 'versiegelt' || instance.status === 'eingereicht';
       document.getElementById('btn-seal').disabled = !canSeal;
       document.getElementById('btn-export').disabled = !canExport;
+      // Download-Links erscheinen erst nach Versiegelung. URLs zeigen direkt
+      // auf den token-freien Application-Download-Endpoint.
+      const dlMaster = document.getElementById('btn-dl-master');
+      const dlEric = document.getElementById('btn-dl-eric');
+      const base = `/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/download`;
+      dlMaster.hidden = !isSealed;
+      dlEric.hidden = !isSealed;
+      dlMaster.href = `${base}/master.json`;
+      dlEric.href = `${base}/eric.xml`;
       // Letzter Run → canonical_layer laden, falls vorhanden
       if (instance.runs.length > 0) {
         loadLastLayer();
@@ -571,16 +588,96 @@
     }
 
     // ── Seal / Export ───────────────────────────────────────────────────
+    function showSealResult(html, kind /* 'ok' | 'err' | 'warn' */) {
+      const panel = document.getElementById('seal-panel');
+      const out = document.getElementById('seal-result');
+      out.innerHTML = html;
+      out.dataset.kind = kind;
+      panel.hidden = false;
+    }
+
     document.getElementById('btn-seal').addEventListener('click', async () => {
+      showSealResult('<div style="color: var(--color-text-tertiary);">Versiegelung läuft…</div>', 'warn');
       const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/seal`, { method: 'POST' });
-      const j = await res.json().catch(() => ({}));
-      if (res.status === 501) {
-        alert(`Versiegelung noch nicht verfügbar: ${j.message || j.error}`);
-      } else if (res.ok) {
-        alert('Fall versiegelt.');
+      const ct = res.headers.get('content-type') || '';
+
+      // Sync-JSON-Antwort (Pre-Seal-Validierung schlug fehl oder anderer Sync-Fehler)
+      if (ct.includes('application/json')) {
+        const j = await res.json().catch(() => ({}));
+        if (res.status === 409 && j.error === 'missing-pflicht-fields' && Array.isArray(j.missing)) {
+          const rows = j.missing.slice(0, 50).map(m => `
+            <tr>
+              <td style="font-family: ui-monospace, monospace; font-size: 11.5px;">${escapeHtml(m.eCode)}</td>
+              <td>${escapeHtml(m.drucktext || '')}</td>
+              <td>${escapeHtml(m.anlage || '')}${m.vordruckzeile ? ' Z.' + escapeHtml(m.vordruckzeile) : ''}</td>
+            </tr>
+          `).join('');
+          showSealResult(`
+            <div style="color: #ef4444; font-weight: 500; margin-bottom: 8px;">${escapeHtml(j.message || 'Pflicht-Felder fehlen')}</div>
+            <table class="layer-table">
+              <thead><tr><th>eCode</th><th>Drucktext</th><th>Anlage</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <p class="panel-sub" style="margin-top: 10px;">Erkannte Anlagen: ${(j.anlagen || []).join(', ') || '—'}. Wert eintragen (z.B. neues Dokument hochladen) und erneut versiegeln.</p>
+          `, 'err');
+          return;
+        }
+        if (res.status === 501) {
+          showSealResult(`<div style="color: #ef4444;">Versiegelung nicht verfügbar: ${escapeHtml(j.message || j.error || '')}</div>`, 'err');
+          return;
+        }
+        if (!res.ok) {
+          showSealResult(`<div style="color: #ef4444;">Fehler ${res.status}: ${escapeHtml(j.error || '')}${j.message ? ' — ' + escapeHtml(j.message) : ''}</div>`, 'err');
+          return;
+        }
+        showSealResult('<div style="color: #059669;">✓ Versiegelt.</div>', 'ok');
+        await loadInstance();
+        return;
+      }
+
+      // SSE-Stream (Validation OK, seal-Workflow läuft)
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let merkleRoot = null;
+      let stagesDone = 0;
+      let lastStageError = null;
+      let runState = null;
+      const events = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const p of parts) {
+          const m = /^data:\s*(.+)$/m.exec(p);
+          if (!m) continue;
+          try {
+            const obj = JSON.parse(m[1]);
+            events.push(`[${obj.stageId ?? '·'}] ${obj.name}`);
+            if (obj.name === 'merkle_computed') merkleRoot = obj.payload?.root;
+            if (obj.name === 'stage_done') stagesDone++;
+            if (obj.name === 'stage_error') lastStageError = { stage: obj.stageId, payload: obj.payload };
+            if (obj.name === 'run_done') runState = 'ok';
+            if (obj.name === 'run_error') runState = 'error';
+          } catch { /* ignore */ }
+        }
+      }
+      if (runState === 'ok') {
+        showSealResult(`
+          <div style="color: #059669; font-weight: 500; margin-bottom: 4px;">✓ Fall versiegelt · ${stagesDone} Stages</div>
+          ${merkleRoot ? `<div style="font-size: 11.5px; color: var(--color-text-tertiary); font-family: ui-monospace, monospace;">Merkle-Root: ${escapeHtml(merkleRoot)}</div>` : ''}
+        `, 'ok');
         await loadInstance();
       } else {
-        alert(`Fehler: ${j.error || res.status}`);
+        showSealResult(`
+          <div style="color: #ef4444; font-weight: 500; margin-bottom: 4px;">✕ Versiegelung fehlgeschlagen</div>
+          ${lastStageError ? `<div style="font-size: 12px;">Stage <code>${escapeHtml(lastStageError.stage)}</code>: ${escapeHtml(JSON.stringify(lastStageError.payload).slice(0, 240))}</div>` : ''}
+          <details style="margin-top: 8px;"><summary style="cursor: pointer; font-size: 12px; color: var(--color-text-secondary);">Event-Log</summary>
+            <pre style="font-size: 11px; color: var(--color-text-tertiary); margin: 6px 0 0; max-height: 200px; overflow: auto;">${escapeHtml(events.join('\n'))}</pre>
+          </details>
+        `, 'err');
       }
     });
 

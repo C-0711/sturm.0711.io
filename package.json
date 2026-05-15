@@ -13,8 +13,10 @@
     "test:gitchain": "tsx src/lib/gitchain-client.test.ts",
     "test:pentacam-kc": "tsx src/workflows/pentacam-kc/pentacam-kc.test.ts",
     "test:myopia": "tsx src/workflows/myopia-progression/myopia-progression.test.ts",
+    "test:applications": "tsx src/server/applications.test.ts",
+    "test:seal": "tsx src/stages/seal/seal.test.ts",
     "test:e2e:designer": "node tests/e2e/designer.mjs",
-    "test": "npm run test:codec && npm run test:schema && npm run test:gitchain && npm run test:pentacam-kc && npm run test:myopia",
+    "test": "npm run test:codec && npm run test:schema && npm run test:gitchain && npm run test:pentacam-kc && npm run test:myopia && npm run test:applications && npm run test:seal",
     "build:ui": "npm run build:ui:pipeline && npm run build:ui:designer",
     "build:ui:pipeline": "esbuild src/ui/pipeline.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/pipeline.bundle.js",
     "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js"

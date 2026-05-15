@@ -364,30 +364,76 @@ app.post(
     const extractionId = app_.workflows.extraction;
     if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
 
-    // Aus dem letzten Run: phase7Validator.canonicalLayer (oder phase5Merge.canonical_layer
-    // als Fallback) und phase5Merge.eric_xml lesen.
+    // Aus dem letzten Run: rich canonical_layer (mit origin/anlage/drucktext)
+    // bevorzugt aus phase6BmfRechner.canonical_layer, dann phase5Merge.
+    // Der flache phase7Validator.canonicalLayer.codes-Map ist nur Fallback.
     const lastRunId = inst.runs[inst.runs.length - 1];
     const runDir = path.join(RUNS_DIR, extractionId, lastRunId);
     async function readJson(rel: string): Promise<unknown | null> {
       try { return JSON.parse(await fs.promises.readFile(path.join(runDir, rel), 'utf-8')); }
       catch { return null; }
     }
-    // Wir kennen die genauen Pfade aus elster-v5_2-rag-Stages.
     const validatorOut = (await readJson('phase7Validator/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> } } | null;
-    const mergeOut = (await readJson('phase5Merge/output.json')) as { canonical_layer?: Record<string, unknown>; eric_xml?: string } | null;
-    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> }; eric_xml?: string } | null;
+    const mergeOut = (await readJson('phase5Merge/output.json')) as { canonical_layer?: Record<string, { value?: string; normalized?: string | null; anlage?: string }>; eric_xml?: string } | null;
+    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as { canonical_layer?: Record<string, { value?: string; normalized?: string | null; anlage?: string }>; eric_xml?: string; xml_payload?: string } | null;
+    const klassOut = (await readJson('klassifizierung/output.json')) as { erkannte_anlagen?: string[] } | null;
 
     const canonical_layer =
-      validatorOut?.canonicalLayer?.codes ??
-      bmfOut?.canonicalLayer?.codes ??
-      mergeOut?.canonical_layer ??
-      null;
-    const eric_xml = bmfOut?.eric_xml ?? mergeOut?.eric_xml ?? '';
+      (bmfOut?.canonical_layer && Object.keys(bmfOut.canonical_layer).length > 0) ? bmfOut.canonical_layer :
+      (mergeOut?.canonical_layer && Object.keys(mergeOut.canonical_layer).length > 0) ? mergeOut.canonical_layer :
+      validatorOut?.canonicalLayer?.codes ?? null;
+    const eric_xml = bmfOut?.xml_payload ?? bmfOut?.eric_xml ?? mergeOut?.eric_xml ?? '';
 
     if (!canonical_layer || typeof canonical_layer !== 'object') {
       return res.status(409).json({
         error: 'extraction-incomplete',
         message: `Run ${lastRunId} hat keinen canonical_layer geliefert.`,
+      });
+    }
+
+    // ── Pre-Seal-Validierung (I1.1): alle pflicht=true Atome der erkannten
+    // Anlagen müssen im canonical_layer einen nicht-leeren Wert haben. Wenn
+    // der Katalog für eine Anlage keine pflicht-Atome führt (z.B. Anlage N
+    // — siehe Mängel D1) ist der Check für diese Anlage ein No-op und der
+    // Seal läuft. Computed-Felder (ESt1A E0107xxx von BMF) sind ohnehin
+    // nicht pflicht und werden ignoriert.
+    const anlagen = Array.isArray(klassOut?.erkannte_anlagen) ? klassOut!.erkannte_anlagen : [];
+    const layerCovered = new Set<string>();
+    for (const [code, cv] of Object.entries(canonical_layer)) {
+      const v = (cv as { value?: string; normalized?: string | null })?.value ?? null;
+      const n = (cv as { value?: string; normalized?: string | null })?.normalized ?? null;
+      if ((typeof v === 'string' && v.trim().length > 0) || (typeof n === 'string' && n.trim().length > 0)) {
+        layerCovered.add(code);
+      }
+    }
+    const missing: Array<{ eCode: string; anlage: string; drucktext: string; vordruckzeile: string }> = [];
+    try {
+      const { felderFuerAnlage } = await import('./lib/elster-catalog.ts');
+      for (const anlage of anlagen) {
+        const liste = await felderFuerAnlage(anlage as never);
+        for (const feld of liste.felder) {
+          if (!feld.pflicht) continue;
+          if (!layerCovered.has(feld.eCode)) {
+            missing.push({
+              eCode: feld.eCode,
+              anlage,
+              drucktext: feld.drucktext,
+              vordruckzeile: feld.vordruckzeile,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[seal] pre-validation catalog lookup failed:', (e as Error).message);
+      // Im Fehlerfall lassen wir die Validierung großzügig durchgehen, damit
+      // ein Katalog-Bug nicht versiegeln blockiert.
+    }
+    if (missing.length > 0) {
+      return res.status(409).json({
+        error: 'missing-pflicht-fields',
+        message: `Versiegelung blockiert: ${missing.length} Pflicht-Feld${missing.length === 1 ? '' : 'er'} ohne Wert.`,
+        missing,
+        anlagen,
       });
     }
 
@@ -433,6 +479,58 @@ app.post(
       }
     } catch { /* errors emitted as events */ }
     finally { unsub(); res.end(); }
+  },
+);
+
+// ── GET /api/applications/:appId/instances/:caseId/download/:artifact ──
+// Liefert die versiegelten Artefakte des Falls zum Download. Wir erlauben
+// genau zwei: master.json (signierter Snapshot, master.signed-Variante aus
+// dem seal-Run) und eric_xml (ERiC-konformes XML-Payload).
+//
+// Token-frei: die Application-Oberfläche scoped alles auf den Fall-Workspace.
+app.get(
+  '/api/applications/:appId/instances/:caseId/download/:artifact',
+  async (req, res) => {
+    const { appId, caseId, artifact } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    if (inst.status !== 'versiegelt' && inst.status !== 'eingereicht') {
+      return res.status(409).json({ error: 'not-sealed', message: 'Download erst nach Versiegelung verfügbar.' });
+    }
+    const wsAbs = path.isAbsolute(inst.workspacePath)
+      ? inst.workspacePath
+      : path.join(ROOT, inst.workspacePath);
+    const masterPath = path.join(wsAbs, 'seal', 'master.json');
+    if (artifact === 'master.json') {
+      try {
+        const raw = await fs.promises.readFile(masterPath, 'utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${caseId}-master.json"`);
+        res.type('application/json').send(raw);
+      } catch {
+        res.status(404).json({ error: 'master-not-found' });
+      }
+      return;
+    }
+    if (artifact === 'eric.xml') {
+      try {
+        const raw = await fs.promises.readFile(masterPath, 'utf-8');
+        const master = JSON.parse(raw) as { eric_xml?: string };
+        const xml = master.eric_xml ?? '';
+        if (!xml) return res.status(404).json({ error: 'eric-xml-empty' });
+        res.setHeader('Content-Disposition', `attachment; filename="${caseId}-eric.xml"`);
+        res.type('application/xml').send(xml);
+      } catch {
+        res.status(404).json({ error: 'master-not-found' });
+      }
+      return;
+    }
+    return res.status(400).json({
+      error: 'unknown-artifact',
+      message: `unbekanntes Artefakt: ${artifact}`,
+      supported: ['master.json', 'eric.xml'],
+    });
   },
 );
 

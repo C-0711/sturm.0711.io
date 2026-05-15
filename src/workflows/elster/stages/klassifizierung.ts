@@ -26,6 +26,9 @@ export interface KlassifizierungOutput {
   regex_hits: Record<string, number>;
   llm_hits: string[];
   used_llm: boolean;
+  /** Wenn gesetzt: Meta-Dokument (Transferticket etc.) wurde erkannt,
+   *  Downstream-Stages sollten zu No-ops werden. */
+  kpi_warning?: 'meta-doc';
   ms: number;
 }
 
@@ -216,6 +219,51 @@ export const klassifizierungStage = defineStage<
     const katalog = await loadKatalog(input.vz);
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
+
+    // ─── I1.4 Meta-Dokument-Heuristik ──────────────────────────────────────
+    // ELSTER produziert eine Reihe von Meta-Dokumenten (Transferticket,
+    // Steuer-Abruf-Quittung, Empfangsbestätigung), die für die Extraktion
+    // wertlos sind, aber genug "tax language" enthalten, dass die Regex-
+    // Erkennung Anlagen wie N treffen kann. Wir erkennen diese Klasse hier
+    // *vor* Regex+LLM und kürzen ab: `erkannte_anlagen=[]` + `meta_doc`
+    // KPI-Warning. Downstream-Stages (felderKatalog, phase1Regex usw.)
+    // werden zu No-ops.
+    const META_DOC_PATTERNS = [
+      /\btransfer-?ticket\b/i,
+      /\bsteuer[- ]?abruf\b/i,
+      /\bsteuer-?konto[ -]?abruf\b/i,
+      /\bempfangs[- ]?bestätigung\b/i,
+      /\bquittung\s+über\s+den\s+abruf\b/i,
+      /\babruf[- ]?bescheinigung\b/i,
+    ];
+    const metaHits = META_DOC_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
+    // Zusätzlich: sehr kurze Dokumente OHNE typische Wertspalten (€-Zeichen,
+    // Beträge mit Komma+Cent) sind selten Belege.
+    const hasCurrency = /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) || /\d+,\d{2}\s*€/.test(input.text);
+    const isMetaDoc = metaHits.length > 0 && (!hasCurrency || input.text.length < 1200);
+    if (isMetaDoc) {
+      ctx.emit('meta_doc_detected', { patterns: metaHits, hasCurrency, textLen: input.text.length });
+      ctx.logger.info('Meta-Dokument erkannt — keine Beleg-Extraktion', {
+        patterns: metaHits,
+        hasCurrency,
+        textLen: input.text.length,
+      });
+      await ctx.artifacts.write('erkannte_anlagen.json', {
+        erkannte_anlagen: [],
+        regex_hits: {},
+        llm_hits: [],
+        meta_doc: true,
+        meta_patterns: metaHits,
+      });
+      return {
+        erkannte_anlagen: [],
+        regex_hits: {},
+        llm_hits: [],
+        used_llm: false,
+        kpi_warning: 'meta-doc',
+        ms: Date.now() - t0,
+      };
+    }
 
     // ─── Wave 25 v2: skip_classification + anlagen_hint ─────────────────────
     // cb-ctax hat aus Mistral-Small-KPIs schon ein konfidentes Anlagen-Set
