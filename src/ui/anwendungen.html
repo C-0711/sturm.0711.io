@@ -367,7 +367,12 @@
       activeApp = null;
     }
     async function submitCreate() {
-      if (!activeApp) return;
+      // Snapshot der App-ID, BEVOR closeCreateModal() activeApp = null
+      // setzt. Bug aus E2E: ohne Snapshot landete der Redirect mit
+      // ?app=null, da activeApp zum Zeitpunkt der location.href-Zuweisung
+      // bereits zurückgesetzt war.
+      const appId = activeApp;
+      if (!appId) return;
       const displayName = document.getElementById('m-display').value.trim();
       const mandant_id = document.getElementById('m-mandant').value.trim();
       const jahrStr = document.getElementById('m-jahr').value.trim();
@@ -377,7 +382,7 @@
       if (!displayName) { err.textContent = 'Anzeigename ist Pflicht.'; return; }
       if (!mandant_id) { err.textContent = 'Mandant-ID ist Pflicht.'; return; }
       try {
-        const res = await fetch(`/api/applications/${encodeURIComponent(activeApp)}/instances`, {
+        const res = await fetch(`/api/applications/${encodeURIComponent(appId)}/instances`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ displayName, mandant_id, veranlagungsjahr }),
@@ -389,7 +394,7 @@
         }
         const inst = await res.json();
         closeCreateModal();
-        location.href = `/steuerfall.html?app=${encodeURIComponent(activeApp)}&case=${encodeURIComponent(inst.caseId)}`;
+        location.href = `/steuerfall.html?app=${encodeURIComponent(appId)}&case=${encodeURIComponent(inst.caseId)}`;
       } catch (e) {
         err.textContent = String(e?.message || e);
       }
