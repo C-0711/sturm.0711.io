@@ -1109,9 +1109,14 @@ export function buildElsterV52RagWorkflow() {
           model: 'gemma4-mm',
           temperature: 0,
           maxTokens: 2000,
-          concurrency: 3,
-          stream: true,
-          perAnlageTimeoutMs: 60_000,
+          // Concurrency 2 + stream:false: im Stricker-Bulk-E2E ist die
+          // Streaming-Variante unter Burst-Last (5-7 parallele Workflows)
+          // mit "fetch failed" abgekackt, der non-streaming-Pfad (chatJson)
+          // hat denselben Retry und ist stabil. Live-per-Field-Stream wird
+          // im Bulk-Modus eh nicht angezeigt.
+          concurrency: 2,
+          stream: false,
+          perAnlageTimeoutMs: 90_000,
           typedSchema: true,
         },
         inputs: {
