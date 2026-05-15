@@ -1600,14 +1600,14 @@ function buildResultModelFromCanonical({ phase5Merge, bmfRechner, validator, wor
   const canonical = source.canonical_layer;
   const stats = phase5Merge?.stats || {};
 
-  const rows = [];
+  const rawRows = [];
   for (const [eCode, cv] of Object.entries(canonical)) {
     const isComputed = cv.origin === 'BMF_RECHNER';
     // Computed values get their own group at the top of the result. Declared
     // values stay grouped by Anlage like before.
     const group = isComputed ? '_bmf_rechner' : (cv.anlage || 'X');
     const path = `${group}.${eCode}`;
-    rows.push({
+    rawRows.push({
       path,
       group,
       leaf: eCode,
@@ -1634,6 +1634,30 @@ function buildResultModelFromCanonical({ phase5Merge, bmfRechner, validator, wor
       anleitung: null,
     });
   }
+
+  // ── Dedupe duplicate eCode-Varianten ────────────────────────────────────
+  // Der BMF-Katalog hat oft mehrere eCodes für dasselbe gedruckte Feld
+  // (z.B. E0200201..E0200204 für "Bruttoarbeitslohn" — verschiedene Format-
+  // bzw. Steuerpflichtiger/Ehegatte-Varianten). Wenn Layer-1 alle befüllt
+  // mit demselben gemerkten Wert, zeigt das UI "Bruttoarbeitslohn 4×". Hier
+  // gruppieren wir Rows mit identischem (anlage, vordruckzeile, label,
+  // formatted-value) zu einer Repräsentanten-Row und sammeln die weiteren
+  // eCodes in `additionalECodes` für die Anzeige.
+  const groupKey = (r) => `${r.anlage ?? ''}|${r.vordruckzeile ?? ''}|${r.label}|${r.formatted}|${r.matchMethod ?? ''}`;
+  const dedupMap = new Map();
+  for (const r of rawRows) {
+    const k = groupKey(r);
+    const ex = dedupMap.get(k);
+    if (!ex) {
+      dedupMap.set(k, { ...r, additionalECodes: [] });
+    } else {
+      ex.additionalECodes.push(r.ecode);
+      // Keep the representative path (= first eCode encountered).
+      // If any sibling has a span and we don't, adopt it.
+      if (!ex.span && r.span) ex.span = r.span;
+    }
+  }
+  const rows = Array.from(dedupMap.values());
   // Group by Anlage (BMF first via _bmf_rechner key); validator-issues anschließen
   const groupsMap = new Map();
   // Ensure BMF computed group renders first if present
@@ -2437,14 +2461,28 @@ function PdfSidePanel({ pdfUrl, hoverPath, resultModel, onClose }) {
     if (!hoverPath || !resultModel) return;
     const row = resultModel.rows.find(r => r.path === hoverPath);
     if (!row) return;
-    // v5/v5.1: prefer the OCR evidence_line (snippet) — it's longer and more
-    // unique than the bare value, which is critical for currency/dates that
-    // appear many times in a multi-doc bundle. Fall back to row.value.
-    const snippet = (row.span && typeof row.span.snippet === 'string') ? row.span.snippet.trim() : '';
+    // Candidate-Needles in Reihenfolge der Spezifität:
+    //   1. row.value — Wert allein (Currency/Date matched fast immer im PDF-
+    //                 Text-Layer, auch wenn Spaces fehlen)
+    //   2. längstes "Wort" aus evidence_line — Label-Token (z.B. "Kirchensteuer"),
+    //      hilft, wenn der Wert mehrfach im PDF auftaucht
+    //   3. evidence_line — letzter Versuch (das alte Verhalten); matcht selten
+    //      direkt, weil die OCR-Markdown-Tabellenform im PDF-Text-Layer fehlt
     const valueStr = (row.value != null ? String(row.value) : '').trim();
-    const target = snippet || valueStr;
-    if (!target) return;
-    const needle = target.toLowerCase();
+    const formattedStr = (row.formatted != null ? String(row.formatted) : '').trim();
+    const snippet = (row.span && typeof row.span.snippet === 'string') ? row.span.snippet.trim() : '';
+    // Längstes alphanumerisches Wort aus dem Snippet als Label-Token-Kandidat.
+    const labelToken = (() => {
+      if (!snippet) return '';
+      const words = snippet.match(/[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9-]{4,}/g) || [];
+      // Längstes Wort > 5 Buchstaben — vermeidet kurze Stopwords ("Zeile", "von").
+      const sorted = words.filter(w => w.length > 5).sort((a, b) => b.length - a.length);
+      return sorted[0] || '';
+    })();
+    const candidates = [valueStr, formattedStr, labelToken, snippet].filter((c, i, a) =>
+      c && a.indexOf(c) === i, // dedupe + skip empty
+    );
+    if (candidates.length === 0) return;
 
     // Search-order: indicated page first, then the rest. Picks up matches
     // wherever they actually live in the PDF text-layer.
@@ -2459,8 +2497,12 @@ function PdfSidePanel({ pdfUrl, hoverPath, resultModel, onClose }) {
 
     let firstHitPageWrap = null;
     let firstHitTopInPage = null;
+    let activeNeedle = null;
 
-    for (const pIdx of order) {
+    // Try each candidate in turn; stop at the first that yields ≥1 hit anywhere.
+    outer: for (const candidate of candidates) {
+      const needle = candidate.toLowerCase();
+      for (const pIdx of order) {
       const ps = pageStateRef.current[pIdx];
       if (!ps) continue;
       const fullText = ps.charIndex.map(ci => ci.str).join('');
@@ -2510,7 +2552,8 @@ function PdfSidePanel({ pdfUrl, hoverPath, resultModel, onClose }) {
       }
       // Stop after the first page that produced any match — keeps the
       // highlight focused on one page rather than scattering across many.
-      if (firstHitPageWrap) break;
+      if (firstHitPageWrap) { activeNeedle = candidate; break outer; }
+    }
     }
 
     if (firstHitPageWrap && firstHitPageWrap.parentElement) {
@@ -2631,10 +2674,16 @@ function ResultRow({ row, expanded, onToggle, onHover, hovered }) {
     if (hasIssues) return 'warn';
     return null;
   })();
-  // Compact citation, only when we have one: "E0200201 · N Z.5"
+  // Compact citation, only when we have one: "E0200201 · N Z.5".
+  // Wenn Format-/Personen-Varianten zusammengefasst wurden (additionalECodes
+  // nicht leer), zeigen wir z.B. "E0200201 (+3) · N Z.5".
+  const extraCount = Array.isArray(row.additionalECodes) ? row.additionalECodes.length : 0;
   const cite = row.ecode
-    ? `${row.ecode}${row.anlage ? ` · ${row.anlage}` : ''}${row.vordruckzeile ? ` Z.${row.vordruckzeile}` : ''}`
+    ? `${row.ecode}${extraCount > 0 ? ` (+${extraCount})` : ''}${row.anlage ? ` · ${row.anlage}` : ''}${row.vordruckzeile ? ` Z.${row.vordruckzeile}` : ''}`
     : null;
+  const variantTitle = extraCount > 0
+    ? `${1 + extraCount} eCode-Varianten mit identischem Wert: ${[row.ecode, ...row.additionalECodes].join(', ')}`
+    : undefined;
   return (
     <div
       className={`sturm-result-row ${expanded ? 'is-expanded' : ''} ${hovered ? 'is-hovered' : ''}`}
@@ -2657,7 +2706,7 @@ function ResultRow({ row, expanded, onToggle, onHover, hovered }) {
         </div>
         <div className="sturm-result-row-bottom">
           <span className="sturm-result-row-value">{row.formatted}</span>
-          {cite && <span className="sturm-result-cite">{cite}</span>}
+          {cite && <span className="sturm-result-cite" title={variantTitle}>{cite}</span>}
         </div>
       </button>
       {expanded && (
