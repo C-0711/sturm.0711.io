@@ -228,10 +228,16 @@ async function main() {
         log.log(s, `POST instances → ${status}`, body);
         if (status !== 201) throw new Error(`expected 201, got ${status}: ${JSON.stringify(body).slice(0, 200)}`);
         createdCaseId = body?.caseId;
-        if (!createdCaseId) throw new Error('caseId not in response');
         // Wait for navigation to /steuerfall.html
         await waitFor(page, () => page.url().includes('/steuerfall.html'), { timeout: 15000 });
         log.log(s, `redirected → ${page.url()}`);
+        // Fallback: wenn body.caseId nicht ankam (race), aus der URL ziehen.
+        if (!createdCaseId) {
+          const u = new URL(page.url());
+          createdCaseId = u.searchParams.get('case');
+          log.log(s, `caseId fallback aus URL: ${createdCaseId}`);
+        }
+        if (!createdCaseId) throw new Error('caseId not in response and not in redirect URL');
         log.finish(s, 'ok');
       } catch (e) {
         await log.screenshot(s, page, 'failure');
