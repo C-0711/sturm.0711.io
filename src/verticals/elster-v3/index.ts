@@ -1108,7 +1108,12 @@ export function buildElsterV52RagWorkflow() {
           provider: 'vllm',
           model: 'gemma4-mm',
           temperature: 0,
-          maxTokens: 2000,
+          // Gemma-4-mm hat nur 8192 Token Context. Bei est_2023.pdf (6 Seiten
+          // 60KB OCR × 7 Anlagen) reichten 2000 Output-Tokens + Prompt nicht.
+          // JSON-Output wie {E0200201:"100",E0200301:"200",…} braucht eh
+          // < 500 Tokens für 30 eCodes. Reservierter Context für Prompt
+          // wächst entsprechend.
+          maxTokens: 500,
           // Concurrency 2 + stream:false: im Stricker-Bulk-E2E ist die
           // Streaming-Variante unter Burst-Last (5-7 parallele Workflows)
           // mit "fetch failed" abgekackt, der non-streaming-Pfad (chatJson)
