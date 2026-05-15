@@ -1,0 +1,300 @@
+{
+  "args": {
+    "base": "https://sturm.0711.io",
+    "fixture": "/Users/christophbertsch/Desktop/sturm.0711.io/runs/elster-v5_1/mp3wk06p-uagm9y/_input/VAST_Belege_Stricker.pdf",
+    "out": "/Users/christophbertsch/Desktop/sturm.0711.io/reports/anwendungen-e2e-2026-05-15T07-47-33",
+    "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "headless": true,
+    "waitMs": 240000
+  },
+  "log": {
+    "steps": [
+      {
+        "idx": 1,
+        "name": "open-anwendungen",
+        "descr": "GET /anwendungen.html",
+        "startedAt": "2026-05-15T07:47:33.615Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:34.799Z",
+            "msg": "screenshot → step-01-loaded.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:34.805Z",
+            "msg": "App-Sections gerendert: 1"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "loaded",
+            "file": "step-01-loaded.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:34.805Z"
+      },
+      {
+        "idx": 2,
+        "name": "open-new-case-modal",
+        "descr": "Click \"Neuer Fall\" button",
+        "startedAt": "2026-05-15T07:47:34.805Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:34.881Z",
+            "msg": "screenshot → step-02-modal-open.png"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "modal-open",
+            "file": "step-02-modal-open.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:34.881Z"
+      },
+      {
+        "idx": 3,
+        "name": "create-case",
+        "descr": "Fill modal + submit POST /api/applications/.../instances",
+        "startedAt": "2026-05-15T07:47:34.881Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:35.301Z",
+            "msg": "screenshot → step-03-filled.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:35.386Z",
+            "msg": "POST instances → 201",
+            "payload": {
+              "caseId": "e2e-2026-05-15t07-47-34-2025-mp6m78zb",
+              "appId": "steuerfall-est",
+              "displayName": "E2E 2026-05-15T07:47:34",
+              "mandantId": "e2e-test",
+              "veranlagungsjahr": 2025,
+              "status": "in_bearbeitung",
+              "createdAt": "2026-05-15T07:47:35.351Z",
+              "updatedAt": "2026-05-15T07:47:35.353Z",
+              "runs": [],
+              "workspacePath": "applications/steuerfall-est/e2e-2026-05-15t07-47-34-2025-mp6m78zb"
+            }
+          },
+          {
+            "ts": "2026-05-15T07:47:35.638Z",
+            "msg": "redirected → https://sturm.0711.io/steuerfall.html?app=steuerfall-est&case=e2e-2026-05-15t07-47-34-2025-mp6m78zb"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "filled",
+            "file": "step-03-filled.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:35.638Z"
+      },
+      {
+        "idx": 4,
+        "name": "steuerfall-loaded",
+        "descr": "Verify /steuerfall.html rendered with case data",
+        "startedAt": "2026-05-15T07:47:35.638Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:35.656Z",
+            "msg": "screenshot → step-04-loaded.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:35.661Z",
+            "msg": "case-display: E2E 2026-05-15T07:47:34"
+          },
+          {
+            "ts": "2026-05-15T07:47:35.661Z",
+            "msg": "case-meta:    e2e-2026-05-15t07-47-34-2025-mp6m78zb · Mandant e2e-test · 2025 · in_bearbeitung"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "loaded",
+            "file": "step-04-loaded.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:35.662Z"
+      },
+      {
+        "idx": 5,
+        "name": "upload-and-extract",
+        "descr": "Upload VAST_Belege_Stricker.pdf → SSE",
+        "startedAt": "2026-05-15T07:47:35.662Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:35.667Z",
+            "msg": "file selected: /tmp/e2e-1778831255662-VAST_Belege_Stricker.pdf"
+          },
+          {
+            "ts": "2026-05-15T07:47:35.811Z",
+            "msg": "screenshot → step-05-uploading-start.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:46.908Z",
+            "msg": "screenshot → step-05-after-upload.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:46.909Z",
+            "msg": "drop-result: ✓ Extraktion abgeschlossen · 11 Stages"
+          },
+          {
+            "ts": "2026-05-15T07:47:46.910Z",
+            "msg": "last events:\n[phase3LlmFill] stage_done\n[phase4Disambig] stage_start\n[phase4Disambig] phase4_start\n[phase4Disambig] phase4_done\n[phase4Disambig] stage_done\n[phase5Merge] stage_start\n[phase5Merge] phase5_done\n[phase5Merge] stage_done\n[phase6BmfRechner] stage_start\n[phase6BmfRechner] bmf_rechner_start\n[phase6BmfRechner] bmf_rechner_compute\n[phase6BmfRechner] bmf_rechner_compute\n[phase6BmfRechner] bmf_rechner_compute\n[phase6BmfRechner] bmf_rechner_compute\n[phase6BmfRechner] bmf_rechner_done\n[phase6BmfRechner] stage_done\n[phase7Validator] stage_start\n[phase7Validator] validator_done\n[phase7Validator] stage_done\n[·] run_done"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "uploading-start",
+            "file": "step-05-uploading-start.png"
+          },
+          {
+            "label": "after-upload",
+            "file": "step-05-after-upload.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:46.910Z"
+      },
+      {
+        "idx": 6,
+        "name": "verify-canonical-layer",
+        "descr": "Result table rendered with ≥1 row",
+        "startedAt": "2026-05-15T07:47:46.910Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:46.941Z",
+            "msg": "screenshot → step-06-layer.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:46.942Z",
+            "msg": "layer rows: 20"
+          },
+          {
+            "ts": "2026-05-15T07:47:46.942Z",
+            "msg": "layer-sub:  aus Stage: phase7Validator · 20 eCodes · unknown=20"
+          },
+          {
+            "ts": "2026-05-15T07:47:46.973Z",
+            "msg": "GET /result stats",
+            "payload": {
+              "totalFields": 20,
+              "byOrigin": {
+                "unknown": 20
+              }
+            }
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "layer",
+            "file": "step-06-layer.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:46.973Z"
+      },
+      {
+        "idx": 7,
+        "name": "seal",
+        "descr": "Click \"Versiegeln\" → steuerfall-seal workflow",
+        "startedAt": "2026-05-15T07:47:46.973Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:46.975Z",
+            "msg": "btn-seal disabled? false"
+          },
+          {
+            "ts": "2026-05-15T07:47:47.094Z",
+            "msg": "POST /seal → 200"
+          },
+          {
+            "ts": "2026-05-15T07:47:49.645Z",
+            "msg": "screenshot → step-07-after-seal.png"
+          },
+          {
+            "ts": "2026-05-15T07:47:49.646Z",
+            "msg": "alerts captured",
+            "payload": [
+              "Fall versiegelt."
+            ]
+          },
+          {
+            "ts": "2026-05-15T07:47:49.647Z",
+            "msg": "case-meta after seal: e2e-2026-05-15t07-47-34-2025-mp6m78zb · Mandant e2e-test · 2025 · versiegelt"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "after-seal",
+            "file": "step-07-after-seal.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:49.647Z"
+      },
+      {
+        "idx": 8,
+        "name": "export",
+        "descr": "Click \"An ELSTER\" → Lane-5 MCP (Stub erwartet)",
+        "startedAt": "2026-05-15T07:47:49.647Z",
+        "events": [
+          {
+            "ts": "2026-05-15T07:47:49.648Z",
+            "msg": "btn-export disabled? false"
+          },
+          {
+            "ts": "2026-05-15T07:47:49.756Z",
+            "msg": "POST /export → 503",
+            "payload": {
+              "erfolg": false,
+              "reason": "mcp-unavailable"
+            }
+          },
+          {
+            "ts": "2026-05-15T07:47:51.301Z",
+            "msg": "screenshot → step-08-after-export.png"
+          }
+        ],
+        "screenshots": [
+          {
+            "label": "after-export",
+            "file": "step-08-after-export.png"
+          }
+        ],
+        "status": "ok",
+        "error": null,
+        "finishedAt": "2026-05-15T07:47:51.302Z"
+      }
+    ],
+    "consoleMsgs": [
+      {
+        "ts": "2026-05-15T07:47:49.755Z",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 503 ()"
+      }
+    ],
+    "networkErrors": [
+      {
+        "ts": "2026-05-15T07:47:49.756Z",
+        "url": "https://sturm.0711.io/api/applications/steuerfall-est/instances/e2e-2026-05-15t07-47-34-2025-mp6m78zb/export",
+        "method": "POST",
+        "status": 503,
+        "body": "{\"erfolg\":false,\"reason\":\"mcp-unavailable\"}"
+      }
+    ],
+    "startedAt": "2026-05-15T07:47:33.200Z"
+  }
+}

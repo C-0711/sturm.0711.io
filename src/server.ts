@@ -232,17 +232,39 @@ app.get(
       catch { return null; }
     }
 
-    const validatorOut = (await readJson('phase7Validator/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> } } | null;
-    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as { canonicalLayer?: { codes?: Record<string, unknown> }; eric_xml?: string } | null;
-    const mergeOut = (await readJson('phase5Merge/output.json')) as { canonical_layer?: Record<string, unknown>; eric_xml?: string } | null;
+    const validatorOut = (await readJson('phase7Validator/output.json')) as {
+      canonicalLayer?: { codes?: Record<string, unknown>; validator?: unknown };
+    } | null;
+    const bmfOut = (await readJson('phase6BmfRechner/output.json')) as {
+      canonical_layer?: Record<string, unknown>;
+      canonicalLayer?: { codes?: Record<string, unknown> };
+      eric_xml?: string;
+      xml_payload?: string;
+    } | null;
+    const mergeOut = (await readJson('phase5Merge/output.json')) as {
+      canonical_layer?: Record<string, unknown>;
+      eric_xml?: string;
+    } | null;
 
+    // Priorität: das *reiche* canonical_layer (mit origin/drucktext/anlage/
+    // evidence_line) zuerst — phase6 und phase5 halten das im snake_case-
+    // canonical_layer-Feld. phase7Validator und der camelCase-canonicalLayer.codes
+    // sind ein flacher eCode → string Map (nur Wert) und nur als Fallback gut.
     let layer: Record<string, unknown> | null = null;
     let source: string | null = null;
-    if (validatorOut?.canonicalLayer?.codes) { layer = validatorOut.canonicalLayer.codes; source = 'phase7Validator'; }
-    else if (bmfOut?.canonicalLayer?.codes) { layer = bmfOut.canonicalLayer.codes; source = 'phase6BmfRechner'; }
-    else if (mergeOut?.canonical_layer) { layer = mergeOut.canonical_layer; source = 'phase5Merge'; }
+    if (bmfOut?.canonical_layer && Object.keys(bmfOut.canonical_layer).length > 0) {
+      layer = bmfOut.canonical_layer;
+      source = 'phase6BmfRechner';
+    } else if (mergeOut?.canonical_layer && Object.keys(mergeOut.canonical_layer).length > 0) {
+      layer = mergeOut.canonical_layer;
+      source = 'phase5Merge';
+    } else if (validatorOut?.canonicalLayer?.codes) {
+      // Last-Resort: flat codes-map ohne Metadaten.
+      layer = validatorOut.canonicalLayer.codes;
+      source = 'phase7Validator-flat';
+    }
 
-    const eric_xml = bmfOut?.eric_xml ?? mergeOut?.eric_xml ?? null;
+    const eric_xml = bmfOut?.xml_payload ?? bmfOut?.eric_xml ?? mergeOut?.eric_xml ?? null;
 
     // Origin-Verteilung als Statistik (REGEX_100% / REGEX_3F / LLM_FSM /
     // BMF_RECHNER / ENSEMBLE_*).
