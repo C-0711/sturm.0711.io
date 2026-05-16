@@ -11,6 +11,7 @@ import { registerAllWorkflows } from './workflows/index.ts';
 import { registerAllApplications } from './applications/index.ts';
 import { listWorkflows, getWorkflow, listStages, getStage, listApplications, getApplication } from './core/registry.ts';
 import { ToolContainer, getToolContainer } from './core/tools/tool-container.ts';
+import type { McpHandle } from './core/tools/handles.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import type { WorkflowDef } from './core/types.ts';
@@ -1005,17 +1006,42 @@ app.post(
     }
     const ericXml = master?.eric_xml ?? '';
     const merkleRoot = master?.merkle?.root;
+    const fall_metadata = {
+      appId, caseId,
+      mandantId: inst.mandantId,
+      veranlagungsjahr: inst.veranlagungsjahr ?? null,
+      merkle_root: merkleRoot,
+    };
+    // P6: prefer the per-Anwendung ToolContainer (Lane-5 by role 'einreichung').
+    // `elster-lane5` is required=false; gate with .has(). Fallback to the direct
+    // ElsterMcpClient keeps the Stub-Mode contract intact (returns
+    // `{ erfolg:false, reason:'mcp-unavailable' }` when ELSTER_MCP_URL unset).
+    // Removed in P10 after the lint rule lands.
+    const container = getToolContainer(appId);
+    const lane5 = container?.has('elster-lane5')
+      ? container.getByRole<McpHandle>('einreichung')
+      : null;
     const { ElsterMcpClient } = await import('./lib/elster-mcp-client.ts');
-    const client = new ElsterMcpClient();
-    const result = await client.einreichen({
-      eric_xml: ericXml,
-      fall_metadata: {
-        appId, caseId,
-        mandantId: inst.mandantId,
-        veranlagungsjahr: inst.veranlagungsjahr ?? null,
-        merkle_root: merkleRoot,
-      },
-    });
+    type ElsterEinreichenErgebnis = Awaited<ReturnType<InstanceType<typeof ElsterMcpClient>['einreichen']>>;
+    let result: ElsterEinreichenErgebnis;
+    if (lane5) {
+      try {
+        result = await lane5.call<ElsterEinreichenErgebnis>(
+          'elster_einreichen',
+          { eric_xml: ericXml, fall_metadata },
+        );
+      } catch (err) {
+        const msg = (err as Error).message ?? String(err);
+        result = {
+          erfolg: false,
+          reason: msg.includes('timeout') ? 'timeout' : 'mcp-error',
+          raw: msg,
+        };
+      }
+    } else {
+      const client = new ElsterMcpClient();
+      result = await client.einreichen({ eric_xml: ericXml, fall_metadata });
+    }
     if (result.erfolg && result.einreichungs_id) {
       inst.status = 'eingereicht';
       inst.exportedAt = new Date().toISOString();

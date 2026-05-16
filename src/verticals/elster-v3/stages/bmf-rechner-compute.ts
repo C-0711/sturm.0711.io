@@ -17,6 +17,7 @@
  * canonical_layer bleibt unverändert. Pipeline schlägt nicht fehl.
  */
 import { defineStage } from '../../../core/stage.ts';
+import type { McpHandle } from '../../../core/tools/handles.ts';
 import { BmfMcpClient, canonicalLayerToElsterFelder, type BmfSteuerErgebnis } from '../../../lib/bmf-mcp-client.ts';
 import { buildEricXml, type CanonicalValue } from './phase5-merge.ts';
 
@@ -156,14 +157,25 @@ export const bmfRechnerComputeStage = defineStage<
       mcp_url: cfg.mcpUrl ?? process.env.BMF_MCP_URL ?? 'http://localhost:12010/mcp',
     });
 
-    const client = new BmfMcpClient({ url: cfg.mcpUrl, timeoutMs: cfg.timeoutMs });
+    // P6: prefer the per-Anwendung ToolContainer (Lane-1 by role 'steuerrechner').
+    // Fallback to the direct BmfMcpClient keeps Designer/CLI standalone runs working;
+    // the shim is removed in P10 after the lint rule lands.
+    const bmf = ctx.tools.has('bmf-lane1')
+      ? ctx.tools.getByRole<McpHandle>('steuerrechner')
+      : null;
 
     let mcpResponse: BmfSteuerErgebnis;
     try {
-      mcpResponse = await client.berechneVollstaendigeSteuerV2(
-        { erklaerungsjahr: veranlagungsjahr, elster_felder: elsterFelder },
-        ctx.signal,
-      );
+      mcpResponse = bmf
+        ? await bmf.call<BmfSteuerErgebnis>(
+            'berechne_vollstaendige_steuer_v2',
+            { erklaerungsjahr: veranlagungsjahr, elster_felder: elsterFelder },
+            { signal: ctx.signal, timeoutMs: cfg.timeoutMs },
+          )
+        : await new BmfMcpClient({ url: cfg.mcpUrl, timeoutMs: cfg.timeoutMs }).berechneVollstaendigeSteuerV2(
+            { erklaerungsjahr: veranlagungsjahr, elster_felder: elsterFelder },
+            ctx.signal,
+          );
     } catch (err) {
       const msg = (err as Error).message;
       ctx.logger.warn('BMF-MCP unreachable / failed — graceful skip', { error: msg });
