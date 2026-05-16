@@ -41,7 +41,7 @@ const steuerfallEstTools: ToolRef[] = [
   {
     name: 'claude-haiku',
     kind: 'llm',
-    required: false,
+    required: true,
     alwaysOn: false,
     roles: ['critic-llm', 'classify-fallback'],
     config: {
@@ -146,11 +146,11 @@ const steuerfallEstTools: ToolRef[] = [
       tools: ['elster_einreichen'],
     },
   },
-  // 10 — Gitchain-Anker (on-seal-only)
+  // 10 — Gitchain-Anker (on-seal-only) — IMMER aktiv (User-Vorgabe)
   {
     name: 'gitchain',
     kind: 'gitchain',
-    required: false,
+    required: true,
     alwaysOn: true,
     roles: ['anchor'],
     config: {
