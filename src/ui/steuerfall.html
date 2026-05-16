@@ -568,8 +568,16 @@
         `;
       }
       window.lucide && window.lucide.createIcons();
-      throw new Error('missing or invalid app/case params');
+      // Empty-State ohne pageerror: in den DOMContentLoaded-Pfad früh exiten.
+      // window.__sturmSteuerfallNoCase = true; alle async-Initializer prüfen das.
+      window.__sturmSteuerfallNoCase = true;
+    } else {
+      window.__sturmSteuerfallNoCase = false;
     }
+    if (window.__sturmSteuerfallNoCase) {
+      // Stop hier — keine APIs anfragen, keine instance-Loads.
+      console.info('[steuerfall] no app/case selected; showing redirect');
+    } else {
 
     let instance = null;
 
@@ -1392,6 +1400,7 @@
       // Dedup-Toggle
       document.getElementById('layer-show-all').addEventListener('change', paintLayer);
     });
+    } // end else-Branch (APP_ID && CASE_ID gegeben)
   </script>
 </body>
 </html>

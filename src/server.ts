@@ -1414,6 +1414,9 @@ function safeSeg(seg: string): string {
 // ============ Static UI ============
 
 app.use('/design-system', express.static(path.join(UI_DIR, 'design-system')));
+// Silenced favicon — kein favicon-File im Repo, deshalb 204 statt 404-Spam in
+// jeder UI-Console.
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
 app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/pipeline.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
 app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));

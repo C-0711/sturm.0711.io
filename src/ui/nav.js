@@ -129,7 +129,7 @@ export async function contextRendererAnwendungen(host) {
           <i data-lucide="box"></i>
           <span class="sturm-sb-item-main">
             <span class="sturm-sb-item-label">${escapeHtml(app.name)}</span>
-            <span class="sturm-sb-item-sub">${cases.length} Fall${cases.length === 1 ? '' : 'en'} · ${inBearb} offen · ${sealed} versiegelt</span>
+            <span class="sturm-sb-item-sub" title="${cases.length} Fall${cases.length === 1 ? '' : 'en'} · ${inBearb} offen · ${sealed} versiegelt">${cases.length} · ${inBearb} offen · ${sealed} vers.</span>
           </span>
         </a>
       `;

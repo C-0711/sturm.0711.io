@@ -122,11 +122,20 @@ function layoutWorkflow(wf) {
   // Stages ohne Topo-Ordnung (z.B. isoliert) einfach hinten ranhängen
   for (const id of stageIds) if (!seen.has(id)) layers[layers.length - 1 || 0]?.push(id);
 
-  const COL_W = 240, ROW_H = 140;
+  // Spacing — Node-Card ist 200-280px breit (CSS .sturm-node), Texte oft
+  // 3-zeilig. Bei 11-Stage-Workflows (elster-v5_2-rag) waren COL_W=240/ROW_H=140
+  // zu eng → Nodes überlappten horizontal, Beschreibungen schnitten ab.
+  // 320/200 lässt jetzt ~40px-Gap zwischen Nodes auch bei max-width.
+  const COL_W = 320, ROW_H = 200;
+  // Vertikales Zentrieren pro Spalte: alle Spalten haben identische y-Mitte,
+  // damit Edges nicht diagonal kreuz-springen wenn ein Layer mehr Stages als
+  // der nächste hat.
+  const maxRows = layers.reduce((m, l) => Math.max(m, l.length), 0);
   const positions = {};
   layers.forEach((layer, col) => {
+    const verticalOffset = ((maxRows - layer.length) * ROW_H) / 2;
     layer.forEach((id, row) => {
-      positions[id] = { x: 20 + col * COL_W, y: 60 + row * ROW_H };
+      positions[id] = { x: 20 + col * COL_W, y: 60 + verticalOffset + row * ROW_H };
     });
   });
   return { positions, layers };
@@ -2808,7 +2817,10 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
   useEffect(() => {
     if (!flowRef.current || nodes.length === 0) return;
     const scheduleFit = () => {
-      flowRef.current?.fitView({ padding: 0.24, duration: 220, maxZoom: 1 });
+      // padding 0.12 statt 0.24 + minZoom 0.18 + maxZoom 1.4 — bei 11-Stage-
+      // Workflows (elster-v5_2-rag) muss fitView weit rauszoomen können,
+      // sonst werden ocr (links) + phase6/7 (rechts) abgeschnitten.
+      flowRef.current?.fitView({ padding: 0.12, duration: 220, minZoom: 0.18, maxZoom: 1.4 });
     };
     requestAnimationFrame(() => requestAnimationFrame(scheduleFit));
   }, [workflowId, drawerCollapsed, nodes.length, edges.length]);
@@ -2820,7 +2832,7 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
       nodeTypes={nodeTypes}
       onInit={(instance) => {
         flowRef.current = instance;
-        setTimeout(() => instance.fitView({ padding: 0.24, duration: 0, maxZoom: 1 }), 0);
+        setTimeout(() => instance.fitView({ padding: 0.12, duration: 0, minZoom: 0.18, maxZoom: 1.4 }), 0);
       }}
       nodesDraggable={true}
       nodesConnectable={false}
