@@ -3,6 +3,9 @@ import { getStage } from './registry.ts';
 import { EventBus } from './events.ts';
 import { createArtifactStore } from './artifacts.ts';
 import { createGitChainArtifactStore, type GitChainArtifactStore } from './artifacts-gitchain.ts';
+import { getToolContainer } from './tools/tool-container.ts';
+import { NullToolContainer } from './tools/null-container.ts';
+import type { ToolContainerView } from './tools/types.ts';
 import type {
   WorkflowDef,
   RunResult,
@@ -70,6 +73,13 @@ export interface RunOptions {
   abortSignal?: AbortSignal;
   /** Optionaler Callback für jedes Event — zusätzlich zur Bus-Subscription. */
   onEvent?: (name: string, payload: unknown, stageId?: string) => void;
+  /**
+   * Anwendung, die diesen Run getriggert hat. Wenn gesetzt, injiziert der
+   * Runner den passenden bereits gebooteten `ToolContainer` in `ctx.tools`.
+   * Standalone-Runs (Designer, Bash, generischer /api/runs/:wf) lassen das
+   * Feld weg und bekommen einen `NullToolContainer`.
+   */
+  appId?: string;
 }
 
 export interface Run {
@@ -92,12 +102,32 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     bus.subscribe(e => opts.onEvent!(e.name, e.payload, e.stageId));
   }
 
+  // Resolve tool container once per run: bound by appId from runtimeOpts.
+  // Standalone runs (no appId) → NullToolContainer; stages that try to
+  // .get() will throw a helpful error. Boot-skip mode (appId present but
+  // no container booted) logs a warning once and falls back to NullContainer.
+  let tools: ToolContainerView;
+  if (opts.appId) {
+    const booted = getToolContainer(opts.appId);
+    if (booted) {
+      tools = booted;
+    } else {
+      console.warn(
+        `[runner] WARN: appId='${opts.appId}' has no booted ToolContainer; falling back to NullToolContainer`,
+      );
+      tools = new NullToolContainer();
+    }
+  } else {
+    tools = new NullToolContainer();
+  }
+
   const result = (async (): Promise<RunResult> => {
-    // Select artifact backend — GitChain if STURM_ARTIFACT_BACKEND=gitchain, otherwise filesystem
+    // Select artifact backend — use GitChain automatically when configured.
     let artifacts: ArtifactStore;
     let gitChainStore: GitChainArtifactStore | null = null;
+    const isGitChainConfigured = Boolean(process.env['GITCHAIN_DATABASE_URL'] && process.env['GITCHAIN_REPO_ROOT']);
 
-    if (process.env['STURM_ARTIFACT_BACKEND'] === 'gitchain') {
+    if (isGitChainConfigured) {
       try {
         gitChainStore = await createGitChainArtifactStore(opts.runsDir, def.id, runId);
         artifacts = gitChainStore;
@@ -164,6 +194,7 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           // parallel layer siblings are not yet visible — by design, since
           // their outputs are still in flight.
           results: stageResults as Readonly<Record<string, StageResult>>,
+          tools,
         };
         try {
           const output = await impl.run(resolved, ctx);

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { myopiaExtractStage } from './stages/extract.ts';
 import { myopiaClassifyStage } from './stages/classify.ts';
 import type { StageContext } from '../../core/types.ts';
+import { NullToolContainer } from '../../core/tools/null-container.ts';
 
 const noopArtifacts = {
   async write() {}, async writeBuffer() {},
@@ -22,6 +23,7 @@ function makeCtx<T>(stageId: string): StageContext<T> {
     runId: 'test', workflowId: 'myopia-progression', stageId,
     config: undefined as T, logger: noopLogger, artifacts: noopArtifacts,
     emit() {}, signal: new AbortController().signal, results: {},
+    tools: new NullToolContainer(),
   };
 }
 

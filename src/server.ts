@@ -348,7 +348,7 @@ app.post(
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
-    const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+    const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
     void persistInputForRun(def.id, run.runId, req.file.path, req.file.originalname, req.file.size, req.file.mimetype);
 
     // Datei in den Workspace-Inbox kopieren + Manifest fortschreiben.
@@ -446,7 +446,7 @@ app.post(
         mandant_id: inst.mandantId,
         case_id: inst.caseId,
       };
-      const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+      const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
       void persistInputForRun(def.id, run.runId, file.path, file.originalname, file.size, file.mimetype);
       runIds.push(run.runId);
 
@@ -672,7 +672,7 @@ app.post(
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
-    const run = runWorkflow(def, { runsDir: RUNS_DIR, input });
+    const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
     const unsub = run.bus.subscribe((env) => res.write(formatSseEvent(env)));
     res.write(formatSseEvent({
       name: 'run_meta',

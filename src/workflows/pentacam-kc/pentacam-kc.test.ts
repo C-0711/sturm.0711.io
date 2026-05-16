@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { pentacamExtractStage } from './stages/extract.ts';
 import { pentacamClassifyStage } from './stages/classify.ts';
 import type { StageContext } from '../../core/types.ts';
+import { NullToolContainer } from '../../core/tools/null-container.ts';
 
 // ─── Minimal context double — covers what extract+classify use ────────────
 const noopArtifacts = {
@@ -44,6 +45,7 @@ function makeCtx<T>(stageId: string): StageContext<T> {
     emit() {},
     signal: new AbortController().signal,
     results: {},
+    tools: new NullToolContainer(),
   };
 }
 

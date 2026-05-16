@@ -5,6 +5,7 @@
 import { phase3EnsembleMergeStage } from './phase3-ensemble-merge.ts';
 import type { Phase3LlmFillOutput, Phase3LlmHit } from './phase3-llm-fill.ts';
 import type { ArtifactStore, StageContext, StageLogger, StageResult, StageId } from '../../../core/types.ts';
+import { NullToolContainer } from '../../../core/tools/null-container.ts';
 
 let pass = 0, fail = 0;
 function assert(name: string, ok: boolean, detail?: unknown) {
@@ -31,6 +32,7 @@ function memCtx<TC>(config: TC): StageContext<TC> {
     config, logger, artifacts: store,
     emit: () => {}, signal: new AbortController().signal,
     results: {} as Readonly<Record<StageId, StageResult>>,
+    tools: new NullToolContainer(),
   };
 }
 

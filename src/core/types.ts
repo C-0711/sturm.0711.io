@@ -5,6 +5,8 @@
  * Der Runner führt aus, emittiert Events, persistiert Artefakte.
  */
 
+import type { ToolContainerView } from './tools/types.ts';
+
 // ============ Workflow-Definition ============
 
 export type WorkflowId = string;
@@ -120,6 +122,12 @@ export interface StageContext<TConfig = unknown> {
    * Used by introspective stages (eval/kpi, compare/merge) — do not mutate.
    */
   results: Readonly<Record<StageId, StageResult>>;
+  /**
+   * Tool roster resolved from the Anwendung that triggered this run.
+   * Standalone runs (no Anwendung) get a NullToolContainer whose .get()
+   * throws a helpful error.
+   */
+  tools: ToolContainerView;
 }
 
 /**
