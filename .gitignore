@@ -58,7 +58,8 @@ src/verticals/elster-v3/data/.backup-*
 .claude/settings.json
 
 # Persistente Application-Instances (Phase 4a)
-applications-data/
+/applications-data/
 
 # Application-Workspaces (per-case state — written at runtime)
-applications/
+# Anchored to repo root so src/applications/ stays tracked.
+/applications/
