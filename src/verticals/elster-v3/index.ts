@@ -1093,7 +1093,12 @@ export function buildElsterV52RagWorkflow() {
       },
       felderNarrow: {
         uses: 'elster-v5_2-rag/felder-narrow',
-        config: { pflichtAlwaysKeep: true, passthroughOnEmptyRag: true },
+        // 2026-05-16: Test — minPerAnlage 30 → 250 (= effektiv kein Cap).
+        // Historisch hatte elster-v4 mit `maxFelderProAnlage: 250` 56 eCodes
+        // auf Stricker est_2023.pdf — heute v5_2-rag nur 39-40 wegen 30-Cap.
+        // Mit ngram-speculative-decoding + optional-pflicht-schema sollte
+        // die zusätzliche Felder-Last absorbierbar sein.
+        config: { pflichtAlwaysKeep: true, passthroughOnEmptyRag: true, minPerAnlage: 250 },
         inputs: {
           felder_per_anlage: '${felderKatalog.per_anlage}',
           kandidatenECodes: '${quantumGround.kandidatenECodes}',
@@ -1113,16 +1118,16 @@ export function buildElsterV52RagWorkflow() {
           maxTokens: 1500,
           concurrency: 5,
           stream: true,
-          perAnlageTimeoutMs: 90_000,
+          // 2026-05-16: timeout 90→180s, weil felderNarrow jetzt bis 250
+          // Felder/Anlage durchlässt (Anlage N hat 134, KAP 81) und vLLM-
+          // Decode bei einem einzelnen Call sonst über 90s rausläuft.
+          perAnlageTimeoutMs: 180_000,
           typedSchema: true,
-          // Sub-Slicing-Mechanismus existiert in phase3-llm-fill.ts (Helper
-          // sliceFieldsByType + parallel-worker-loop). Bei unserer aktuellen
-          // Scale (14–30 missing-eCodes pro Anlage) bringt es nichts —
-          // E2E zeigte Regression von 45 → 40 eCodes bei +160% Laufzeit.
-          // Code bleibt als opt-in: sinnvoll erst wenn felderNarrow geweitet
-          // wird (≥60 missing/Anlage) ODER vLLM `enable_prefix_caching`
-          // aktiviert ist. Default 0 = aus.
-          maxFieldsPerSlice: 0,
+          // Sub-Slicing JETZT aktiv: mit felderNarrow.minPerAnlage=250 haben
+          // große Anlagen (N=134, KAP=81) zu viele Felder für einen Call.
+          // 25er-Slices + 4 parallel = jede Anlage in ~2-3s erledigt.
+          maxFieldsPerSlice: 25,
+          sliceConcurrency: 4,
         },
         inputs: {
           text: '${ocr.text}',
