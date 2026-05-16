@@ -2,6 +2,24 @@
 const { useState, useEffect, useMemo, useRef, useCallback } = React;
 const RF = window.ReactFlow;
 
+// Capture ?token=… from the URL on page-load and persist to localStorage,
+// then strip it from the visible URL — same convention as studio-ocr.html.
+// Lets users hand-out token-seeded bookmarks without baking the token into
+// every subsequent request.
+(function captureUrlToken() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const tok = params.get('token');
+    if (tok && tok.length > 0) {
+      localStorage.setItem('sturm-token', tok);
+      params.delete('token');
+      const qs = params.toString();
+      const cleanUrl = location.pathname + (qs ? '?' + qs : '') + location.hash;
+      history.replaceState(null, '', cleanUrl);
+    }
+  } catch { /* localStorage / URL APIs unavailable */ }
+})();
+
 function authHeaders() {
   const tok = localStorage.getItem('sturm-token');
   return tok ? { 'Authorization': `Bearer ${tok}` } : {};
@@ -2784,6 +2802,22 @@ async function streamRun(workflowId, file, onEvent) {
   });
   if (!resp.ok || !resp.body) {
     const text = await resp.text().catch(() => '');
+    if (resp.status === 401) {
+      // Auf prod hat sturm STURM_BEARER_TOKEN gesetzt; UI hat keinen Token
+      // in localStorage → 401. Prompt für Token + persistieren, dann
+      // nochmal versuchen wenn User OK gibt.
+      const tok = window.prompt(
+        'Diese sturm-Instanz fordert einen Bearer-Token an.\n\n' +
+        'Token jetzt eingeben — er wird in localStorage gespeichert und ist für künftige Runs aktiv:'
+      );
+      if (tok && tok.trim()) {
+        localStorage.setItem('sturm-token', tok.trim());
+        throw new Error('Token gesetzt — bitte Run erneut starten.');
+      }
+      throw new Error(
+        'run HTTP 401 — kein Bearer-Token gesetzt. Setze ihn via localStorage.setItem("sturm-token", "<token>") oder lade die Seite mit ?token=<token> auf.',
+      );
+    }
     throw new Error(`run HTTP ${resp.status}: ${text.slice(0, 300)}`);
   }
   const reader = resp.body.getReader();

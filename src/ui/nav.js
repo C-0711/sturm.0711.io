@@ -15,6 +15,23 @@
  * Element mit dem fertigen Markup.
  */
 
+// ─── ?token=… aus URL übernehmen und in localStorage persistieren ───────
+// Wird einmal beim Import des Moduls ausgeführt (vor renderSturmNav). Lässt
+// User token-eingebettete Bookmarks teilen ohne den Token in jeder URL zu
+// behalten. Wird von authHeaders() in den HTML-Seiten konsumiert.
+(function captureUrlToken() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const tok = params.get('token');
+    if (tok && tok.length > 0) {
+      localStorage.setItem('sturm-token', tok);
+      params.delete('token');
+      const qs = params.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    }
+  } catch { /* localStorage / URL APIs unavailable */ }
+})();
+
 const PRIMARY_NAV = [
   { id: 'workflows',  label: 'Workflows',       href: '/',                 icon: 'layout-grid' },
   { id: 'anwendungen', label: 'Anwendungen',     href: '/anwendungen.html', icon: 'boxes' },
