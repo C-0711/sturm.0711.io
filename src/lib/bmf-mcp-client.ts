@@ -146,12 +146,22 @@ export class BmfMcpClient {
 /** Map a sturm canonical_layer (eCode → CanonicalValue) into the MCP's
  *  `elster_felder` format (eCode → German-notation string). Currency-eCodes
  *  werden aus `normalized` (Integer-Cents) zurück in "12345,67" gewandelt,
- *  Strings bleiben unverändert. Felder ohne value werden ausgelassen. */
+ *  Strings bleiben unverändert. Felder ohne value werden ausgelassen.
+ *  Felder mit `trust === 'suspicious'` werden gefiltert — sie wären sonst
+ *  Halluzinationen wie "456" für Bezeichnung/Betrag/Summe-Platzhalter, die
+ *  in BMF-Mappings (z.B. pv_beitraege ← E0202604) gegen die echten Werte
+ *  gewinnen (first_present-Aggregation). */
 export function canonicalLayerToElsterFelder(
-  canonical: Record<string, { value: string; normalized: string | null; datentyp: 'string' | 'date' | 'currency' }>,
+  canonical: Record<string, {
+    value: string;
+    normalized: string | null;
+    datentyp: 'string' | 'date' | 'currency';
+    trust?: 'high' | 'medium' | 'low' | 'suspicious';
+  }>,
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [eCode, cv] of Object.entries(canonical)) {
+    if (cv.trust === 'suspicious') continue; // verdächtige LLM-Halluzinationen raus
     if (cv.datentyp === 'currency' && cv.normalized && /^-?\d+$/.test(cv.normalized)) {
       // integer-cents → "x,xx" (Vorzeichen behalten)
       const cents = parseInt(cv.normalized, 10);

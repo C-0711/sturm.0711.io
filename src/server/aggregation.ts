@@ -48,6 +48,10 @@ export interface MergedField {
   drucktext: string;
   vordruckzeile: string;
   datentyp: string;
+  /** Trust-Stufe — wird aus dem winner.raw.trust übernommen, damit Downstream
+   *  (BMF-Pre-Filter, Review-UI) zwischen high/medium/low/suspicious
+   *  unterscheiden kann. */
+  trust?: 'high' | 'medium' | 'low' | 'suspicious';
   /** Alle Belege, die diesen Wert geliefert haben. */
   confirmed_by: Array<{ runId: string; filename: string }>;
   /** Confidence: 1 = einziger Beleg, n>1 = bestätigt. */
@@ -246,6 +250,7 @@ export async function aggregateCase(
         datentyp: String(c.raw.datentyp ?? ''),
         confirmed_by: c.sources,
         confidence_count: c.sources.length,
+        trust: (c.raw as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust,
       };
       continue;
     }
@@ -268,6 +273,7 @@ export async function aggregateCase(
       datentyp: String(winner.raw.datentyp ?? ''),
       confirmed_by: winner.sources,
       confidence_count: winner.sources.length,
+      trust: (winner.raw as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust,
     };
     conflicts.push({
       eCode,

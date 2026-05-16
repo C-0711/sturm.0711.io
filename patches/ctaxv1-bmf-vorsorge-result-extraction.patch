@@ -1,0 +1,49 @@
+# CTAXV1 BMF-Container fix: vorsorgeaufwand_total result-extraction key
+#
+# Apply on h200v at /home/christoph.bertsch/CTAXV1/services/lane1_bmf/server/
+# bmf_calculator_mcp_server.py — discovered 2026-05-16.
+#
+# Bug: execute_module_formulas() returns {'ergebnisse': {...}, 'pruefprotokoll': [...], 'formeln_ausgefuehrt': N}.
+# The result-extraction in _calculate_comprehensive_tax checked only English
+# keys 'results' / 'result' and fell through to the top-level dict, missing
+# the German 'ergebnisse' key. Result: vorsorgeaufwand_total = 10981.88 €
+# computed correctly but read as 0 € → no §10 EStG deduction applied → ESt
+# inflated 16.663 € (Single tariff) when correct is ~6.959 € (Splitting +
+# Vorsorge), causing a fake 9.857 € Nachzahlung instead of real ~64 € refund.
+#
+# Apply:
+#   docker cp services/lane1_bmf/server/bmf_calculator_mcp_server.py \
+#     ctaxv1-lane1-bmf:/app/lane1_bmf/server/bmf_calculator_mcp_server.py
+#   docker restart ctaxv1-lane1-bmf
+#
+--- a/services/lane1_bmf/server/bmf_calculator_mcp_server.py
++++ b/services/lane1_bmf/server/bmf_calculator_mcp_server.py
+@@ -973,12 +973,17 @@
+             self.logger.info(f"🔄 Executing vorsorgeaufwand module (PostgreSQL formulas)...")
+             vorsorge_result = await self.bmf_calculator.calculate_module("vorsorgeaufwand", vorsorge_inputs)
+
+-            # Extract total - handle both result formats (success wrapper or direct result)
+-            if "results" in vorsorge_result:
+-                # PostgreSQL formula result format
+-                vorsorge_data = vorsorge_result["results"]
+-            elif "result" in vorsorge_result:
+-                # Standard result format
+-                vorsorge_data = vorsorge_result["result"]
+-            else:
+-                # Direct format (no wrapper)
+-                vorsorge_data = vorsorge_result
++            # Extract total - handle three result formats:
++            #   ergebnisse (German, current Postgres-formula return) — KEY FIX 2026-05-16
++            #   results / result (legacy success wrappers)
++            #   direct dict (Python fallback)
++            if "ergebnisse" in vorsorge_result:
++                vorsorge_data = vorsorge_result["ergebnisse"]
++            elif "results" in vorsorge_result:
++                vorsorge_data = vorsorge_result["results"]
++            elif "result" in vorsorge_result:
++                vorsorge_data = vorsorge_result["result"]
++            else:
++                vorsorge_data = vorsorge_result
+
+             absetzbare_vorsorge = Decimal(str(vorsorge_data.get("vorsorgeaufwand_total", 0)))
+             self.logger.info(f"✅ Vorsorge calculated (PostgreSQL): {absetzbare_vorsorge:,.2f} EUR")
