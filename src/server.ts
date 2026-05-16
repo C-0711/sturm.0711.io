@@ -1496,6 +1496,8 @@ app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwe
 app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
 app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
 app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
+app.get('/fleet', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
+app.get('/api/fleet/data', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
 app.use(express.static(UI_DIR));
 
 // Docs: /docs/WORKFLOW_TEMPLATE.md direkt ausliefern (plain text)

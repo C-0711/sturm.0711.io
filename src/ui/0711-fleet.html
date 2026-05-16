@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>0711 Fleet · STURM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/colors_and_type.css">
+  <link rel="stylesheet" href="https://unpkg.com/reactflow@11.11.4/dist/style.css">
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <style>
+    html, body, #root { height: 100%; margin: 0; }
+    body { background: var(--color-bg); color: var(--color-text-primary); font-family: var(--font-inter); overflow: hidden; }
+    .top { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); padding: 8px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .stats { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-secondary); letter-spacing: 0.02em; }
+    .stats b { color: var(--color-accent); font-weight: 600; }
+    .stats .sep { color: var(--color-text-tertiary); margin: 0 6px; }
+    h1.title { font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-primary); margin: 0; }
+    input.search { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); color: var(--color-text-primary); padding: 5px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; width: 260px; outline: none; }
+    input.search:focus { border-color: var(--color-accent); }
+    button.tool { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); color: var(--color-text-primary); padding: 5px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 11.5px; cursor: pointer; }
+    button.tool:hover { background: var(--color-bg-hover); border-color: var(--color-accent); }
+    button.tool.active { background: var(--color-accent); color: var(--color-bg); border-color: var(--color-accent); }
+    label.chk { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); cursor: pointer; padding: 3px 7px; border-radius: 5px; border: 1px solid var(--color-border); background: var(--color-bg-tertiary); }
+    label.chk input { accent-color: var(--color-accent); margin: 0; }
+    label.chk.off { opacity: 0.4; }
+    .flow-wrap { position: absolute; top: 96px; bottom: 0; left: 0; right: 0; }
+    .rf-node { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 10px; min-width: 140px; max-width: 220px; font-family: var(--font-mono); font-size: 11px; color: var(--color-text-primary); position: relative; box-shadow: var(--shadow-sm); transition: border-color 0.15s, transform 0.15s; }
+    .rf-node:hover { border-color: var(--color-accent); }
+    .rf-node.dimmed { opacity: 0.18; }
+    .rf-node.match { border-color: var(--color-accent); box-shadow: var(--shadow-focus-accent); }
+    .rf-node .nlabel { font-weight: 600; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rf-node .nmeta { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .rf-node .nmeta .port { color: var(--color-cyan); }
+    .rf-node .nmeta .type { color: var(--color-accent); }
+    .rf-node .health { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 2px var(--color-bg-secondary); }
+    .h-healthy   { background: var(--color-emerald); }
+    .h-unhealthy { background: var(--color-amber); }
+    .h-crash-loop{ background: var(--color-red); animation: blink 1.2s infinite; }
+    .h-internal  { background: var(--color-zinc); }
+    .h-external  { background: var(--color-violet); }
+    @keyframes blink { 50% { opacity: 0.35; } }
+    .rf-node.octagon { clip-path: polygon(20% 0, 80% 0, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0 80%, 0 20%); background: var(--color-bg-tertiary); border-color: var(--color-amber); padding: 10px 14px; }
+    .group-node { background: rgba(133, 123, 97, 0.05); border: 1px dashed rgba(133, 123, 97, 0.35); border-radius: 10px; padding: 0; }
+    .group-header { font-family: var(--font-mono); font-size: 11px; color: var(--color-accent); font-weight: 600; padding: 4px 10px; letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 1px dashed rgba(133, 123, 97, 0.25); background: rgba(133, 123, 97, 0.08); border-radius: 10px 10px 0 0; }
+    .group-header .count { color: var(--color-text-tertiary); font-weight: 400; margin-left: 6px; }
+    .drawer { position: fixed; top: 96px; bottom: 0; right: 0; width: 360px; background: var(--color-bg-secondary); border-left: 1px solid var(--color-border); transform: translateX(100%); transition: transform 0.25s var(--ease-default); z-index: 40; overflow-y: auto; padding: 18px 18px 32px; }
+    .drawer.open { transform: translateX(0); }
+    .drawer h2 { font-family: var(--font-mono); font-size: 14px; font-weight: 600; margin: 0 0 10px; letter-spacing: 0.03em; color: var(--color-text-primary); word-break: break-word; }
+    .drawer .close { position: absolute; top: 12px; right: 12px; background: transparent; border: 1px solid var(--color-border); color: var(--color-text-secondary); width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono); font-size: 13px; line-height: 1; }
+    .drawer .close:hover { color: var(--color-text-primary); border-color: var(--color-accent); }
+    .drawer .field { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px dotted var(--color-border-light); font-family: var(--font-mono); font-size: 11.5px; }
+    .drawer .field .k { color: var(--color-text-tertiary); min-width: 80px; }
+    .drawer .field .v { color: var(--color-text-primary); word-break: break-word; flex: 1; }
+    .drawer .field .v a { color: var(--color-accent); }
+    .drawer .section-head { font-family: var(--font-mono); font-size: 11px; color: var(--color-accent); margin: 18px 0 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .drawer ul.edges { list-style: none; padding: 0; margin: 0; }
+    .drawer ul.edges li { font-family: var(--font-mono); font-size: 11px; padding: 4px 6px; border-radius: 4px; color: var(--color-text-secondary); cursor: pointer; }
+    .drawer ul.edges li:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+    .drawer ul.edges li .kind { display: inline-block; min-width: 64px; color: var(--color-text-tertiary); }
+    .legend { position: fixed; bottom: 14px; left: 14px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); z-index: 30; display: grid; grid-template-columns: auto auto; gap: 4px 14px; }
+    .legend .sw { display: inline-block; width: 28px; height: 0; vertical-align: middle; margin-right: 6px; }
+    .legend .l-http     { border-top: 2px solid var(--color-text-secondary); }
+    .legend .l-mcp      { border-top: 2px dashed var(--color-amber); }
+    .legend .l-db       { border-top: 2px dotted var(--color-blue); }
+    .legend .l-llm      { border-top: 2px solid var(--color-purple); }
+    .legend .l-gitchain { border-top: 2px solid var(--color-emerald); }
+    .legend .l-proxy    { border-top: 1px solid var(--color-text-tertiary); }
+    .legend .l-depends  { border-top: 2px dashed var(--color-text-tertiary); }
+    .react-flow__edge-path { transition: stroke-opacity 0.15s; }
+    .edge-dimmed .react-flow__edge-path { stroke-opacity: 0.1; }
+    .edge-match .react-flow__edge-path { stroke-width: 2.4px; }
+    .react-flow__controls button { background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); color: var(--color-text-primary); }
+    .react-flow__controls button:hover { background: var(--color-bg-hover); }
+    .react-flow__minimap { background: var(--color-bg-secondary); border: 1px solid var(--color-border); }
+    .react-flow__background { background: var(--color-bg); }
+    .react-flow__attribution { display: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react-dom": "https://esm.sh/react-dom@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+      "reactflow": "https://esm.sh/reactflow@11.11.4?deps=react@18.3.1,react-dom@18.3.1"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import React, { useState, useEffect, useMemo, useCallback } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import ReactFlow, {
+      Background, Controls, MiniMap,
+      useNodesState, useEdgesState,
+      MarkerType, Handle, Position
+    } from 'reactflow';
+
+    const h = React.createElement;
+    const LS_KEY = '0711-fleet-prefs';
+
+    // ---------- edge styling per kind ----------
+    const EDGE_KINDS = ['http','mcp','db','llm','gitchain','proxy','depends-on'];
+    const EDGE_STYLE = {
+      'http':       { stroke: '#a8a6a3', strokeWidth: 1.4 },
+      'mcp':        { stroke: '#f99c00', strokeWidth: 1.6, strokeDasharray: '6 4' },
+      'db':         { stroke: '#3080ff', strokeWidth: 1.2, strokeDasharray: '1 4' },
+      'llm':        { stroke: '#ac4bff', strokeWidth: 1.8 },
+      'gitchain':   { stroke: '#00bb7f', strokeWidth: 1.8 },
+      'proxy':      { stroke: '#787674', strokeWidth: 0.9 },
+      'depends-on': { stroke: '#787674', strokeWidth: 1.2, strokeDasharray: '4 4' },
+    };
+
+    // ---------- custom node ----------
+    function FleetNode({ data }) {
+      const oct = data.type === 'mcp-server';
+      return h('div', {
+        className: 'rf-node' + (oct ? ' octagon' : '') +
+          (data.dimmed ? ' dimmed' : '') +
+          (data.match ? ' match' : ''),
+      },
+        h(Handle, { type: 'target', position: Position.Top, style: { opacity: 0 } }),
+        h('span', { className: 'health h-' + (data.status || 'internal'), title: data.status }),
+        h('div', { className: 'nlabel' }, data.label),
+        h('div', { className: 'nmeta' },
+          data.type && h('span', { className: 'type' }, data.type),
+          data.port && h('span', { className: 'port' }, ':' + data.port),
+        ),
+        h(Handle, { type: 'source', position: Position.Bottom, style: { opacity: 0 } }),
+      );
+    }
+
+    function GroupNode({ data }) {
+      return h('div', { className: 'group-node', style: { width: data.width, height: data.height } },
+        h('div', { className: 'group-header' },
+          'Familie: ' + data.label,
+          h('span', { className: 'count' }, '· ' + data.count + ' nodes')
+        )
+      );
+    }
+
+    const nodeTypes = { fleet: FleetNode, group: GroupNode };
+
+    // ---------- dagre layout ----------
+    function layout(fleetNodes, fleetEdges, families) {
+      const NODE_W = 180, NODE_H = 56;
+      const PAD_X = 18, PAD_Y = 32, GROUP_GAP = 28;
+
+      // 1) lay out children inside each family with its own dagre
+      const familyBoxes = {};
+      for (const fam of families) {
+        const kids = fleetNodes.filter(n => n.family === fam.id);
+        if (!kids.length) continue;
+        const g = new dagre.graphlib.Graph();
+        g.setGraph({ rankdir: 'TB', nodesep: 28, ranksep: 42, marginx: 8, marginy: 8 });
+        g.setDefaultEdgeLabel(() => ({}));
+        for (const n of kids) g.setNode(n.id, { width: NODE_W, height: NODE_H });
+        for (const e of fleetEdges) {
+          const s = kids.find(k => k.id === e.source);
+          const t = kids.find(k => k.id === e.target);
+          if (s && t) g.setEdge(e.source, e.target);
+        }
+        dagre.layout(g);
+        const positions = {};
+        let maxX = 0, maxY = 0;
+        for (const n of kids) {
+          const p = g.node(n.id);
+          positions[n.id] = { x: p.x - NODE_W/2, y: p.y - NODE_H/2 };
+          maxX = Math.max(maxX, p.x + NODE_W/2);
+          maxY = Math.max(maxY, p.y + NODE_H/2);
+        }
+        familyBoxes[fam.id] = {
+          width: maxX + PAD_X,
+          height: maxY + PAD_Y + 14,
+          positions,
+        };
+      }
+
+      // 2) lay out families themselves with dagre based on cross-family edges
+      const fg = new dagre.graphlib.Graph();
+      fg.setGraph({ rankdir: 'TB', nodesep: GROUP_GAP, ranksep: 80, marginx: 30, marginy: 30 });
+      fg.setDefaultEdgeLabel(() => ({}));
+      for (const fam of families) {
+        const box = familyBoxes[fam.id];
+        if (!box) continue;
+        fg.setNode(fam.id, { width: box.width, height: box.height });
+      }
+      const famEdgeSet = new Set();
+      for (const e of fleetEdges) {
+        const s = fleetNodes.find(n => n.id === e.source);
+        const t = fleetNodes.find(n => n.id === e.target);
+        if (!s || !t) continue;
+        if (s.family === t.family) continue;
+        const key = s.family + '->' + t.family;
+        if (famEdgeSet.has(key)) continue;
+        famEdgeSet.add(key);
+        fg.setEdge(s.family, t.family);
+      }
+      dagre.layout(fg);
+
+      // 3) build group + child node objects with absolute coords (children use parentNode + relative coords)
+      const out = [];
+      for (const fam of families) {
+        const box = familyBoxes[fam.id];
+        if (!box) continue;
+        const p = fg.node(fam.id);
+        const gx = p.x - box.width/2;
+        const gy = p.y - box.height/2;
+        const kids = fleetNodes.filter(n => n.family === fam.id);
+        out.push({
+          id: 'group:' + fam.id,
+          type: 'group',
+          position: { x: gx, y: gy },
+          data: { label: fam.label, width: box.width, height: box.height, count: kids.length },
+          style: { width: box.width, height: box.height, zIndex: -1 },
+          selectable: false,
+          draggable: false,
+        });
+        for (const n of kids) {
+          const pos = box.positions[n.id];
+          out.push({
+            id: n.id,
+            type: 'fleet',
+            position: { x: pos.x, y: pos.y + 22 }, // offset for header
+            parentNode: 'group:' + fam.id,
+            extent: 'parent',
+            data: { ...n, status: n.status || 'internal' },
+          });
+        }
+      }
+      return out;
+    }
+
+    // ---------- main app ----------
+    function App() {
+      const [raw, setRaw] = useState(null);
+      const [nodes, setNodes, onNodesChange] = useNodesState([]);
+      const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+      const [search, setSearch] = useState('');
+      const [theme, setTheme] = useState('dark');
+      const [famVis, setFamVis] = useState({});
+      const [kindVis, setKindVis] = useState(Object.fromEntries(EDGE_KINDS.map(k => [k, true])));
+      const [pathsOnly, setPathsOnly] = useState(false);
+      const [selected, setSelected] = useState(null);
+
+      // load prefs
+      useEffect(() => {
+        try {
+          const p = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+          if (p.search) setSearch(p.search);
+          if (p.theme) setTheme(p.theme);
+          if (p.famVis) setFamVis(p.famVis);
+          if (p.kindVis) setKindVis(p.kindVis);
+          if (typeof p.pathsOnly === 'boolean') setPathsOnly(p.pathsOnly);
+        } catch (_) {}
+      }, []);
+
+      // persist prefs
+      useEffect(() => {
+        localStorage.setItem(LS_KEY, JSON.stringify({ search, theme, famVis, kindVis, pathsOnly }));
+        document.documentElement.dataset.theme = theme;
+      }, [search, theme, famVis, kindVis, pathsOnly]);
+
+      // fetch data
+      useEffect(() => {
+        fetch('/api/fleet/data').then(r => r.json()).then(d => {
+          setRaw(d);
+          const fv = {};
+          for (const f of d.families) fv[f.id] = true;
+          setFamVis(prev => Object.keys(prev).length ? prev : fv);
+        });
+      }, []);
+
+      // initial layout
+      useEffect(() => {
+        if (!raw) return;
+        const laid = layout(raw.nodes, raw.edges, raw.families);
+        setNodes(laid);
+        setEdges(raw.edges.map(e => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          label: e.label || undefined,
+          labelStyle: { fill: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 10 },
+          labelBgStyle: { fill: 'var(--color-bg-secondary)', fillOpacity: 0.85 },
+          labelBgPadding: [3, 2],
+          style: EDGE_STYLE[e.kind] || EDGE_STYLE.http,
+          markerEnd: { type: MarkerType.ArrowClosed, color: (EDGE_STYLE[e.kind]||EDGE_STYLE.http).stroke },
+          data: { kind: e.kind },
+          type: 'default',
+        })));
+      }, [raw]);
+
+      // apply filters / search / paths-only
+      const filteredNodes = useMemo(() => {
+        if (!raw) return nodes;
+        const q = search.trim().toLowerCase();
+        // direct neighbour set when pathsOnly + selected
+        let pathSet = null;
+        if (pathsOnly && selected) {
+          pathSet = new Set([selected.id]);
+          for (const e of raw.edges) {
+            if (e.source === selected.id) pathSet.add(e.target);
+            if (e.target === selected.id) pathSet.add(e.source);
+          }
+        }
+        return nodes.map(n => {
+          if (n.type === 'group') {
+            const fid = n.id.replace(/^group:/, '');
+            const hidden = !famVis[fid];
+            return { ...n, hidden };
+          }
+          const famHidden = !famVis[n.data.family];
+          const matches = q ? n.data.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q) : false;
+          const dimmedBySearch = q && !matches;
+          const hiddenByPath = pathSet && !pathSet.has(n.id);
+          return {
+            ...n,
+            hidden: famHidden || hiddenByPath,
+            data: { ...n.data, dimmed: dimmedBySearch, match: matches },
+          };
+        });
+      }, [nodes, search, famVis, pathsOnly, selected, raw]);
+
+      const filteredEdges = useMemo(() => {
+        if (!raw) return edges;
+        const q = search.trim().toLowerCase();
+        let pathEdgeSet = null;
+        if (pathsOnly && selected) {
+          pathEdgeSet = new Set(raw.edges
+            .filter(e => e.source === selected.id || e.target === selected.id)
+            .map(e => e.id));
+        }
+        const visibleNodeIds = new Set(filteredNodes.filter(n => !n.hidden && n.type === 'fleet').map(n => n.id));
+        return edges.map(e => {
+          const kind = e.data?.kind || 'http';
+          const kindOn = !!kindVis[kind];
+          const endpointsVisible = visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target);
+          const inPath = pathEdgeSet ? pathEdgeSet.has(e.id) : true;
+          const matches = q && raw.edges.find(x => x.id === e.id) && (
+            raw.nodes.find(n => n.id === e.source)?.label.toLowerCase().includes(q) ||
+            raw.nodes.find(n => n.id === e.target)?.label.toLowerCase().includes(q)
+          );
+          return {
+            ...e,
+            hidden: !kindOn || !endpointsVisible || !inPath,
+            className: (q && !matches) ? 'edge-dimmed' : (matches ? 'edge-match' : ''),
+          };
+        });
+      }, [edges, kindVis, filteredNodes, search, pathsOnly, selected, raw]);
+
+      const onNodeClick = useCallback((_, n) => {
+        if (n.type === 'group') return;
+        setSelected(n.data);
+      }, []);
+
+      const fit = () => {
+        const ev = new CustomEvent('fleet-fit');
+        window.dispatchEvent(ev);
+      };
+
+      if (!raw) {
+        return h('div', { style: { padding: 40, fontFamily: 'var(--font-mono)' } }, 'loading fleet data…');
+      }
+
+      const stats = raw.stats;
+      const statsLine = [
+        [stats.containers, 'containers'],
+        [stats.services, 'services'],
+        [stats.dbs, 'DB+queue'],
+        [stats.llmEndpoints, 'LLM endpoints'],
+        [(stats.qdrantVectors/1000).toFixed(0)+'k', 'vectors (Qdrant)'],
+        [stats.gitchainContainers, 'gitchain containers'],
+        [stats.gitchainAtoms, 'atoms'],
+        [stats.unhealthy, 'crash-loop/unhealthy'],
+      ];
+
+      return h(React.Fragment, null,
+        h('div', { className: 'top' },
+          h('div', { className: 'row' },
+            h('h1', { className: 'title' }, '0711 Fleet · application map'),
+            h('div', { style: { flex: 1 } }),
+            h('input', {
+              className: 'search', placeholder: 'search nodes (substring, case-insensitive)…',
+              value: search, onChange: e => setSearch(e.target.value),
+            }),
+            h('button', { className: 'tool', onClick: () => window.dispatchEvent(new CustomEvent('fleet-fit')) }, 'fit'),
+            h('button', {
+              className: 'tool' + (pathsOnly ? ' active' : ''),
+              onClick: () => setPathsOnly(v => !v),
+              title: 'Show only paths from the selected node',
+            }, 'paths-only'),
+            h('button', {
+              className: 'tool',
+              onClick: () => setTheme(t => t === 'dark' ? 'light' : 'dark'),
+            }, theme === 'dark' ? 'light' : 'dark'),
+          ),
+          h('div', { className: 'row stats' },
+            statsLine.map(([n, l], i) => h(React.Fragment, { key: i },
+              i > 0 && h('span', { className: 'sep' }, '·'),
+              h('span', null, h('b', null, n), ' ', l)
+            ))
+          ),
+          h('div', { className: 'row', style: { gap: 4 } },
+            raw.families.map(f => h('label', {
+              key: f.id,
+              className: 'chk' + (famVis[f.id] ? '' : ' off'),
+              title: f.desc,
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: !!famVis[f.id],
+                onChange: () => setFamVis(v => ({ ...v, [f.id]: !v[f.id] })),
+              }),
+              f.label
+            ))
+          ),
+          h('div', { className: 'row', style: { gap: 4 } },
+            EDGE_KINDS.map(k => h('label', {
+              key: k,
+              className: 'chk' + (kindVis[k] ? '' : ' off'),
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: !!kindVis[k],
+                onChange: () => setKindVis(v => ({ ...v, [k]: !v[k] })),
+              }),
+              k
+            ))
+          ),
+        ),
+
+        h('div', { className: 'flow-wrap' },
+          h(FlowCanvas, {
+            nodes: filteredNodes,
+            edges: filteredEdges,
+            onNodesChange, onEdgesChange,
+            onNodeClick,
+            theme,
+          }),
+        ),
+
+        h(Legend),
+        h(Drawer, { node: selected, raw, onClose: () => setSelected(null), onJump: (id) => {
+          const target = raw.nodes.find(n => n.id === id);
+          if (target) setSelected(target);
+        } }),
+      );
+    }
+
+    function FlowCanvas({ nodes, edges, onNodesChange, onEdgesChange, onNodeClick, theme }) {
+      const [rf, setRf] = useState(null);
+      useEffect(() => {
+        const handler = () => rf?.fitView({ padding: 0.15, duration: 400 });
+        window.addEventListener('fleet-fit', handler);
+        return () => window.removeEventListener('fleet-fit', handler);
+      }, [rf]);
+      return h(ReactFlow, {
+        nodes, edges,
+        onNodesChange, onEdgesChange,
+        onNodeClick,
+        nodeTypes,
+        onInit: setRf,
+        fitView: true,
+        fitViewOptions: { padding: 0.15 },
+        minZoom: 0.1, maxZoom: 2.0,
+        proOptions: { hideAttribution: true },
+        defaultEdgeOptions: { type: 'default' },
+      },
+        h(Background, { color: theme === 'dark' ? '#2e2c2a' : '#e8e8e8', gap: 24, size: 1 }),
+        h(Controls, { showInteractive: false }),
+        h(MiniMap, {
+          nodeColor: (n) => n.type === 'group' ? 'transparent' : '#857b61',
+          maskColor: theme === 'dark' ? 'rgba(26,24,22,0.7)' : 'rgba(255,255,255,0.7)',
+          pannable: true, zoomable: true,
+        }),
+      );
+    }
+
+    function Legend() {
+      return h('div', { className: 'legend' },
+        h('div', null, h('span', { className: 'sw l-http' }), 'http'),
+        h('div', null, h('span', { className: 'sw l-mcp' }), 'mcp'),
+        h('div', null, h('span', { className: 'sw l-db' }), 'db'),
+        h('div', null, h('span', { className: 'sw l-llm' }), 'llm'),
+        h('div', null, h('span', { className: 'sw l-gitchain' }), 'gitchain'),
+        h('div', null, h('span', { className: 'sw l-proxy' }), 'proxy'),
+        h('div', null, h('span', { className: 'sw l-depends' }), 'depends-on'),
+      );
+    }
+
+    function Drawer({ node, raw, onClose, onJump }) {
+      if (!node || !raw) return h('div', { className: 'drawer' });
+      const inbound  = raw.edges.filter(e => e.target === node.id);
+      const outbound = raw.edges.filter(e => e.source === node.id);
+      const fam = raw.families.find(f => f.id === node.family);
+      const F = (k, v) => v ? h('div', { className: 'field', key: k },
+        h('span', { className: 'k' }, k), h('span', { className: 'v' }, v)
+      ) : null;
+      const URLs = node.publicUrl ? node.publicUrl.split(' / ').map(u =>
+        h('a', { key: u, href: 'https://' + u.trim(), target: '_blank', rel: 'noreferrer' }, u.trim())
+      ).reduce((a, c, i) => a.concat(i ? [h('span', { key: 'sep'+i }, ' · '), c] : [c]), []) : null;
+      return h('aside', { className: 'drawer open' },
+        h('button', { className: 'close', onClick: onClose, title: 'close' }, '×'),
+        h('h2', null, node.label),
+        F('id', node.id),
+        F('type', node.type),
+        F('family', fam ? fam.label : node.family),
+        F('image', node.image),
+        F('port', node.port),
+        F('status', node.status),
+        URLs && h('div', { className: 'field' }, h('span', { className: 'k' }, 'public'), h('span', { className: 'v' }, URLs)),
+        F('notes', node.notes),
+        h('div', { className: 'section-head' }, 'inbound (' + inbound.length + ')'),
+        h('ul', { className: 'edges' },
+          inbound.length === 0 ? h('li', null, '—')
+            : inbound.map(e => h('li', { key: e.id, onClick: () => onJump(e.source) },
+                h('span', { className: 'kind' }, e.kind),
+                e.source, e.label ? ' · ' + e.label : ''))
+        ),
+        h('div', { className: 'section-head' }, 'outbound (' + outbound.length + ')'),
+        h('ul', { className: 'edges' },
+          outbound.length === 0 ? h('li', null, '—')
+            : outbound.map(e => h('li', { key: e.id, onClick: () => onJump(e.target) },
+                h('span', { className: 'kind' }, e.kind),
+                e.target, e.label ? ' · ' + e.label : ''))
+        ),
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(h(App));
+  </script>
+</body>
+</html>
