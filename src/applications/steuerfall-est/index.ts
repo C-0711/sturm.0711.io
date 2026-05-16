@@ -41,7 +41,7 @@ const steuerfallEstTools: ToolRef[] = [
   {
     name: 'claude-haiku',
     kind: 'llm',
-    required: true,
+    required: false,
     alwaysOn: false,
     roles: ['critic-llm', 'classify-fallback'],
     config: {
@@ -150,7 +150,7 @@ const steuerfallEstTools: ToolRef[] = [
   {
     name: 'gitchain',
     kind: 'gitchain',
-    required: true,
+    required: false,
     alwaysOn: true,
     roles: ['anchor'],
     config: {

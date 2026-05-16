@@ -10,6 +10,7 @@ import { registerAllStages } from './stages/index.ts';
 import { registerAllWorkflows } from './workflows/index.ts';
 import { registerAllApplications } from './applications/index.ts';
 import { listWorkflows, getWorkflow, listStages, getStage, listApplications, getApplication } from './core/registry.ts';
+import { ToolContainer, getToolContainer } from './core/tools/tool-container.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import type { WorkflowDef } from './core/types.ts';
@@ -24,7 +25,13 @@ import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
-import { createApplicationsRouter, loadInstanceFile, saveInstanceFile } from './server/applications.ts';
+import {
+  createApplicationsRouter,
+  loadInstanceFile,
+  saveInstanceFile,
+  syncWorkspaceContainer,
+  promoteWorkspaceToTaxCase,
+} from './server/applications.ts';
 import { computeWorkflowStats } from './server/workflow-stats.ts';
 import { persistUploadToInbox, recordDocumentRunCompletion } from './server/inbox.ts';
 import {
@@ -65,6 +72,14 @@ registerAllStages();
 registerAllWorkflows();
 // Anwendungen *nach* Workflows registrieren, damit Workflow-Refs validierbar sind.
 registerAllApplications();
+// Tool-Container pro Anwendung initialisieren. STURM_TOOLS_BOOT=skip
+// überspringt die Probe — nützlich in Dev-Umgebungen ohne vLLM/gitchain.
+if (process.env.STURM_TOOLS_BOOT === 'skip') {
+  console.log('[tools] boot SKIPPED via STURM_TOOLS_BOOT=skip');
+} else {
+  const tools = await ToolContainer.bootAll();
+  console.log(`  Tool-Container: ${tools.size} Anwendung(en) initialisiert`);
+}
 // Snapshot built-in IDs BEFORE user-workflows get registered. The workflows-user
 // router uses this to decide what's a "true" built-in vs what's user-owned.
 const builtInWorkflowIds = new Set(listWorkflows().map((w) => w.id));
@@ -676,6 +691,31 @@ app.post(
         inst.status = 'versiegelt';
         inst.sealedAt = new Date().toISOString();
         inst.sealCommitSha = anchorOut?.anchor?.commit_hash;
+
+        if (inst.containerId) {
+          try {
+            await syncWorkspaceContainer(inst.containerId, inst.workspacePath);
+          } catch (err) {
+            console.warn('[seal] failed to sync workspace container:', (err as Error).message);
+          }
+          try {
+            const promoted = await promoteWorkspaceToTaxCase(
+              inst.containerId,
+              inst.caseId,
+              inst.mandantId,
+              inst.veranlagungsjahr ?? new Date().getFullYear(),
+              inst.displayName,
+              app_.id,
+            );
+            if (promoted) {
+              inst.taxCaseContainerId = promoted.tax_case_id;
+              inst.taxCaseCommitSha = promoted.commit_sha;
+            }
+          } catch (err) {
+            console.warn('[seal] failed to promote workspace to tax_case:', (err as Error).message);
+          }
+        }
+
         await saveInstanceFile(APPLICATIONS_DIR, inst);
       }
     } catch { /* errors emitted as events */ }
@@ -725,6 +765,7 @@ app.get(
             value: v.value,
             normalized: v.normalized,
             datentyp: (v.datentyp as 'string' | 'date' | 'currency') ?? 'string',
+            trust: (v as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust,
           }])),
         );
         const client = new BmfMcpClient({ timeoutMs: 15_000 });
@@ -748,6 +789,10 @@ app.get(
 // Wird im /steuerfall.html Header für Health-Dots gepingt. Token-frei,
 // weil nur Health-Probe (kein Tool-Call).
 app.get('/api/applications/:appId/mcps/health', async (req, res) => {
+  // Deprecated — bevorzuge /api/applications/:appId/tools/health (P2). Wir
+  // setzen den Header proaktiv, damit Clients bei nächster Gelegenheit migrieren.
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Link', `</api/applications/${req.params.appId}/tools/health>; rel="successor-version"`);
   const { appId } = req.params;
   const app_ = getApplication(appId);
   if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
@@ -787,6 +832,27 @@ app.get('/api/applications/:appId/mcps/health', async (req, res) => {
     }
   }));
   res.json({ mcps: checks });
+});
+
+// ── GET /api/applications/:appId/tools/health ───────────────────────────
+// P2-Nachfolger der `/mcps/health`-Route: liefert pro registriertem Tool
+// (LLM/Embedder/RAG/MCP/Gitchain/Catalog/KV) den aktuellen `ToolHealth`.
+// Verwendet den per Application gebooteten `ToolContainer`. Antwortet 503,
+// wenn der Container nicht hochgefahren wurde (z.B. STURM_TOOLS_BOOT=skip).
+app.get('/api/applications/:appId/tools/health', async (req, res) => {
+  const { appId } = req.params;
+  const app_ = getApplication(appId);
+  if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+  const container = getToolContainer(appId);
+  if (!container) {
+    return res.status(503).json({
+      error: 'tool-container not booted',
+      hint: 'STURM_TOOLS_BOOT=skip is set or server is still initializing',
+      appId,
+    });
+  }
+  const tools = await container.healthAll();
+  res.json({ appId, tools });
 });
 
 // ── GET /api/applications/:appId/instances/:caseId/runs/:runId/summary ──
