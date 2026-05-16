@@ -203,6 +203,89 @@
     .bmf-tile-sub { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 2px; }
     .bmf-tile.empty .bmf-tile-value { color: var(--color-text-tertiary); font-size: 14px; font-weight: 400; }
 
+    /* Steuer-Bilanz unter den Kacheln — Erstattung/Nachzahlung visuell deutlich. */
+    .bmf-result {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      background: var(--color-bg-secondary);
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .bmf-result.refund  { border-color: #059669; background: rgba(5,150,105,0.06); }
+    .bmf-result.payback { border-color: #b45309; background: rgba(180,83,9,0.07); }
+    .bmf-result-label { color: var(--color-text-secondary); }
+    .bmf-result-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bmf-result.refund .bmf-result-value  { color: #10b981; }
+    .bmf-result.payback .bmf-result-value { color: #d97706; }
+
+    /* Detail-Block (klappbar) */
+    .bmf-detail {
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      background: var(--color-bg-card, transparent);
+      padding: 0;
+      margin-bottom: 12px;
+    }
+    .bmf-detail > summary {
+      list-style: none; cursor: pointer;
+      padding: 10px 14px; font-size: 13px;
+      color: var(--color-text-secondary);
+      font-weight: 500;
+    }
+    .bmf-detail > summary::before {
+      content: '▶'; font-size: 9px; margin-right: 8px;
+      transition: transform var(--duration-fast) var(--ease-default);
+      display: inline-block;
+    }
+    .bmf-detail[open] > summary::before { transform: rotate(90deg); }
+    .bmf-detail-body { padding: 0 14px 14px; }
+    .bmf-section { margin-top: 14px; }
+    .bmf-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-tertiary); margin-bottom: 6px; }
+    .bmf-steps {
+      display: table; width: 100%; border-collapse: collapse;
+      font-size: 12.5px; font-variant-numeric: tabular-nums;
+    }
+    .bmf-steps > div { display: table-row; }
+    .bmf-steps > div > span { display: table-cell; padding: 6px 8px; border-bottom: 1px solid var(--color-border-light, var(--color-border)); vertical-align: top; }
+    .bmf-steps .bs-num   { width: 28px; color: var(--color-text-tertiary); text-align: right; }
+    .bmf-steps .bs-label { color: var(--color-text-primary); }
+    .bmf-steps .bs-details { color: var(--color-text-tertiary); font-size: 11.5px; }
+    .bmf-steps .bs-value { text-align: right; font-weight: 500; min-width: 110px; }
+    .bmf-steps .bs-value.subtract { color: #d97706; }
+    .bmf-steps .bs-value.result { color: var(--color-text-primary); font-weight: 600; border-top: 1px solid var(--color-border); }
+    .bmf-formula {
+      font-family: var(--font-mono); font-size: 11.5px;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-hover);
+      padding: 8px 10px;
+      border-radius: 6px;
+      word-break: break-all;
+    }
+    .bmf-formula-meta { font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; }
+    .bmf-inputs {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 6px 16px;
+      font-size: 12px;
+    }
+    .bmf-inputs > span > b { color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+    .bmf-warning {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-left: 3px solid #b45309;
+      background: rgba(180,83,9,0.06);
+      font-size: 11.5px;
+      color: var(--color-text-secondary);
+    }
+    .bmf-receipts {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .bmf-receipts li { font-size: 12px; padding: 6px 10px; background: var(--color-bg-hover); border-radius: 6px; }
+    .bmf-receipts li .legal { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 2px; }
+
     /* Pflicht-Coverage-Bar */
     .coverage-bar {
       display: flex; align-items: center; gap: 10px;
@@ -452,6 +535,11 @@
               <button class="fall-btn" id="btn-aggregate-refresh"><i data-lucide="refresh-cw"></i><span>Aktualisieren</span></button>
             </div>
             <div class="bmf-tiles" id="bmf-tiles"></div>
+            <div class="bmf-result" id="bmf-result" hidden></div>
+            <details class="bmf-detail" id="bmf-detail" hidden>
+              <summary id="bmf-detail-summary">Detaillierte Berechnung</summary>
+              <div id="bmf-detail-body"></div>
+            </details>
             <div class="coverage-bar" id="coverage-bar"></div>
             <details class="missing-list" id="missing-list" hidden>
               <summary id="missing-summary"></summary>
@@ -1149,6 +1237,153 @@
       const eur = Number(cents);
       return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(eur);
     }
+    function fmtEur2(eur) {
+      if (eur == null || isNaN(eur)) return '—';
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(eur));
+    }
+    function fmtPct(p) {
+      if (p == null || isNaN(p)) return '—';
+      return `${(p * 100).toFixed(2)} %`;
+    }
+
+    function renderBmfResult(daten) {
+      const host = document.getElementById('bmf-result');
+      if (!host) return;
+      if (!daten || daten.erstattung_oder_nachzahlung == null) { host.hidden = true; return; }
+      // BMF-Konvention: positiv = Erstattung (FA zahlt zurück), negativ = Nachzahlung
+      const v = Number(daten.erstattung_oder_nachzahlung);
+      const isRefund = v > 0;
+      const isPayback = v < 0;
+      const cls = isRefund ? 'refund' : isPayback ? 'payback' : '';
+      const label = isRefund ? 'Erstattung'
+                   : isPayback ? 'Nachzahlung'
+                   : 'Ausgeglichen';
+      const meta = `Steuerlast ${fmtEur2(daten.gesamtsteuer)} − Vorauszahlungen ${fmtEur2(daten.steuervorauszahlungen)}`;
+      host.hidden = false;
+      host.className = `bmf-result ${cls}`;
+      host.innerHTML = `
+        <div>
+          <div class="bmf-result-label">${escapeHtml(label)}</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px;">${escapeHtml(meta)}</div>
+        </div>
+        <div class="bmf-result-value">${fmtEur2(Math.abs(v))}</div>
+      `;
+    }
+
+    function renderBmfDetail(daten) {
+      const host = document.getElementById('bmf-detail');
+      const body = document.getElementById('bmf-detail-body');
+      if (!host || !body) return;
+      if (!daten || !daten.berechnungsdetails) { host.hidden = true; return; }
+      host.hidden = false;
+      const det = daten.berechnungsdetails || {};
+      const steps = Array.isArray(det.rechenschritte) ? det.rechenschritte : [];
+      const inputs = det.eingabewerte || {};
+      const steuerB = det.steuer_berechnung || {};
+      const soliB = det.soli_berechnung || {};
+      const vz = det.vorauszahlungen || {};
+
+      const stepsHtml = steps.map((r) => {
+        const w = Number(r.wert);
+        const isSubtract = /Abzug/i.test(r.bezeichnung || '');
+        const isResult = /Ergebnis|Einkommensteuer|Soliditäts|Solidarit|Anrechnung|zu versteuerndes/i.test(r.bezeichnung || '') && r.schritt >= 5;
+        const cls = isResult ? 'result' : (isSubtract ? 'subtract' : '');
+        const sign = isSubtract && w !== 0 ? '−' : '';
+        return `
+          <div>
+            <span class="bs-num">${escapeHtml(String(r.schritt ?? ''))}</span>
+            <span class="bs-label">${escapeHtml(r.bezeichnung || '')}<br><span class="bs-details">${escapeHtml(r.details || '')}</span></span>
+            <span class="bs-value ${cls}">${sign}${fmtEur2(Math.abs(w))}</span>
+          </div>
+        `;
+      }).join('');
+
+      const inputsHtml = Object.entries(inputs).map(([k, v]) => {
+        let display = '';
+        if (typeof v === 'boolean') display = v ? 'ja' : 'nein';
+        else if (typeof v === 'object' && v !== null) display = JSON.stringify(v);
+        else if (typeof v === 'number') {
+          display = ['ehegattensplitting','steuerklasse'].includes(k) ? String(v) : fmtEur2(v);
+        }
+        else display = String(v);
+        return `<span><b>${escapeHtml(k.replace(/_/g, ' '))}:</b> ${escapeHtml(display)}</span>`;
+      }).join('');
+
+      const fehlBelege = Array.isArray(daten.fehlende_belege) ? daten.fehlende_belege : [];
+      const belegeHtml = fehlBelege.length === 0 ? '' : `
+        <div class="bmf-section">
+          <div class="bmf-section-title">⚠️ Fehlende Belege (${fehlBelege.length})</div>
+          <ul class="bmf-receipts">
+            ${fehlBelege.map((b) => `
+              <li>
+                <div><b>${escapeHtml(b.category || '')}</b> · ${fmtEur2(b.betrag)}</div>
+                <div>Benötigt: ${escapeHtml((b.erforderliche_belege || []).join(', '))}</div>
+                <div class="legal">${escapeHtml(b.legal_reference || '')} — ${escapeHtml(b.begruendung || '')}</div>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+
+      // Bug-Warnungen: wenn Vorsorgeaufwendungen=0 trotz vorhandener AN-Beiträge in inputs
+      const sumVorsorge = (Number(inputs.rv_beitraege || 0)) + (Number(inputs.kv_beitraege || 0)) + (Number(inputs.pv_beitraege || 0)) + (Number(inputs.av_beitraege || 0));
+      const vorsorgeAbsetzbar = Number(inputs.vorsorgeaufwendungen_absetzbar || 0);
+      const vorsorgeWarn = sumVorsorge > 100 && vorsorgeAbsetzbar === 0
+        ? `<div class="bmf-warning">⚠️ Vorsorge-Berechnungs-Bug — BMF Lane-1 hat Beiträge erhalten (Summe ${fmtEur2(sumVorsorge)}) liefert aber <b>vorsorgeaufwendungen_absetzbar=0</b>. Der § 10 EStG Höchstbetragsabzug wird übersprungen → ESt erscheint zu hoch. Bug-Lokation: ctaxv1-lane1-bmf/vorsorgeaufwand_service.py</div>`
+        : '';
+      const splittingWarn = inputs.ehegattensplitting === false
+        ? `<div class="bmf-warning">⚠️ Ehegattensplitting nicht aktiv obwohl Zusammenveranlagung erkannt. Wenn der Fall Splittingtarif erlaubt, wird die ESt etwa doppelt so hoch berechnet wie real fällig.</div>`
+        : '';
+
+      body.innerHTML = `
+        <div class="bmf-detail-body">
+
+          <div class="bmf-section">
+            <div class="bmf-section-title">Eingabewerte aus canonical_layer</div>
+            <div class="bmf-inputs">${inputsHtml}</div>
+          </div>
+
+          <div class="bmf-section">
+            <div class="bmf-section-title">Rechenschritte (§2/§9/§10/§32a EStG)</div>
+            <div class="bmf-steps">${stepsHtml}</div>
+          </div>
+
+          ${steuerB.formel_verwendet ? `
+          <div class="bmf-section">
+            <div class="bmf-section-title">Tarif-Formel (${escapeHtml(steuerB.steuerzone || '')})</div>
+            <div class="bmf-formula">${escapeHtml(steuerB.formel_verwendet)}</div>
+            <div class="bmf-formula-meta">${escapeHtml(steuerB.bmf_referenz || '')} · Grenzsatz ${fmtPct(daten.grenzsteuersatz)} · ⌀ ${fmtPct(daten.durchschnittssteuersatz)}</div>
+          </div>` : ''}
+
+          ${Object.keys(soliB).length > 0 ? `
+          <div class="bmf-section">
+            <div class="bmf-section-title">Solidaritätszuschlag</div>
+            <div class="bmf-inputs">
+              <span><b>Freibetrag:</b> ${fmtEur2(soliB.soli_freibetrag)}</span>
+              <span><b>Satz:</b> ${(Number(soliB.soli_rate)*100).toFixed(1)} %</span>
+              <span><b>Wert:</b> ${fmtEur2(soliB.solidaritaetszuschlag)}</span>
+              <span><b>Hinweis:</b> ${escapeHtml(soliB.berechnungshinweis || '')}</span>
+            </div>
+          </div>` : ''}
+
+          <div class="bmf-section">
+            <div class="bmf-section-title">Bereits gezahlt (Vorauszahlungen)</div>
+            <div class="bmf-inputs">
+              <span><b>Lohnsteuer:</b> ${fmtEur2(vz.lohnsteuer)}</span>
+              <span><b>Soli:</b> ${fmtEur2(vz.soli)}</span>
+              <span><b>Kirchensteuer:</b> ${fmtEur2(vz.kirchensteuer)}</span>
+              <span><b>Kapitalertragsteuer:</b> ${fmtEur2(vz.kapest)}</span>
+              <span><b>Gesamt:</b> ${fmtEur2(vz.gesamt)}</span>
+            </div>
+          </div>
+
+          ${belegeHtml}
+          ${vorsorgeWarn}
+          ${splittingWarn}
+
+        </div>
+      `;
+    }
 
     function renderAggregate(data) {
       const sub = document.getElementById('aggregate-sub');
@@ -1175,6 +1410,11 @@
         `;
         tilesEl.appendChild(div);
       }
+
+      // Bilanz-Block (Erstattung/Nachzahlung)
+      renderBmfResult(daten);
+      // Detailliertes Berechnungs-Detail (Eingaben, Schritte, Formel, Soli, Vorauszahlungen, fehlende Belege)
+      renderBmfDetail(daten);
 
       // Pflicht-Coverage
       const cov = data.pflicht_coverage;
