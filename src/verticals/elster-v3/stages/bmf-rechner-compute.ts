@@ -212,6 +212,8 @@ export const bmfRechnerComputeStage = defineStage<
         formula_string: det.formel_verwendet,
         paragraph_estg: det.bmf_referenz,
         inputs_used,
+        trust: 'high',
+        trust_reasons: ['BMF Lane-1 deterministisch berechnet'],
       };
       result.computed_layer[meta.eCode] = cv;
       result.canonical_layer[meta.eCode] = cv;

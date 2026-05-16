@@ -49,6 +49,16 @@ export interface CanonicalValue {
   paragraph_estg?: string;
   /** origin=BMF_RECHNER: Map slot_name → eCode der genutzten Inputs. */
   inputs_used?: Record<string, string>;
+  /** UI-Hint: wie verlässlich ist der Wert?
+   *   • high       — REGEX_100% mit Belegzeile, oder BMF deterministisch
+   *   • medium     — REGEX_3F oder LLM_FSM mit Drucktext-Bezug
+   *   • low        — LLM_FSM ohne klaren Anker (z.B. generisches "Betrag")
+   *   • suspicious — Wert wirkt nach Halluzination (Wert = Vordruckzeile,
+   *                  oder Wert tritt in ≥3 eCodes mit generischem Drucktext auf)
+   *  Wird im UI für Priorisierung der manuellen Prüfung benutzt. */
+  trust: 'high' | 'medium' | 'low' | 'suspicious';
+  /** Maschinen-lesbare Gründe für den Trust-Level (UI kann Hover/Badge zeigen). */
+  trust_reasons: string[];
 }
 
 export interface Phase5MergeInput {
@@ -67,8 +77,95 @@ export interface Phase5MergeOutput {
     from_llm: number;
     by_anlage: Record<string, number>;
     by_datentyp: Record<string, number>;
+    by_trust: Record<string, number>;
     ms: number;
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Trust-Scoring — pro Wert ein Trust-Level für den Review-UI
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Generische Drucktexts ohne semantischen Anker. Häufige Halluzinations-Magneten. */
+const GENERIC_DRUCKTEXTS = new Set([
+  'Bezeichnung', 'Betrag', 'Summe', 'Art', 'Datum', 'Anzahl', 'Bemerkung',
+]);
+
+/** In-place: setzt trust + trust_reasons auf jedem canonical-Eintrag.
+ *
+ * Heuristiken:
+ *   • Wert-Halluzination: identischer Wert in ≥3 generischen Drucktext-Feldern
+ *     (z.B. "456" in Bezeichnung+Betrag+Summe — OCR-Boilerplate aus WISO/ERiC).
+ *   • Zeilennummer als Wert: value === vordruckzeile und beides 1-3 Ziffern.
+ *   • Currency-Mismatch: datentyp=currency aber value nicht numerisch.
+ *   • BMF_RECHNER + REGEX_100% mit evidence_line → high
+ *   • REGEX_3F + LLM_FSM mit spezifischem Drucktext → medium
+ *   • LLM_FSM mit generischem Drucktext → low
+ */
+function computeTrust(canonical: Record<string, CanonicalValue>): void {
+  // Pass A: index identischer Werte über generische Drucktext-Felder.
+  const valueOccurrences = new Map<string, CanonicalValue[]>();
+  for (const v of Object.values(canonical)) {
+    if (!v.value) continue;
+    if (!GENERIC_DRUCKTEXTS.has(v.drucktext.trim())) continue;
+    const key = String(v.value).trim();
+    if (!key) continue;
+    let arr = valueOccurrences.get(key);
+    if (!arr) { arr = []; valueOccurrences.set(key, arr); }
+    arr.push(v);
+  }
+  const hallucinatedValues = new Set<string>();
+  for (const [val, vs] of valueOccurrences) {
+    if (vs.length >= 3) hallucinatedValues.add(val);
+  }
+
+  // Pass B: trust pro Eintrag.
+  for (const v of Object.values(canonical)) {
+    const reasons: string[] = [];
+    const valStr = String(v.value ?? '').trim();
+    let trust: CanonicalValue['trust'];
+
+    if (hallucinatedValues.has(valStr) && GENERIC_DRUCKTEXTS.has(v.drucktext.trim())) {
+      trust = 'suspicious';
+      reasons.push(`Wert "${valStr}" tritt in mehreren generischen Drucktext-Feldern auf — vermutlich OCR-Platzhalter`);
+    } else if (
+      valStr === v.vordruckzeile &&
+      /^\d{1,3}$/.test(valStr) &&
+      v.datentyp !== 'currency' // 0,00 € als Lohnsteuer ist OK
+    ) {
+      trust = 'suspicious';
+      reasons.push(`Wert entspricht Zeilennummer ${v.vordruckzeile} — Zeilennummer als Wert misinterpretiert`);
+    } else if (v.origin === 'BMF_RECHNER') {
+      trust = 'high';
+      reasons.push('BMF Lane-1 deterministisch berechnet');
+    } else if (v.origin === 'REGEX_100%' && v.evidence_line) {
+      trust = 'high';
+      reasons.push('Regex-Match mit Belegzeile');
+    } else if (v.origin === 'REGEX_100%') {
+      trust = 'medium';
+      reasons.push('Regex-Match (Belegzeile fehlt)');
+    } else if (v.origin === 'REGEX_3F') {
+      trust = 'medium';
+      reasons.push('Regex-Match mit 3-Feld-Kontext');
+    } else if (v.origin === 'LLM_FSM') {
+      if (v.datentyp === 'currency' && valStr && !/^-?[\d.,]/.test(valStr)) {
+        trust = 'suspicious';
+        reasons.push(`Datentyp currency aber Wert "${valStr}" nicht numerisch`);
+      } else if (GENERIC_DRUCKTEXTS.has(v.drucktext.trim())) {
+        trust = 'low';
+        reasons.push(`LLM-Fill auf generisches Feld "${v.drucktext}" — kein eindeutiger Anker`);
+      } else {
+        trust = 'medium';
+        reasons.push('LLM-Fill mit spezifischem Drucktext');
+      }
+    } else {
+      trust = 'low';
+      reasons.push('Unbekannte Origin');
+    }
+
+    v.trust = trust;
+    v.trust_reasons = reasons;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -165,6 +262,8 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
           datentyp: h.datentyp,
           kontextPath: h.kontextPath,
           evidence_line: h.evidence_line,
+          trust: 'medium',
+          trust_reasons: [],
         };
         fromRegex++;
         byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;
@@ -186,12 +285,19 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
           vordruckzeile: h.vordruckzeile,
           datentyp: h.datentyp,
           kontextPath: h.kontextPath,
+          trust: 'medium',
+          trust_reasons: [],
         };
         fromLlm++;
         byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;
         byDatentyp[h.datentyp] = (byDatentyp[h.datentyp] ?? 0) + 1;
       }
     }
+
+    // Trust-Scoring vor XML-Build, damit es in canonical_layer.json persistiert.
+    computeTrust(canonical);
+    const trustCounts = { high: 0, medium: 0, low: 0, suspicious: 0 } as Record<string, number>;
+    for (const v of Object.values(canonical)) trustCounts[v.trust] = (trustCounts[v.trust] ?? 0) + 1;
 
     const xml = buildEricXml(canonical);
     await ctx.artifacts.write('canonical_layer.json', canonical);
@@ -202,6 +308,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
       from_regex: fromRegex,
       from_llm: fromLlm,
       anlagen: Object.keys(byAnlage).length,
+      trust: trustCounts,
     });
 
     return {
@@ -213,6 +320,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
         from_llm: fromLlm,
         by_anlage: byAnlage,
         by_datentyp: byDatentyp,
+        by_trust: trustCounts,
         ms: Date.now() - t0,
       },
     };
