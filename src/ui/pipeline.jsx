@@ -181,6 +181,17 @@ function StageNode({ data, selected }) {
         </div>
       )}
       {data.ms != null && <div className="sturm-node-time">{fmtDur(data.ms)}</div>}
+      {(data.avgMs != null || data.avgOutputSize != null) && data.statsSamples > 0 && (
+        <div
+          className="sturm-node-stats"
+          title={`Mittelwert über ${data.statsSamples} historische Runs${data.statsErrorRate > 0 ? ` (Fehlerrate ${Math.round(data.statsErrorRate*100)}%)` : ''}`}
+        >
+          {data.avgMs != null && <span>⌀ {fmtDur(Math.round(data.avgMs))}</span>}
+          {data.avgOutputSize != null && (
+            <span>⌀ {Math.round(data.avgOutputSize)} {data.outputSizeUnit || ''}</span>
+          )}
+        </div>
+      )}
       <RF.Handle type="source" position="right" style={{ background: 'var(--color-border)', width: 6, height: 6 }} />
     </div>
   );
@@ -3002,6 +3013,9 @@ function App() {
   const [stageOutputs, setStageOutputs] = useState({}); // { [stageId]: outputJson }
   // Result-tab UX extras: previous runs (Diff-dropdown), compare-run data, PDF-Split, Hover-link.
   const [previousRuns, setPreviousRuns] = useState([]);
+  // Aggregat-Stats (avg-ms + output-size pro Stage) aus den letzten 50 Runs.
+  // Wird auf jeder StageNode unten klein angezeigt — ⌀ Dauer · ⌀ Output.
+  const [workflowStats, setWorkflowStats] = useState(null);
   const [compareRunId, setCompareRunId] = useState(() => {
     return new URLSearchParams(location.search).get('compare') || null;
   });
@@ -3188,6 +3202,17 @@ function App() {
       .catch(() => setPreviousRuns([]));
   }, [workflow, runId]);
 
+  // ── Aggregat-Stats (avg-ms + output-size per Stage über letzte 50 Runs) ──
+  // Wird einmalig pro Workflow geladen und auf jeder StageNode angezeigt.
+  // Re-fetch nach jedem fertigen Run, damit frische Daten einfließen.
+  useEffect(() => {
+    if (!workflow) return;
+    fetch(`/api/workflows/${encodeURIComponent(workflow.id)}/stats?maxRuns=50`)
+      .then(r => r.ok ? r.json() : null)
+      .then(s => setWorkflowStats(s))
+      .catch(() => setWorkflowStats(null));
+  }, [workflow, runId]);
+
   // ── Compare-run artefacts ──
   useEffect(() => {
     if (!workflow || !compareRunId) {
@@ -3298,6 +3323,13 @@ function App() {
     return m;
   }, [workflow]);
 
+  // Stats-Map indiziert nach Stage-ID, damit der Lookup im Node-Map O(1) bleibt
+  const statsByStage = useMemo(() => {
+    const m = {};
+    for (const s of (workflowStats?.stages || [])) m[s.stageId] = s;
+    return m;
+  }, [workflowStats]);
+
   const nodes = useMemo(() => {
     if (!workflow || !layout) return [];
     const stageNodes = workflow.stages.map(s => {
@@ -3306,6 +3338,7 @@ function App() {
       const branches = Object.keys(branchesMap).map(id => ({ id, ...branchesMap[id] }));
       // User-overrides gewinnen über das auto-Layout.
       const pos = nodePosOverrides[s.id] || layout.positions[s.id] || { x: 0, y: 0 };
+      const stats = statsByStage[s.id];
       return {
         id: s.id,
         type: isFanout ? 'fanout' : 'stage',
@@ -3320,6 +3353,11 @@ function App() {
           branches: isFanout ? branches : undefined,
           fieldsIn:  stageFieldFlow[s.id]?.in  ?? null,
           fieldsOut: stageFieldFlow[s.id]?.out ?? null,
+          avgMs: stats?.avgMs ?? null,
+          avgOutputSize: stats?.avgOutputSize ?? null,
+          outputSizeUnit: stats?.outputSizeUnit ?? null,
+          statsSamples: stats?.samples ?? 0,
+          statsErrorRate: stats?.errorRate ?? 0,
         },
         draggable: true,
       };

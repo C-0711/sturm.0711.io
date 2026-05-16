@@ -331,7 +331,8 @@
         return `<a class="sturm-card"
                    href="/pipeline.html?workflow=${encodeURIComponent(id)}"
                    data-search="${escapeHtml(search)}"
-                   data-category="${cat}">
+                   data-category="${cat}"
+                   data-workflow-id="${escapeHtml(id)}">
           <div class="sturm-card-head">
             <h3 class="sturm-card-title">${escapeHtml(name)}</h3>
             <span class="sturm-card-id">${escapeHtml(id)}</span>
@@ -347,10 +348,53 @@
             <span class="sturm-card-meta-item">
               <i data-lucide="file"></i><span>${escapeHtml(fileTypesFromAccept(accept))}</span>
             </span>
+            <span class="sturm-card-meta-item" data-role="stats" data-id="${escapeHtml(id)}" style="opacity:0.55">
+              <i data-lucide="activity"></i><span>—</span>
+            </span>
           </div>
         </a>`;
       }).join('');
       newCard.insertAdjacentHTML('beforebegin', cards);
+      // Stats pro Workflow asynchron nachladen — kein Block beim ersten Render.
+      void hydrateStats(wfs.map(w => w.id).filter(Boolean));
+    }
+
+    function formatMs(ms) {
+      if (ms == null || !isFinite(ms)) return '—';
+      if (ms < 1000) return Math.round(ms) + ' ms';
+      if (ms < 60000) return (ms/1000).toFixed(1) + ' s';
+      const m = Math.floor(ms/60000); const s = Math.round((ms%60000)/1000);
+      return `${m}:${s.toString().padStart(2,'0')} min`;
+    }
+
+    async function hydrateStats(ids) {
+      // Parallel laden, aber Concurrency cap (Card-Liste kann lang werden)
+      const POOL = 4;
+      let i = 0;
+      async function worker() {
+        while (i < ids.length) {
+          const id = ids[i++];
+          try {
+            const r = await fetch(`/api/workflows/${encodeURIComponent(id)}/stats?maxRuns=20`);
+            if (!r.ok) continue;
+            const stats = await r.json();
+            const slot = document.querySelector(`[data-role="stats"][data-id="${CSS.escape(id)}"]`);
+            if (!slot) continue;
+            const span = slot.querySelector('span');
+            if (stats.runs === 0) {
+              span.textContent = 'keine Runs';
+              slot.title = 'noch nicht ausgeführt';
+            } else {
+              const succ = Math.round((stats.successRate || 0) * 100);
+              span.textContent = `${stats.runs} Runs · ⌀ ${formatMs(stats.avgMs)} · ${succ}% ok`;
+              slot.title = `p95 ${formatMs(stats.p95Ms)} — letzte ${stats.runs} Runs`;
+              slot.style.opacity = '0.95';
+            }
+          } catch { /* silent */ }
+        }
+      }
+      await Promise.all(Array.from({length: POOL}, worker));
+      window.lucide && window.lucide.createIcons();
     }
 
     function applyFilter() {

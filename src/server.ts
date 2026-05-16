@@ -25,6 +25,7 @@ import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware 
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
 import { createApplicationsRouter, loadInstanceFile, saveInstanceFile } from './server/applications.ts';
+import { computeWorkflowStats } from './server/workflow-stats.ts';
 import { persistUploadToInbox, recordDocumentRunCompletion } from './server/inbox.ts';
 import {
   applyOverrides,
@@ -182,6 +183,22 @@ app.get('/api/workflows/:id', (req, res) => {
   const def = getWorkflow(req.params.id);
   if (!def) return res.status(404).json({ error: `workflow not found: ${req.params.id}` });
   res.json(summarizeWorkflow(def));
+});
+
+// Aggregat über die letzten N Runs: avg-ms pro Workflow + pro Stage, plus
+// avg-Output-Size pro Stage (heuristisch). Zeigt dem User auf einen Blick wo
+// im Funnel Felder/Daten verloren gehen.
+app.get('/api/workflows/:id/stats', async (req, res) => {
+  const wf = safeSeg(req.params.id);
+  if (!wf) { res.status(400).json({ error: 'invalid workflow id' }); return; }
+  const maxRunsRaw = Number(req.query.maxRuns);
+  const maxRuns = Number.isFinite(maxRunsRaw) && maxRunsRaw > 0 ? Math.min(200, maxRunsRaw) : 50;
+  try {
+    const stats = await computeWorkflowStats(RUNS_DIR, wf, { maxRuns });
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // ============ Applications (Anwendungen) ============

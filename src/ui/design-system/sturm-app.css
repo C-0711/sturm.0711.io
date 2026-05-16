@@ -471,6 +471,12 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   font-family: var(--font-mono); font-size: 10px;
   color: var(--color-text-tertiary); margin-top: 6px;
 }
+.sturm-node-stats {
+  font-family: var(--font-mono); font-size: 9.5px;
+  color: var(--color-text-tertiary); opacity: 0.78;
+  margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap;
+}
+.sturm-node-stats span { white-space: nowrap; }
 
 .sturm-node-kpis {
   display: flex; flex-wrap: wrap; gap: 4px 6px;
