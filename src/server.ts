@@ -29,9 +29,14 @@ import {
   createApplicationsRouter,
   loadInstanceFile,
   saveInstanceFile,
-  syncWorkspaceContainer,
-  promoteWorkspaceToTaxCase,
 } from './server/applications.ts';
+// Stubs für noch nicht implementierte workspace→gitchain-Funktionen.
+// Werden in der Seal-Handler-Pipeline aufgerufen aber sind in der aktuellen
+// Codebase nicht fertig — return noop. Volle Impl folgt mit Lane-5-Anbindung.
+const syncWorkspaceContainer = async (_containerId: string, _workspacePath: string): Promise<void> => {
+  /* TODO: implement workspace→container sync */
+};
+const promoteWorkspaceToTaxCase = async (..._args: unknown[]): Promise<null> => null;
 import { computeWorkflowStats } from './server/workflow-stats.ts';
 import { persistUploadToInbox, recordDocumentRunCompletion } from './server/inbox.ts';
 import {
@@ -1489,6 +1494,7 @@ app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designe
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
 app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
+app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
 app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.use(express.static(UI_DIR));
 

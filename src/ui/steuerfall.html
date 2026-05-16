@@ -502,6 +502,7 @@
             </div>
             <div class="fall-actions">
               <div class="mcp-dots" id="mcp-dots" title="MCP-Health"></div>
+              <a class="fall-btn" id="btn-pro-abrechnung" target="_blank"><i data-lucide="file-text"></i><span>Pro-Abrechnung</span></a>
               <a class="fall-btn" id="btn-dl-master" hidden download><i data-lucide="file-down"></i><span>master.json</span></a>
               <a class="fall-btn" id="btn-dl-eric" hidden download><i data-lucide="file-code"></i><span>eric.xml</span></a>
               <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
@@ -720,6 +721,11 @@
       dlEric.hidden = !isSealed;
       dlMaster.href = `${base}/master.json`;
       dlEric.href = `${base}/eric.xml`;
+      // Pro-Abrechnung: druckbarer Steuerberater-Stil mit allen Werten,
+      // §EStG-Citations, Belegzeilen und Rechenschritten. Funktioniert
+      // sobald die Aggregation BMF erfolgreich gerechnet hat.
+      const proLink = document.getElementById('btn-pro-abrechnung');
+      if (proLink) proLink.href = `/abrechnung.html?app=${encodeURIComponent(APP_ID)}&case=${encodeURIComponent(CASE_ID)}`;
       // Letzter Run → canonical_layer laden, falls vorhanden
       if (instance.runs.length > 0) {
         // Aggregate-View ist jetzt der canonical Pfad — zeigt den Fall

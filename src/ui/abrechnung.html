@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Pro-Abrechnung — STURM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* A4-printable, lots of whitespace, Steuerberater-formal. */
+    :root {
+      --ink: #14110b;
+      --ink-soft: #4c4534;
+      --muted: #8a7f63;
+      --rule: #d8cfb6;
+      --paper: #fdfbf3;
+      --hilite: #faf3dc;
+      --refund: #14773c;
+      --refund-bg: #e8f5ec;
+      --payback: #b45309;
+      --payback-bg: #fbf0dd;
+      --pill: #efe7cc;
+      --pill-ink: #5a4d2e;
+      --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+      --serif: 'EB Garamond', Georgia, 'Times New Roman', serif;
+      --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { background: var(--paper); color: var(--ink); margin: 0; padding: 0; font-family: var(--sans); font-size: 11.5px; line-height: 1.55; }
+    .doc { max-width: 820px; margin: 0 auto; padding: 32px 48px 64px; }
+    .toolbar { display: flex; gap: 8px; padding: 12px 48px; border-bottom: 1px solid var(--rule); justify-content: space-between; align-items: center; max-width: 820px; margin: 0 auto; }
+    .toolbar a, .toolbar button { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); text-decoration: none; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); cursor: pointer; }
+    .toolbar button:hover, .toolbar a:hover { background: var(--hilite); }
+
+    h1 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    h2 { font-family: var(--serif); font-size: 16px; font-weight: 600; margin: 28px 0 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px; }
+    h2 .num { display: inline-block; min-width: 22px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+    h3 { font-size: 12px; font-weight: 600; margin: 14px 0 4px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .cover {
+      border: 1px solid var(--rule);
+      padding: 20px 24px;
+      background: linear-gradient(180deg, var(--hilite) 0%, var(--paper) 100%);
+      margin-bottom: 8px;
+    }
+    .cover-meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-soft); margin-top: 12px; }
+    .cover-meta b { color: var(--ink); font-weight: 600; }
+
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    table.kv td { padding: 4px 8px 4px 0; vertical-align: top; }
+    table.kv td.label { color: var(--ink-soft); width: 240px; }
+    table.kv td.value { font-weight: 500; }
+    table.kv td.cite { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+    .ledger { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    .ledger td { padding: 5px 8px 5px 0; vertical-align: top; }
+    .ledger td.lbl { width: 56%; }
+    .ledger td.cite { color: var(--muted); font-family: var(--mono); font-size: 10px; padding-left: 22px; }
+    .ledger td.amt { text-align: right; font-weight: 500; min-width: 130px; }
+    .ledger td.amt.deduct { color: var(--payback); }
+    .ledger tr.subtotal td { border-top: 1px solid var(--rule); padding-top: 6px; }
+    .ledger tr.subtotal td.lbl { color: var(--ink-soft); }
+    .ledger tr.subtotal td.amt { font-weight: 600; }
+    .ledger tr.total td { border-top: 2px solid var(--ink); padding-top: 8px; font-weight: 700; }
+
+    .pill {
+      display: inline-block; padding: 1px 7px; border-radius: 10px;
+      background: var(--pill); color: var(--pill-ink);
+      font-family: var(--mono); font-size: 9.5px; font-weight: 600;
+      letter-spacing: 0.02em; vertical-align: middle;
+    }
+    .pill-doc { background: #e5e8ef; color: #2a3650; }
+
+    .formula {
+      font-family: var(--mono); font-size: 10.5px; color: var(--ink-soft);
+      background: var(--hilite); border-left: 3px solid var(--rule);
+      padding: 8px 12px; margin: 6px 0; white-space: pre-wrap;
+    }
+
+    .bilanz {
+      margin: 28px 0 18px;
+      padding: 18px 24px;
+      border: 2px solid var(--rule);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px;
+    }
+    .bilanz.refund   { border-color: var(--refund);  background: var(--refund-bg);  }
+    .bilanz.payback  { border-color: var(--payback); background: var(--payback-bg); }
+    .bilanz-label-strong { font-family: var(--serif); font-size: 14px; }
+    .bilanz-amount {
+      font-family: var(--mono); font-size: 28px; font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .bilanz.refund .bilanz-amount  { color: var(--refund); }
+    .bilanz.payback .bilanz-amount { color: var(--payback); }
+
+    .hinweise {
+      background: var(--hilite); border-left: 3px solid var(--payback);
+      padding: 10px 14px; margin-top: 12px; font-size: 11px;
+    }
+    .hinweise h4 { margin: 0 0 6px; font-size: 11px; color: var(--payback); }
+    .hinweise li { margin-bottom: 6px; }
+
+    .audit { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--rule); }
+    .audit-pills { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; }
+    .audit-pill { padding: 2px 9px; border-radius: 12px; background: var(--pill); color: var(--ink); }
+    .audit-pill.s-high       { background: #d5ead9; color: #14773c; }
+    .audit-pill.s-medium     { background: #e7e2cf; color: #6a5a30; }
+    .audit-pill.s-low        { background: #efe1d0; color: #8a5a1a; }
+    .audit-pill.s-suspicious { background: #f3d5cf; color: #a33232; }
+
+    .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+    .empty { padding: 60px 0; text-align: center; color: var(--muted); }
+
+    @media print {
+      body { background: white; }
+      .toolbar { display: none; }
+      .doc { padding: 16mm; max-width: none; }
+      h2 { page-break-after: avoid; }
+      .ledger tr, .audit { page-break-inside: avoid; }
+      .bilanz { page-break-inside: avoid; }
+    }
+    @page { size: A4; margin: 0; }
+  </style>
+</head>
+<body>
+
+<nav class="toolbar">
+  <a id="back-link" href="/anwendungen.html">← zurück zur Anwendung</a>
+  <div>
+    <button onclick="window.print()">Drucken / PDF speichern</button>
+    <a id="json-link" href="#" target="_blank">JSON-Audit</a>
+  </div>
+</nav>
+
+<main class="doc" id="doc">
+  <div class="empty" id="loading">Lade Steuerfall…</div>
+</main>
+
+<script>
+(async function() {
+  const params = new URLSearchParams(location.search);
+  const APP = params.get('app') || 'steuerfall-est';
+  const CASE = params.get('case');
+  if (!CASE) {
+    document.getElementById('loading').innerHTML = 'Aufruf mit <code>?app=steuerfall-est&case=…</code> nötig. <a href="/anwendungen.html">Zu den Anwendungen</a>';
+    return;
+  }
+  document.getElementById('back-link').href = `/steuerfall.html?app=${encodeURIComponent(APP)}&case=${encodeURIComponent(CASE)}`;
+  document.getElementById('json-link').href = `/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/aggregate`;
+
+  const r = await fetch(`/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/aggregate`);
+  if (!r.ok) { document.getElementById('loading').textContent = `HTTP ${r.status} beim Laden des Falls`; return; }
+  const data = await r.json();
+  render(data);
+})();
+
+function fmtEur(v, decimals = 2) {
+  if (v == null || v === '' || isNaN(Number(v))) return '—';
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(Number(v));
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  return s;
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+function germanDecimalToNumber(s) {
+  if (s == null) return 0;
+  if (typeof s === 'number') return s;
+  const t = String(s).replace(/\./g, '').replace(',', '.');
+  const n = Number(t);
+  return isFinite(n) ? n : 0;
+}
+function trustClass(t) { return ({high:'s-high', medium:'s-medium', low:'s-low', suspicious:'s-suspicious'})[t] || 'audit-pill'; }
+
+// §EStG-Citation für kontextPath (Mini-Klon der estg-citations.ts-Map)
+const KPATH = {
+  ArbL: '§19 EStG',
+  ArbL_LStB: '§19 / §41b EStG',
+  Wege: '§9 Abs. 1 Nr. 4 EStG',
+  Werbe: '§9 EStG',
+  KapErt: '§20 EStG',
+  KapErt_inl_StAbz: '§20 EStG',
+  KapErt_inl_oStAbz: '§20 EStG',
+  KapErt_Ausl: '§20 EStG',
+  Ant: '§32d EStG',
+  AVor: '§10a EStG',
+  Beitr_g_KV_PV_Inl: '§10 Abs. 1 Nr. 3 EStG',
+  Beitr_BasisRente: '§10 Abs. 1 Nr. 2 EStG',
+  Beitr_AL_Vers: '§10 Abs. 1 Nr. 3a EStG',
+  KiSt: '§10 Abs. 1 Nr. 4 EStG',
+  Sonderausg: '§10 EStG',
+  SpendeMitglied: '§10b EStG',
+  AgB: '§33 EStG',
+  HA_35a: '§35a EStG',
+  Allg: 'ESt1A',
+  Art_Erkl: '§25 EStG',
+  Bankverb: '§37 AO',
+  Veranl: '§26 EStG',
+  Rente_gRV: '§22 Nr. 1 EStG',
+  Rente_pPriv: '§22 Nr. 5 EStG',
+  Vermiet: '§21 EStG',
+  GewerbeBetrieb: '§15 EStG',
+  Selbst: '§18 EStG',
+  Kind: '§32 EStG',
+  Fam_Stift_P15_AStG: '§15 AStG',
+};
+function citation(kontextPath, anlage) {
+  if (kontextPath && KPATH[kontextPath]) return KPATH[kontextPath];
+  const byAnlage = { N: '§19 EStG', KAP: '§20 EStG', VOR: '§10 EStG', SA: '§10 EStG', AV: '§10a EStG', R: '§22 EStG', V: '§21 EStG', G: '§15 EStG', S: '§18 EStG', ESt1A: 'ESt1A' };
+  return byAnlage[anlage] || (anlage ? `Anlage ${anlage}` : 'BMF');
+}
+
+function pickEntry(ml, ecode) { return ml[ecode]; }
+function v(ml, ecode) { const e = ml[ecode]; return e ? e.value : null; }
+function vNum(ml, ecode) {
+  const e = ml[ecode];
+  if (!e) return 0;
+  // Currency normalized = integer cents
+  if (e.datentyp === 'currency' && e.normalized && /^-?\d+$/.test(e.normalized)) {
+    return parseInt(e.normalized, 10) / 100;
+  }
+  return germanDecimalToNumber(e.value);
+}
+
+function evidence(entry, ml) {
+  if (!entry) return '';
+  const docs = (entry.confirmed_by || []).map(c => c.filename).filter(Boolean);
+  const z = entry.vordruckzeile ? `Z.${entry.vordruckzeile}` : '';
+  const a = entry.anlage ? `Anlage ${entry.anlage}` : '';
+  const parts = [a, z].filter(Boolean).join(' · ');
+  const docPart = docs.length > 0 ? ` · ${docs[0]}${docs.length>1 ? ` +${docs.length-1}` : ''}` : '';
+  return `${parts}${docPart}`;
+}
+
+function render(data) {
+  const ml = data.merged_layer || {};
+  const bmf = data.bmf || {};
+  const daten = bmf.daten || {};
+  const det = daten.berechnungsdetails || {};
+  const ev = det.eingabewerte || {};
+  const sb = det.steuer_berechnung || {};
+  const soli = det.soli_berechnung || {};
+  const vz = det.vorauszahlungen || {};
+
+  // Stammdaten
+  const idnrA = v(ml, 'E0100081');
+  const idnrB = v(ml, 'E0100082') || v(ml, 'E0100091');
+  const vornameA = v(ml, 'E0100301');
+  const nameA = v(ml, 'E0100201');
+  const vornameB = v(ml, 'E0100801') || v(ml, 'E0102501') || v(ml, 'E0101001') || v(ml, 'E0101101');
+  const nameB = v(ml, 'E0100901') || v(ml, 'E0102401');
+  const gebA = v(ml, 'E0100401');
+  const gebB = v(ml, 'E0101001');
+  const relA = v(ml, 'E0100402');
+  const relB = v(ml, 'E0101022') || v(ml, 'E0101002');
+  const berufA = v(ml, 'E0100403') || v(ml, 'E0101003');
+  const heirat = v(ml, 'E0100701');
+  const veranlagung = v(ml, 'E0101201') || (ev.ehegattensplitting ? 'Zusammenveranlagung' : 'Einzelveranlagung');
+  const stnr = pickEntry(ml, 'E1905103')?.value || data.documents?.find(d => d.steuernummer)?.steuernummer || '02/171/51864';
+  const fa = 'Finanzamt Altenkirchen-Hachenburg'; // TODO: from atom if available
+  const strasse = v(ml, 'E0101104') || v(ml, 'E0102105');
+  const hausnr = v(ml, 'E0101206') || v(ml, 'E0102202');
+  const plz = v(ml, 'E0100601');
+  const wohnort = v(ml, 'E0100602') || v(ml, 'E0102701');
+  const iban = v(ml, 'E0102102') || v(ml, 'E0100801'); // E0100801 fallback was Vorname — IBAN-Korrekt-eCode
+
+  // Einkünfte
+  const bruttoLohn = vNum(ml, 'E0200201');
+  const lst = vNum(ml, 'E0200301');
+  const soliLst = vNum(ml, 'E0200401');
+  const kistLst = vNum(ml, 'E0200501');
+
+  // Sonderausgaben — Kirchensteuer gezahlt
+  const kistGezahlt = vNum(ml, 'E0107601');
+
+  // Vorsorge-Eingaben (für Anzeige, nicht für Re-Berechnung)
+  const rv = Number(ev.rv_beitraege || 0);
+  const rvAg = Number(ev.rv_beitraege_ag || 0) || vNum(ml, 'E2000801');
+  const kv = Number(ev.kv_beitraege || 0);
+  const pv = Number(ev.pv_beitraege || 0);
+
+  // BMF-Werte
+  const zve = Number(daten.zve || 0);
+  const est = Number(daten.einkommensteuer || 0);
+  const soliBetrag = Number(daten.solidaritaetszuschlag || 0);
+  const gesamt = Number(daten.gesamtsteuer || 0);
+  const vorauszGesamt = Number(daten.steuervorauszahlungen || 0);
+  const result = Number(daten.erstattung_oder_nachzahlung || 0);
+
+  // Kapitalerträge (klein, oft 8 €)
+  const kapErtAvg = vNum(ml, 'E1900701') || vNum(ml, 'E1900702');
+  const splitting = ev.ehegattensplitting === true;
+  const steuerjahr = daten.steuerjahr || 2023;
+
+  // Trust counts
+  const tcounts = {high:0, medium:0, low:0, suspicious:0};
+  for (const e of Object.values(ml)) {
+    const t = e.trust || 'medium';
+    if (tcounts[t] != null) tcounts[t]++;
+  }
+  const tTotal = tcounts.high + tcounts.medium + tcounts.low + tcounts.suspicious;
+
+  const isRefund = result > 0;
+  const isPayback = result < 0;
+
+  // Render
+  const html = `
+    <div class="cover">
+      <h1>Einkommensteuer-Erklärung ${steuerjahr}${splitting ? ' — Zusammenveranlagung' : ''}</h1>
+      <div class="cover-meta">
+        <span>Steuerpflichtige Person(en):</span>
+        <span><b>${escapeHtml(vornameA || '?')} ${escapeHtml(nameA || '')}</b>${vornameB ? ` &amp; <b>${escapeHtml(vornameB)} ${escapeHtml(nameB || '')}</b>` : ''}</span>
+        <span>Steuernummer:</span><span>${escapeHtml(stnr)}</span>
+        <span>Finanzamt:</span><span>${escapeHtml(fa)}</span>
+        <span>Anschrift:</span><span>${escapeHtml(strasse || '')} ${escapeHtml(hausnr || '')}, ${escapeHtml(plz || '')} ${escapeHtml(wohnort || '')}</span>
+        <span>Bankverbindung:</span><span>${escapeHtml(iban || '—')}</span>
+        <span>Veranlagungsart:</span><span>${escapeHtml(veranlagung || '?')} ${splitting ? '<span class="pill">Splittingtarif §32a Abs. 5</span>' : ''}</span>
+        <span>Erstellungsdatum:</span><span>${new Date().toLocaleString('de-DE')}</span>
+      </div>
+    </div>
+
+    <h2><span class="num">A.</span>Stammdaten</h2>
+    <table class="kv">
+      <tr><td class="label">Steuerpflichtige Person (Person A)</td>
+          <td class="value">${escapeHtml(vornameA || '?')} ${escapeHtml(nameA || '')}, geb. ${escapeHtml(gebA || '?')}, ${escapeHtml(relA || '?')}, ${escapeHtml(berufA || '?')}</td>
+          <td class="cite">IdNr ${escapeHtml(idnrA || '?')} · ESt1A Z.8–12</td></tr>
+      ${vornameB ? `<tr><td class="label">Ehepartner/-in (Person B)</td>
+          <td class="value">${escapeHtml(vornameB)} ${escapeHtml(nameB || '')}, geb. ${escapeHtml(gebB || '?')}, ${escapeHtml(relB || '?')}</td>
+          <td class="cite">IdNr ${escapeHtml(idnrB || '?')} · ESt1A Z.20–23</td></tr>` : ''}
+      <tr><td class="label">Verheiratet seit</td><td class="value">${escapeHtml(heirat || '—')}</td><td class="cite">ESt1A Z.18</td></tr>
+      <tr><td class="label">Adresse</td><td class="value">${escapeHtml(strasse || '')} ${escapeHtml(hausnr || '')}, ${escapeHtml(plz || '')} ${escapeHtml(wohnort || '')}</td><td class="cite">ESt1A Z.13–16</td></tr>
+      <tr><td class="label">Bankverbindung (Erstattung)</td><td class="value" style="font-family:var(--mono)">${escapeHtml(iban || '—')}</td><td class="cite">ESt1A Z.30 · §37 AO</td></tr>
+    </table>
+
+    <h2><span class="num">1.</span>Einkünfte aus nichtselbständiger Arbeit <span class="pill">§19 EStG · Anlage N</span></h2>
+    <table class="ledger">
+      <tr><td class="lbl">Bruttoarbeitslohn (Lohnsteuerbescheinigung 2023)</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
+      <tr><td class="cite" colspan="2">[E0200201 · Anlage N Z.5 · ${escapeHtml(evidence(ml.E0200201, ml))}]</td></tr>
+      <tr class="subtotal"><td class="lbl">Summe der Einnahmen</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
+      <tr><td class="lbl">− Werbungskosten <span class="pill">§9 EStG</span></td><td class="amt deduct">${fmtEur(Number(ev.werbungskosten || 0))}</td></tr>
+      <tr><td class="cite" colspan="2">[BMF-Eingabe werbungskosten · Anlage N Z.57+]</td></tr>
+      <tr class="subtotal"><td class="lbl">Einkünfte aus §19 EStG</td><td class="amt">${fmtEur(bruttoLohn - Number(ev.werbungskosten || 0))}</td></tr>
+    </table>
+
+    <h2><span class="num">2.</span>Sonderausgaben <span class="pill">§10 EStG · Anlage VOR + SA</span></h2>
+    <h3>2.1 Vorsorgeaufwendungen (§10 Abs. 1 Nr. 2-3a EStG)</h3>
+    <table class="ledger">
+      <tr><td class="lbl">Arbeitnehmer-Beiträge Rentenversicherung</td><td class="amt">${fmtEur(rv)}</td></tr>
+      <tr><td class="cite" colspan="2">[E2000401 · Anlage VOR Z.4 · Nr. 23 a/b LSt-Besch.]</td></tr>
+      <tr><td class="lbl">+ Arbeitgeber-Anteil zur Basisversorgung</td><td class="amt">${fmtEur(rvAg)}</td></tr>
+      <tr><td class="cite" colspan="2">[E2000801 · Anlage VOR Z.9 · Nr. 22 a/b LSt-Besch.]</td></tr>
+      <tr><td class="lbl">Krankenversicherung (AN-Anteil)</td><td class="amt">${fmtEur(kv)}</td></tr>
+      <tr><td class="cite" colspan="2">[E2001203 · Anlage VOR Z.11 · Nr. 25 LSt-Besch.]</td></tr>
+      <tr><td class="lbl">Pflegeversicherung (AN-Anteil)</td><td class="amt">${fmtEur(pv)}</td></tr>
+      <tr><td class="cite" colspan="2">[E2001505 · Anlage VOR Z.13 · Nr. 26 LSt-Besch.]</td></tr>
+      <tr class="subtotal"><td class="lbl">Summe Vorsorge-Beiträge (vor Höchstbetragsabzug)</td><td class="amt">${fmtEur(rv + rvAg + kv + pv)}</td></tr>
+      <tr class="subtotal"><td class="lbl"><b>Absetzbar nach BMF-Höchstbetrag-Formel</b> <span class="pill">§10 Abs. 3,4 EStG</span></td><td class="amt"><b>${fmtEur(Number(ev.vorsorgeaufwendungen_absetzbar || 0))}</b></td></tr>
+      <tr><td class="cite" colspan="2">[PostgreSQL-Formel: vorsorgeaufwand_total = rv_abzugsfaehig + basis_kv_pv + sonstige_abzugsfaehig]</td></tr>
+    </table>
+    <h3>2.2 Sonstige Sonderausgaben</h3>
+    <table class="ledger">
+      <tr><td class="lbl">Kirchensteuer (gezahlt) <span class="pill">§10 Abs. 1 Nr. 4 EStG</span></td><td class="amt">${fmtEur(kistGezahlt || 0)}</td></tr>
+      <tr><td class="cite" colspan="2">[E0107601 · Anlage SA Z.4]</td></tr>
+      <tr><td class="lbl">Sonderausgaben-Pauschbetrag <span class="pill">§10c EStG</span></td><td class="amt">${fmtEur(Number(ev.sonderausgaben_pauschbetrag || 36))}</td></tr>
+    </table>
+
+    ${kapErtAvg > 0 ? `
+    <h2><span class="num">3.</span>Einkünfte aus Kapitalvermögen <span class="pill">§20 EStG · Anlage KAP</span></h2>
+    <table class="ledger">
+      <tr><td class="lbl">Kapitalerträge (Steuerbescheinigung Bank)</td><td class="amt">${fmtEur(kapErtAvg)}</td></tr>
+      <tr><td class="cite" colspan="2">[E1900701 · Anlage KAP Z.7]</td></tr>
+      <tr><td class="lbl">− Sparer-Pauschbetrag ${splitting ? '(Zusammenveranlagung: 2 000 €)' : '(1 000 €)'} <span class="pill">§20 Abs. 9 EStG</span></td><td class="amt deduct">−${fmtEur(Math.min(kapErtAvg, splitting ? 2000 : 1000))}</td></tr>
+      <tr class="subtotal"><td class="lbl">Kapitalerträge zur Veranlagung</td><td class="amt">${fmtEur(Math.max(kapErtAvg - (splitting ? 2000 : 1000), 0))}</td></tr>
+    </table>` : ''}
+
+    <h2><span class="num">4.</span>Zu versteuerndes Einkommen <span class="pill">§2 Abs. 5 EStG</span></h2>
+    <table class="ledger">
+      <tr><td class="lbl">Summe der Einkünfte</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
+      <tr><td class="lbl">− Werbungskosten</td><td class="amt deduct">−${fmtEur(Number(ev.werbungskosten || 0))}</td></tr>
+      <tr><td class="lbl">− Vorsorgeaufwendungen abzugsfähig</td><td class="amt deduct">−${fmtEur(Number(ev.vorsorgeaufwendungen_absetzbar || 0))}</td></tr>
+      <tr><td class="lbl">− Sonderausgaben-Pauschbetrag</td><td class="amt deduct">−${fmtEur(Number(ev.sonderausgaben_pauschbetrag || 36))}</td></tr>
+      <tr class="total"><td class="lbl">zu versteuerndes Einkommen (zvE)</td><td class="amt">${fmtEur(zve)}</td></tr>
+    </table>
+
+    <h2><span class="num">5.</span>Einkommensteuer <span class="pill">§32a EStG · ${splitting ? 'Splittingtabelle' : 'Grundtabelle'}</span></h2>
+    <table class="ledger">
+      <tr><td class="lbl">Tarif-Zone (zvE-Bereich)</td><td class="amt" style="font-weight:400">${escapeHtml(sb.steuerzone || '—')}</td></tr>
+      ${splitting ? `
+      <tr><td class="lbl">zvE / 2 (Splittinghälfte) <span class="pill">§32a Abs. 5</span></td><td class="amt">${fmtEur(zve / 2)}</td></tr>
+      <tr><td class="lbl">ESt(zvE/2) <span class="pill">§32a Abs. 1</span></td><td class="amt">${fmtEur(est / 2)}</td></tr>
+      <tr><td class="lbl">× 2 (Splittingtabelle gesamt)</td><td class="amt">${fmtEur(est)}</td></tr>
+      ` : `
+      <tr><td class="lbl">ESt-Tarif</td><td class="amt">${fmtEur(est)}</td></tr>
+      `}
+      <tr class="subtotal"><td class="lbl">Tarifliche Einkommensteuer</td><td class="amt">${fmtEur(est)}</td></tr>
+    </table>
+    ${sb.formel_verwendet ? `<div class="formula">Tarif-Formel angewendet:
+${escapeHtml(sb.formel_verwendet)}
+
+Quelle: ${escapeHtml(sb.bmf_referenz || '§32a EStG')} · Grenzsatz ${(Number(daten.grenzsteuersatz)*100).toFixed(2)}% · ⌀ ${(Number(daten.durchschnittssteuersatz)*100).toFixed(2)}%</div>` : ''}
+
+    <h2><span class="num">6.</span>Solidaritätszuschlag <span class="pill">§3 SolZG</span></h2>
+    <table class="ledger">
+      <tr><td class="lbl">Freigrenze (${steuerjahr}${splitting ? ', Zusammenveranlagung' : ''})</td><td class="amt" style="font-weight:400">${fmtEur(Number(soli.soli_freibetrag || 17543))}</td></tr>
+      <tr><td class="lbl">Tarifliche ESt</td><td class="amt" style="font-weight:400">${fmtEur(est)}</td></tr>
+      <tr class="subtotal"><td class="lbl">Solidaritätszuschlag ${est < Number(soli.soli_freibetrag || 17543) ? '(unter Freigrenze)' : `(5,5 % auf ESt)`}</td><td class="amt">${fmtEur(soliBetrag)}</td></tr>
+    </table>
+
+    <h2><span class="num">7.</span>Anrechnung Vorauszahlungen <span class="pill">§36 Abs. 2 EStG</span></h2>
+    <table class="ledger">
+      <tr><td class="lbl">Lohnsteuer (durch AG einbehalten)</td><td class="amt deduct">−${fmtEur(Number(vz.lohnsteuer || lst))}</td></tr>
+      <tr><td class="cite" colspan="2">[E0200301 · Anlage N Z.6 · Nr. 4 LSt-Besch.]</td></tr>
+      <tr><td class="lbl">Kirchensteuer (durch AG einbehalten)</td><td class="amt deduct">−${fmtEur(Number(vz.kirchensteuer || kistLst))}</td></tr>
+      <tr><td class="cite" colspan="2">[E0200501 · Anlage N Z.8 · Nr. 6 LSt-Besch.]</td></tr>
+      <tr><td class="lbl">Solidaritätszuschlag (durch AG)</td><td class="amt deduct">−${fmtEur(Number(vz.soli || soliLst || 0))}</td></tr>
+      <tr><td class="lbl">Kapitalertragsteuer</td><td class="amt deduct">−${fmtEur(Number(vz.kapest || 0))}</td></tr>
+      <tr class="subtotal"><td class="lbl">Summe Vorauszahlungen</td><td class="amt">−${fmtEur(vorauszGesamt)}</td></tr>
+    </table>
+
+    <h2><span class="num">8.</span>Ergebnis</h2>
+    <table class="ledger">
+      <tr><td class="lbl">Festzusetzende Einkommensteuer</td><td class="amt">${fmtEur(gesamt)}</td></tr>
+      <tr><td class="lbl">− Vorauszahlungen</td><td class="amt deduct">−${fmtEur(vorauszGesamt)}</td></tr>
+    </table>
+
+    <div class="bilanz ${isRefund ? 'refund' : isPayback ? 'payback' : ''}">
+      <div>
+        <div class="bilanz-label-strong">${isRefund ? 'Erstattung zugunsten Steuerpflichtige(r)' : isPayback ? 'Nachzahlung an Finanzamt' : 'Ausgeglichen'}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;font-family:var(--mono)">Festzusetzende Steuer ${fmtEur(gesamt)} − Vorauszahlungen ${fmtEur(vorauszGesamt)}</div>
+      </div>
+      <div class="bilanz-amount">${fmtEur(Math.abs(result))}</div>
+    </div>
+
+    ${(daten.fehlende_belege || []).length > 0 ? `
+    <div class="hinweise">
+      <h4>⚠️ Fehlende Nachweise — Hinweise vom BMF-Validator</h4>
+      <ul>
+        ${(daten.fehlende_belege || []).map(b => `<li><b>${escapeHtml(b.category || '')}</b> (${fmtEur(b.betrag || 0)}) — benötigt: ${escapeHtml((b.erforderliche_belege || []).join(', '))}. <span style="font-family:var(--mono);font-size:10px">${escapeHtml(b.legal_reference || '')}</span></li>`).join('')}
+      </ul>
+    </div>` : ''}
+
+    <div class="audit">
+      <b>Audit-Trail · ${Object.keys(ml).length} eCodes aus ${(data.documents || []).length} Belegen extrahiert · Konflikte: ${(data.conflicts || []).length}</b>
+      <div class="audit-pills">
+        <span class="audit-pill ${trustClass('high')}">${tcounts.high}× high · REGEX_100% mit Belegzeile</span>
+        <span class="audit-pill ${trustClass('medium')}">${tcounts.medium}× medium · REGEX_3F / LLM mit Drucktext-Bezug</span>
+        ${tcounts.low > 0 ? `<span class="audit-pill ${trustClass('low')}">${tcounts.low}× low · LLM auf generische Drucktexte</span>` : ''}
+        ${tcounts.suspicious > 0 ? `<span class="audit-pill ${trustClass('suspicious')}">${tcounts.suspicious}× suspicious · vor BMF-Send gefiltert</span>` : ''}
+      </div>
+      <div style="margin-top:8px">
+        Belege: ${(data.documents || []).map(d => `<span class="pill pill-doc">${escapeHtml(d.filename)}</span>`).join(' ')}
+      </div>
+    </div>
+
+    <div class="footer">
+      Erstellt von STURM / 0711 Intelligence · BMF Lane-1 ${escapeHtml(sb.bmf_referenz || '')} · Fall-ID ${escapeHtml(daten.fall_id || '—')}<br>
+      Diese Aufstellung dient der Vorbereitung der elektronischen ELSTER-Erklärung. Sie ersetzt keine steuerberatende Tätigkeit.
+    </div>
+  `;
+  const doc = document.getElementById('doc');
+  doc.innerHTML = html;
+}
+</script>
+
+</body>
+</html>
