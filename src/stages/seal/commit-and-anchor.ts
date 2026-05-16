@@ -1,20 +1,22 @@
 /**
- * seal/commit-and-anchor — schreibt das signierte master.json in den
- * Workspace des Falls und legt einen Anchor-Record an.
+ * seal/commit-and-anchor — commits the sealed workspace into its gitchain
+ * container and records the anchor in registry.anchors. Stage-pure: only
+ * disk write is the gitchain checkout (managed by the client).
  *
- * Anchor v1: file-basiert. Wir schreiben einen Record nach
- *   <workspacePath>/anchors/<isoDate>-<random>.json
- * mit { container_id, tag, commit_hash, network, anchored_at, … }. Wenn
- * später GitChain-Postgres aktiv geschaltet wird, ruft diese Stage statt
- * dessen GitChainClient.recordAnchor(); Contract bleibt identisch.
- *
- * commit_hash ist hier der merkle.root des Snapshots — analog zum Git-
- * Commit-Sha im echten gitchain-Flow.
+ * Flow:
+ *   1. Ensure the container exists in registry.containers (idempotent).
+ *   2. cloneOrInit the workspace as a git checkout of the bare repo.
+ *   3. Materialize the signed master.json into <wsAbs>/seal/master.json
+ *      (this is the only direct fs write — gitchain commits on-disk files).
+ *   4. commitAndPush via gitchain → returns the git commit sha.
+ *   5. recordAnchor in registry.anchors (commit_hash = git sha; merkle root
+ *      is preserved separately in master.json for content-addressing).
+ *   6. Audit-trail artefacts written via ctx.artifacts (master + anchor JSON).
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { defineStage } from '../../core/stage.ts';
+import { getGitChainClient } from '../../lib/gitchain-client.ts';
 
 export interface CommitAndAnchorInput {
   master: {
@@ -39,15 +41,29 @@ export interface CommitAndAnchorOutput {
     block_number: number | null;
     anchored_at: string;
   };
+  /** Convenience aliases used by downstream consumers (P8+). */
+  containerId: string;
+  commitSha: string;
+  merkleRoot: string;
+  sealedAt: string;
 }
 
 export interface CommitAndAnchorConfig {
-  /** Anchor-Tag. Default 'seal-v1'. */
+  /** Anchor tag prefix. Default 'seal-v1'. */
   tag?: string;
-  /** Netzwerk-Identifier. Default 'base-mainnet'. */
+  /** Network identifier recorded with the anchor. Default 'base-mainnet'. */
   network?: string;
-  /** Optional override: explicit project root. */
+  /** Optional override: explicit project root for resolving relative workspacePath. */
   rootDir?: string;
+  /**
+   * gitchain container type. Default 'tax_case'. Configurable so the same
+   * stage can seal non-tax workflows once they exist.
+   */
+  containerType?: string;
+  /**
+   * gitchain namespace. Default 'ctax'.
+   */
+  containerNamespace?: string;
 }
 
 export const commitAndAnchorStage = defineStage<
@@ -58,54 +74,113 @@ export const commitAndAnchorStage = defineStage<
   id: 'seal/commit-and-anchor',
   name: 'Seal · Commit + Anchor',
   description:
-    'Schreibt master.signed.json in den Fall-Workspace und legt einen Anchor-Record ' +
-    'an (file-basiert in v1; auf GitChain-Postgres umstellbar ohne Contract-Bruch). ' +
-    'commit_hash = merkle.root des Snapshots.',
-  hints: { inputs: 'master (signiert), workspacePath', outputs: 'masterPath, anchorPath, anchor-row' },
+    'Versiegelt den Fall-Workspace: ensureContainer → cloneOrInit → commitAndPush → recordAnchor. ' +
+    'commit_hash = echter Git-Sha aus dem gitchain-Commit; merkle.root liegt im master.json.',
+  hints: { inputs: 'master (signiert), workspacePath', outputs: 'containerId, commitSha, anchor-row' },
   async run(input, ctx) {
     const cfg = ctx.config ?? {};
     const tag = cfg.tag ?? 'seal-v1';
     const network = cfg.network ?? 'base-mainnet';
+    // rootDir is intentionally configurable to keep the stage decoupled from
+    // process.cwd(); when omitted we fall back to cwd because the legacy
+    // workflow wiring still passes relative workspacePath strings.
     const root = cfg.rootDir ?? process.cwd();
+    const containerType = cfg.containerType ?? 'tax_case';
+    const containerNamespace = cfg.containerNamespace ?? 'ctax';
+
     const master = input.master;
     if (!master || !master.appId || !master.caseId) {
       throw new Error('seal/commit-and-anchor: input.master.{appId,caseId} required');
     }
-    const commitHash = master.merkle?.root;
-    if (!commitHash) throw new Error('seal/commit-and-anchor: master.merkle.root missing');
+    const merkleRoot = master.merkle?.root;
+    if (!merkleRoot) throw new Error('seal/commit-and-anchor: master.merkle.root missing');
 
-    // Ziel: <root>/<workspacePath>/seal/master.json + anchors/<id>.json.
-    // Fallback: in den Run-Artefakten, wenn workspacePath fehlt.
-    const wsRel = input.workspacePath || path.join('applications', master.appId as string, master.caseId as string);
+    const appId = String(master.appId);
+    const caseId = String(master.caseId);
+
+    // Resolve workspace path: relative paths resolve against config.rootDir.
+    const wsRel = input.workspacePath || path.join('applications', appId, caseId);
     const wsAbs = path.isAbsolute(wsRel) ? wsRel : path.join(root, wsRel);
     const sealDir = path.join(wsAbs, 'seal');
-    const anchorsDir = path.join(wsAbs, 'anchors');
     await fs.mkdir(sealDir, { recursive: true });
-    await fs.mkdir(anchorsDir, { recursive: true });
 
+    const containerId = `0711:${containerType}:${containerNamespace}:${caseId}`;
+
+    // --- gitchain: ensure container, init workdir as git checkout ---
+    const gc = getGitChainClient();
+
+    // createContainer is idempotent (returns existing on conflict).
+    await gc.createContainer({
+      type: containerType,
+      namespace: containerNamespace,
+      identifier: caseId,
+      display_name: `Steuerfall ${appId}/${caseId}`,
+      description: `Versiegelter Steuerfall (${appId})`,
+      visibility: 'private',
+      relations: { appId, caseId },
+    });
+    await gc.cloneOrInit(containerId, wsAbs);
+
+    // Materialize master.json onto disk so gitchain can commit it. This is
+    // the one legitimate non-artifact disk write — the gitchain checkout IS
+    // the source of truth, ctx.artifacts is the run-scoped audit copy.
     const masterPath = path.join(sealDir, 'master.json');
     await fs.writeFile(masterPath, JSON.stringify(master, null, 2), 'utf-8');
 
-    const containerId = `0711:tax_case:ctax:${master.caseId}`;
-    const anchor = {
+    const authorName = process.env['STURM_GIT_AUTHOR_NAME'] ?? 'sturm-sealer';
+    const authorEmail = process.env['STURM_GIT_AUTHOR_EMAIL'] ?? 'seal@0711.io';
+    const commitSha = await gc.commitAndPush(
+      wsAbs,
+      `seal: ${appId}/${caseId} merkle=${merkleRoot.slice(0, 12)}`,
+      { name: authorName, email: authorEmail },
+    );
+
+    const sealedAt = new Date().toISOString();
+    const anchorTag = `${tag}-${sealedAt.replace(/[:.]/g, '-')}`;
+
+    await gc.recordAnchor({
       container_id: containerId,
-      tag,
-      commit_hash: commitHash,
+      tag: anchorTag,
+      commit_hash: commitSha,
+      network,
+      // tx_hash / block_number remain undefined until on-chain emit lands.
+    });
+
+    const anchor: CommitAndAnchorOutput['anchor'] = {
+      container_id: containerId,
+      tag: anchorTag,
+      commit_hash: commitSha,
       network,
       tx_hash: null,
       block_number: null,
-      anchored_at: new Date().toISOString(),
+      anchored_at: sealedAt,
     };
-    const anchorPath = path.join(
-      anchorsDir,
-      `${anchor.anchored_at.replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}.json`,
-    );
-    await fs.writeFile(anchorPath, JSON.stringify(anchor, null, 2), 'utf-8');
 
-    await ctx.artifacts.write('master.json', master);
-    await ctx.artifacts.write('anchor.json', anchor);
-    ctx.emit('sealed', { masterPath, anchorPath, merkleRoot: commitHash, tag, network });
+    // Audit-trail artefacts. Pure ctx.artifacts.write — no direct fs here.
+    await ctx.artifacts.write('seal/master.json', master);
+    await ctx.artifacts.write('seal/anchor.json', anchor);
 
-    return { masterPath, anchorPath, anchor };
+    // anchorPath retained in the output contract for backwards compat; it
+    // points at the audit-trail artifact (relative path in the run store).
+    const anchorPath = 'seal/anchor.json';
+
+    ctx.emit('sealed', {
+      containerId,
+      commitSha,
+      merkleRoot,
+      tag: anchorTag,
+      network,
+      masterPath,
+    });
+
+    return {
+      masterPath,
+      anchorPath,
+      anchor,
+      containerId,
+      commitSha,
+      merkleRoot,
+      sealedAt,
+    };
   },
 });

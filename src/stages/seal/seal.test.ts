@@ -16,6 +16,8 @@ import { computeMerkleStage } from './compute-merkle.ts';
 import { signMasterStage } from './sign-master.ts';
 import { commitAndAnchorStage } from './commit-and-anchor.ts';
 import { verifyMaster } from '../../lib/master-signer.ts';
+import { setGitChainClientForTests, GitChainClient } from '../../lib/gitchain-client.ts';
+import { NullToolContainer } from '../../core/tools/null-container.ts';
 import type { StageContext, ArtifactStore, StageLogger, StageResult, StageId } from '../../core/types.ts';
 
 let pass = 0, fail = 0;
@@ -59,6 +61,7 @@ function makeCtx<TConfig>(config: TConfig, stageId = 'test'): { ctx: StageContex
     emit: (name, payload) => { events.push({ name, payload }); },
     signal: new AbortController().signal,
     results: {} as Readonly<Record<StageId, StageResult>>,
+    tools: new NullToolContainer(),
   };
   return { ctx, writes, events };
 }
@@ -175,30 +178,115 @@ async function main() {
     }
   }
 
-  console.log('\n=== commit-and-anchor: writes master + anchor record to workspace ===');
+  console.log('\n=== commit-and-anchor: wires gitchain (ensure → cloneOrInit → commit → anchor) ===');
   {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sturm-anchor-test-'));
     try {
-      const master = {
-        appId: 'a', caseId: 'c',
-        merkle: { root: 'a'.repeat(64) },
-        signature: { alg: 'HMAC-SHA256', value: 'dGVzdA==', keyId: 'sturm-master-v1' },
-        canonical_layer: { E0200201: { value: '1' } },
+      // Mock gitchain client — record every call.
+      const calls: { method: string; args: unknown[] }[] = [];
+      const fakeContainer = {
+        id: '0711:tax_case:ctax:c', type: 'tax_case', namespace: 'ctax',
+        identifier: 'c', git_url: 'mock://repo', visibility: 'private',
       };
-      const wsRel = 'ws-relative-path';
-      const { ctx } = makeCtx({ tag: 'seal-v1', network: 'base-mainnet', rootDir: tmp });
-      const out = await commitAndAnchorStage.run({ master: master as never, workspacePath: wsRel }, ctx);
-      const wsAbs = path.join(tmp, wsRel);
-      const masterStat = await fs.stat(path.join(wsAbs, 'seal', 'master.json'));
-      assert('master.json file exists', masterStat.isFile());
-      const anchorsList = await fs.readdir(path.join(wsAbs, 'anchors'));
-      eq('one anchor record written', anchorsList.length, 1);
-      eq('anchor commit_hash equals merkle root', out.anchor.commit_hash, 'a'.repeat(64));
-      eq('anchor tag', out.anchor.tag, 'seal-v1');
-      eq('anchor network', out.anchor.network, 'base-mainnet');
-      eq('anchor tx_hash null (v1 stub)', out.anchor.tx_hash, null);
-      eq('anchor block_number null (v1 stub)', out.anchor.block_number, null);
-      eq('container_id format', out.anchor.container_id, '0711:tax_case:ctax:c');
+      const mock = {
+        getContainer: async (...args: unknown[]) => {
+          calls.push({ method: 'getContainer', args });
+          return null;
+        },
+        createContainer: async (...args: unknown[]) => {
+          calls.push({ method: 'createContainer', args });
+          return fakeContainer;
+        },
+        cloneOrInit: async (...args: unknown[]) => {
+          calls.push({ method: 'cloneOrInit', args });
+        },
+        commitAndPush: async (...args: unknown[]) => {
+          calls.push({ method: 'commitAndPush', args });
+          return 'deadbeefcafebabe1234567890abcdef12345678';
+        },
+        recordAnchor: async (...args: unknown[]) => {
+          calls.push({ method: 'recordAnchor', args });
+        },
+      } as unknown as GitChainClient;
+      setGitChainClientForTests(mock);
+
+      try {
+        const master = {
+          appId: 'a', caseId: 'c',
+          merkle: { root: 'a'.repeat(64) },
+          signature: { alg: 'HMAC-SHA256', value: 'dGVzdA==', keyId: 'sturm-master-v1' },
+          canonical_layer: { E0200201: { value: '1' } },
+        };
+        const wsRel = 'ws-relative-path';
+        const { ctx, writes, events } = makeCtx({ tag: 'seal-v1', network: 'base-mainnet', rootDir: tmp });
+        const out = await commitAndAnchorStage.run({ master: master as never, workspacePath: wsRel }, ctx);
+        const wsAbs = path.join(tmp, wsRel);
+
+        // 1) gitchain calls in correct order with expected args.
+        eq('gitchain call sequence',
+          calls.map((c) => c.method),
+          ['createContainer', 'cloneOrInit', 'commitAndPush', 'recordAnchor']);
+
+        const createArgs = calls[0]!.args[0] as { type: string; namespace: string; identifier: string };
+        eq('createContainer type', createArgs.type, 'tax_case');
+        eq('createContainer namespace', createArgs.namespace, 'ctax');
+        eq('createContainer identifier', createArgs.identifier, 'c');
+
+        const cloneArgs = calls[1]!.args;
+        eq('cloneOrInit containerId', cloneArgs[0], '0711:tax_case:ctax:c');
+        eq('cloneOrInit workdir', cloneArgs[1], wsAbs);
+
+        const commitArgs = calls[2]!.args as [string, string, { name: string; email: string }];
+        eq('commitAndPush workdir', commitArgs[0], wsAbs);
+        assert('commitAndPush message references appId/caseId',
+          commitArgs[1].includes('a/c') && commitArgs[1].includes('aaaaaaaaaaaa'));
+        assert('commitAndPush author has name', !!commitArgs[2].name);
+        assert('commitAndPush author has email', !!commitArgs[2].email);
+
+        const anchorArgs = calls[3]!.args[0] as {
+          container_id: string; tag: string; commit_hash: string; network: string;
+        };
+        eq('recordAnchor container_id', anchorArgs.container_id, '0711:tax_case:ctax:c');
+        eq('recordAnchor commit_hash (real git sha, not merkle)',
+          anchorArgs.commit_hash, 'deadbeefcafebabe1234567890abcdef12345678');
+        eq('recordAnchor network', anchorArgs.network, 'base-mainnet');
+        assert('recordAnchor tag prefixed with seal-v1', anchorArgs.tag.startsWith('seal-v1-'));
+
+        // 2) Output contract.
+        eq('output containerId', out.containerId, '0711:tax_case:ctax:c');
+        eq('output commitSha', out.commitSha, 'deadbeefcafebabe1234567890abcdef12345678');
+        eq('output merkleRoot', out.merkleRoot, 'a'.repeat(64));
+        assert('output sealedAt is ISO', /^\d{4}-\d{2}-\d{2}T/.test(out.sealedAt));
+        eq('legacy output anchor.commit_hash === git sha',
+          out.anchor.commit_hash, 'deadbeefcafebabe1234567890abcdef12345678');
+        eq('legacy output anchor.tx_hash null', out.anchor.tx_hash, null);
+        eq('legacy output anchor.block_number null', out.anchor.block_number, null);
+        eq('legacy output anchor.container_id', out.anchor.container_id, '0711:tax_case:ctax:c');
+
+        // 3) ctx.artifacts writes (audit trail).
+        assert('ctx.artifacts.write seal/master.json', 'seal/master.json' in writes);
+        assert('ctx.artifacts.write seal/anchor.json', 'seal/anchor.json' in writes);
+
+        // 4) sealed event emitted.
+        const sealed = events.find((e) => e.name === 'sealed');
+        assert('sealed event emitted', !!sealed);
+
+        // 5) master.json materialized to disk for gitchain to commit.
+        const masterStat = await fs.stat(path.join(wsAbs, 'seal', 'master.json'));
+        assert('master.json materialized on disk', masterStat.isFile());
+
+        // 6) Stage purity: NO legacy `anchors/` directory on disk anymore.
+        // (Old behavior wrote <wsAbs>/anchors/<id>.json via direct fs.writeFile —
+        // the new flow uses ctx.artifacts only for the anchor record.)
+        let anchorsExists = false;
+        try {
+          await fs.stat(path.join(wsAbs, 'anchors'));
+          anchorsExists = true;
+        } catch { /* expected: directory must not exist */ }
+        assert('no legacy anchors/ directory created on disk', !anchorsExists);
+      } finally {
+        setGitChainClientForTests(null);
+      }
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });
     }

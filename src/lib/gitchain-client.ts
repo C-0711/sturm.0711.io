@@ -310,6 +310,17 @@ export class GitChainClient {
     );
   }
 
+  async deleteContainer(id: string): Promise<void> {
+    const [, type, namespace, identifier] = id.split(':');
+    await this.pool.query('DELETE FROM registry.citations WHERE source_id = $1 OR target_id = $1', [id]);
+    await this.pool.query('DELETE FROM registry.anchors WHERE container_id = $1', [id]);
+    await this.pool.query('DELETE FROM registry.containers WHERE id = $1', [id]);
+    if (type && namespace && identifier) {
+      const barePath = this.bareRepoPath(type, namespace, identifier);
+      await fs.rm(barePath, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }
@@ -330,4 +341,13 @@ export function getGitChainClient(): GitChainClient {
 
   _instance = new GitChainClient({ databaseUrl, repoRoot, apiUrl });
   return _instance;
+}
+
+/**
+ * Test-only hook: override the singleton with a mock/stub. Pass `null` to
+ * reset and force the next `getGitChainClient()` call to re-create from env.
+ * Never call this from production code.
+ */
+export function setGitChainClientForTests(client: GitChainClient | null): void {
+  _instance = client;
 }
