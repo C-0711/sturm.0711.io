@@ -36,6 +36,7 @@ import { phase5MergeStage } from './stages/phase5-merge.ts';
 import { bmfRechnerComputeStage } from './stages/bmf-rechner-compute.ts';
 import { felderNarrowStage } from './stages/felder-narrow.ts';
 import { phase3EnsembleMergeStage } from './stages/phase3-ensemble-merge.ts';
+import { mistralOcrClassifyStage } from './stages/mistral-ocr-classify.ts';
 // elster-v4-stricker: Light-Path Stages (citation-curated, slot-norm, 4-Tier MRL)
 import { labelValueParserStage } from './stages/label-value-parser.ts';
 import { atomsCascadeSearchStage } from './stages/atoms-cascade-search.ts';
@@ -87,6 +88,7 @@ export function registerElsterV3Stages(): void {
   registerStage(felderNarrowStage);
   // elster-v5_2-rag-ensemble: N-Branch Consensus Merge über phase3-Outputs
   registerStage(phase3EnsembleMergeStage);
+  registerStage(mistralOcrClassifyStage);
   // elster-v4-stricker: Light-Path deterministic chain for text-layer PDFs (VAST exports)
   registerStage(labelValueParserStage);
   registerStage(atomsCascadeSearchStage);
