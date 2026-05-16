@@ -154,6 +154,11 @@ export class QuantumIndex {
   /** Decoded records, one per vector. PolarEncoded objects are eager so
    *  estimateFromSq doesn't pay decode cost per query. */
   private readonly records: TurboEncoded[];
+  /** Packed Float32 cache of polar-decoded x̂ vectors, one row per record
+   *  (n × d). Built lazily on first scan and reused thereafter. Removes
+   *  the per-record polar.decode (two Float32Array allocations + an
+   *  O(d²) inverse rotation) from the inner hot loop. */
+  private xHatCache: Float32Array | null = null;
 
   private constructor(
     header: QuantumIndexHeader,
@@ -163,6 +168,22 @@ export class QuantumIndex {
     this.header = header;
     this.turbo = turbo;
     this.records = records;
+  }
+
+  /** Lazy: decode every record's x̂ once, cache it row-major in a single
+   *  Float32Array. Memory cost: n·d·4 bytes (≈ 7 MB for d=768/n=2287).
+   *  After first call all `estimateFromSqWithXHat` accesses are O(d). */
+  private ensureXHatCache(): Float32Array {
+    if (this.xHatCache) return this.xHatCache;
+    const d = this.header.d;
+    const n = this.header.n;
+    const cache = new Float32Array(n * d);
+    for (let i = 0; i < n; i++) {
+      const xHat = this.turbo.polar.decode(this.records[i].polar);
+      cache.set(xHat, i * d);
+    }
+    this.xHatCache = cache;
+    return cache;
   }
 
   static async load(path: string): Promise<QuantumIndex> {
@@ -249,9 +270,11 @@ export class QuantumIndex {
     }
     // S·q computed once and reused for all records.
     const Sq = this.turbo.qjl.projectFloat(query);
+    const xHat = this.ensureXHatCache();
+    const d = this.header.d;
     const out = new Float32Array(this.n);
     for (let i = 0; i < this.n; i++) {
-      out[i] = this.turbo.estimateFromSq(query, Sq, this.records[i]);
+      out[i] = this.turbo.estimateFromSqWithXHat(query, Sq, xHat, i * d, this.records[i]);
     }
     return out;
   }
@@ -267,9 +290,11 @@ export class QuantumIndex {
       throw new Error(`topK: query dim ${query.length} ≠ index d=${this.d}`);
     }
     const Sq = this.turbo.qjl.projectFloat(query);
+    const xHat = this.ensureXHatCache();
+    const d = this.header.d;
     const heap = new MinHeap(Math.min(k, this.n));
     for (let i = 0; i < this.n; i++) {
-      const score = this.turbo.estimateFromSq(query, Sq, this.records[i]);
+      const score = this.turbo.estimateFromSqWithXHat(query, Sq, xHat, i * d, this.records[i]);
       heap.pushIfBetter({ idx: i, score });
     }
     return heap.drainSorted();
@@ -285,9 +310,11 @@ export class QuantumIndex {
       throw new Error(`rerank: query dim ${query.length} ≠ index d=${this.d}`);
     }
     const Sq = this.turbo.qjl.projectFloat(query);
+    const xHat = this.ensureXHatCache();
+    const d = this.header.d;
     const heap = new MinHeap(Math.min(k, candidates.length));
     for (const idx of candidates) {
-      const score = this.turbo.estimateFromSq(query, Sq, this.records[idx]);
+      const score = this.turbo.estimateFromSqWithXHat(query, Sq, xHat, idx * d, this.records[idx]);
       heap.pushIfBetter({ idx, score });
     }
     return heap.drainSorted();

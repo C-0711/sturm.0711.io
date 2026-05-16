@@ -125,6 +125,32 @@ export class TurboQuantizer {
     return term1 + term2;
   }
 
+  /**
+   * Hot-scan variant: uses a pre-decoded x̂ slice instead of running
+   * polar.decode per record. The caller is responsible for ensuring
+   * `xHat[xHatOffset..xHatOffset+d]` is the polar-decoded vector for
+   * the record described by `encoded`. Skipping decode removes the
+   * dominant per-record allocation (`new Float32Array(d)` × 2) and the
+   * O(d²) inverse rotation — turning a multi-second scan into ms.
+   */
+  estimateFromSqWithXHat(
+    q: Float32Array,
+    Sq: Float32Array,
+    xHat: Float32Array,
+    xHatOffset: number,
+    encoded: TurboEncoded,
+  ): number {
+    if (Sq.length !== this.d) {
+      throw new Error(
+        `TurboQuantizer.estimateFromSqWithXHat: expected Sq length ${this.d}, got ${Sq.length}`
+      );
+    }
+    let term1 = 0;
+    for (let i = 0; i < this.d; i++) term1 += q[i] * xHat[xHatOffset + i];
+    const term2 = this.qjl.estimateFromSq(Sq, encoded.qjlSigns, encoded.residualNorm);
+    return term1 + term2;
+  }
+
   /** Bytes-per-vector of the compressed representation (excluding scalars). */
   get bytesPerVector(): number {
     const polarBytes = this.d; // one byte per index (loose packing for now)
