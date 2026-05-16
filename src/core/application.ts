@@ -10,6 +10,8 @@
  * Registry assembliert auch während Workflows phasenweise hinzukommen.
  */
 
+import type { ToolRef, McpToolRef, RagIndexToolRef } from './tools/types.ts';
+
 export type ApplicationId = string;
 
 export interface ApplicationWorkflowRefs {
@@ -57,6 +59,12 @@ export interface ApplicationDef {
   mcps?: Record<string, ApplicationMcpRef>;
   /** RAG-Konfiguration (Container + Index-Tier). */
   rag?: ApplicationRagRef;
+  /**
+   * Phase-P1: Expliziter Werkzeug-Kasten der Anwendung. Wenn gesetzt,
+   * überschreibt er den aus `mcps` + `rag` desugarisierten Default
+   * (siehe `resolveTools` / `desugarLegacyTools`). Validation/Probing in P2.
+   */
+  tools?: ToolRef[];
 }
 
 /**
@@ -68,4 +76,63 @@ export function defineApplication(def: ApplicationDef): ApplicationDef {
   if (!def.name) throw new Error(`application ${def.id}: name missing`);
   if (!def.workflows) throw new Error(`application ${def.id}: workflows missing`);
   return def;
+}
+
+/**
+ * Desugar legacy `mcps` + `rag` shape on an `ApplicationDef` into an
+ * equivalent `ToolRef[]`. Pure function — does NOT mutate `def`.
+ *
+ * Wird genutzt, wenn eine Anwendung noch kein explizites `tools`-Roster
+ * deklariert hat (Backwards-Compat während der P1-Migration). Die hier
+ * erzeugten Refs entsprechen exakt der bisherigen Bedeutung; insbesondere:
+ *   - jedes `mcps[name]` wird zu einem `McpToolRef` mit `roles: [name]`,
+ *   - `rag` wird zu einem einzigen `RagIndexToolRef` namens `"rag"`.
+ */
+export function desugarLegacyTools(def: ApplicationDef): ToolRef[] {
+  const out: ToolRef[] = [];
+
+  if (def.mcps) {
+    for (const [name, m] of Object.entries(def.mcps)) {
+      const ref: McpToolRef = {
+        name,
+        kind: 'mcp',
+        required: false,
+        config: {
+          envUrl: m.envVar,
+          defaultUrl: m.url,
+          tools: m.tools,
+        },
+        roles: [name],
+      };
+      out.push(ref);
+    }
+  }
+
+  if (def.rag) {
+    const ref: RagIndexToolRef = {
+      name: 'rag',
+      kind: 'rag-index',
+      required: true,
+      alwaysOn: true,
+      config: {
+        containerId: def.rag.containerId,
+        manifest: def.rag.indexPath ?? '',
+        strategy: 'turboquant-cascade',
+        tiers: ['d128', 'd256', 'd768', 'fp32'],
+        topK: { d128: 512, d256: 128, d768: 32, fp32: 8 },
+      },
+    };
+    out.push(ref);
+  }
+
+  return out;
+}
+
+/**
+ * Liefert das effektive Tool-Roster einer Anwendung: bevorzugt das explizite
+ * `def.tools`, fällt sonst auf den desugarisierten Legacy-View zurück.
+ * Pure function — keine Mutation des Inputs.
+ */
+export function resolveTools(def: ApplicationDef): ToolRef[] {
+  return def.tools ?? desugarLegacyTools(def);
 }
