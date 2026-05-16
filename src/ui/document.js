@@ -8,9 +8,16 @@ const params = new URLSearchParams(location.search);
 const wsId = params.get('ws');
 const uuid = params.get('uuid');
 if (!wsId || !uuid) {
+  // Graceful empty-state — kein pageerror in der Console, einfach Hinweis +
+  // Link. Caller (document.html) checkt typeof wsId; alle async-init's sind
+  // ohnehin nach diesem if-Block.
   document.body.innerHTML = '<p style="padding:40px;font-family:system-ui">?ws=&lt;id&gt;&amp;uuid=&lt;uuid&gt; fehlt. <a href="/workspaces.html">Zurück</a></p>';
-  throw new Error('missing params');
+  console.info('[document] missing params; showing redirect');
+  // Stop further script execution by short-circuiting all DOM bindings below.
+  // We use a sentinel that all initializer functions check.
+  window.__sturmDocumentNoParams = true;
 }
+if (!window.__sturmDocumentNoParams) {
 
 const titleEl = $('doc-title');
 const classPill = $('doc-class-pill');
@@ -2039,3 +2046,4 @@ loadAll().then(() => {
     document.querySelectorAll('.doc-tab-panel').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== initialTab));
   }
 });
+} // end if (!window.__sturmDocumentNoParams)
