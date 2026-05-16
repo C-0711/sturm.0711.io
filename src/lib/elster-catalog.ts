@@ -142,19 +142,29 @@ export function normalizeForElster(value: unknown, datentyp: ElsterDatentyp): st
     case 'currency': {
       // Strip currency symbol, spaces, thousands separators. Convert
       // comma decimal to dot, then convert to integer cents.
-      // Accept inputs like: "1.234,56 €", "1234,56", "30707", "30707.00", "-30.707,00"
+      // Accept inputs like: "1.234,56 €", "1234,56", "30707", "30707.00", "-30.707,00", "6.011"
       let v = s.replace(/[€\sEUR]/gi, '');
       // Detect German vs ISO decimal: if both "." and "," appear and "," is
       // last → German (1.234,56). If only "." → ISO. If only "," → German.
+      // SPECIAL CASE: only "."-blocks matching ^\d{1,3}(\.\d{3})+$ (no comma
+      // and dot-groups are 3-digit) → German thousand without cents:
+      // "6.011" = 6011 €, "63.559" = 63559 €. Without this the value is
+      // misinterpreted as 6,011 € (a factor-1000 underflow that propagates
+      // into the BMF Vorsorgeaufwendungen calculation).
       const lastComma = v.lastIndexOf(',');
       const lastDot = v.lastIndexOf('.');
       let normalized: string;
+      const sign = v.startsWith('-') ? '-' : '';
+      const body = sign ? v.slice(1) : v;
       if (lastComma > lastDot) {
         // German: dots are thousand separators, comma is decimal
         normalized = v.replace(/\./g, '').replace(',', '.');
       } else if (lastDot > lastComma && lastComma >= 0) {
         // Weird: both present, dot last → ISO-ish "1,234.56" — strip commas
         normalized = v.replace(/,/g, '');
+      } else if (lastComma < 0 && /^\d{1,3}(?:\.\d{3})+$/.test(body)) {
+        // German thousand-grouped integer without cents: "6.011" → "6011"
+        normalized = sign + body.replace(/\./g, '');
       } else {
         // Only one separator (or none): treat dot as decimal
         normalized = v.replace(/,/g, '.');
