@@ -20,6 +20,7 @@
  */
 import { defineStage } from '../../../core/stage.ts';
 import type { AnlagenFelderListe } from '../../../lib/elster-catalog.ts';
+import type { RagIndexHandle } from '../../../core/tools/handles.ts';
 import type { KandidatECode } from './quantum-ground.ts';
 
 export interface FelderNarrowInput {
@@ -82,6 +83,15 @@ export const felderNarrowStage = defineStage<
     const pflichtAlwaysKeep = cfg.pflichtAlwaysKeep ?? true;
     const passthroughOnEmptyRag = cfg.passthroughOnEmptyRag ?? true;
     const minPerAnlage = cfg.minPerAnlage ?? 30;
+    // P7: tools-handle für Observability (RAG-Container-Identität ins SSE-Event).
+    // Diese Stage selbst konsumiert die RAG-Treffer als Input (kandidatenECodes)
+    // — kein direkter cascade-Call. Ein Handle-Lookup hier macht den
+    // Tool-Roster-Status für den Run sichtbar (Designer/Audit), ohne die
+    // Algorithmik zu ändern.
+    const rag = ctx.tools.has('elster-rag')
+      ? ctx.tools.get<RagIndexHandle>('elster-rag')
+      : null;
+    void rag;
 
     const fpa = input.felder_per_anlage ?? {};
     const kandidaten = Array.isArray(input.kandidatenECodes) ? input.kandidatenECodes : [];

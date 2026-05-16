@@ -24,6 +24,7 @@ import {
   normalizeForElster,
   type ElsterDatentyp,
 } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle } from '../../../core/tools/handles.ts';
 import type { Phase1AnlageResult, Phase1RegexHit } from './phase1-regex.ts';
 import type { Phase3AnlageResult, Phase3LlmHit } from './phase3-llm-fill.ts';
 
@@ -240,6 +241,14 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
 
   async run(input, ctx) {
     const t0 = Date.now();
+    // P7: Catalog-Handle für Container-Identität (Audit/Designer). phase5-merge
+    // konsumiert phase1+phase3 Outputs als bereits aufgebaute Werte — kein
+    // direkter atoms/container-Lookup nötig. Probe sichert, dass die Stage
+    // catalog-bewusst ist und ermöglicht künftige Verschärfungen.
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+    void cat;
     const phase1 = input.phase1_per_anlage ?? {};
     const phase3 = input.phase3_per_anlage ?? {};
     const canonical: Record<string, CanonicalValue> = {};

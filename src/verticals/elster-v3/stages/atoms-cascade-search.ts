@@ -31,6 +31,7 @@ import {
   type CascadeManifest,
 } from '../../../lib/quantum-index.ts';
 import { loadCatalog, type CatalogAtom } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
 
 import type { BelegBlock, LabelValueChunk } from './label-value-parser.ts';
 
@@ -229,15 +230,22 @@ export const atomsCascadeSearchStage = defineStage<
         ? new Set(input.anlagen)
         : null;
 
-    // Lade Cascade + Catalog (gecached).
-    const { cascade, atoms } = await loadCascadeAndAtoms(
-      DEFAULT_DATA_DIR,
-      manifestFile,
-      atomsFile,
-      // finalK = max(topK*4, 20) — der Cascade-Layer rerankt am Ende auf so
-      // viele Kandidaten, dass anlagen-Whitelist-Filterung noch genug übrig lässt.
-      Math.max(topK * 4, 20),
-    );
+    // P7: bevorzuge ctx.tools.get('elster-rag') / 'elster-catalog' wenn die
+    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache.
+    const rag = ctx.tools.has('elster-rag')
+      ? ctx.tools.get<RagIndexHandle>('elster-rag')
+      : null;
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+    // finalK = max(topK*4, 20) — der Cascade-Layer rerankt am Ende auf so
+    // viele Kandidaten, dass anlagen-Whitelist-Filterung noch genug übrig lässt.
+    const cascadeKLoad = Math.max(topK * 4, 20);
+    const fallback = (!rag || !cat)
+      ? await loadCascadeAndAtoms(DEFAULT_DATA_DIR, manifestFile, atomsFile, cascadeKLoad)
+      : null;
+    const atoms: CatalogAtom[] = cat ? cat.get<CatalogAtom[]>('atoms') : fallback!.atoms;
+    const cascadeDescribe = fallback ? fallback.cascade.describe() : `rag-tool(${rag?.meta.containerId ?? 'unknown'})`;
 
     // Flatten alle Chunks über alle Belege, behalte Mapping zurück.
     type Loc = { belegIdx: number; chunkIdx: number };
@@ -259,7 +267,7 @@ export const atomsCascadeSearchStage = defineStage<
           chunksWithCandidates: 0,
           avgTopScore: 0,
           avgSeparation: 0,
-          cascadeDescribe: cascade.describe(),
+          cascadeDescribe,
           embedMs: 0,
           cascadeMs: 0,
           totalMs: Date.now() - t0,
@@ -294,7 +302,13 @@ export const atomsCascadeSearchStage = defineStage<
 
     for (let qi = 0; qi < queries.length; qi++) {
       const loc = locs[qi];
-      const scored = cascade.topK(vectors[qi], cascadeK);
+      let scored: Array<{ idx: number; score: number }>;
+      if (rag) {
+        const ragHits = await rag.retrieve(Array.from(vectors[qi]), { topK: cascadeK, signal: ctx.signal });
+        scored = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
+      } else {
+        scored = fallback!.cascade.topK(vectors[qi], cascadeK);
+      }
       let cands = scored.map((s, i) => {
         const a = atoms[s.idx];
         const c: AtomCandidate = {
@@ -338,7 +352,7 @@ export const atomsCascadeSearchStage = defineStage<
       chunksWithCandidates: withCands,
       avgTopScore: withCands > 0 ? Number((scoreSum / withCands).toFixed(4)) : 0,
       avgSeparation: withCands > 0 ? Number((separationSum / withCands).toFixed(3)) : 0,
-      cascadeDescribe: cascade.describe(),
+      cascadeDescribe,
       embedMs,
       cascadeMs,
       totalMs,

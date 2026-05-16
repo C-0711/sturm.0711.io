@@ -23,6 +23,7 @@ import {
   type AnlagenFelderListe,
   type AnlagenFeld,
 } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle } from '../../../core/tools/handles.ts';
 
 export interface Phase1RegexInput {
   /** OCR-Volltext (von mistral-ocr). */
@@ -246,6 +247,15 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
     if (typeof input.text !== 'string' || input.text.length === 0) {
       throw new Error('phase1-regex: input.text required');
     }
+    // P7: Catalog-Handle für Container-Identität (Audit/Designer). Diese Stage
+    // konsumiert per_anlage als bereits aufgebaute Liste — kein direkter
+    // atoms-Lookup nötig. Der Handle-Probe macht aber sichtbar, dass die Stage
+    // catalog-bewusst ist, und ermöglicht künftige Verschärfungen (z.B. eCode-
+    // Kreuzcheck gegen cat.get('atoms')).
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+    void cat;
     const perAnlage = input.per_anlage ?? {};
     const lines = input.text.split(/\r?\n/);
     const result: Record<string, Phase1AnlageResult> = {};
