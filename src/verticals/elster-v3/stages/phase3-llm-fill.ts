@@ -358,7 +358,12 @@ function buildDynamicSchema(
         description: `${f.drucktext.slice(0, 100)} (Z${f.vordruckzeile}, ${f.datentyp}${f.pflicht ? ', PFLICHT' : ''})`,
       };
     }
-    required.push(f.eCode);
+    // Nur Pflicht-Felder als required — der Rest darf weggelassen werden.
+    // Spart pro Anlage ~300 Tokens null-Output (E0200201:null,E0200202:null,…)
+    // → in Phase 3 typisch 5-6× Decode-Speedup ohne Recall-Verlust auf den
+    // Pflicht-Feldern. Missing eCodes werden im post-processing als
+    // still_missing behandelt (siehe processOne unten).
+    if (f.pflicht) required.push(f.eCode);
   }
   return {
     name: `phase3_fill_${anlage.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
