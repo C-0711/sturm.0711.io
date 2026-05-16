@@ -615,6 +615,8 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
           '# Regeln:',
           '- Für JEDEN eCode oben: setze den Wert wenn du ihn im OCR findest, sonst NULL.',
           '- Currency-Werte in deutscher Notation belassen (z.B. "1.234,56"); Normalisierung downstream.',
+          '- **POSITIV: Lohn, Beiträge zu RV/KV/PV/AV, Kapitalerträge, Steuern, Werbungskosten** sind IMMER positiv. KEIN Minus-Zeichen bei diesen Feldern, auch wenn der Drucktext "Abzug" oder "AN-Anteil" suggeriert.',
+          '- NEGATIV nur erlaubt bei: explizit als "Erstattung", "Verlust", "Korrektur", "Rückzahlung" gekennzeichneten Werten im OCR-Text.',
           '- Date-Werte im Originalformat des Belegs.',
           '- KEINE eCodes erfinden — nur die oben aufgelisteten Felder im Output.',
           '- Die Hints oben sind schon korrekt — extrahiere sie NICHT nochmal.',
@@ -694,6 +696,12 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
         const llm_hits: Record<string, Phase3LlmHit> = {};
         const still_missing: string[] = [];
         const felderByECode = new Map(missingFelder.map((f) => [f.eCode, f]));
+        // Sign-Guard: Currency-Werte sind in ELSTER fast immer positiv.
+        // Beobachteter LLM-Fehler: Gemma-4 setzt Minus-Zeichen vor AN-Anteile,
+        // Beiträge, Lohnwerte, weil der Drucktext "Abzug"/"Anteil" suggeriert.
+        // Wenn der Drucktext keinen expliziten Negativ-Marker enthält, drehen
+        // wir Negativ-Werte hier wieder positiv.
+        const NEGATIVE_ALLOWED_MARKERS = /Erstattung|Verlust|Rückzahlung|Korrektur|negativ/i;
         for (const eCode of missingFelder.map((f) => f.eCode)) {
           const v = parsed[eCode];
           if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) {
@@ -702,9 +710,25 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
           }
           if (!allowed.has(eCode)) continue;
           const f = felderByECode.get(eCode)!;
+          let valueStr = String(v);
+          if (f.datentyp === 'currency' && valueStr.trim().startsWith('-') && !NEGATIVE_ALLOWED_MARKERS.test(f.drucktext)) {
+            // Vorzeichen-Korrektur: nimm Absolut-Betrag, log Korrektur via emit.
+            const corrected = valueStr.trim().replace(/^-/, '');
+            ctx.emit('phase3_sign_corrected', {
+              eCode, anlage, drucktext: f.drucktext,
+              from: valueStr, to: corrected,
+            });
+            valueStr = corrected;
+          } else if (typeof v === 'number' && v < 0 && f.datentyp === 'currency' && !NEGATIVE_ALLOWED_MARKERS.test(f.drucktext)) {
+            valueStr = String(Math.abs(v));
+            ctx.emit('phase3_sign_corrected', {
+              eCode, anlage, drucktext: f.drucktext,
+              from: String(v), to: valueStr,
+            });
+          }
           llm_hits[eCode] = {
             eCode,
-            value: String(v),
+            value: valueStr,
             origin: 'LLM_FSM',
             kontextPath: f.einkunftsart,
             anlage,
