@@ -24,6 +24,7 @@ import {
 import type { Phase1AnlageResult } from './phase1-regex.ts';
 import type { Phase3AnlageResult, Phase3LlmHit, Phase3LlmFillOutput } from './phase3-llm-fill.ts';
 import type { ChatProvider } from '../../../lib/llm-chat.ts';
+import type { LlmHandle } from '../../../core/tools/handles.ts';
 
 export interface Phase4DisambigInput {
   text: string;
@@ -95,21 +96,14 @@ interface DisambigAnswer {
   reasoning: string;
 }
 
-async function disambigCall(
-  feld: AnlagenFeld,
-  anlage: string,
-  candidates: Candidate[],
-  cfg: Required<Pick<Phase4DisambigConfig, 'vllmUrl' | 'model' | 'temperature' | 'perCallTimeoutMs'>>,
-  signal?: AbortSignal,
-): Promise<DisambigAnswer | null> {
+function buildDisambigSchema(feld: AnlagenFeld, candidates: Candidate[]): Record<string, unknown> {
   const isCurrency = feld.datentyp === 'currency';
   const valueSchema: Record<string, unknown> = isCurrency
     ? { type: ['number', 'null'] }
     : feld.datentyp === 'date'
     ? { type: ['string', 'null'], maxLength: 10 }
     : { type: ['string', 'null'], maxLength: feld.maxLaenge ?? 200 };
-
-  const schema = {
+  return {
     type: 'object',
     additionalProperties: false,
     required: ['value', 'source_idx', 'confidence', 'reasoning'],
@@ -120,12 +114,14 @@ async function disambigCall(
       reasoning: { type: 'string', maxLength: 280 },
     },
   };
+}
 
+function buildDisambigPrompt(feld: AnlagenFeld, anlage: string, candidates: Candidate[]): string {
+  const isCurrency = feld.datentyp === 'currency';
   const candidatesBlock = candidates
     .map((c, i) => `  [${i}] score=${c.score.toFixed(2)}  "${c.line.slice(0, 180)}"`)
     .join('\n');
-
-  const prompt = [
+  return [
     `# Disambiguierung für ELSTER eCode ${feld.eCode}`,
     `Drucktext: ${feld.drucktext}`,
     `Datentyp: ${feld.datentyp}${feld.maxLaenge ? `, maxLen=${feld.maxLaenge}` : ''}`,
@@ -143,6 +139,44 @@ async function disambigCall(
     '- Wenn der Kandidat semantisch nicht passt (z.B. Arbeitgeber-Adresse statt Steuerpflichtiger-Adresse) → null.',
     '- confidence < 0.6 wenn du raten müsstest.',
   ].filter(Boolean).join('\n');
+}
+
+async function disambigCall(
+  feld: AnlagenFeld,
+  anlage: string,
+  candidates: Candidate[],
+  cfg: Required<Pick<Phase4DisambigConfig, 'vllmUrl' | 'model' | 'temperature' | 'perCallTimeoutMs'>>,
+  signal: AbortSignal | undefined,
+  llm: LlmHandle | null,
+): Promise<DisambigAnswer | null> {
+  const schema = buildDisambigSchema(feld, candidates);
+  const prompt = buildDisambigPrompt(feld, anlage, candidates);
+
+  // P5a tool-binding: prefer the Anwendung-bound `disambig-llm` role
+  // (`gemma4-mm` in the steuerfall-est roster) when a real ToolContainer
+  // is wired. The handle wraps the same vLLM chatJson backend but routes
+  // through the Anwendung-resolved baseUrl/model. Fallback path (raw fetch)
+  // keeps Designer / standalone CLI runs working. P10 will remove the
+  // fallback after the lint rule lands.
+  if (llm) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(new Error('disambig timeout')), cfg.perCallTimeoutMs);
+    const onParentAbort = () => ac.abort(signal?.reason);
+    signal?.addEventListener('abort', onParentAbort, { once: true });
+    try {
+      return await llm.chatJson<DisambigAnswer>(prompt, {
+        schema: { name: `disambig_${feld.eCode}`, schema, strict: true },
+        temperature: cfg.temperature,
+        maxTokens: 200,
+        signal: ac.signal,
+      });
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onParentAbort);
+    }
+  }
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(new Error('disambig timeout')), cfg.perCallTimeoutMs);
@@ -223,6 +257,14 @@ export const phase4EntityDisambigStage = defineStage<
       ctx.logger.warn('phase4-entity-disambig: provider≠vllm — Mini-Disambig im aktuellen MVP nur über vLLM');
     }
 
+    // P5a: prefer the Anwendung-bound `disambig-llm` role when the run was
+    // started via an Anwendung (steuerfall-est binds `gemma4-mm` to both
+    // `extraction-llm` and `disambig-llm`). Standalone runs land in the
+    // fallback path (raw vLLM fetch with config.vllmUrl).
+    const llmHandle: LlmHandle | null = provider === 'vllm' && ctx.tools.has('gemma4-mm')
+      ? ctx.tools.getByRole<LlmHandle>('disambig-llm')
+      : null;
+
     const phase3 = input.phase3_per_anlage ?? {};
     const felderMap = input.felder_per_anlage ?? {};
     const results: Record<string, Phase3AnlageResult> = {};
@@ -257,6 +299,7 @@ export const phase4EntityDisambigStage = defineStage<
           task.candidates,
           { vllmUrl, model, temperature, perCallTimeoutMs },
           ctx.signal,
+          llmHandle,
         );
         if (!ans || ans.value === null || ans.confidence < confT) {
           ctx.emit('phase4_field_skip', {

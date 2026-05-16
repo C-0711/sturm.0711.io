@@ -25,6 +25,7 @@
 import { defineStage } from '../../../core/stage.ts';
 import { loadDisambiguationHints } from '../../../lib/elster-catalog.ts';
 import { normalizeForElster } from '../../../lib/elster-catalog.ts';
+import type { LlmHandle } from '../../../core/tools/handles.ts';
 
 import type { AnnotatedChunk } from './atoms-cascade-search.ts';
 import type {
@@ -231,7 +232,33 @@ async function callDisambig(
   maxTokens: number,
   timeoutMs: number,
   signal: AbortSignal,
+  llm: LlmHandle | null,
 ): Promise<{ picked_ecode: string | null; confidence: number; reasoning: string }> {
+  // P5a tool-binding: prefer the Anwendung-bound `disambig-llm` role
+  // (`gemma4-mm` in the steuerfall-est roster) when a real ToolContainer
+  // is wired. Fallback (raw vLLM fetch) keeps Designer / standalone CLI
+  // runs working. P10 will remove the fallback after the lint rule lands.
+  if (llm) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), timeoutMs);
+    const onAbort = () => ctl.abort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      return await llm.chatJson<{ picked_ecode: string | null; confidence: number; reasoning: string }>(
+        prompt,
+        {
+          schema: { name: 'elster_disambig', strict: true, schema: DISAMBIG_SCHEMA },
+          temperature,
+          maxTokens,
+          signal: ctl.signal,
+        },
+      );
+    } finally {
+      clearTimeout(t);
+      signal.removeEventListener('abort', onAbort);
+    }
+  }
+
   const body = {
     model,
     messages: [{ role: 'user', content: prompt }],
@@ -336,6 +363,13 @@ export const llmDisambigStage = defineStage<
     const maxTokens = ctx.config?.maxTokens ?? 300;
     const maxConcurrency = ctx.config?.maxConcurrency ?? 16;
     const perCallTimeoutMs = ctx.config?.perCallTimeoutMs ?? 120_000;
+
+    // P5a: prefer the Anwendung-bound `disambig-llm` role (steuerfall-est
+    // wires `gemma4-mm` to both `extraction-llm` and `disambig-llm`).
+    // Standalone runs fall back to raw vLLM fetch on `vllmUrl`.
+    const llmHandle: LlmHandle | null = ctx.tools.has('gemma4-mm')
+      ? ctx.tools.getByRole<LlmHandle>('disambig-llm')
+      : null;
 
     // Disambig-Hinweise einmalig aus Container laden
     const hintsFile = await loadDisambiguationHints();
@@ -453,6 +487,7 @@ export const llmDisambigStage = defineStage<
             maxTokens,
             perCallTimeoutMs,
             ctx.signal,
+            llmHandle,
           );
           return { ok: true as const, item, parsed: r };
         } catch (err) {
