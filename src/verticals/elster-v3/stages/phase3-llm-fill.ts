@@ -258,6 +258,13 @@ export interface Phase3LlmFillConfig {
   /** v5.1-Modus: type-aware Schema (currency→number, date→ISO-string,
    *  enum-Felder→enum). Default false (=v5-kompatibel). */
   typedSchema?: boolean;
+  /** Sub-Slicing: max Felder pro vLLM-Call. Anlagen mit mehr eCodes werden
+   *  in Slices à diese Größe gesplittet (gruppiert nach datentyp, parallel
+   *  ausgeführt). 0 oder undefined = kein Slicing (alle Felder in 1 Schema).
+   *  Default: 0 (off). Empfohlen 25 für 100+-Feld-Coverage ohne FSM-Stall. */
+  maxFieldsPerSlice?: number;
+  /** Max parallele Slice-Calls innerhalb einer Anlage. Default 3. */
+  sliceConcurrency?: number;
 }
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<ChatProvider, string> = {
@@ -289,6 +296,50 @@ function enumForECode(eCode: string): string[] | null {
     }
   }
   return null;
+}
+
+/** Slice eine Felder-Liste in homogene Gruppen ≤ maxSize. Gruppierung nach
+ *  datentyp (currency / date / string / enum) zuerst, dann Chunk pro Gruppe.
+ *  Vorteile gegenüber 1-Schema-pro-Anlage:
+ *   • FSM-Compile-Kosten sinken (kleiner Zustandsraum)
+ *   • Less Field-Skipping bei strict-json (LLM fokussiert pro Slice)
+ *   • Typ-homogene Slices = einfachere Validator-Pipeline
+ *  Reihenfolge innerhalb einer Gruppe: stable (sort by eCode), damit Slices
+ *  über Re-Runs identisch sind. */
+function sliceFieldsByType(felder: AnlagenFeld[], maxSize: number): AnlagenFeld[][] {
+  if (maxSize <= 0 || felder.length <= maxSize) return [felder];
+  const groupKey = (f: AnlagenFeld): string => {
+    if (enumForECode(f.eCode)) return 'enum';
+    return f.datentyp || 'string';
+  };
+  const byType = new Map<string, AnlagenFeld[]>();
+  for (const f of felder) {
+    const k = groupKey(f);
+    let g = byType.get(k);
+    if (!g) { g = []; byType.set(k, g); }
+    g.push(f);
+  }
+  const slices: AnlagenFeld[][] = [];
+  // Stable group order: currency → date → enum → string (Stammdaten zuletzt,
+  // weil sie oft dünn besetzt sind und kein Eile haben). Innerhalb stable by eCode.
+  const groupOrder = ['currency', 'date', 'enum', 'string'];
+  for (const key of groupOrder) {
+    const group = byType.get(key);
+    if (!group) continue;
+    group.sort((a, b) => a.eCode.localeCompare(b.eCode));
+    for (let i = 0; i < group.length; i += maxSize) {
+      slices.push(group.slice(i, i + maxSize));
+    }
+    byType.delete(key);
+  }
+  // Unbekannte Datentypen am Ende.
+  for (const group of byType.values()) {
+    group.sort((a, b) => a.eCode.localeCompare(b.eCode));
+    for (let i = 0; i < group.length; i += maxSize) {
+      slices.push(group.slice(i, i + maxSize));
+    }
+  }
+  return slices;
 }
 
 function buildDynamicSchema(
@@ -437,6 +488,8 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
     const wantStream = (cfg.stream ?? true) && provider === 'vllm';
     const perAnlageTimeoutMs = cfg.perAnlageTimeoutMs ?? 60_000;
     const typedSchema = cfg.typedSchema ?? false;
+    const maxFieldsPerSlice = Math.max(0, cfg.maxFieldsPerSlice ?? 0);
+    const sliceConcurrency = Math.max(1, cfg.sliceConcurrency ?? 3);
 
     const phase1 = input.phase1_per_anlage ?? {};
     const felderMap = input.felder_per_anlage ?? {};
@@ -485,39 +538,17 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
         return;
       }
 
-      const schema = buildDynamicSchema(anlage, missingFelder, { typed: typedSchema });
+      const fullSchema = buildDynamicSchema(anlage, missingFelder, { typed: typedSchema });
       const hintsBlock = formatHintsBlock(phase1Result.regex_hits);
-      const missingBlock = formatMissingFieldsBlock(missingFelder);
       const zitate = await formatEinkunftsartenZitate(missingFelder);
 
-      const prompt = [
-        '=== CONTAINER-BRIEF (zuerst lesen) ===',
-        brief,
-        '=== ENDE BRIEF ===',
-        '',
-        `# Aufgabe: Lücken-Füller für Anlage ${anlage} (Phase 3 von 5)`,
-        '',
-        zitate,
-        '',
-        hintsBlock,
-        '',
-        missingBlock,
-        '',
-        '# Regeln:',
-        '- Für JEDEN eCode oben: setze den Wert wenn du ihn im OCR findest, sonst NULL.',
-        '- Currency-Werte in deutscher Notation belassen (z.B. "1.234,56"); Normalisierung downstream.',
-        '- Date-Werte im Originalformat des Belegs.',
-        '- KEINE eCodes erfinden — nur die oben aufgelisteten Felder im Output.',
-        '- Die Hints oben sind schon korrekt — extrahiere sie NICHT nochmal.',
-        '',
-        '# OCR-Volltext:',
-        input.text,
-      ].join('\n');
-
-      const overheadChars = brief.length + hintsBlock.length + missingBlock.length + zitate.length + 500;
+      // Budget-Check gegen das volle Schema (Upper-Bound). Slices haben kleinere
+      // Schemas, also passt jeder Slice automatisch ins Budget.
+      const fullMissingBlock = formatMissingFieldsBlock(missingFelder);
+      const overheadChars = brief.length + hintsBlock.length + fullMissingBlock.length + zitate.length + 500;
       const budget = computePromptBudget({
         modelContextTokens: contextTokensFor(modelName),
-        schema: schema.schema,
+        schema: fullSchema.schema,
         maxOutputTokens: maxTokens,
         overheadTokens: Math.ceil(overheadChars / 3.5),
       });
@@ -540,33 +571,118 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
         throw err;
       }
 
-      try {
-        let parsed: Record<string, string | null> = {};
-        if (wantStream) {
-          parsed = await vllmStreamExtract(
-            prompt,
-            {
-              vllmUrl: cfg.vllmUrl,
+      // Sub-Slicing: bei großen Anlagen (>maxFieldsPerSlice) wird das Schema in
+      // typ-homogene Slices à ~maxFieldsPerSlice geteilt und parallel gerufen.
+      // Vorteile: kleinere FSM, weniger Field-Skipping, höhere Coverage.
+      const slices = sliceFieldsByType(missingFelder, maxFieldsPerSlice);
+      const sliceCount = slices.length;
+      if (sliceCount > 1) {
+        ctx.emit('phase3_anlage_slices', {
+          anlage,
+          slices: sliceCount,
+          missing: missingFelder.length,
+          maxFieldsPerSlice,
+        });
+      }
+
+      const runSlice = async (sliceIdx: number): Promise<{ parsed: Record<string, string | null>; error: Error | null }> => {
+        const sliceFelder = slices[sliceIdx];
+        const sliceSchema =
+          sliceCount === 1
+            ? fullSchema
+            : buildDynamicSchema(`${anlage}_s${sliceIdx}`, sliceFelder, { typed: typedSchema });
+        const sliceMissingBlock = sliceCount === 1 ? fullMissingBlock : formatMissingFieldsBlock(sliceFelder);
+        const slicePrompt = [
+          '=== CONTAINER-BRIEF (zuerst lesen) ===',
+          brief,
+          '=== ENDE BRIEF ===',
+          '',
+          sliceCount === 1
+            ? `# Aufgabe: Lücken-Füller für Anlage ${anlage} (Phase 3 von 5)`
+            : `# Aufgabe: Lücken-Füller für Anlage ${anlage} — Slice ${sliceIdx + 1}/${sliceCount} (Phase 3 von 5)`,
+          '',
+          zitate,
+          '',
+          hintsBlock,
+          '',
+          sliceMissingBlock,
+          '',
+          '# Regeln:',
+          '- Für JEDEN eCode oben: setze den Wert wenn du ihn im OCR findest, sonst NULL.',
+          '- Currency-Werte in deutscher Notation belassen (z.B. "1.234,56"); Normalisierung downstream.',
+          '- Date-Werte im Originalformat des Belegs.',
+          '- KEINE eCodes erfinden — nur die oben aufgelisteten Felder im Output.',
+          '- Die Hints oben sind schon korrekt — extrahiere sie NICHT nochmal.',
+          '',
+          '# OCR-Volltext:',
+          input.text,
+        ].join('\n');
+        try {
+          let parsed: Record<string, string | null> = {};
+          if (wantStream) {
+            parsed = await vllmStreamExtract(
+              slicePrompt,
+              {
+                vllmUrl: cfg.vllmUrl,
+                model: modelName,
+                temperature,
+                maxTokens,
+                jsonSchema: { name: sliceSchema.name, schema: sliceSchema.schema, strict: true },
+                signal: ctx.signal,
+                timeoutMs: perAnlageTimeoutMs,
+              },
+              ({ eCode, value }) => ctx.emit('phase3_field', { anlage, eCode, value, slice: sliceIdx }),
+            );
+          } else {
+            const r = await chatJson<Record<string, string | null>>(slicePrompt, {
+              provider,
               model: modelName,
+              vllmUrl: cfg.vllmUrl,
               temperature,
               maxTokens,
-              jsonSchema: { name: schema.name, schema: schema.schema, strict: true },
+              jsonSchema: { name: sliceSchema.name, schema: sliceSchema.schema, strict: true },
               signal: ctx.signal,
-              timeoutMs: perAnlageTimeoutMs,
-            },
-            ({ eCode, value }) => ctx.emit('phase3_field', { anlage, eCode, value }),
-          );
-        } else {
-          const r = await chatJson<Record<string, string | null>>(prompt, {
-            provider,
-            model: modelName,
-            vllmUrl: cfg.vllmUrl,
-            temperature,
-            maxTokens,
-            jsonSchema: { name: schema.name, schema: schema.schema, strict: true },
-            signal: ctx.signal,
+            });
+            parsed = r.parsed as Record<string, string | null>;
+          }
+          return { parsed, error: null };
+        } catch (err) {
+          return { parsed: {}, error: err as Error };
+        }
+      };
+
+      try {
+        // Slices parallel mit eigenem Concurrency-Limit innerhalb der Anlage.
+        const sliceQueue = [...Array(sliceCount).keys()];
+        const sliceOut: Array<{ parsed: Record<string, string | null>; error: Error | null }> = new Array(sliceCount);
+        const sliceWorker = async (): Promise<void> => {
+          while (sliceQueue.length > 0) {
+            const i = sliceQueue.shift();
+            if (i === undefined) break;
+            sliceOut[i] = await runSlice(i);
+          }
+        };
+        const nSliceWorkers = Math.min(sliceConcurrency, sliceCount);
+        await Promise.all(Array.from({ length: nSliceWorkers }, () => sliceWorker()));
+
+        const failedSlices = sliceOut.filter((o) => o.error !== null).length;
+        if (failedSlices === sliceCount) {
+          // Alle Slices fehlgeschlagen → echter Fehler
+          throw sliceOut[0].error ?? new Error('alle Slices fehlgeschlagen');
+        }
+        // Merge: eCodes sind unique über alle Slices (Disjunkte Partitions),
+        // also einfaches Object.assign. last-write-wins ist unkritisch.
+        const parsed: Record<string, string | null> = {};
+        for (const o of sliceOut) Object.assign(parsed, o.parsed);
+        if (failedSlices > 0) {
+          ctx.emit('phase3_anlage_partial', {
+            anlage,
+            slices: sliceCount,
+            failedSlices,
+            errors: sliceOut
+              .map((o, i) => (o.error ? { slice: i, error: o.error.message } : null))
+              .filter(Boolean),
           });
-          parsed = r.parsed as Record<string, string | null>;
         }
 
         const allowed = new Set(missingFelder.map((f) => f.eCode));

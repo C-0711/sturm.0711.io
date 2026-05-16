@@ -1115,6 +1115,14 @@ export function buildElsterV52RagWorkflow() {
           stream: true,
           perAnlageTimeoutMs: 90_000,
           typedSchema: true,
+          // Sub-Slicing-Mechanismus existiert in phase3-llm-fill.ts (Helper
+          // sliceFieldsByType + parallel-worker-loop). Bei unserer aktuellen
+          // Scale (14–30 missing-eCodes pro Anlage) bringt es nichts —
+          // E2E zeigte Regression von 45 → 40 eCodes bei +160% Laufzeit.
+          // Code bleibt als opt-in: sinnvoll erst wenn felderNarrow geweitet
+          // wird (≥60 missing/Anlage) ODER vLLM `enable_prefix_caching`
+          // aktiviert ist. Default 0 = aus.
+          maxFieldsPerSlice: 0,
         },
         inputs: {
           text: '${ocr.text}',
