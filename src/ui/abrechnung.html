@@ -212,6 +212,74 @@ function citation(kontextPath, anlage) {
   return byAnlage[anlage] || (anlage ? `Anlage ${anlage}` : 'BMF');
 }
 
+/** §32a EStG Grundtabelle für ein gegebenes zvE + Steuerjahr.
+ *  Wird benutzt um den Splittingtarif-Vorteil zu berechnen (Single-ESt
+ *  auf das volle zvE, minus Splittingtarif-ESt). */
+function calcEst32a(zve, jahr) {
+  if (zve <= 0) return 0;
+  // §32a Koeffizienten 2023 vs 2024
+  const cfg = (jahr === 2023) ? {
+    GFB: 10908, Z2_START: 10909, Z3_START: 16000, Z4_START: 62810, Z5_START: 277826,
+    Z2_A: 979.18, Z2_B: 1400,
+    Z3_A: 192.59, Z3_B: 2397, Z3_C: 966.53,
+    Z4_K: 0.42, Z4_C: 9972.98,
+    Z5_K: 0.45, Z5_C: 18307.73,
+    Z2_BASE: 10908, Z3_BASE: 15999,
+  } : {
+    GFB: 11784, Z2_START: 11785, Z3_START: 17006, Z4_START: 66761, Z5_START: 277826,
+    Z2_A: 922.98, Z2_B: 1400,
+    Z3_A: 181.19, Z3_B: 2397, Z3_C: 1015.13,
+    Z4_K: 0.42, Z4_C: 10602.13,
+    Z5_K: 0.45, Z5_C: 18936.88,
+    Z2_BASE: 11784, Z3_BASE: 17005,
+  };
+  if (zve <= cfg.GFB) return 0;
+  if (zve < cfg.Z3_START) {
+    const y = (zve - cfg.Z2_BASE) / 10000;
+    return Math.floor((cfg.Z2_A * y + cfg.Z2_B) * y);
+  }
+  if (zve < cfg.Z4_START) {
+    const z = (zve - cfg.Z3_BASE) / 10000;
+    return Math.floor((cfg.Z3_A * z + cfg.Z3_B) * z + cfg.Z3_C);
+  }
+  if (zve < cfg.Z5_START) {
+    return Math.floor(cfg.Z4_K * zve - cfg.Z4_C);
+  }
+  return Math.floor(cfg.Z5_K * zve - cfg.Z5_C);
+}
+
+/** Vorsorge-Höchstbetragsberechnung als Tabelle (§10 Abs. 3,4 EStG).
+ *  Zeigt die intermediären Werte aus der BMF-PostgreSQL-Formel-Engine. */
+function renderVorsorgeBreakdown(vb, ev) {
+  if (!vb || typeof vb !== 'object' || !('vorsorgeaufwand_total' in vb)) return '';
+  const num = (k) => Number(vb[k] || 0);
+  return `
+    <h3 style="margin-top:14px">Höchstbetrags-Berechnung §10 Abs. 3, 4 EStG</h3>
+    <table class="ledger">
+      <tr><td class="lbl" colspan="2"><i>Basisversorgung (§10 Abs. 1 Nr. 2 — RV/Altersvorsorge)</i></td></tr>
+      <tr><td class="lbl">RV-Beitrag AN ${fmtEur(num('rv_beitraege'))} + AG ${fmtEur(num('rv_beitraege_ag'))}</td><td class="amt">${fmtEur(num('rv_gesamt'))}</td></tr>
+      <tr><td class="lbl">Höchstbetrag (${(num('rv_av_abzugsfaehig_prozent')*100).toFixed(0)} % von Höchstbetrag-RV/AV ${fmtEur(num('rv_av_hoechstbetrag'))})</td><td class="amt" style="font-weight:400">≤ ${fmtEur(num('rv_av_hoechstbetrag') * num('rv_av_abzugsfaehig_prozent'))}</td></tr>
+      <tr><td class="lbl">− AG-Anteil bereits steuerfrei (§3 Nr. 62 EStG)</td><td class="amt deduct">−${fmtEur(num('rv_beitraege_ag'))}</td></tr>
+      <tr class="subtotal"><td class="lbl"><b>rv_abzugsfaehig</b></td><td class="amt"><b>${fmtEur(num('rv_abzugsfaehig'))}</b></td></tr>
+      <tr><td class="cite" colspan="2">Formel: min(rv_gesamt × ${(num('rv_av_abzugsfaehig_prozent')*100).toFixed(0)}%, rv_av_hoechstbetrag × ${(num('rv_av_abzugsfaehig_prozent')*100).toFixed(0)}%) − rv_beitraege_ag</td></tr>
+
+      <tr><td class="lbl" colspan="2"><br><i>Basis-KV / PV (§10 Abs. 1 Nr. 3 EStG)</i></td></tr>
+      <tr><td class="lbl">KV-Beitrag AN</td><td class="amt">${fmtEur(num('kv_beitraege'))}</td></tr>
+      <tr><td class="lbl">− Kürzung Krankengeld-Anteil (${(num('kv_kuerzung_krankengeld')*100).toFixed(1)} %)</td><td class="amt deduct">−${fmtEur(num('kv_kuerzung_betrag'))}</td></tr>
+      <tr><td class="lbl"><b>kv_basis_abzugsfaehig</b></td><td class="amt">${fmtEur(num('kv_basis_abzugsfaehig'))}</td></tr>
+      <tr><td class="lbl">+ pv_basis_abzugsfaehig (PV-AN ${fmtEur(num('pv_beitraege'))})</td><td class="amt">${fmtEur(num('pv_basis_abzugsfaehig'))}</td></tr>
+      <tr class="subtotal"><td class="lbl"><b>basis_kv_pv</b></td><td class="amt"><b>${fmtEur(num('basis_kv_pv'))}</b></td></tr>
+
+      <tr><td class="lbl" colspan="2"><br><i>Sonstige Vorsorge (§10 Abs. 1 Nr. 3a EStG)</i></td></tr>
+      <tr><td class="lbl">AV-Beitrag + Wahlleistungen + Haftpflicht etc.</td><td class="amt">${fmtEur(num('sonstige_input'))}</td></tr>
+      <tr><td class="lbl">Höchstbetrag Arbeitnehmer ${fmtEur(num('sonstige_hoechstbetrag_an'))}</td><td class="amt" style="font-weight:400">≤ ${fmtEur(num('sonstige_limit'))}</td></tr>
+      <tr class="subtotal"><td class="lbl"><b>sonstige_abzugsfaehig</b></td><td class="amt"><b>${fmtEur(num('sonstige_abzugsfaehig'))}</b></td></tr>
+
+      <tr class="total"><td class="lbl">vorsorgeaufwand_total = rv_abzugsfaehig + basis_kv_pv + sonstige_abzugsfaehig</td><td class="amt">${fmtEur(num('vorsorgeaufwand_total'))}</td></tr>
+    </table>
+  `;
+}
+
 function pickEntry(ml, ecode) { return ml[ecode]; }
 function v(ml, ecode) { const e = ml[ecode]; return e ? e.value : null; }
 function vNum(ml, ecode) {
@@ -356,7 +424,12 @@ function render(data) {
       <tr><td class="lbl">Pflegeversicherung (AN-Anteil)</td><td class="amt">${fmtEur(pv)}</td></tr>
       <tr><td class="cite" colspan="2">[E2001505 · Anlage VOR Z.13 · Nr. 26 LSt-Besch.]</td></tr>
       <tr class="subtotal"><td class="lbl">Summe Vorsorge-Beiträge (vor Höchstbetragsabzug)</td><td class="amt">${fmtEur(rv + rvAg + kv + pv)}</td></tr>
-      <tr class="subtotal"><td class="lbl"><b>Absetzbar nach BMF-Höchstbetrag-Formel</b> <span class="pill">§10 Abs. 3,4 EStG</span></td><td class="amt"><b>${fmtEur(Number(ev.vorsorgeaufwendungen_absetzbar || 0))}</b></td></tr>
+    </table>
+
+    ${renderVorsorgeBreakdown(det.vorsorge_berechnung || {}, ev) || ''}
+
+    <table class="ledger" style="margin-top:8px">
+      <tr class="subtotal"><td class="lbl"><b>Absetzbar nach BMF-Höchstbetrag-Berechnung</b> <span class="pill">§10 Abs. 3,4 EStG</span></td><td class="amt"><b>${fmtEur(Number(ev.vorsorgeaufwendungen_absetzbar || 0))}</b></td></tr>
       <tr><td class="cite" colspan="2">[PostgreSQL-Formel: vorsorgeaufwand_total = rv_abzugsfaehig + basis_kv_pv + sonstige_abzugsfaehig]</td></tr>
     </table>
     <h3>2.2 Sonstige Sonderausgaben</h3>
@@ -400,6 +473,27 @@ function render(data) {
 ${escapeHtml(sb.formel_verwendet)}
 
 Quelle: ${escapeHtml(sb.bmf_referenz || '§32a EStG')} · Grenzsatz ${(Number(daten.grenzsteuersatz)*100).toFixed(2)}% · ⌀ ${(Number(daten.durchschnittssteuersatz)*100).toFixed(2)}%</div>` : ''}
+
+    ${(() => {
+      if (!splitting) return '';
+      const grundtarifEst = calcEst32a(zve, steuerjahr);
+      const vorteil = grundtarifEst - est;
+      if (vorteil <= 0) return '';
+      return `
+        <div class="hinweise" style="border-left-color:var(--refund); background:var(--refund-bg);">
+          <h4 style="color:var(--refund)">💚 Splittingtarif-Vorteil</h4>
+          <table class="ledger" style="margin-top:0">
+            <tr><td class="lbl">Hypothetische ESt im Grundtarif (zvE ${fmtEur(zve)} ohne Splitting)</td><td class="amt">${fmtEur(grundtarifEst)}</td></tr>
+            <tr><td class="lbl">Tatsächlich angewendet (Splittingtabelle, §32a Abs. 5)</td><td class="amt">${fmtEur(est)}</td></tr>
+            <tr class="subtotal"><td class="lbl"><b>Splittingtarif-Vorteil durch Zusammenveranlagung</b></td><td class="amt" style="color:var(--refund)"><b>−${fmtEur(vorteil)}</b></td></tr>
+          </table>
+          <div style="margin-top:6px;font-size:10.5px;color:var(--muted)">
+            Berechnung: §32a Abs. 1 EStG (Grundtarif) auf volles zvE vs. §32a Abs. 5 (Splittingtarif: ESt(zvE/2) × 2).
+            Bei Einzelveranlagung ${fmtEur(grundtarifEst)} hätte gezahlt werden müssen.
+          </div>
+        </div>
+      `;
+    })()}
 
     <h2><span class="num">6.</span>Solidaritätszuschlag <span class="pill">§3 SolZG</span></h2>
     <table class="ledger">

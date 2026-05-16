@@ -1,0 +1,9 @@
+# CTAXV1 BMF-Container fix: vorsorge_berechnung dict now exposes intermediate
+# formula results (rv_abzugsfaehig, basis_kv_pv, sonstige_abzugsfaehig, etc.)
+# Applied on h200v 2026-05-16. Allows abrechnung.html to render the
+# §10 Abs. 3, 4 EStG Höchstbetragsberechnung as a detailed table.
+--- a/services/lane1_bmf/server/bmf_calculator_mcp_server.py
++++ b/services/lane1_bmf/server/bmf_calculator_mcp_server.py
+@@ -1105,1 +1105,1 @@
+-                    "vorsorge_berechnung": vorsorge_result.get("results", vorsorge_result.get("result", {})),
++                    "vorsorge_berechnung": vorsorge_result.get("ergebnisse", vorsorge_result.get("results", vorsorge_result.get("result", vorsorge_result))),
