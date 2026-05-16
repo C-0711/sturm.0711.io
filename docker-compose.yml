@@ -45,9 +45,16 @@ services:
       # GITCHAIN_DATABASE_URL: postgresql://gitchain:…@gitchain-host:5432/gitchain
       GITCHAIN_DEFAULT_NAMESPACE: ctax
       GITCHAIN_DEFAULT_TENANT: ctax-0711
+      # ── Gitchain Tool-Binding (P0) ─────────────────────────────────
+      # Container-Registry + git-Anker. Auf h200v laufen API:3361 und
+      # Postgres:5440 als separate Dienste; via host-gateway erreichbar.
+      GITCHAIN_API_URL: ${GITCHAIN_API_URL:-http://host.docker.internal:3361}
+      GITCHAIN_DATABASE_URL: ${GITCHAIN_DATABASE_URL:-postgres://gitchain:gitchain@host.docker.internal:5440/gitchain}
+      GITCHAIN_REPO_ROOT: ${GITCHAIN_REPO_ROOT:-/var/lib/gitchain/repos}
       # Lane-5 ELSTER-MCP (Einreichung). Wenn nicht gesetzt, antwortet der
       # Client deterministisch mit { erfolg: false, reason: 'mcp-unavailable' }.
-      ELSTER_MCP_URL: ${ELSTER_MCP_URL:-}
+      # P0: Default zeigt auf h200v-Lane-5 (Port 12014) via host-gateway.
+      ELSTER_MCP_URL: ${ELSTER_MCP_URL:-http://host.docker.internal:12014/mcp}
       # ── LLM-Backends auf dem Host ───────────────────────────────────
       # `host.docker.internal` ist auf Linux nicht automatisch gemappt —
       # extra_hosts (unten) legt host-gateway als Alias an. Damit erreicht

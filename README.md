@@ -41,7 +41,24 @@ UI erreichbar unter `http://localhost:7800` (bzw. `https://sturm.0711.io` hinter
 - **hello-ocr** — Minimal-Referenz: Mistral OCR → Textstatistik. Dient als Vorlage für neue Workflows.
 - **elster-v1** — ELSTER Feldextraktion: OCR-permissiv → Regel-Engine → Schema-Bau → OCR-kuratiert → Baseline-Merge → Bewertung → Cross-Check, parallel Anlagen-Detektor.
 
+## Tool-Wiring (P0)
+
+Die Stages rufen externe Tools auf (vLLM, Ollama, BMF-/ELSTER-MCP, Gitchain).
+Die zugehörigen Env-Vars (`VLLM_URL`, `OLLAMA_URL`, `BMF_MCP_URL`,
+`ELSTER_MCP_URL`, `GITCHAIN_*`) sind in `.env.example` und
+`docker-compose.yml` dokumentiert; Defaults zeigen auf `host.docker.internal`.
+
+Smoke-Test:
+
+```bash
+npm run verify:tools
+```
+
+Druckt einen Roster mit `●/○/✕` pro Tool. Details und Fehler-Diagnose siehe
+`docs/TOOL-WIRING.md`.
+
 ## Dokumentation
 
 - `docs/WORKFLOW_TEMPLATE.md` — Vorlage, um neue Workflows durch Claude Code bauen zu lassen
+- `docs/TOOL-WIRING.md` — Env-Vars + Smoke-Test für externe Tool-Bindings
 - `CLAUDE.md` — Architektur-Notizen für Claude Code
