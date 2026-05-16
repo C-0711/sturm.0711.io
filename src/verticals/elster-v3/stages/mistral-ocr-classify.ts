@@ -27,6 +27,7 @@ import {
   type MistralOcrConfig as FullConfig,
   type ParsedOcrResponse,
 } from '../../../lib/mistral-ocr/index.ts';
+import type { LlmHandle } from '../../../core/tools/handles.ts';
 
 // Kanonische Anlagen-IDs (synchron mit src/verticals/elster/stages/klassifizierung.ts PATTERNS-Map).
 // Hauptvordrucke + alle Anlagen die der Pass-1-Regex kennt.
@@ -154,6 +155,24 @@ export const mistralOcrClassifyStage = defineStage<
       },
     };
     if (cfg.confidenceScoresGranularity === undefined) cfg.confidenceScoresGranularity = 'page';
+
+    // ─── P5b — Tool-binding: pull model from the bound `ocr-primary` handle ───
+    // Wenn die Anwendung ein `mistral-ocr`-Werkzeug deklariert hat (siehe
+    // steuerfall-est-Tool-Roster), nutzen wir dessen `meta.model` als Quelle
+    // der Wahrheit für den OCR-Endpoint. Das hält Stage-Config und Roster
+    // entkoppelt: Wer das Modell wechseln will, edited das Roster, nicht den
+    // Stage-Code. Für Designer/CLI-Runs ohne Anwendung-Kontext (NullContainer)
+    // bleibt die direkte `callMistralOcrWithFallback`-Bahn aktiv — der Shim
+    // verschwindet erst in P10.
+    if (ctx.tools.has('mistral-ocr')) {
+      const ocrHandle = ctx.tools.getByRole<LlmHandle>('ocr-primary');
+      cfg.model = ocrHandle.meta.model;
+      ctx.logger.debug('mistral-ocr-classify: using bound OCR handle', {
+        tool: ocrHandle.name,
+        provider: ocrHandle.meta.provider,
+        model: ocrHandle.meta.model,
+      });
+    }
 
     const fileId =
       input.fileId ??

@@ -1,6 +1,8 @@
 import { defineStage } from '../../../core/stage.ts';
 import { chatJson } from '../lib/mistral-chat.ts';
 import { loadKatalog } from '../lib/anlagen-katalog.ts';
+import type { LlmHandle } from '../../../core/tools/handles.ts';
+import type { ToolContainerView } from '../../../core/tools/types.ts';
 
 export interface KlassifizierungInput {
   text: string;
@@ -130,12 +132,34 @@ function runRegex(text: string, allowed: Set<string>): Record<string, number> {
  *  fordert dieser Prompt PRO Anlage eine wörtliche OCR-Zitatzeile. Server-side
  *  filtern wir Anlagen deren `evidence`-Snippet NICHT als substring im OCR-Text
  *  vorkommt — schließt LLM-Halluzinationen ("KAP weil Sparkasse erwähnt") aus. */
+/**
+ * P5b — Tool-binding: prefer a bound LlmHandle from the Anwendung roster
+ * over a direct chatJson() call. Wahlhierarchie:
+ *   1. `classify-fallback` (claude-haiku) — critic-grade Gegenleser.
+ *   2. `classify-primary`  (mistral-small) — günstigerer Pfad.
+ *   3. NULL                                — fällt auf direkten chatJson()
+ *                                            (Designer / standalone runs ohne
+ *                                            Anwendung-Kontext).
+ *
+ * Shim bleibt bis P10 stehen, damit Designer-Runs nicht brechen.
+ */
+function pickKlassifizierungHandle(tools: ToolContainerView): LlmHandle | null {
+  if (tools.has('claude-haiku')) {
+    return tools.getByRole<LlmHandle>('classify-fallback');
+  }
+  if (tools.has('mistral-small')) {
+    return tools.getByRole<LlmHandle>('classify-primary');
+  }
+  return null;
+}
+
 async function llmClassify(
   text: string,
   anlagenNames: string[],
   model: string,
   temperature: number,
   signal?: AbortSignal,
+  handle?: LlmHandle | null,
 ): Promise<{ names: string[]; rejected: Array<{ name: string; reason: string; evidence?: string }> }> {
   const prompt = [
     'Du bekommst den Text eines Steuerdokuments (OCR).',
@@ -153,11 +177,20 @@ async function llmClassify(
     text.slice(0, 30_000),
   ].join('\n');
 
-  const { parsed } = await chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(prompt, {
-    model,
-    temperature,
-    signal,
-  });
+  let parsed: { anlagen?: Array<{ name: string; evidence?: string }> };
+  if (handle) {
+    parsed = await handle.chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(
+      prompt,
+      { temperature, signal },
+    );
+  } else {
+    const res = await chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(prompt, {
+      model,
+      temperature,
+      signal,
+    });
+    parsed = res.parsed;
+  }
 
   const allowed = new Set(anlagenNames);
   const lowerText = text.toLowerCase();
@@ -306,6 +339,14 @@ export const klassifizierungStage = defineStage<
     let llmRejected: Array<{ name: string; reason: string; evidence?: string }> = [];
     let usedLlm = false;
     if (shouldLlm) {
+      const handle = pickKlassifizierungHandle(ctx.tools);
+      if (handle) {
+        ctx.logger.debug('klassifizierung: using bound LLM handle', {
+          tool: handle.name,
+          provider: handle.meta.provider,
+          model: handle.meta.model,
+        });
+      }
       try {
         const r = await llmClassify(
           input.text,
@@ -313,6 +354,7 @@ export const klassifizierungStage = defineStage<
           ctx.config.model ?? 'mistral-small-latest',
           ctx.config.temperature ?? 0,
           ctx.signal,
+          handle,
         );
         llmNames = r.names;
         llmRejected = r.rejected;
