@@ -37,6 +37,7 @@ import {
   loadCatalog,
   type CatalogAtom,
 } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = resolve(HERE, '../data');
@@ -311,7 +312,25 @@ export const retrievalVerifyStage = defineStage<
       };
     }
 
-    const { cascade, atoms, eCodeToIdx } = await loadCascade(dataDir, manifestFile, atomsFile, topK);
+    // P7: bevorzuge ctx.tools.get('elster-rag') / 'elster-catalog' wenn die
+    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache.
+    const rag = ctx.tools.has('elster-rag')
+      ? ctx.tools.get<RagIndexHandle>('elster-rag')
+      : null;
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+    const fallback = (!rag || !cat)
+      ? await loadCascade(dataDir, manifestFile, atomsFile, topK)
+      : null;
+    const atoms: CatalogAtom[] = cat ? cat.get<CatalogAtom[]>('atoms') : fallback!.atoms;
+    let eCodeToIdx: Map<string, number>;
+    if (fallback) {
+      eCodeToIdx = fallback.eCodeToIdx;
+    } else {
+      eCodeToIdx = new Map<string, number>();
+      atoms.forEach((a, i) => eCodeToIdx.set(a.field_name, i));
+    }
 
     const queries = interesting.map((l) => makeQueryText(l.key, l.value));
     const tEmb = Date.now();
@@ -356,7 +375,13 @@ export const retrievalVerifyStage = defineStage<
 
     for (let i = 0; i < interesting.length; i++) {
       const leaf = interesting[i];
-      const top = cascade.topK(queryVecs[i], topK);
+      let top: Array<{ idx: number; score: number }>;
+      if (rag) {
+        const ragHits = await rag.retrieve(Array.from(queryVecs[i]), { topK, signal: ctx.signal });
+        top = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
+      } else {
+        top = fallback!.cascade.topK(queryVecs[i], topK);
+      }
       const cand = top.map((s) => {
         const a = atoms[s.idx];
         return {

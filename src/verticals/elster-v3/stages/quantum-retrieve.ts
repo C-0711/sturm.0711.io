@@ -36,6 +36,7 @@ import {
   type CascadeManifest,
 } from '../../../lib/quantum-index.ts';
 import { loadCatalog, type CatalogAtom } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = resolve(HERE, '../data');
@@ -167,11 +168,32 @@ export const quantumRetrieveStage = defineStage<
       throw new Error('quantum-retrieve: all queries must be non-empty strings');
     }
 
+    // P7: bevorzuge ctx.tools.get('elster-rag') + 'elster-catalog' wenn die
+    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache wenn standalone
+    // (Designer / Test / NullToolContainer).
+    const rag = ctx.tools.has('elster-rag')
+      ? ctx.tools.get<RagIndexHandle>('elster-rag')
+      : null;
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+
     ctx.emit('cascade_load_start', { dataDir, manifestFile });
-    const { cascade, atoms } = await loadCascade(dataDir, manifestFile, atomsFile, topK);
+
+    // Fallback-Cascade nur laden wenn ein Pfad das Modul-scope braucht
+    // (kein RAG-Tool oder kein Catalog-Tool gebunden).
+    const fallback = (!rag || !cat)
+      ? await loadCascade(dataDir, manifestFile, atomsFile, topK)
+      : null;
+    // Atoms holen — entweder vom Catalog-Tool (bevorzugt) oder via Fallback.
+    const atoms: CatalogAtom[] = cat
+      ? cat.get<CatalogAtom[]>('atoms')
+      : fallback!.atoms;
+    const cascadeDescribe = fallback ? fallback.cascade.describe() : '';
+
     ctx.emit('cascade_load_done', {
       atoms: atoms.length,
-      cascade: cascade.describe(),
+      cascade: cascadeDescribe || 'rag-tool',
     });
 
     const tEmb = Date.now();
@@ -180,11 +202,19 @@ export const quantumRetrieveStage = defineStage<
     ctx.emit('queries_embedded', { count: queryVecs.length, ms: embedMs });
 
     const tRet = Date.now();
-    const hits = queryVecs.map((qv, i) => {
-      const top = cascade.topK(qv, topK);
+    const hits = await Promise.all(queryVecs.map(async (qv, i) => {
+      let scored: Array<{ idx: number; score: number }>;
+      if (rag) {
+        // P7-Pfad: RAG-Handle. Wir geben den vorberechneten Vektor weiter
+        // (RagIndexHandle.retrieve akzeptiert number[]).
+        const ragHits = await rag.retrieve(Array.from(qv), { topK, signal: ctx.signal });
+        scored = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
+      } else {
+        scored = fallback!.cascade.topK(qv, topK);
+      }
       return {
         query: queries[i],
-        kandidaten: top.map<Kandidat>((s) => {
+        kandidaten: scored.map<Kandidat>((s) => {
           const a = atoms[s.idx];
           return {
             atom_id: a.atom_id,
@@ -202,7 +232,7 @@ export const quantumRetrieveStage = defineStage<
           };
         }),
       };
-    });
+    }));
     const retrieveMs = Date.now() - tRet;
     ctx.emit('quantum_retrieve_done', { queries: queries.length, retrieveMs });
 
@@ -211,7 +241,7 @@ export const quantumRetrieveStage = defineStage<
       stats: {
         queries: queries.length,
         catalogAtoms: atoms.length,
-        cascadeDescription: cascade.describe(),
+        cascadeDescription: cascadeDescribe || `rag-tool(${rag?.meta.containerId ?? 'unknown'})`,
         embedMs,
         retrieveMs,
       },

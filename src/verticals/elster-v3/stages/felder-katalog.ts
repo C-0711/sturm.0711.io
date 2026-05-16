@@ -14,8 +14,44 @@
 import { defineStage } from '../../../core/stage.ts';
 import {
   felderFuerAnlage,
+  einkunftsartVonAtom,
+  type AnlagenFeld,
   type AnlagenFelderListe,
+  type CatalogAtom,
 } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle } from '../../../core/tools/handles.ts';
+
+/**
+ * P7-Hilfsfunktion: baut die AnlagenFelderListe aus einem rohen Atoms-Array.
+ * Mirrors die Sortier-/Filter-Logik aus `felderFuerAnlage` in elster-catalog.ts
+ * — wir replizieren sie hier, damit der ctx.tools-Pfad ohne den modulscope
+ * loadCatalog auskommt. Bug-Fixes hier müssen synchron in beiden Pfaden landen.
+ */
+function felderFromAtoms(atoms: CatalogAtom[], anlage: string): AnlagenFelderListe {
+  const inAnlage = atoms.filter((a) => a.metadata.anlage === anlage);
+  const felder: AnlagenFeld[] = inAnlage
+    .filter((a) => /^E\d+$/.test(a.field_name))
+    .map((a) => ({
+      eCode: a.field_name,
+      drucktext: a.metadata.drucktext || a.value || a.field_name,
+      bezeichnung: a.value,
+      datentyp: a.metadata.datentyp,
+      formatRegex: a.metadata.formatRegex,
+      pflicht: a.metadata.pflicht,
+      vordruckzeile: a.metadata.vordruckzeile,
+      einkunftsart: einkunftsartVonAtom(a),
+      maxLaenge: a.metadata.maxLaenge,
+      minLaenge: a.metadata.minLaenge,
+    }));
+  felder.sort((a, b) => {
+    if (a.pflicht !== b.pflicht) return a.pflicht ? -1 : 1;
+    const za = Number(a.vordruckzeile) || Number.MAX_SAFE_INTEGER;
+    const zb = Number(b.vordruckzeile) || Number.MAX_SAFE_INTEGER;
+    if (za !== zb) return za - zb;
+    return a.eCode.localeCompare(b.eCode);
+  });
+  return { anlage, felder };
+}
 
 export interface FelderKatalogInput {
   /** Anlagen-Codes von elster/klassifizierung, z.B. ["N","VOR","SA"]. */
@@ -62,11 +98,20 @@ export const felderKatalogStage = defineStage<
       return { per_anlage: {}, total_felder: 0, total_pflicht: 0, ms: Date.now() - t0 };
     }
 
+    // P7: bevorzuge ctx.tools.get('elster-catalog') wenn die Anwendung den
+    // Catalog gebunden hat. Fallback auf felderFuerAnlage (modul-scope cache).
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+    const atomsFromCat = cat ? cat.get<CatalogAtom[]>('atoms') : null;
+
     const per_anlage: Record<string, AnlagenFelderListe> = {};
     let total = 0;
     let totalPflicht = 0;
     for (const anlage of anlagen) {
-      const liste = await felderFuerAnlage(anlage);
+      const liste = atomsFromCat
+        ? felderFromAtoms(atomsFromCat, anlage)
+        : await felderFuerAnlage(anlage);
       per_anlage[anlage] = liste;
       total += liste.felder.length;
       totalPflicht += liste.felder.filter((f) => f.pflicht).length;

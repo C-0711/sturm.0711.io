@@ -32,6 +32,7 @@ import {
   type CatalogAtom,
   type EinkunftsartCode,
 } from '../../../lib/elster-catalog.ts';
+import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = resolve(HERE, '../data');
@@ -246,7 +247,21 @@ export const quantumGroundStage = defineStage<QuantumGroundInput, QuantumGroundO
     const phrasen = extrahierePhrasen(input.text, maxPhrasen);
     ctx.emit('phrasen_extracted', { count: phrasen.length, sample: phrasen.slice(0, 5) });
 
-    const { cascade, atoms } = await loadCascadeAndAtoms(dataDir, manifestFile, atomsFile, proPhraseK);
+    // P7: bevorzuge ctx.tools.get('elster-rag') / 'elster-catalog' wenn die
+    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache.
+    const rag = ctx.tools.has('elster-rag')
+      ? ctx.tools.get<RagIndexHandle>('elster-rag')
+      : null;
+    const cat = ctx.tools.has('elster-catalog')
+      ? ctx.tools.get<CatalogHandle>('elster-catalog')
+      : null;
+    // Fallback-Cascade nur laden wenn ein Pfad das Modul-scope braucht.
+    const fallback = (!rag || !cat)
+      ? await loadCascadeAndAtoms(dataDir, manifestFile, atomsFile, proPhraseK)
+      : null;
+    const atoms: CatalogAtom[] = cat
+      ? cat.get<CatalogAtom[]>('atoms')
+      : fallback!.atoms;
 
     const baueKandidat = (
       a: CatalogAtom,
@@ -295,8 +310,14 @@ export const quantumGroundStage = defineStage<QuantumGroundInput, QuantumGroundO
 
       const tRet = Date.now();
       for (const qv of queryVecs) {
-        const hits = cascade.topK(qv, proPhraseK);
-        for (const h of hits) {
+        let scored: Array<{ idx: number; score: number }>;
+        if (rag) {
+          const ragHits = await rag.retrieve(Array.from(qv), { topK: proPhraseK, signal: ctx.signal });
+          scored = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
+        } else {
+          scored = fallback!.cascade.topK(qv, proPhraseK);
+        }
+        for (const h of scored) {
           const e = cascadeAgg.get(h.idx);
           if (e) { e.sumScore += h.score; e.count += 1; }
           else cascadeAgg.set(h.idx, { sumScore: h.score, count: 1 });
