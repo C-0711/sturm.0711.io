@@ -376,3 +376,25 @@ stage-3, stage-4 → stage-5        # join
 - **Browser zeigt alten Stand**: Hard-Reload (Cmd+Shift+R), Engine nicht restartet oder Browser-Cache.
 
 Alles andere: `pm2 logs sturm --lines 50` + `runs/<workflow>/<latest>/_result.json`.
+
+---
+
+## 9 · Tool-Konsum (P4+)
+
+Stages MÜSSEN externe Werkzeuge über `ctx.tools` konsumieren. Direkter
+`process.env`-Zugriff in `src/stages/` oder `src/verticals/` wird von
+`npm run lint:no-env` abgelehnt.
+
+```ts
+// Richtig:
+const llm = ctx.tools.getByRole<LlmHandle>('extraction-llm');
+const r = await llm.chatJson(prompt, { schema, signal: ctx.signal });
+
+// Falsch (CI failt):
+const r = await fetch(`${process.env.VLLM_URL}/v1/chat/completions`, ...);
+```
+
+Neue Werkzeuge werden im Anwendung-Roster (`src/applications/<id>/index.ts`)
+deklariert, sobald eine Stage eine neue externe Abhängigkeit braucht. In
+Ausnahmefällen (z.B. `STURM_GIT_AUTHOR_NAME` für die Gitchain-Identität)
+kann die Zeile mit `// lint-no-env: allow — <Begründung>` markiert werden.

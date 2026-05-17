@@ -1012,19 +1012,24 @@ app.post(
       veranlagungsjahr: inst.veranlagungsjahr ?? null,
       merkle_root: merkleRoot,
     };
-    // P6: prefer the per-Anwendung ToolContainer (Lane-5 by role 'einreichung').
-    // `elster-lane5` is required=false; gate with .has(). Fallback to the direct
-    // ElsterMcpClient keeps the Stub-Mode contract intact (returns
-    // `{ erfolg:false, reason:'mcp-unavailable' }` when ELSTER_MCP_URL unset).
-    // Removed in P10 after the lint rule lands.
+    // P10: Lane-5 (`elster-lane5`) is required=false in the Anwendung roster,
+    // so we still gate with .has(). When unwired, we no longer silently
+    // construct an ElsterMcpClient — we return 503 so the UI can surface a
+    // clean "einreichung-not-configured" message.
     const container = getToolContainer(appId);
-    const lane5 = container?.has('elster-lane5')
-      ? container.getByRole<McpHandle>('einreichung')
-      : null;
-    const { ElsterMcpClient } = await import('./lib/elster-mcp-client.ts');
-    type ElsterEinreichenErgebnis = Awaited<ReturnType<InstanceType<typeof ElsterMcpClient>['einreichen']>>;
+    if (!container?.has('elster-lane5')) {
+      return res.status(503).json({
+        erfolg: false,
+        reason: 'einreichung-not-configured',
+        message: 'Lane-5 (elster-lane5) ist in der Anwendung nicht gebunden. Tool-Roster prüfen.',
+      });
+    }
+    const lane5 = container.getByRole<McpHandle>('einreichung');
+    type ElsterEinreichenErgebnis = Awaited<
+      ReturnType<InstanceType<typeof import('./lib/elster-mcp-client.ts').ElsterMcpClient>['einreichen']>
+    >;
     let result: ElsterEinreichenErgebnis;
-    if (lane5) {
+    {
       try {
         result = await lane5.call<ElsterEinreichenErgebnis>(
           'elster_einreichen',
@@ -1038,9 +1043,6 @@ app.post(
           raw: msg,
         };
       }
-    } else {
-      const client = new ElsterMcpClient();
-      result = await client.einreichen({ eric_xml: ericXml, fall_metadata });
     }
     if (result.erfolg && result.einreichungs_id) {
       inst.status = 'eingereicht';

@@ -19,7 +19,7 @@
  * Output-Shape spiegelt phase1: per_anlage mit llm_hits map.
  */
 import { defineStage } from '../../../core/stage.ts';
-import { chatJson, onpremFetch, type ChatProvider } from '../../../lib/llm-chat.ts';
+import { onpremFetch, type ChatProvider } from '../../../lib/llm-chat.ts';
 import type { LlmHandle } from '../../../core/tools/handles.ts';
 import {
   loadContainerBrief,
@@ -642,32 +642,17 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
               ({ eCode, value }) => ctx.emit('phase3_field', { anlage, eCode, value, slice: sliceIdx }),
             );
           } else {
-            // P5a tool-binding: prefer the Anwendung-bound `extraction-llm` role
-            // (`gemma4-mm` in the steuerfall-est roster) when a real ToolContainer
-            // is wired. Fallback to direct `chatJson()` keeps Designer / standalone
-            // CLI runs working. P10 will remove this shim after the lint rule lands.
-            const llm = provider === 'vllm' && ctx.tools.has('gemma4-mm')
-              ? ctx.tools.getByRole<LlmHandle>('extraction-llm')
-              : null;
-            if (llm) {
-              parsed = await llm.chatJson<Record<string, string | null>>(slicePrompt, {
-                schema: { name: sliceSchema.name, schema: sliceSchema.schema, strict: true },
-                temperature,
-                maxTokens,
-                signal: ctx.signal,
-              });
-            } else {
-              const r = await chatJson<Record<string, string | null>>(slicePrompt, {
-                provider,
-                model: modelName,
-                vllmUrl: cfg.vllmUrl,
-                temperature,
-                maxTokens,
-                jsonSchema: { name: sliceSchema.name, schema: sliceSchema.schema, strict: true },
-                signal: ctx.signal,
-              });
-              parsed = r.parsed as Record<string, string | null>;
-            }
+            // P10: extraction-llm role is mandatory. NullToolContainer.getByRole
+            // throws a clear "no Anwendung context" error if the workflow is
+            // launched standalone — that is the correct contract because
+            // gemma4-mm is declared required:true in the steuerfall-est roster.
+            const llm = ctx.tools.getByRole<LlmHandle>('extraction-llm');
+            parsed = await llm.chatJson<Record<string, string | null>>(slicePrompt, {
+              schema: { name: sliceSchema.name, schema: sliceSchema.schema, strict: true },
+              temperature,
+              maxTokens,
+              signal: ctx.signal,
+            });
           }
           return { parsed, error: null };
         } catch (err) {

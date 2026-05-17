@@ -21,65 +21,19 @@
  * The current Layer-1 nested schemas don't always include eCode (mapping is
  * done in Layer 4). In that case mode (2) is the useful signal.
  */
-import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { defineStage } from '../../../core/stage.ts';
 import { embedQueries, type GemmaEmbedOptions } from '../../../lib/gemma-embed.ts';
 import {
-  QuantumCascade,
-  type CascadeManifest,
-} from '../../../lib/quantum-index.ts';
-import {
   checkFormat,
   normalizeForElster,
-  loadCatalog,
   type CatalogAtom,
 } from '../../../lib/elster-catalog.ts';
 import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DATA_DIR = resolve(HERE, '../data');
-const DEFAULT_MANIFEST = 'embeddings.gemma4.cascade.json';
-const DEFAULT_ATOMS = 'atoms.json';
 
 // Local "CatalogAtom" shape removed — we use the canonical type from
 // src/lib/elster-catalog.ts (imported above) which has the full metadata
 // (datentyp, formatRegex, pflicht, vordruckzeile, …) needed for the new
 // format/datentyp/pflicht validators.
-
-interface CacheEntry {
-  cascade: QuantumCascade;
-  atoms: CatalogAtom[];
-  eCodeToIdx: Map<string, number>;
-}
-const CACHE = new Map<string, Promise<CacheEntry>>();
-
-async function loadCascade(
-  dataDir: string,
-  manifestFile: string,
-  atomsFile: string,
-  finalK: number,
-): Promise<CacheEntry> {
-  const key = `${dataDir}::${manifestFile}::${finalK}`;
-  let p = CACHE.get(key);
-  if (p) return p;
-  p = (async () => {
-    const manifest: CascadeManifest = JSON.parse(
-      await readFile(join(dataDir, manifestFile), 'utf-8'),
-    );
-    const cascade = await QuantumCascade.loadFromManifest(dataDir, manifest, finalK);
-    const atoms: CatalogAtom[] = JSON.parse(
-      await readFile(join(dataDir, atomsFile), 'utf-8'),
-    );
-    const eCodeToIdx = new Map<string, number>();
-    atoms.forEach((a, i) => eCodeToIdx.set(a.field_name, i));
-    return { cascade, atoms, eCodeToIdx };
-  })();
-  CACHE.set(key, p);
-  return p;
-}
 
 // ─── nested-JSON walker ──────────────────────────────────────────────────
 
@@ -278,9 +232,9 @@ export const retrievalVerifyStage = defineStage<
 
   async run(input, ctx) {
     const cfg = ctx.config ?? {};
-    const dataDir = cfg.dataDir ?? DEFAULT_DATA_DIR;
-    const manifestFile = cfg.manifestFile ?? DEFAULT_MANIFEST;
-    const atomsFile = cfg.atomsFile ?? DEFAULT_ATOMS;
+    // dataDir/manifestFile/atomsFile config-Felder bleiben für Rückwärtskompat
+    // im Schema, werden aber seit P10 nicht mehr gelesen — Anwendung-Tools
+    // `elster-rag` und `elster-catalog` liefern Index + Atome.
     const topK = cfg.topK ?? 20;
     const unbekanntGrenze = cfg.unbekanntGrenze ?? 0.274;
     const konfidenzGrenze = cfg.konfidenzGrenze ?? 0.400;
@@ -312,25 +266,13 @@ export const retrievalVerifyStage = defineStage<
       };
     }
 
-    // P7: bevorzuge ctx.tools.get('elster-rag') / 'elster-catalog' wenn die
-    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache.
-    const rag = ctx.tools.has('elster-rag')
-      ? ctx.tools.get<RagIndexHandle>('elster-rag')
-      : null;
-    const cat = ctx.tools.has('elster-catalog')
-      ? ctx.tools.get<CatalogHandle>('elster-catalog')
-      : null;
-    const fallback = (!rag || !cat)
-      ? await loadCascade(dataDir, manifestFile, atomsFile, topK)
-      : null;
-    const atoms: CatalogAtom[] = cat ? cat.get<CatalogAtom[]>('atoms') : fallback!.atoms;
-    let eCodeToIdx: Map<string, number>;
-    if (fallback) {
-      eCodeToIdx = fallback.eCodeToIdx;
-    } else {
-      eCodeToIdx = new Map<string, number>();
-      atoms.forEach((a, i) => eCodeToIdx.set(a.field_name, i));
-    }
+    // P10: elster-rag + elster-catalog are required:true in the steuerfall-est
+    // roster. NullToolContainer throws cleanly if the workflow runs standalone.
+    const rag = ctx.tools.get<RagIndexHandle>('elster-rag');
+    const cat = ctx.tools.get<CatalogHandle>('elster-catalog');
+    const atoms: CatalogAtom[] = cat.get<CatalogAtom[]>('atoms');
+    const eCodeToIdx = new Map<string, number>();
+    atoms.forEach((a, i) => eCodeToIdx.set(a.field_name, i));
 
     const queries = interesting.map((l) => makeQueryText(l.key, l.value));
     const tEmb = Date.now();
@@ -375,13 +317,8 @@ export const retrievalVerifyStage = defineStage<
 
     for (let i = 0; i < interesting.length; i++) {
       const leaf = interesting[i];
-      let top: Array<{ idx: number; score: number }>;
-      if (rag) {
-        const ragHits = await rag.retrieve(Array.from(queryVecs[i]), { topK, signal: ctx.signal });
-        top = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
-      } else {
-        top = fallback!.cascade.topK(queryVecs[i], topK);
-      }
+      const ragHits = await rag.retrieve(Array.from(queryVecs[i]), { topK, signal: ctx.signal });
+      const top: Array<{ idx: number; score: number }> = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
       const cand = top.map((s) => {
         const a = atoms[s.idx];
         return {

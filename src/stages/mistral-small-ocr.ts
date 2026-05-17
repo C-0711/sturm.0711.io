@@ -177,7 +177,7 @@ export const mistralSmallOcrStage = defineStage<
     if (!input?.filePath) throw new Error('mistral-small-ocr: filePath fehlt');
     const t0 = Date.now();
     const mode: MistralSmallOcrMode = ctx.config?.mode ?? 'md';
-    const apiKey = ctx.config?.apiKey ?? process.env['MISTRAL_API_KEY'];
+    const apiKey = ctx.config?.apiKey ?? process.env['MISTRAL_API_KEY']; // lint-no-env: allow — Mistral API key, pre-P10 OCR stage not yet wired to a tool roster
     if (!apiKey) {
       throw new Error('mistral-small-ocr: MISTRAL_API_KEY env nicht gesetzt');
     }

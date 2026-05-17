@@ -1,5 +1,4 @@
 import { defineStage } from '../../../core/stage.ts';
-import { chatJson } from '../lib/mistral-chat.ts';
 import { loadKatalog } from '../lib/anlagen-katalog.ts';
 import type { LlmHandle } from '../../../core/tools/handles.ts';
 import type { ToolContainerView } from '../../../core/tools/types.ts';
@@ -133,33 +132,31 @@ function runRegex(text: string, allowed: Set<string>): Record<string, number> {
  *  filtern wir Anlagen deren `evidence`-Snippet NICHT als substring im OCR-Text
  *  vorkommt — schließt LLM-Halluzinationen ("KAP weil Sparkasse erwähnt") aus. */
 /**
- * P5b — Tool-binding: prefer a bound LlmHandle from the Anwendung roster
- * over a direct chatJson() call. Wahlhierarchie:
+ * P10 — Tool-binding: an LlmHandle from the Anwendung roster is mandatory.
+ * Wahlhierarchie:
  *   1. `classify-fallback` (claude-haiku) — critic-grade Gegenleser.
  *   2. `classify-primary`  (mistral-small) — günstigerer Pfad.
- *   3. NULL                                — fällt auf direkten chatJson()
- *                                            (Designer / standalone runs ohne
- *                                            Anwendung-Kontext).
  *
- * Shim bleibt bis P10 stehen, damit Designer-Runs nicht brechen.
+ * Beide sind in steuerfall-est als required:true deklariert. Wenn weder
+ * vorhanden ist, wirft `getByRole('classify-fallback')` mit einer klaren
+ * Fehlermeldung — das ist der korrekte Vertrag für Standalone-Runs ohne
+ * Anwendung-Kontext.
  */
-function pickKlassifizierungHandle(tools: ToolContainerView): LlmHandle | null {
+function pickKlassifizierungHandle(tools: ToolContainerView): LlmHandle {
   if (tools.has('claude-haiku')) {
     return tools.getByRole<LlmHandle>('classify-fallback');
   }
-  if (tools.has('mistral-small')) {
-    return tools.getByRole<LlmHandle>('classify-primary');
-  }
-  return null;
+  // Falls claude-haiku nicht gebunden ist, fällt der Lookup auf classify-primary
+  // zurück — NullToolContainer wirft, wenn auch das fehlt.
+  return tools.getByRole<LlmHandle>('classify-primary');
 }
 
 async function llmClassify(
   text: string,
   anlagenNames: string[],
-  model: string,
   temperature: number,
-  signal?: AbortSignal,
-  handle?: LlmHandle | null,
+  signal: AbortSignal | undefined,
+  handle: LlmHandle,
 ): Promise<{ names: string[]; rejected: Array<{ name: string; reason: string; evidence?: string }> }> {
   const prompt = [
     'Du bekommst den Text eines Steuerdokuments (OCR).',
@@ -177,20 +174,12 @@ async function llmClassify(
     text.slice(0, 30_000),
   ].join('\n');
 
-  let parsed: { anlagen?: Array<{ name: string; evidence?: string }> };
-  if (handle) {
-    parsed = await handle.chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(
-      prompt,
-      { temperature, signal },
-    );
-  } else {
-    const res = await chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(prompt, {
-      model,
-      temperature,
-      signal,
-    });
-    parsed = res.parsed;
-  }
+  // P10: LLM-Handle ist mandatorisch — wird aus dem Anwendung-Roster
+  // aufgelöst (classify-fallback bevorzugt, sonst classify-primary).
+  const parsed = await handle.chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(
+    prompt,
+    { temperature, signal },
+  );
 
   const allowed = new Set(anlagenNames);
   const lowerText = text.toLowerCase();
@@ -340,18 +329,15 @@ export const klassifizierungStage = defineStage<
     let usedLlm = false;
     if (shouldLlm) {
       const handle = pickKlassifizierungHandle(ctx.tools);
-      if (handle) {
-        ctx.logger.debug('klassifizierung: using bound LLM handle', {
-          tool: handle.name,
-          provider: handle.meta.provider,
-          model: handle.meta.model,
-        });
-      }
+      ctx.logger.debug('klassifizierung: using bound LLM handle', {
+        tool: handle.name,
+        provider: handle.meta.provider,
+        model: handle.meta.model,
+      });
       try {
         const r = await llmClassify(
           input.text,
           anlagenNames,
-          ctx.config.model ?? 'mistral-small-latest',
           ctx.config.temperature ?? 0,
           ctx.signal,
           handle,

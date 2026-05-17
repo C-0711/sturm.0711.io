@@ -20,54 +20,12 @@
  *     identisch zu retrieval-verify.ts und quantum-ground.ts.
  *   • embedQueries aus gemma-embed.ts (EmbeddingGemma + task-Prefix).
  */
-import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { defineStage } from '../../../core/stage.ts';
 import { embedQueries, type GemmaEmbedOptions } from '../../../lib/gemma-embed.ts';
-import {
-  QuantumCascade,
-  type CascadeManifest,
-} from '../../../lib/quantum-index.ts';
-import { loadCatalog, type CatalogAtom } from '../../../lib/elster-catalog.ts';
+import { type CatalogAtom } from '../../../lib/elster-catalog.ts';
 import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
 
 import type { BelegBlock, LabelValueChunk } from './label-value-parser.ts';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DATA_DIR = resolve(HERE, '../data');
-const DEFAULT_MANIFEST = 'embeddings.gemma4.cascade.json';
-const DEFAULT_ATOMS = 'atoms.json';
-
-// ─── Cached cascade + atoms ───────────────────────────────────────────────
-
-interface CascadeWithAtoms {
-  cascade: QuantumCascade;
-  atoms: CatalogAtom[];
-}
-const CASCADE_CACHE = new Map<string, Promise<CascadeWithAtoms>>();
-
-async function loadCascadeAndAtoms(
-  dataDir: string,
-  manifestFile: string,
-  atomsFile: string,
-  finalK: number,
-): Promise<CascadeWithAtoms> {
-  const key = `${dataDir}::${manifestFile}::${finalK}`;
-  let p = CASCADE_CACHE.get(key);
-  if (p) return p;
-  p = (async () => {
-    const manifest: CascadeManifest = JSON.parse(
-      await readFile(join(dataDir, manifestFile), 'utf-8'),
-    );
-    const cascade = await QuantumCascade.loadFromManifest(dataDir, manifest, finalK);
-    const handle = await loadCatalog(join(dataDir, atomsFile));
-    return { cascade, atoms: handle.atoms };
-  })();
-  CASCADE_CACHE.set(key, p);
-  return p;
-}
 
 // ─── Stage I/O ────────────────────────────────────────────────────────────
 
@@ -221,8 +179,9 @@ export const atomsCascadeSearchStage = defineStage<
     }
 
     const topK = ctx.config?.topK ?? 5;
-    const manifestFile = ctx.config?.manifestFile ?? DEFAULT_MANIFEST;
-    const atomsFile = ctx.config?.atomsFile ?? DEFAULT_ATOMS;
+    // manifestFile/atomsFile config-Felder bleiben für Rückwärtskompat im
+    // Schema, werden aber seit P10 nicht mehr gelesen — Anwendung-Tools
+    // `elster-rag` und `elster-catalog` liefern Index + Atome.
     const scopeToAnlagen = ctx.config?.scopeToAnlagen ?? true;
     const queryStrategy = ctx.config?.queryStrategy ?? 'label-only';
     const anlagenWhitelist =
@@ -230,22 +189,12 @@ export const atomsCascadeSearchStage = defineStage<
         ? new Set(input.anlagen)
         : null;
 
-    // P7: bevorzuge ctx.tools.get('elster-rag') / 'elster-catalog' wenn die
-    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache.
-    const rag = ctx.tools.has('elster-rag')
-      ? ctx.tools.get<RagIndexHandle>('elster-rag')
-      : null;
-    const cat = ctx.tools.has('elster-catalog')
-      ? ctx.tools.get<CatalogHandle>('elster-catalog')
-      : null;
-    // finalK = max(topK*4, 20) — der Cascade-Layer rerankt am Ende auf so
-    // viele Kandidaten, dass anlagen-Whitelist-Filterung noch genug übrig lässt.
-    const cascadeKLoad = Math.max(topK * 4, 20);
-    const fallback = (!rag || !cat)
-      ? await loadCascadeAndAtoms(DEFAULT_DATA_DIR, manifestFile, atomsFile, cascadeKLoad)
-      : null;
-    const atoms: CatalogAtom[] = cat ? cat.get<CatalogAtom[]>('atoms') : fallback!.atoms;
-    const cascadeDescribe = fallback ? fallback.cascade.describe() : `rag-tool(${rag?.meta.containerId ?? 'unknown'})`;
+    // P10: elster-rag + elster-catalog are required:true in the steuerfall-est
+    // roster. NullToolContainer throws cleanly if the workflow runs standalone.
+    const rag = ctx.tools.get<RagIndexHandle>('elster-rag');
+    const cat = ctx.tools.get<CatalogHandle>('elster-catalog');
+    const atoms: CatalogAtom[] = cat.get<CatalogAtom[]>('atoms');
+    const cascadeDescribe = `rag-tool(${rag.meta?.containerId ?? 'unknown'})`;
 
     // Flatten alle Chunks über alle Belege, behalte Mapping zurück.
     type Loc = { belegIdx: number; chunkIdx: number };
@@ -302,13 +251,8 @@ export const atomsCascadeSearchStage = defineStage<
 
     for (let qi = 0; qi < queries.length; qi++) {
       const loc = locs[qi];
-      let scored: Array<{ idx: number; score: number }>;
-      if (rag) {
-        const ragHits = await rag.retrieve(Array.from(vectors[qi]), { topK: cascadeK, signal: ctx.signal });
-        scored = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
-      } else {
-        scored = fallback!.cascade.topK(vectors[qi], cascadeK);
-      }
+      const ragHits = await rag.retrieve(Array.from(vectors[qi]), { topK: cascadeK, signal: ctx.signal });
+      const scored: Array<{ idx: number; score: number }> = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
       let cands = scored.map((s, i) => {
         const a = atoms[s.idx];
         const c: AtomCandidate = {

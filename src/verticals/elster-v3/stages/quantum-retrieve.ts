@@ -22,55 +22,13 @@
  * elster-v3 workflow runs many times against the same catalog, so amortizing
  * the 7 MB fp32 + 900 KB TQ load over runs is essential.
  */
-import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { defineStage } from '../../../core/stage.ts';
 import {
   embedQueries,
   type GemmaEmbedOptions,
 } from '../../../lib/gemma-embed.ts';
-import {
-  QuantumCascade,
-  type CascadeManifest,
-} from '../../../lib/quantum-index.ts';
-import { loadCatalog, type CatalogAtom } from '../../../lib/elster-catalog.ts';
+import { type CatalogAtom } from '../../../lib/elster-catalog.ts';
 import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DATA_DIR = resolve(HERE, '../data');
-const DEFAULT_MANIFEST = 'embeddings.gemma4.cascade.json';
-const DEFAULT_ATOMS = 'atoms.json';
-
-interface CacheEntry {
-  cascade: QuantumCascade;
-  atoms: CatalogAtom[];
-}
-
-/** Module-scope cache keyed by `${dataDir}::${manifestFile}`. */
-const CACHE = new Map<string, Promise<CacheEntry>>();
-
-async function loadCascade(
-  dataDir: string,
-  manifestFile: string,
-  atomsFile: string,
-  finalK: number,
-): Promise<CacheEntry> {
-  const key = `${dataDir}::${manifestFile}`;
-  let p = CACHE.get(key);
-  if (p) return p;
-  p = (async () => {
-    const manifest: CascadeManifest = JSON.parse(
-      await readFile(join(dataDir, manifestFile), 'utf-8'),
-    );
-    const cascade = await QuantumCascade.loadFromManifest(dataDir, manifest, finalK);
-    const handle = await loadCatalog(join(dataDir, atomsFile));
-    return { cascade, atoms: handle.atoms };
-  })();
-  CACHE.set(key, p);
-  return p;
-}
 
 export interface QuantumRetrieveInput {
   /** The query string. Usually OCR text or a layer-1 field value. */
@@ -154,9 +112,9 @@ export const quantumRetrieveStage = defineStage<
 
   async run(input, ctx) {
     const cfg = ctx.config ?? {};
-    const dataDir = cfg.dataDir ?? DEFAULT_DATA_DIR;
-    const manifestFile = cfg.manifestFile ?? DEFAULT_MANIFEST;
-    const atomsFile = cfg.atomsFile ?? DEFAULT_ATOMS;
+    // dataDir/manifestFile/atomsFile config-Felder bleiben für Rückwärtskompat
+    // im Schema, werden aber seit P10 nicht mehr gelesen — Anwendung-Tools
+    // `elster-rag` und `elster-catalog` liefern Index + Atome.
     const topK = cfg.topK ?? 10;
     const embedOpts: GemmaEmbedOptions = { ...(cfg.embed ?? {}), signal: ctx.signal };
 
@@ -168,32 +126,16 @@ export const quantumRetrieveStage = defineStage<
       throw new Error('quantum-retrieve: all queries must be non-empty strings');
     }
 
-    // P7: bevorzuge ctx.tools.get('elster-rag') + 'elster-catalog' wenn die
-    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache wenn standalone
-    // (Designer / Test / NullToolContainer).
-    const rag = ctx.tools.has('elster-rag')
-      ? ctx.tools.get<RagIndexHandle>('elster-rag')
-      : null;
-    const cat = ctx.tools.has('elster-catalog')
-      ? ctx.tools.get<CatalogHandle>('elster-catalog')
-      : null;
+    // P10: elster-rag + elster-catalog are required:true in the steuerfall-est
+    // roster. NullToolContainer throws cleanly if the workflow runs standalone.
+    const rag = ctx.tools.get<RagIndexHandle>('elster-rag');
+    const cat = ctx.tools.get<CatalogHandle>('elster-catalog');
 
-    ctx.emit('cascade_load_start', { dataDir, manifestFile });
-
-    // Fallback-Cascade nur laden wenn ein Pfad das Modul-scope braucht
-    // (kein RAG-Tool oder kein Catalog-Tool gebunden).
-    const fallback = (!rag || !cat)
-      ? await loadCascade(dataDir, manifestFile, atomsFile, topK)
-      : null;
-    // Atoms holen — entweder vom Catalog-Tool (bevorzugt) oder via Fallback.
-    const atoms: CatalogAtom[] = cat
-      ? cat.get<CatalogAtom[]>('atoms')
-      : fallback!.atoms;
-    const cascadeDescribe = fallback ? fallback.cascade.describe() : '';
+    const atoms: CatalogAtom[] = cat.get<CatalogAtom[]>('atoms');
 
     ctx.emit('cascade_load_done', {
       atoms: atoms.length,
-      cascade: cascadeDescribe || 'rag-tool',
+      cascade: `rag-tool(${rag.meta?.containerId ?? 'unknown'})`,
     });
 
     const tEmb = Date.now();
@@ -203,15 +145,8 @@ export const quantumRetrieveStage = defineStage<
 
     const tRet = Date.now();
     const hits = await Promise.all(queryVecs.map(async (qv, i) => {
-      let scored: Array<{ idx: number; score: number }>;
-      if (rag) {
-        // P7-Pfad: RAG-Handle. Wir geben den vorberechneten Vektor weiter
-        // (RagIndexHandle.retrieve akzeptiert number[]).
-        const ragHits = await rag.retrieve(Array.from(qv), { topK, signal: ctx.signal });
-        scored = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
-      } else {
-        scored = fallback!.cascade.topK(qv, topK);
-      }
+      const ragHits = await rag.retrieve(Array.from(qv), { topK, signal: ctx.signal });
+      const scored: Array<{ idx: number; score: number }> = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
       return {
         query: queries[i],
         kandidaten: scored.map<Kandidat>((s) => {
@@ -241,7 +176,7 @@ export const quantumRetrieveStage = defineStage<
       stats: {
         queries: queries.length,
         catalogAtoms: atoms.length,
-        cascadeDescription: cascadeDescribe || `rag-tool(${rag?.meta.containerId ?? 'unknown'})`,
+        cascadeDescription: `rag-tool(${rag.meta?.containerId ?? 'unknown'})`,
         embedMs,
         retrieveMs,
       },

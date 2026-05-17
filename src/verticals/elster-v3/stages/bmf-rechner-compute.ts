@@ -18,7 +18,7 @@
  */
 import { defineStage } from '../../../core/stage.ts';
 import type { McpHandle } from '../../../core/tools/handles.ts';
-import { BmfMcpClient, canonicalLayerToElsterFelder, type BmfSteuerErgebnis } from '../../../lib/bmf-mcp-client.ts';
+import { canonicalLayerToElsterFelder, type BmfSteuerErgebnis } from '../../../lib/bmf-mcp-client.ts';
 import { buildEricXml, type CanonicalValue } from './phase5-merge.ts';
 
 /** Map: MCP-Output-Key → ELSTER eCode + Drucktext + Anlage.
@@ -66,7 +66,8 @@ export interface BmfRechnerComputeOutput {
 }
 
 export interface BmfRechnerComputeConfig {
-  /** MCP-URL. Default: process.env.BMF_MCP_URL oder http://localhost:12010/mcp */
+  /** MCP-URL. Legacy — wird seit P10 von der Anwendung-Tool-Roster aufgelöst (bmf-lane1).
+   *  Bleibt im Config-Schema für Rückwärtskompat; wird vom Stage nicht mehr gelesen. */
   mcpUrl?: string;
   /** Veranlagungsjahr. Default: aktuelles Jahr − 1 (Steuererklärung läuft ein Jahr nach). */
   veranlagungsjahr?: number;
@@ -151,31 +152,25 @@ export const bmfRechnerComputeStage = defineStage<
     }
 
     const elsterFelder = canonicalLayerToElsterFelder(declared);
+
+    // P10: Lane-1 BMF-Rechner is required:true in the Anwendung roster
+    // (steuerfall-est binds `bmf-lane1` at role `steuerrechner`).
+    // NullToolContainer throws if the workflow runs without an Anwendung.
+    const bmf = ctx.tools.getByRole<McpHandle>('steuerrechner');
+
     ctx.emit('bmf_rechner_start', {
       veranlagungsjahr,
       input_ecodes: Object.keys(elsterFelder),
-      mcp_url: cfg.mcpUrl ?? process.env.BMF_MCP_URL ?? 'http://localhost:12010/mcp',
+      mcp_url: bmf.meta?.url ?? null,
     });
-
-    // P6: prefer the per-Anwendung ToolContainer (Lane-1 by role 'steuerrechner').
-    // Fallback to the direct BmfMcpClient keeps Designer/CLI standalone runs working;
-    // the shim is removed in P10 after the lint rule lands.
-    const bmf = ctx.tools.has('bmf-lane1')
-      ? ctx.tools.getByRole<McpHandle>('steuerrechner')
-      : null;
 
     let mcpResponse: BmfSteuerErgebnis;
     try {
-      mcpResponse = bmf
-        ? await bmf.call<BmfSteuerErgebnis>(
-            'berechne_vollstaendige_steuer_v2',
-            { erklaerungsjahr: veranlagungsjahr, elster_felder: elsterFelder },
-            { signal: ctx.signal, timeoutMs: cfg.timeoutMs },
-          )
-        : await new BmfMcpClient({ url: cfg.mcpUrl, timeoutMs: cfg.timeoutMs }).berechneVollstaendigeSteuerV2(
-            { erklaerungsjahr: veranlagungsjahr, elster_felder: elsterFelder },
-            ctx.signal,
-          );
+      mcpResponse = await bmf.call<BmfSteuerErgebnis>(
+        'berechne_vollstaendige_steuer_v2',
+        { erklaerungsjahr: veranlagungsjahr, elster_felder: elsterFelder },
+        { signal: ctx.signal, timeoutMs: cfg.timeoutMs },
+      );
     } catch (err) {
       const msg = (err as Error).message;
       ctx.logger.warn('BMF-MCP unreachable / failed — graceful skip', { error: msg });

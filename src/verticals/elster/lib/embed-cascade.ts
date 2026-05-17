@@ -43,8 +43,8 @@ async function getCatalog(): Promise<ElsterCatalog> {
 async function getIndex(): Promise<BundledIndex> {
   if (!indexP) {
     // Default to the Ollama bge-m3 index produced by preprocess-embed-catalog.mjs
-    const bin = process.env.ELSTER_INDEX_BIN ?? join(DATA, 'ecode_index_ollama_bge-m3.bin');
-    const meta = process.env.ELSTER_INDEX_META ?? join(DATA, 'ecode_index_ollama_bge-m3.meta.json');
+    const bin = process.env.ELSTER_INDEX_BIN ?? join(DATA, 'ecode_index_ollama_bge-m3.bin'); // lint-no-env: allow — bundled index location, pre-P10 lib module
+    const meta = process.env.ELSTER_INDEX_META ?? join(DATA, 'ecode_index_ollama_bge-m3.meta.json'); // lint-no-env: allow — bundled index meta path, pre-P10 lib module
     indexP = loadBundledIndex(bin, meta);
   }
   return indexP;
@@ -181,8 +181,8 @@ const stageReason: CascadeStage<ElsterCatalog> = {
         anlagen_kontext: f?.kontextPaths?.[0] ?? '',
       };
     });
-    const provider = (process.env.CHAT_PROVIDER as 'mistral' | 'ollama' | undefined) ?? 'ollama';
-    const model = process.env.CHAT_MODEL ??
+    const provider = (process.env.CHAT_PROVIDER as 'mistral' | 'ollama' | undefined) ?? 'ollama'; // lint-no-env: allow — pre-P10 elster-v1 lib, not yet migrated to ctx.tools
+    const model = process.env.CHAT_MODEL ?? // lint-no-env: allow — pre-P10 elster-v1 lib, not yet migrated to ctx.tools
       (provider === 'mistral' ? 'mistral-large-latest' : 'gemma4:31b-128k');
     const prompt = [
       `Du bist Steuerberater-Experte und mappst frei extrahierte KPIs aus deutschen Steuerdokumenten`,

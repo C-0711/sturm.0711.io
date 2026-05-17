@@ -225,72 +225,30 @@ const DISAMBIG_SCHEMA = {
 // ─── vLLM Call (single) ───────────────────────────────────────────────────
 
 async function callDisambig(
-  url: string,
-  model: string,
   prompt: string,
   temperature: number,
   maxTokens: number,
   timeoutMs: number,
   signal: AbortSignal,
-  llm: LlmHandle | null,
+  llm: LlmHandle,
 ): Promise<{ picked_ecode: string | null; confidence: number; reasoning: string }> {
-  // P5a tool-binding: prefer the Anwendung-bound `disambig-llm` role
-  // (`gemma4-mm` in the steuerfall-est roster) when a real ToolContainer
-  // is wired. Fallback (raw vLLM fetch) keeps Designer / standalone CLI
-  // runs working. P10 will remove the fallback after the lint rule lands.
-  if (llm) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), timeoutMs);
-    const onAbort = () => ctl.abort();
-    signal.addEventListener('abort', onAbort, { once: true });
-    try {
-      return await llm.chatJson<{ picked_ecode: string | null; confidence: number; reasoning: string }>(
-        prompt,
-        {
-          schema: { name: 'elster_disambig', strict: true, schema: DISAMBIG_SCHEMA },
-          temperature,
-          maxTokens,
-          signal: ctl.signal,
-        },
-      );
-    } finally {
-      clearTimeout(t);
-      signal.removeEventListener('abort', onAbort);
-    }
-  }
-
-  const body = {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    temperature,
-    max_tokens: maxTokens,
-    response_format: {
-      type: 'json_schema',
-      json_schema: { name: 'elster_disambig', strict: true, schema: DISAMBIG_SCHEMA },
-    },
-  };
+  // P10: disambig-llm is bound by the Anwendung (steuerfall-est: gemma4-mm).
+  // No raw-fetch fallback — NullToolContainer throws clearly if the workflow
+  // runs standalone.
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
-  // Forward parent abort.
   const onAbort = () => ctl.abort();
   signal.addEventListener('abort', onAbort, { once: true });
   try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      signal: ctl.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) throw new Error(`vLLM ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-    const j = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
-    const content = j.choices?.[0]?.message?.content;
-    if (!content) throw new Error('vLLM: empty content');
-    const parsed = JSON.parse(content) as {
-      picked_ecode: string | null;
-      confidence: number;
-      reasoning: string;
-    };
-    return parsed;
+    return await llm.chatJson<{ picked_ecode: string | null; confidence: number; reasoning: string }>(
+      prompt,
+      {
+        schema: { name: 'elster_disambig', strict: true, schema: DISAMBIG_SCHEMA },
+        temperature,
+        maxTokens,
+        signal: ctl.signal,
+      },
+    );
   } finally {
     clearTimeout(t);
     signal.removeEventListener('abort', onAbort);
@@ -352,24 +310,16 @@ export const llmDisambigStage = defineStage<
     const t0 = Date.now();
     const acceptCosine = ctx.config?.acceptCosine ?? 0.65;
     const disambigLo = ctx.config?.disambigLo ?? 0.30;
-    // URL-Priority: stage.config > env VLLM_URL > localhost-default.
-    // VLLM_URL aus env reicht aus für Docker-Containers wo localhost im
-    // Container nicht der Host ist (host.docker.internal:11435).
-    const vllmFromEnv = process.env['VLLM_URL'];
-    const vllmUrl = ctx.config?.vllmUrl
-      ?? (vllmFromEnv ? `${vllmFromEnv.replace(/\/$/, '')}/v1/chat/completions` : 'http://localhost:11435/v1/chat/completions');
-    const model = ctx.config?.model ?? 'gemma4-mm';
     const temperature = ctx.config?.temperature ?? 0;
     const maxTokens = ctx.config?.maxTokens ?? 300;
     const maxConcurrency = ctx.config?.maxConcurrency ?? 16;
     const perCallTimeoutMs = ctx.config?.perCallTimeoutMs ?? 120_000;
 
-    // P5a: prefer the Anwendung-bound `disambig-llm` role (steuerfall-est
-    // wires `gemma4-mm` to both `extraction-llm` and `disambig-llm`).
-    // Standalone runs fall back to raw vLLM fetch on `vllmUrl`.
-    const llmHandle: LlmHandle | null = ctx.tools.has('gemma4-mm')
-      ? ctx.tools.getByRole<LlmHandle>('disambig-llm')
-      : null;
+    // P10: disambig-llm is mandatory — resolved by the Anwendung
+    // (steuerfall-est wires `gemma4-mm` to both `extraction-llm` and
+    // `disambig-llm`). NullToolContainer throws if the workflow runs
+    // standalone — that is the correct contract.
+    const llmHandle: LlmHandle = ctx.tools.getByRole<LlmHandle>('disambig-llm');
 
     // Disambig-Hinweise einmalig aus Container laden
     const hintsFile = await loadDisambiguationHints();
@@ -480,8 +430,6 @@ export const llmDisambigStage = defineStage<
       async (item) => {
         try {
           const r = await callDisambig(
-            vllmUrl,
-            model,
             item.prompt,
             temperature,
             maxTokens,

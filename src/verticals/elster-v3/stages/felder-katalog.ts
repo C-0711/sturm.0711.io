@@ -13,7 +13,6 @@
  */
 import { defineStage } from '../../../core/stage.ts';
 import {
-  felderFuerAnlage,
   einkunftsartVonAtom,
   type AnlagenFeld,
   type AnlagenFelderListe,
@@ -98,20 +97,16 @@ export const felderKatalogStage = defineStage<
       return { per_anlage: {}, total_felder: 0, total_pflicht: 0, ms: Date.now() - t0 };
     }
 
-    // P7: bevorzuge ctx.tools.get('elster-catalog') wenn die Anwendung den
-    // Catalog gebunden hat. Fallback auf felderFuerAnlage (modul-scope cache).
-    const cat = ctx.tools.has('elster-catalog')
-      ? ctx.tools.get<CatalogHandle>('elster-catalog')
-      : null;
-    const atomsFromCat = cat ? cat.get<CatalogAtom[]>('atoms') : null;
+    // P10: elster-catalog is required:true in the steuerfall-est roster.
+    // NullToolContainer throws cleanly if the workflow runs standalone.
+    const cat = ctx.tools.get<CatalogHandle>('elster-catalog');
+    const atomsFromCat = cat.get<CatalogAtom[]>('atoms');
 
     const per_anlage: Record<string, AnlagenFelderListe> = {};
     let total = 0;
     let totalPflicht = 0;
     for (const anlage of anlagen) {
-      const liste = atomsFromCat
-        ? felderFromAtoms(atomsFromCat, anlage)
-        : await felderFuerAnlage(anlage);
+      const liste = felderFromAtoms(atomsFromCat, anlage);
       per_anlage[anlage] = liste;
       total += liste.felder.length;
       totalPflicht += liste.felder.filter((f) => f.pflicht).length;

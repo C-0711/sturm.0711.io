@@ -127,8 +127,8 @@ export const commitAndAnchorStage = defineStage<
     const masterPath = path.join(sealDir, 'master.json');
     await fs.writeFile(masterPath, JSON.stringify(master, null, 2), 'utf-8');
 
-    const authorName = process.env['STURM_GIT_AUTHOR_NAME'] ?? 'sturm-sealer';
-    const authorEmail = process.env['STURM_GIT_AUTHOR_EMAIL'] ?? 'seal@0711.io';
+    const authorName = process.env['STURM_GIT_AUTHOR_NAME'] ?? 'sturm-sealer'; // lint-no-env: allow — git author identity is process-level, not a tool binding
+    const authorEmail = process.env['STURM_GIT_AUTHOR_EMAIL'] ?? 'seal@0711.io'; // lint-no-env: allow — git author identity is process-level, not a tool binding
     const commitSha = await gc.commitAndPush(
       wsAbs,
       `seal: ${appId}/${caseId} merkle=${merkleRoot.slice(0, 12)}`,

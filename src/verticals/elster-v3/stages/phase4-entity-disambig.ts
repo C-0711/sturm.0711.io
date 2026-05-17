@@ -145,66 +145,27 @@ async function disambigCall(
   feld: AnlagenFeld,
   anlage: string,
   candidates: Candidate[],
-  cfg: Required<Pick<Phase4DisambigConfig, 'vllmUrl' | 'model' | 'temperature' | 'perCallTimeoutMs'>>,
+  cfg: Required<Pick<Phase4DisambigConfig, 'perCallTimeoutMs' | 'temperature'>>,
   signal: AbortSignal | undefined,
-  llm: LlmHandle | null,
+  llm: LlmHandle,
 ): Promise<DisambigAnswer | null> {
   const schema = buildDisambigSchema(feld, candidates);
   const prompt = buildDisambigPrompt(feld, anlage, candidates);
 
-  // P5a tool-binding: prefer the Anwendung-bound `disambig-llm` role
-  // (`gemma4-mm` in the steuerfall-est roster) when a real ToolContainer
-  // is wired. The handle wraps the same vLLM chatJson backend but routes
-  // through the Anwendung-resolved baseUrl/model. Fallback path (raw fetch)
-  // keeps Designer / standalone CLI runs working. P10 will remove the
-  // fallback after the lint rule lands.
-  if (llm) {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(new Error('disambig timeout')), cfg.perCallTimeoutMs);
-    const onParentAbort = () => ac.abort(signal?.reason);
-    signal?.addEventListener('abort', onParentAbort, { once: true });
-    try {
-      return await llm.chatJson<DisambigAnswer>(prompt, {
-        schema: { name: `disambig_${feld.eCode}`, schema, strict: true },
-        temperature: cfg.temperature,
-        maxTokens: 200,
-        signal: ac.signal,
-      });
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onParentAbort);
-    }
-  }
-
+  // P10: disambig-llm is bound by the Anwendung (steuerfall-est: gemma4-mm).
+  // No raw-fetch fallback — NullToolContainer throws clearly if the workflow
+  // runs standalone.
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(new Error('disambig timeout')), cfg.perCallTimeoutMs);
   const onParentAbort = () => ac.abort(signal?.reason);
   signal?.addEventListener('abort', onParentAbort, { once: true });
   try {
-    const res = await fetch(`${cfg.vllmUrl}/v1/chat/completions`, {
-      method: 'POST',
+    return await llm.chatJson<DisambigAnswer>(prompt, {
+      schema: { name: `disambig_${feld.eCode}`, schema, strict: true },
+      temperature: cfg.temperature,
+      maxTokens: 200,
       signal: ac.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: cfg.model,
-        temperature: cfg.temperature,
-        max_tokens: 200,
-        messages: [{ role: 'user', content: prompt }],
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: `disambig_${feld.eCode}`, schema, strict: true },
-        },
-      }),
     });
-    if (!res.ok) return null;
-    const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = j.choices?.[0]?.message?.content ?? '';
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start < 0 || end <= start) return null;
-    return JSON.parse(raw.slice(start, end + 1)) as DisambigAnswer;
   } catch {
     return null;
   } finally {
@@ -244,26 +205,21 @@ export const phase4EntityDisambigStage = defineStage<
   async run(input, ctx) {
     const t0 = Date.now();
     const cfg = ctx.config ?? {};
-    const provider: ChatProvider = cfg.provider ?? 'vllm';
-    const vllmUrl = cfg.vllmUrl ?? 'http://localhost:11435';
-    const model = cfg.model ?? 'gemma4-mm';
     const temperature = cfg.temperature ?? 0;
     const confT = cfg.confidenceThreshold ?? 0.7;
     const topK = cfg.topK ?? 5;
     const concurrency = Math.max(1, cfg.concurrency ?? 5);
     const perCallTimeoutMs = cfg.perCallTimeoutMs ?? 20_000;
+    // Provider/model/vllmUrl config is now resolved by the Anwendung tool
+    // roster (steuerfall-est: gemma4-mm at role disambig-llm). The legacy
+    // cfg.provider / cfg.model / cfg.vllmUrl fields remain in the public
+    // config schema for backwards compat but are not consumed by the stage.
 
-    if (provider !== 'vllm') {
-      ctx.logger.warn('phase4-entity-disambig: provider≠vllm — Mini-Disambig im aktuellen MVP nur über vLLM');
-    }
-
-    // P5a: prefer the Anwendung-bound `disambig-llm` role when the run was
-    // started via an Anwendung (steuerfall-est binds `gemma4-mm` to both
-    // `extraction-llm` and `disambig-llm`). Standalone runs land in the
-    // fallback path (raw vLLM fetch with config.vllmUrl).
-    const llmHandle: LlmHandle | null = provider === 'vllm' && ctx.tools.has('gemma4-mm')
-      ? ctx.tools.getByRole<LlmHandle>('disambig-llm')
-      : null;
+    // P10: disambig-llm role is mandatory — resolved via the Anwendung roster
+    // (steuerfall-est binds `gemma4-mm` to both `extraction-llm` and
+    // `disambig-llm`). NullToolContainer throws if the workflow runs without
+    // an Anwendung — which is the right contract.
+    const llmHandle: LlmHandle = ctx.tools.getByRole<LlmHandle>('disambig-llm');
 
     const phase3 = input.phase3_per_anlage ?? {};
     const felderMap = input.felder_per_anlage ?? {};
@@ -286,7 +242,7 @@ export const phase4EntityDisambigStage = defineStage<
         tasks.push({ anlage, feld, candidates });
       }
     }
-    ctx.emit('phase4_start', { tasks: tasks.length, concurrency, model });
+    ctx.emit('phase4_start', { tasks: tasks.length, concurrency, model: llmHandle.meta?.model ?? null });
 
     const queue = [...tasks];
     const worker = async (): Promise<void> => {
@@ -297,7 +253,7 @@ export const phase4EntityDisambigStage = defineStage<
           task.feld,
           task.anlage,
           task.candidates,
-          { vllmUrl, model, temperature, perCallTimeoutMs },
+          { temperature, perCallTimeoutMs },
           ctx.signal,
           llmHandle,
         );

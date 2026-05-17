@@ -276,7 +276,7 @@ export async function resolveEntity(
   }
 
   const provider = opts.chatProvider ??
-    (process.env.CHAT_PROVIDER as 'mistral' | 'ollama' | undefined) ?? 'ollama';
+    (process.env.CHAT_PROVIDER as 'mistral' | 'ollama' | undefined) ?? 'ollama'; // lint-no-env: allow — pre-P10 elster-v1 lib, not yet migrated to ctx.tools
   const model = opts.chatModel ??
     (provider === 'mistral' ? 'mistral-small-latest' : 'gemma4:e4b');
 

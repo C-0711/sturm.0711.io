@@ -16,55 +16,14 @@
  * tells Gemma-4 "look for these eCodes" instead of letting it guess across
  * all 2287. Constrains the vocabulary, lifts mapping accuracy.
  */
-import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { defineStage } from '../../../core/stage.ts';
 import { embedQueries, type GemmaEmbedOptions } from '../../../lib/gemma-embed.ts';
 import {
-  QuantumCascade,
-  type CascadeManifest,
-} from '../../../lib/quantum-index.ts';
-import {
-  loadCatalog,
   einkunftsartVonAtom,
   type CatalogAtom,
   type EinkunftsartCode,
 } from '../../../lib/elster-catalog.ts';
 import type { CatalogHandle, RagIndexHandle } from '../../../core/tools/handles.ts';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DATA_DIR = resolve(HERE, '../data');
-const DEFAULT_MANIFEST = 'embeddings.gemma4.cascade.json';
-const DEFAULT_ATOMS = 'atoms.json';
-
-interface CascadeWithAtoms {
-  cascade: QuantumCascade;
-  atoms: CatalogAtom[];
-}
-const CASCADE_CACHE = new Map<string, Promise<CascadeWithAtoms>>();
-
-async function loadCascadeAndAtoms(
-  dataDir: string,
-  manifestFile: string,
-  atomsFile: string,
-  finalK: number,
-): Promise<CascadeWithAtoms> {
-  const key = `${dataDir}::${manifestFile}::${finalK}`;
-  let p = CASCADE_CACHE.get(key);
-  if (p) return p;
-  p = (async () => {
-    const manifest: CascadeManifest = JSON.parse(
-      await readFile(join(dataDir, manifestFile), 'utf-8'),
-    );
-    const cascade = await QuantumCascade.loadFromManifest(dataDir, manifest, finalK);
-    const handle = await loadCatalog(join(dataDir, atomsFile));
-    return { cascade, atoms: handle.atoms };
-  })();
-  CASCADE_CACHE.set(key, p);
-  return p;
-}
 
 // ─── Phrase extraction ───────────────────────────────────────────────────
 // We're not building a full NLP layout-aware extractor here — the OCR text is
@@ -227,9 +186,9 @@ export const quantumGroundStage = defineStage<QuantumGroundInput, QuantumGroundO
 
   async run(input, ctx) {
     const cfg = ctx.config ?? {};
-    const dataDir = cfg.dataDir ?? DEFAULT_DATA_DIR;
-    const manifestFile = cfg.manifestFile ?? DEFAULT_MANIFEST;
-    const atomsFile = cfg.atomsFile ?? DEFAULT_ATOMS;
+    // dataDir/manifestFile/atomsFile config-Felder bleiben für Rückwärtskompat
+    // im Schema, werden aber seit P10 nicht mehr gelesen — die Anwendung-Tools
+    // `elster-rag` und `elster-catalog` liefern Index + Atome.
     const maxPhrasen = cfg.maxPhrasen ?? 30;
     const proPhraseK = cfg.proPhraseK ?? 10;
     const finalK = cfg.finalK ?? 50;
@@ -247,21 +206,12 @@ export const quantumGroundStage = defineStage<QuantumGroundInput, QuantumGroundO
     const phrasen = extrahierePhrasen(input.text, maxPhrasen);
     ctx.emit('phrasen_extracted', { count: phrasen.length, sample: phrasen.slice(0, 5) });
 
-    // P7: bevorzuge ctx.tools.get('elster-rag') / 'elster-catalog' wenn die
-    // Anwendung sie gebunden hat. Fallback auf modul-scope Cache.
-    const rag = ctx.tools.has('elster-rag')
-      ? ctx.tools.get<RagIndexHandle>('elster-rag')
-      : null;
-    const cat = ctx.tools.has('elster-catalog')
-      ? ctx.tools.get<CatalogHandle>('elster-catalog')
-      : null;
-    // Fallback-Cascade nur laden wenn ein Pfad das Modul-scope braucht.
-    const fallback = (!rag || !cat)
-      ? await loadCascadeAndAtoms(dataDir, manifestFile, atomsFile, proPhraseK)
-      : null;
-    const atoms: CatalogAtom[] = cat
-      ? cat.get<CatalogAtom[]>('atoms')
-      : fallback!.atoms;
+    // P10: `elster-rag` und `elster-catalog` sind required:true im
+    // steuerfall-est-Roster. NullToolContainer wirft eine klare Fehlermeldung,
+    // wenn der Workflow ohne Anwendung-Kontext läuft.
+    const rag = ctx.tools.get<RagIndexHandle>('elster-rag');
+    const cat = ctx.tools.get<CatalogHandle>('elster-catalog');
+    const atoms: CatalogAtom[] = cat.get<CatalogAtom[]>('atoms');
 
     const baueKandidat = (
       a: CatalogAtom,
@@ -310,13 +260,8 @@ export const quantumGroundStage = defineStage<QuantumGroundInput, QuantumGroundO
 
       const tRet = Date.now();
       for (const qv of queryVecs) {
-        let scored: Array<{ idx: number; score: number }>;
-        if (rag) {
-          const ragHits = await rag.retrieve(Array.from(qv), { topK: proPhraseK, signal: ctx.signal });
-          scored = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
-        } else {
-          scored = fallback!.cascade.topK(qv, proPhraseK);
-        }
+        const ragHits = await rag.retrieve(Array.from(qv), { topK: proPhraseK, signal: ctx.signal });
+        const scored: Array<{ idx: number; score: number }> = ragHits.map((h) => ({ idx: Number(h.id), score: h.score }));
         for (const h of scored) {
           const e = cascadeAgg.get(h.idx);
           if (e) { e.sumScore += h.score; e.count += 1; }

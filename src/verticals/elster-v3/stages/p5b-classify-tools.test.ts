@@ -220,19 +220,16 @@ test('klassifizierung: falls through to classify-primary (mistral-small)', async
 // Test 3 — klassifizierung mit NullToolContainer fällt auf direkten chatJson
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('klassifizierung: with NullToolContainer falls back to direct chatJson (no throw on missing API key swallowed by stage)', async () => {
+test('klassifizierung: with NullToolContainer the LLM-branch is gracefully skipped (regex-only result)', async () => {
   const { store, root } = await makeArtifactStore();
   try {
-    // Default-mode 'zero' + Text mit 0 Regex-Hits → LLM würde feuern.
-    // Ohne MISTRAL_API_KEY würde der direkte chatJson() throwen — die Stage
-    // fängt das in einem try/catch und behält das Regex-Result (ctx.logger.warn).
-    // Wir prüfen also nur: kein unhandled throw, und tools.has() liefert false.
+    // P10: ohne Anwendung-Kontext wirft NullToolContainer.getByRole im
+    // LLM-Branch. Die Stage fängt das in einem try/catch ab und behält das
+    // Regex-Result — used_llm bleibt false, kein KPI-Warning.
     const ctx = makeCtx({}, new NullToolContainer(), store);
     const out = await klassifizierungStage.run({ text: OCR_TEXT_NO_HITS }, ctx);
-    // used_llm wird true wenn der Call durchlief; ohne API-Key wirft chatJson
-    // und der catch greift → used_llm bleibt false. Beides ist erlaubt — wir
-    // assertieren nur, dass die Stage nicht crashed.
     assert.ok(Array.isArray(out.erkannte_anlagen));
+    assert.equal(out.used_llm, false);
     assert.equal(out.kpi_warning, undefined);
   } finally {
     await fs.rm(root, { recursive: true, force: true });

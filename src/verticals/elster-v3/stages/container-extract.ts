@@ -389,13 +389,12 @@ export const containerExtractStage = defineStage<
       return { per_anlage: {}, totalFilled: 0, ms: Date.now() - t0 };
     }
 
-    // P7: Catalog-Handle für Container-Identität + zukünftige Brief-Quelle.
-    // CONTAINER_BRIEF.md ist (noch) keine atoms/container/nested-Key, daher
-    // bleibt loadContainerBrief() der Fallback-Pfad. Wenn das Catalog-Tool
-    // gebunden ist, emitten wir die containerId im Start-Event für Audit.
-    const cat = ctx.tools.has('elster-catalog')
-      ? ctx.tools.get<CatalogHandle>('elster-catalog')
-      : null;
+    // P10: Catalog-Handle für Container-Identität. NullToolContainer wirft
+    // klar, wenn der Workflow ohne Anwendung-Kontext läuft. CONTAINER_BRIEF.md
+    // ist (noch) keine atoms/container/nested-Key, daher bleibt
+    // loadContainerBrief() für den Brief-Body bestehen — die containerId aus
+    // dem Tool dient nur dem Audit-Event.
+    const cat = ctx.tools.get<CatalogHandle>('elster-catalog');
 
     const containerBrief = await loadContainerBrief();
     let totalFilled = 0;
@@ -403,7 +402,7 @@ export const containerExtractStage = defineStage<
       anlagen: anlagen.length,
       model: modelName,
       concurrency,
-      containerId: cat?.meta.containerId,
+      containerId: cat.meta?.containerId ?? null,
     });
 
     // Worker-Pool: parallele Anlagen-Extraktion. vLLM mit Continuous Batching

@@ -118,7 +118,7 @@ export const lightonOcrStage = defineStage<LightonOcrInput, LightonOcrOutput, Li
     if (!input?.filePath) throw new Error('lighton-ocr: filePath fehlt');
     const t0 = Date.now();
     const cfg = {
-      baseUrl: ctx.config?.baseUrl ?? process.env['LIGHTON_OCR_URL'] ?? 'http://localhost:11437',
+      baseUrl: ctx.config?.baseUrl ?? process.env['LIGHTON_OCR_URL'] ?? 'http://localhost:11437', // lint-no-env: allow — pre-P10 standalone OCR stage, not yet wired to a tool roster
       model:   ctx.config?.model   ?? 'lighton-ocr',
       maxTokens: ctx.config?.maxTokens ?? 4096,
       rasterize: ctx.config?.rasterize !== false,

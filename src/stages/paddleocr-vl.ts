@@ -58,7 +58,7 @@ export const paddleOcrVlStage = defineStage<PaddleOcrVlInput, PaddleOcrVlOutput,
   async run(input, ctx) {
     if (!input?.filePath) throw new Error('paddleocr-vl: filePath fehlt');
     const t0 = Date.now();
-    const baseUrl = ctx.config?.baseUrl ?? process.env['PADDLEOCR_URL'] ?? 'http://localhost:11438';
+    const baseUrl = ctx.config?.baseUrl ?? process.env['PADDLEOCR_URL'] ?? 'http://localhost:11438'; // lint-no-env: allow — pre-P10 OCR stage, not yet wired to a tool roster
     const endpointPath = ctx.config?.endpointPath ?? '/predict';
     const format = ctx.config?.format ?? 'markdown';
 

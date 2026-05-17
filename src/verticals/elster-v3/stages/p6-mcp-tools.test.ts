@@ -208,29 +208,27 @@ async function main() {
     assert('xml_payload emitted', typeof out.xml_payload === 'string' && out.xml_payload.length > 0);
   }
 
-  console.log('\n=== fallback to direct BmfMcpClient when ctx.tools.has("bmf-lane1") is false ===');
+  console.log('\n=== P10: stage throws cleanly when ctx.tools has no bmf-lane1 binding ===');
   {
-    // Empty container — `.has('bmf-lane1')` returns false, so the stage falls
-    // back to `new BmfMcpClient()`. We can't reach a real MCP here, so the
-    // stage's graceful-degradation path kicks in and we assert that:
-    //   (a) no crash, (b) stats.error is populated, (c) empty computed_layer.
+    // P10: empty container — `getByRole('steuerrechner')` throws a clear
+    // "no tool with role" error instead of silently falling back to a direct
+    // BmfMcpClient. That is the correct contract: bmf-lane1 is required:true
+    // in the steuerfall-est Anwendung roster.
     const tools = makeStubContainer({}, {});
     const ctx = makeStubCtx<BmfRechnerComputeConfig>(tools, {});
-    // Make sure no env var hijacks the URL towards a real port:
-    const savedUrl = process.env.BMF_MCP_URL;
-    process.env.BMF_MCP_URL = 'http://127.0.0.1:1/mcp'; // refused → quick fail
+    let threw = false;
+    let msg = '';
     try {
-      const out = await bmfRechnerComputeStage.run!(
+      await bmfRechnerComputeStage.run!(
         { canonical_layer: makeMinimalCanonicalLayer() },
         ctx,
       );
-      assert('fallback path returns without throwing', true);
-      assert('fallback marks stats.error', typeof out.stats.error === 'string');
-      assert('fallback computed_layer empty', Object.keys(out.computed_layer).length === 0);
-    } finally {
-      if (savedUrl === undefined) delete process.env.BMF_MCP_URL;
-      else process.env.BMF_MCP_URL = savedUrl;
+    } catch (e) {
+      threw = true;
+      msg = (e as Error).message;
     }
+    assert('stage throws when no bmf-lane1 is bound', threw, msg);
+    assert('throw mentions the missing role', /steuerrechner|role|tool/i.test(msg), msg);
   }
 
   console.log('');
