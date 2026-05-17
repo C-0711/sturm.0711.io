@@ -1339,7 +1339,11 @@ export function buildElsterV6VisionWorkflow() {
           maxTokensPerCall: 6000,        // single big call needs more output budget
           perCallTimeoutMs: 240_000,
           renderDpi: 150,
-          maxFieldsPerCall: 400,         // entire catalog if needed (~600 total)
+          // R8 lesson: 400 cap + alphabetical-anlage sort dropped VOR (last)
+          // and most of SA from the field map → vision was never asked about
+          // Vorsorgeaufwand. Bump to 800 so the full narrowed catalog
+          // (~500-700 fields after phase1-missing filter) fits in one call.
+          maxFieldsPerCall: 800,
           schemaName: 'elster_v6_extract',
         },
         inputs: {
