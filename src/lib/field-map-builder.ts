@@ -33,6 +33,12 @@ export interface FieldMapJsonSchema {
     type: 'object';
     additionalProperties: false;
     properties: Record<string, { type: ['string', 'null'] }>;
+    /** With strict mode, OpenAI/vLLM require ALL property keys to be listed
+     *  here so the model emits an explicit string-or-null for every field
+     *  rather than silently skipping ones it isn't confident about. Without
+     *  this, completion_tokens stayed at ~64 for batches over Vorsorge pages
+     *  — model just wrote {"E1900702":"8","E1903702":"1,99"} and stopped. */
+    required: string[];
   };
   strict: true;
 }
@@ -191,8 +197,10 @@ export function buildFieldMap(opts: BuildFieldMapOptions): FieldMapResult {
 
   // jsonSchema bauen.
   const properties: Record<string, { type: ['string', 'null'] }> = {};
+  const required: string[] = [];
   for (const e of capped) {
     properties[e.eCode] = { type: ['string', 'null'] };
+    required.push(e.eCode);
   }
   const jsonSchema: FieldMapJsonSchema = {
     name: schemaName,
@@ -200,6 +208,7 @@ export function buildFieldMap(opts: BuildFieldMapOptions): FieldMapResult {
       type: 'object',
       additionalProperties: false,
       properties,
+      required,
     },
     strict: true,
   };
