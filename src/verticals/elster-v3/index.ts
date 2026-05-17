@@ -1085,7 +1085,11 @@ export function buildElsterV52RagWorkflow() {
       },
       quantumGround: {
         uses: 'elster-v3/quantum-ground',
-        config: { maxPhrasen: 30, proPhraseK: 10, finalK: 50, pflichtScaffold: true },
+        // embed.cpuOnly is REQUIRED on h200v: gemma4-mm holds 99.5% of card 1's
+        // VRAM, so Ollama embedding requests get stalled by 100+s under GPU
+        // contention. cpuOnly forces num_gpu=0 → embeddinggemma runs on the
+        // host's CPU (80 ms / batch of 30 phrasen, vs 107 s on contested GPU).
+        config: { maxPhrasen: 30, proPhraseK: 10, finalK: 50, pflichtScaffold: true, embed: { cpuOnly: true } },
         inputs: {
           text: '${ocr.text}',
           anlagen: '${klassifizierung.erkannte_anlagen}',
@@ -1271,7 +1275,9 @@ export function buildElsterV52RagEnsembleWorkflow() {
       felderKatalog: { uses: 'elster-v4/felder-katalog', config: {}, inputs: { erkannte_anlagen: '${klassifizierung.erkannte_anlagen}' } },
       quantumGround: {
         uses: 'elster-v3/quantum-ground',
-        config: { maxPhrasen: 30, proPhraseK: 10, finalK: 50, pflichtScaffold: true },
+        // embed.cpuOnly: see comment in buildElsterV52RagWorkflow — GPU
+        // contention from gemma4-mm stalls Ollama embed by 100+s on h200v.
+        config: { maxPhrasen: 30, proPhraseK: 10, finalK: 50, pflichtScaffold: true, embed: { cpuOnly: true } },
         inputs: { text: '${ocr.text}', anlagen: '${klassifizierung.erkannte_anlagen}' },
       },
       felderNarrow: {
