@@ -82,19 +82,27 @@ export async function probeGitchainHealth(ref: GitchainToolRef): Promise<ToolHea
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(new Error('timeout')), 3000);
     try {
-      // `${api}/health` ist die Standard-Route der GitChain-API. Falls 404,
-      // fallback auf `/` (200 reicht uns).
-      let res = await fetch(`${apiUrl.replace(/\/$/, '')}/health`, { signal: ac.signal });
-      if (res.status === 404) {
-        res = await fetch(`${apiUrl}/`, { signal: ac.signal });
+      // Try /healthz, /health, /api/health, then /. The gitchain-service
+      // currently has NO health route — every path returns 404. That still
+      // proves the HTTP server is up and the TCP socket is bound. Accept
+      // ANY non-5xx as 'alive' (the API is reachable; routing is a separate
+      // concern verified at actual call time). DB-roundtrip is intentionally
+      // skipped here — would add seconds of boot latency.
+      let res: Response | null = null;
+      for (const p of ['/healthz', '/health', '/api/health', '/']) {
+        try {
+          res = await fetch(`${apiUrl.replace(/\/$/, '')}${p}`, { signal: ac.signal });
+          if (res.status < 500) break;
+        } catch { /* try next path */ }
       }
+      const alive = !!res && res.status < 500;
       return {
         name: ref.name,
         kind: 'gitchain',
         configured: true,
-        alive: res.ok,
+        alive,
         latencyMs: Date.now() - t0,
-        ...(res.ok ? {} : { lastError: `HTTP ${res.status}` }),
+        ...(alive ? {} : { lastError: res ? `HTTP ${res.status}` : 'no response' }),
       };
     } finally {
       clearTimeout(timer);
