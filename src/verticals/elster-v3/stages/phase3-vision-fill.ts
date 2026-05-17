@@ -454,11 +454,28 @@ export const phase3VisionFillStage = defineStage<
           } satisfies BatchOutcome;
         } catch (err) {
           const e = err as Error;
+          const stage = err instanceof VllmVisionError ? err.stage : undefined;
           ctx.emit('vision_batch_failed', {
             idx,
             error: e.message,
-            stage: err instanceof VllmVisionError ? err.stage : undefined,
+            stage,
           });
+          // Persist failure detail so we can see WHY two of three batches
+          // silently fail when vLLM logs 3x 200 OK.
+          const httpStatus = err instanceof VllmVisionError ? err.httpStatus : undefined;
+          const body = err instanceof VllmVisionError ? err.body : undefined;
+          await ctx.artifacts.write(
+            `phase3_vision_raw/batch-${idx}-FAILED.json`,
+            {
+              idx,
+              pages: pngs.length,
+              errorMessage: e.message,
+              errorStage: stage,
+              errorStack: e.stack,
+              vllmHttpStatus: httpStatus,
+              vllmBodyOrContent: body,
+            },
+          );
           return {
             idx,
             parsed: {},
