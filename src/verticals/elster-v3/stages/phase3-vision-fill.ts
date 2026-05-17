@@ -265,13 +265,25 @@ export const phase3VisionFillStage = defineStage<
       renderMs,
     });
 
-    // ── 2. Build field map covering ALL anlagen ────────────────────────
-    // We do not know which PDF page hosts which anlage, so every batch
-    // gets the full field map. The JSON schema also enumerates all
-    // eCodes — the model returns NULL for fields not visible in the
-    // current batch's pages.
+    // ── 2. Build field map for STILL-MISSING fields only ───────────────
+    // phase1Regex already filled ~30-50% of the catalog deterministically.
+    // Asking vision about THOSE fields wastes prompt budget — they'd be
+    // skipped at the cross-validation step anyway (regex wins in phase5).
+    // Restrict the field map to phase1.missing_ecodes per anlage so the
+    // model focuses on what's actually unsolved (Entfernungspauschale,
+    // Vorsorge, Person A/B KAP — the things v6 is meant to fix).
+    const missingFelderMap: typeof felderMap = {};
+    for (const anlage of anlagen) {
+      const missingSet = new Set(phase1[anlage]?.missing_ecodes ?? []);
+      const fullList = felderMap[anlage];
+      if (!fullList) continue;
+      missingFelderMap[anlage] = {
+        anlage: fullList.anlage,
+        felder: fullList.felder.filter((f) => missingSet.has(f.eCode)),
+      };
+    }
     const fieldMap = buildFieldMap({
-      perAnlage: felderMap,
+      perAnlage: missingFelderMap,
       schemaName,
       maxFields: maxFieldsPerCall,
     });
