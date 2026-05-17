@@ -40,7 +40,10 @@ export interface LlmHandle extends BaseHandle {
    * Rückgabe: das geparste JSON-Objekt (nicht der gesamte ChatJsonResult).
    */
   chatJson<T = unknown>(prompt: string | ChatMessage[], opts?: LlmChatOptions): Promise<T>;
-  readonly meta: { provider: 'vllm' | 'mistral' | 'anthropic' | 'ollama'; model: string };
+  /** Resolved provider + model + optional baseUrl. Streaming consumers
+   *  (e.g. phase3-llm-fill's vllmStreamExtract) can use baseUrl to call
+   *  /v1/... directly until the handle gains a streaming API in P-future. */
+  readonly meta: { provider: 'vllm' | 'mistral' | 'anthropic' | 'ollama'; model: string; baseUrl?: string };
 }
 
 // ── Embedder ───────────────────────────────────────────────────────────

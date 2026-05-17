@@ -36,7 +36,11 @@ function fold(prompt: string | ChatMessage[]): { prompt: string; system?: string
 export async function resolveLlm(ref: LlmToolRef): Promise<LlmHandle> {
   const baseUrl = resolveBaseUrl(ref);
 
-  const meta = { provider: ref.config.provider, model: ref.config.model };
+  // baseUrl on meta lets streaming-only consumers (phase3-llm-fill's
+  // vllmStreamExtract) reach vLLM at the same URL the resolver uses,
+  // instead of falling back to a hardcoded `http://localhost:11435`
+  // (which inside a container = the container itself, not the host).
+  const meta = { provider: ref.config.provider, model: ref.config.model, baseUrl };
 
   const chatJsonImpl: LlmHandle['chatJson'] = async <T = unknown>(
     prompt: string | ChatMessage[],

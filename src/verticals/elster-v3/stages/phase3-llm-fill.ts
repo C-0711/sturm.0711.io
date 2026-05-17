@@ -628,10 +628,16 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
         try {
           let parsed: Record<string, string | null> = {};
           if (wantStream) {
+            // Resolve vLLM URL from the bound extraction-llm handle's meta.
+            // The handle's baseUrl is the same URL the resolver uses (with
+            // env-override applied) — avoids the localhost:11435 fallback
+            // that breaks inside a container.
+            const llmForUrl = ctx.tools.getByRole<LlmHandle>('extraction-llm');
+            const resolvedVllmUrl = cfg.vllmUrl ?? llmForUrl.meta.baseUrl;
             parsed = await vllmStreamExtract(
               slicePrompt,
               {
-                vllmUrl: cfg.vllmUrl,
+                vllmUrl: resolvedVllmUrl,
                 model: modelName,
                 temperature,
                 maxTokens,
