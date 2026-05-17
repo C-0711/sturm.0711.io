@@ -30,7 +30,6 @@ import { registerElsterV3MultiStages, buildElsterV3MultiWorkflowWithSchema } fro
 import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc/index.ts';
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
 import { registerSealStages, buildSteuerfallSealWorkflow } from './steuerfall-seal/index.ts';
-import { ctxBootstrapWorkflow, registerCtxBootstrapStages } from './ctx-bootstrap/index.ts';
 
 export function registerAllWorkflows(): void {
   registerWorkflow(helloOcrWorkflow);
@@ -65,9 +64,6 @@ export function registerAllWorkflows(): void {
   // Steuerfall-Versiegelung: HMAC-Snapshot + Merkle + Anchor.
   registerSealStages();
   registerWorkflow(buildSteuerfallSealWorkflow());
-  // Public showcase — der Workflow der den ctx-Workflow zeigt.
-  registerCtxBootstrapStages();
-  registerWorkflow(ctxBootstrapWorkflow);
 }
 
 export { helloOcrWorkflow };
