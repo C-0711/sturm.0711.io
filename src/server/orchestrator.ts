@@ -459,6 +459,146 @@ function safeParseArgs(raw: string): Record<string, unknown> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Non-streaming chat loop — POST /chat-sync
+// ─────────────────────────────────────────────────────────────────────────
+
+/** vLLM /v1/chat/completions with stream: false. Returns the whole reply. */
+async function callVllmSync(
+  opts: { vllmUrl: string; modelName: string; messages: ChatMessage[]; fetchImpl?: typeof fetch; signal?: AbortSignal },
+): Promise<{ content: string; finishReason: string }> {
+  const body = {
+    model: opts.modelName,
+    messages: opts.messages.map((m) => {
+      const o: Record<string, unknown> = { role: m.role, content: m.content };
+      if (m.tool_call_id) o.tool_call_id = m.tool_call_id;
+      if (m.name) o.name = m.name;
+      return o;
+    }),
+    stream: false,
+    temperature: 0.2,
+    max_tokens: 1024,
+  };
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const res = await fetchImpl(`${opts.vllmUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: opts.signal,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`vLLM HTTP ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  const json = await res.json() as {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
+  const c = json.choices?.[0];
+  return { content: c?.message?.content ?? '', finishReason: c?.finish_reason ?? 'stop' };
+}
+
+export interface SyncChatStep {
+  kind: 'tool_call';
+  name: string;
+  args: Record<string, unknown>;
+  result: unknown;
+  ms: number;
+}
+
+export interface SyncChatResult {
+  reply: string;                   // final assistant text
+  iterations: number;
+  steps: SyncChatStep[];
+  totalMs: number;
+  mode: 'fallback-prompt-tools';   // always prompt-engineered (no OpenAI tools schema)
+}
+
+export async function runChatLoopSync(
+  opts: OrchestratorOptions,
+  initialMessages: ChatMessage[],
+  caseIdHint: string | undefined,
+): Promise<SyncChatResult> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const rootCwd = opts.rootCwd ?? process.cwd();
+  const maxIterations = opts.maxIterations ?? 6;
+  const handlerCtx: OrchestratorHandlerCtx = {
+    appId: opts.appId,
+    applicationsDir: opts.applicationsDir,
+    runsDir: opts.runsDir,
+    rootCwd,
+    caseIdHint,
+  };
+  const systemPrompt = opts.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+  const fallbackSystem = buildFallbackSystemPrompt(systemPrompt);
+
+  const messages: ChatMessage[] = [];
+  if (!initialMessages.some((m) => m.role === 'system')) {
+    messages.push({ role: 'system', content: fallbackSystem });
+  } else {
+    // Replace the user's system with the fallback one (which adds tool syntax).
+    messages.push(...initialMessages.map((m, i) => i === 0 && m.role === 'system' ? { ...m, content: fallbackSystem } : m));
+    for (let i = 1; i < initialMessages.length; i++) messages.push({ ...initialMessages[i] });
+  }
+  if (!initialMessages.some((m) => m.role === 'system')) {
+    for (const m of initialMessages) messages.push({ ...m });
+  }
+
+  const steps: SyncChatStep[] = [];
+  const tStart = Date.now();
+  let lastContent = '';
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const reply = await callVllmSync({
+      vllmUrl: opts.vllmUrl,
+      modelName: opts.modelName,
+      messages,
+      fetchImpl,
+    });
+    lastContent = reply.content;
+    const tc = parseFallbackToolCall(reply.content);
+    if (!tc) {
+      // No tool call → final answer.
+      return {
+        reply: reply.content.trim(),
+        iterations: iter + 1,
+        steps,
+        totalMs: Date.now() - tStart,
+        mode: 'fallback-prompt-tools',
+      };
+    }
+    // Execute the tool.
+    const tool = TOOLS_BY_NAME.get(tc.name);
+    const args = safeParseArgs(tc.arguments);
+    const tCall = Date.now();
+    let result: unknown;
+    if (!tool) {
+      result = { error: `Unbekanntes Werkzeug: ${tc.name}` };
+    } else {
+      try {
+        result = await tool.handler(args, handlerCtx);
+      } catch (e) {
+        result = { error: (e as Error).message };
+      }
+    }
+    const ms = Date.now() - tCall;
+    steps.push({ kind: 'tool_call', name: tc.name, args, result, ms });
+    // Append assistant message (with the raw tool_call syntax) + a "tool result" hint.
+    messages.push({ role: 'assistant', content: reply.content });
+    messages.push({
+      role: 'user',
+      content: `<tool_result name="${tc.name}">${JSON.stringify(result)}</tool_result>\n\nBitte berücksichtige dieses Ergebnis und antworte dem Nutzer.`,
+    });
+  }
+  // Max iterations hit — return the last content as the reply.
+  return {
+    reply: lastContent.trim() || '(keine Antwort innerhalb der Iterations-Grenze)',
+    iterations: maxIterations,
+    steps,
+    totalMs: Date.now() - tStart,
+    mode: 'fallback-prompt-tools',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Router
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -499,6 +639,34 @@ export function createOrchestratorRouter(opts: OrchestratorOptions): Router {
       sse.event('error', { message: (e as Error).message });
       sse.event('done', { finishReason: 'error', totalMs: 0 });
       sse.end();
+    }
+  });
+
+  // ── Non-streaming chat — simpler contract, easier to debug ───────────
+  // POST { messages, caseId? } → 200 JSON {
+  //   reply: string, tool_calls: [{name, args, result, ms}], totalMs, iterations
+  // }
+  // Internally: runs the prompt-engineered tool-use loop with stream:false
+  // on every vLLM call. No SSE flush ambiguity. Use this from the UI when
+  // streaming UX isn't required (or when /chat hangs in your env).
+  router.post('/chat-sync', async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as {
+      caseId?: string;
+      messages?: ChatMessage[];
+      appId?: string;
+    };
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    if (messages.length === 0) {
+      return res.status(400).json({ error: 'messages (Array) erforderlich' });
+    }
+    if (body.appId && body.appId !== opts.appId) {
+      return res.status(400).json({ error: `appId mismatch: erwartet ${opts.appId}` });
+    }
+    try {
+      const result = await runChatLoopSync(opts, messages, body.caseId);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
     }
   });
 
