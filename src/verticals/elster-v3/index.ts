@@ -1322,18 +1322,24 @@ export function buildElsterV6VisionWorkflow() {
       phase3VisionFill: {
         uses: 'elster-v6/phase3-vision-fill',
         config: {
-          // 2026-05-17 v3 tuning after Stricker retry:
-          // Vision inference dominated wallclock (125s for 2 pages @ 200dpi).
-          // Lower DPI → smaller image tokens → faster inference.
-          // Also: missing-only field-map now keeps per-call payload small.
-          pagesPerCall: 3,               // 6-page Stricker → 2 calls
-          callConcurrency: 3,            // both batches parallel (+ headroom)
+          // 2026-05-17 v4 tuning — single-call mode for short ESt PDFs.
+          // The spike test that hit 42/44 fields sent ALL 6 Stricker pages
+          // in ONE vision call with the full catalog visible. Batching
+          // into 3-page chunks split VOR (Vorsorgeaufwand, pages 4-5) into
+          // a batch that also had legal-text page 6 and KAP-B page 4,
+          // and the model returned NULL for almost everything in that
+          // batch (4 fields, 64 completion_tokens). Setting pagesPerCall
+          // to 8 means typical ESt PDFs (≤8 pages) run as one call,
+          // restoring the spike's whole-document context. Multi-doc cases
+          // beyond 8 pages still batch.
+          pagesPerCall: 8,               // 6-page Stricker → 1 call
+          callConcurrency: 1,            // single call, no concurrency needed
           rejectWisoPlaceholders: true,
           fallbackToV5: true,
-          maxTokensPerCall: 3500,
-          perCallTimeoutMs: 240_000,     // 240s — vision can be slow on dense forms
-          renderDpi: 150,                // 200→150 cuts image-token count ~44%
-          maxFieldsPerCall: 250,
+          maxTokensPerCall: 6000,        // single big call needs more output budget
+          perCallTimeoutMs: 240_000,
+          renderDpi: 150,
+          maxFieldsPerCall: 400,         // entire catalog if needed (~600 total)
           schemaName: 'elster_v6_extract',
         },
         inputs: {
