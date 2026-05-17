@@ -44,6 +44,101 @@
       text-decoration: none;
     }
     .app-new-btn:hover { filter: brightness(1.05); }
+    .app-new-btn[aria-disabled="true"] {
+      background: var(--color-bg-hover);
+      border-color: var(--color-border);
+      color: var(--color-text-tertiary);
+      cursor: not-allowed;
+      filter: none;
+    }
+    .app-new-btn[aria-disabled="true"]:hover { filter: none; }
+
+    /* ── P9: Tool-Roster Panel ─────────────────────────────────────── */
+    .tools-panel {
+      margin: 10px 0 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      background: var(--color-bg-card, transparent);
+      overflow: hidden;
+    }
+    .tools-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      padding: 9px 14px;
+      background: transparent;
+      border: 0;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+    .tools-chip:hover { background: var(--color-bg-hover); }
+    .tools-chip:focus-visible { outline: 1px solid var(--color-accent); outline-offset: -1px; }
+    .tools-chip-label {
+      font-size: 12.5px;
+      color: var(--color-text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tools-chip-caret {
+      display: inline-block;
+      width: 9px;
+      text-align: center;
+      color: var(--color-text-tertiary);
+      transition: transform .15s;
+    }
+    .tools-panel[data-expanded="true"] .tools-chip-caret { transform: rotate(90deg); }
+    .tools-chip-counts {
+      font-size: 12px;
+      font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      color: var(--color-text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tools-chip-counts .ct { display: inline-flex; align-items: center; gap: 3px; }
+    .tools-dot { font-size: 13px; line-height: 1; }
+    .tools-dot.green { color: #22c55e; }
+    .tools-dot.amber { color: #f59e0b; }
+    .tools-dot.red   { color: #ef4444; }
+    .tools-dot.grey  { color: #9ca3af; }
+    .tools-warn { color: #f59e0b; font-size: 13px; margin-left: 2px; }
+
+    .tools-body {
+      display: none;
+      border-top: 1px solid var(--color-border);
+      padding: 6px 0;
+    }
+    .tools-panel[data-expanded="true"] .tools-body { display: block; }
+
+    .tools-row {
+      display: grid;
+      grid-template-columns: 18px 1.2fr 0.9fr 1.1fr 0.7fr 0.7fr;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 14px;
+      font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size: 11.5px;
+      color: var(--color-text-secondary);
+    }
+    .tools-row + .tools-row { border-top: 1px dashed var(--color-border); }
+    .tools-row .tname { color: var(--color-text-primary); }
+    .tools-row .tkind { color: var(--color-text-tertiary); }
+    .tools-row .turl  { color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tools-row .tlat  { color: var(--color-text-secondary); text-align: right; }
+    .tools-row .tcirc { color: var(--color-text-tertiary); text-align: right; }
+    .tools-row.required-down .tname { color: #ef4444; }
+
+    .tools-banner {
+      padding: 10px 14px;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--color-text-tertiary);
+    }
 
     .case-row {
       display: grid;
@@ -330,6 +425,317 @@
     const casesByApp = new Map();
     const filterState = { status: '*', search: '' };
 
+    // ── P9: Tool-Roster — pro App letzter bekannter Health-State
+    // toolsByApp.get(appId) = { mode: 'ok'|'boot-skip'|'not-found'|'error',
+    //                           tools: ToolHealth[], banner?: string, stale?: boolean }
+    const toolsByApp = new Map();
+    let toolsPollTimer = null;
+    let toolsAbortCtl = null;
+
+    function kindLabelDe(kind) {
+      return ({
+        llm: 'llm',
+        embedder: 'embedder',
+        'rag-index': 'rag-index',
+        catalog: 'catalog',
+        mcp: 'mcp',
+        gitchain: 'gitchain',
+        kv: 'kv',
+      })[kind] || (kind || '');
+    }
+
+    function getToolRefMap(app) {
+      const map = new Map();
+      for (const ref of (app.tools || [])) map.set(ref.name, ref);
+      return map;
+    }
+
+    function classifyTool(health, ref) {
+      const required = !!(ref && ref.required);
+      const configured = health && health.configured !== false;
+      const alive = !!(health && health.alive);
+      const circuit = health && health.circuit;
+      if (!configured && !required) return 'grey';
+      if (required && !alive) return 'red';
+      if (alive && (circuit === 'closed' || circuit === undefined || circuit === null)) return 'green';
+      if (alive && circuit === 'half-open') return 'amber';
+      if (!alive && !required) return 'amber';
+      // Fallback: required but configured & alive without explicit circuit
+      return alive ? 'green' : 'red';
+    }
+
+    function dotChar(klass) {
+      return ({ green: '●', amber: '◐', red: '✕', grey: '○' })[klass] || '·';
+    }
+
+    function dotAriaLabel(klass, health) {
+      if (klass === 'green') {
+        const lat = health && typeof health.latencyMs === 'number' ? ` (${health.latencyMs} ms)` : '';
+        return `verfügbar${lat}`;
+      }
+      if (klass === 'amber') {
+        if (health && health.circuit === 'half-open') return 'eingeschränkt — Kreis halb-offen';
+        return 'optional — derzeit nicht erreichbar';
+      }
+      if (klass === 'red') {
+        const circ = health && health.circuit === 'open' ? ' — Kreis offen' : '';
+        return `ausgefallen${circ}`;
+      }
+      return 'nicht konfiguriert';
+    }
+
+    function expandedKey(appId) { return `0711-anwendungen-tools-expanded.${appId}`; }
+    function isExpanded(appId) {
+      try { return localStorage.getItem(expandedKey(appId)) === 'true'; }
+      catch { return false; }
+    }
+    function setExpanded(appId, v) {
+      try { localStorage.setItem(expandedKey(appId), v ? 'true' : 'false'); }
+      catch {}
+    }
+
+    function summarizeHealth(app, snap) {
+      // Returns { counts: {green, amber, red, grey}, redNames: string[], rows: [...] }
+      const refMap = getToolRefMap(app);
+      const refs = app.tools || [];
+      const healths = (snap && snap.tools) || {};
+      const counts = { green: 0, amber: 0, red: 0, grey: 0 };
+      const redNames = [];
+      const rows = [];
+      // Determine the union of declared refs and health entries, prefer ref order
+      const seen = new Set();
+      const ordered = [];
+      for (const r of refs) { ordered.push(r.name); seen.add(r.name); }
+      for (const k of Object.keys(healths)) if (!seen.has(k)) ordered.push(k);
+      for (const name of ordered) {
+        const ref = refMap.get(name) || { name, kind: (healths[name] && healths[name].kind) || '', required: false };
+        const h = healths[name] || null;
+        const klass = classifyTool(h, ref);
+        counts[klass]++;
+        if (klass === 'red') redNames.push(name);
+        rows.push({ ref, health: h, klass });
+      }
+      return { counts, redNames, rows };
+    }
+
+    function urlForRow(row) {
+      const h = row.health || {};
+      if (h && h.url) return String(h.url);
+      const ref = row.ref || {};
+      const cfg = ref.config || {};
+      if (cfg.provider) return String(cfg.provider) + (cfg.model ? `:${cfg.model}` : '');
+      if (cfg.containerId) return String(cfg.containerId);
+      if (cfg.defaultUrl) return String(cfg.defaultUrl);
+      return '';
+    }
+
+    function renderToolsPanel(app) {
+      const snap = toolsByApp.get(app.id);
+      const expanded = isExpanded(app.id);
+      const total = (app.tools || []).length;
+      // Banner-Fälle (kein Container / nicht-gefunden / boot-skip)
+      if (snap && (snap.mode === 'boot-skip' || snap.mode === 'not-found')) {
+        const msg = snap.banner || '(Tool-Container nicht gestartet)';
+        return `
+          <div class="tools-panel" data-app-tools="${escapeHtml(app.id)}" data-expanded="false" data-mode="${escapeHtml(snap.mode)}">
+            <div class="tools-banner">${escapeHtml(msg)}</div>
+          </div>
+        `;
+      }
+      const { counts } = snap ? summarizeHealth(app, snap) : { counts: { green: 0, amber: 0, red: 0, grey: 0 } };
+      const stale = snap && snap.stale;
+      const countsHtml = `
+        <span class="ct" title="verfügbar"><span class="tools-dot green" aria-hidden="true">●</span>${counts.green}</span>
+        <span class="ct" title="eingeschränkt"><span class="tools-dot amber" aria-hidden="true">◐</span>${counts.amber}</span>
+        <span class="ct" title="ausgefallen"><span class="tools-dot red" aria-hidden="true">✕</span>${counts.red}</span>
+        ${counts.grey > 0 ? `<span class="ct" title="nicht konfiguriert"><span class="tools-dot grey" aria-hidden="true">○</span>${counts.grey}</span>` : ''}
+        ${stale ? '<span class="tools-warn" title="Letzte Aktualisierung fehlgeschlagen — verwende vorigen Stand" aria-label="Aktualisierung fehlgeschlagen">⚠</span>' : ''}
+      `;
+      const bodyHtml = snap ? renderToolsBody(app, snap) : '<div class="tools-banner">Lade Werkzeug-Status…</div>';
+      return `
+        <div class="tools-panel" data-app-tools="${escapeHtml(app.id)}" data-expanded="${expanded ? 'true' : 'false'}">
+          <button type="button" class="tools-chip" data-action="toggle-tools" data-app="${escapeHtml(app.id)}"
+                  aria-expanded="${expanded ? 'true' : 'false'}"
+                  aria-controls="tools-body-${escapeHtml(app.id)}">
+            <span class="tools-chip-label">
+              <span class="tools-chip-caret" aria-hidden="true">▶</span>
+              Werkzeuge (${total})
+            </span>
+            <span class="tools-chip-counts">${countsHtml}</span>
+          </button>
+          <div class="tools-body" id="tools-body-${escapeHtml(app.id)}" role="region" aria-label="Werkzeug-Status">${bodyHtml}</div>
+        </div>
+      `;
+    }
+
+    function renderToolsBody(app, snap) {
+      const { rows } = summarizeHealth(app, snap);
+      if (rows.length === 0) return '<div class="tools-banner">Keine Werkzeuge deklariert.</div>';
+      return rows.map((row) => {
+        const klass = row.klass;
+        const required = !!(row.ref && row.ref.required);
+        const requiredDown = required && klass === 'red';
+        const h = row.health || {};
+        const lat = (typeof h.latencyMs === 'number') ? `${h.latencyMs} ms` : '—';
+        const circ = h.circuit ? String(h.circuit) : (klass === 'grey' ? 'not configured' : '—');
+        const url = urlForRow(row);
+        const kind = kindLabelDe((row.ref && row.ref.kind) || h.kind || '');
+        const nameLabel = required ? `${row.ref.name}` : row.ref.name;
+        return `
+          <div class="tools-row ${requiredDown ? 'required-down' : ''}" role="row">
+            <span class="tools-dot ${klass}" role="cell" aria-label="${escapeHtml(dotAriaLabel(klass, h))}">${dotChar(klass)}</span>
+            <span class="tname" role="cell" title="${required ? 'erforderlich' : 'optional'}">${escapeHtml(nameLabel)}</span>
+            <span class="tkind" role="cell">${escapeHtml(kind)}</span>
+            <span class="turl" role="cell" title="${escapeHtml(url)}">${escapeHtml(url)}</span>
+            <span class="tlat" role="cell">${escapeHtml(lat)}</span>
+            <span class="tcirc" role="cell">${escapeHtml(circ)}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function buttonGatingFor(app) {
+      const snap = toolsByApp.get(app.id);
+      // Boot-skip / not-found: do not gate
+      if (!snap || snap.mode === 'boot-skip' || snap.mode === 'not-found') {
+        return { disabled: false, redNames: [] };
+      }
+      const { redNames } = summarizeHealth(app, snap);
+      return { disabled: redNames.length > 0, redNames };
+    }
+
+    function applyButtonGating(host, apps) {
+      for (const app of apps) {
+        const btn = host.querySelector(`.app-new-btn[data-app="${cssEscape(app.id)}"]`);
+        if (!btn) continue;
+        const { disabled, redNames } = buttonGatingFor(app);
+        if (disabled) {
+          btn.setAttribute('aria-disabled', 'true');
+          btn.setAttribute('title', `Werkzeug(e) nicht verfügbar: ${redNames.join(', ')}`);
+        } else {
+          btn.removeAttribute('aria-disabled');
+          btn.removeAttribute('title');
+        }
+      }
+    }
+
+    function cssEscape(s) {
+      if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(s);
+      return String(s).replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+    }
+
+    function updateToolsDom(host, apps) {
+      for (const app of apps) {
+        const panel = host.querySelector(`.tools-panel[data-app-tools="${cssEscape(app.id)}"]`);
+        if (!panel) continue;
+        const snap = toolsByApp.get(app.id);
+        // If mode changed (e.g. boot-skip → ok), do a full re-render of the panel.
+        const currentMode = panel.getAttribute('data-mode');
+        const nextMode = snap && (snap.mode === 'boot-skip' || snap.mode === 'not-found') ? snap.mode : null;
+        if (currentMode !== nextMode) {
+          panel.outerHTML = renderToolsPanel(app);
+          attachToolsHandlers(host);
+          continue;
+        }
+        if (nextMode) continue; // banner mode — nothing to update
+        const { counts } = snap ? summarizeHealth(app, snap) : { counts: { green: 0, amber: 0, red: 0, grey: 0 } };
+        const stale = snap && snap.stale;
+        const countsHost = panel.querySelector('.tools-chip-counts');
+        if (countsHost) {
+          countsHost.innerHTML = `
+            <span class="ct" title="verfügbar"><span class="tools-dot green" aria-hidden="true">●</span>${counts.green}</span>
+            <span class="ct" title="eingeschränkt"><span class="tools-dot amber" aria-hidden="true">◐</span>${counts.amber}</span>
+            <span class="ct" title="ausgefallen"><span class="tools-dot red" aria-hidden="true">✕</span>${counts.red}</span>
+            ${counts.grey > 0 ? `<span class="ct" title="nicht konfiguriert"><span class="tools-dot grey" aria-hidden="true">○</span>${counts.grey}</span>` : ''}
+            ${stale ? '<span class="tools-warn" title="Letzte Aktualisierung fehlgeschlagen — verwende vorigen Stand" aria-label="Aktualisierung fehlgeschlagen">⚠</span>' : ''}
+          `;
+        }
+        const body = panel.querySelector('.tools-body');
+        if (body && snap) body.innerHTML = renderToolsBody(app, snap);
+      }
+      applyButtonGating(host, apps);
+    }
+
+    function attachToolsHandlers(host) {
+      host.querySelectorAll('[data-action="toggle-tools"]').forEach((btn) => {
+        if (btn.dataset.toolsBound === '1') return;
+        btn.dataset.toolsBound = '1';
+        btn.addEventListener('click', () => {
+          const appId = btn.dataset.app;
+          const panel = btn.closest('.tools-panel');
+          const next = !(panel && panel.getAttribute('data-expanded') === 'true');
+          if (panel) panel.setAttribute('data-expanded', next ? 'true' : 'false');
+          btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+          setExpanded(appId, next);
+        });
+      });
+    }
+
+    async function fetchHealthFor(appId, signal) {
+      try {
+        const res = await fetch(`/api/applications/${encodeURIComponent(appId)}/tools/health`, { signal });
+        if (res.status === 404) return { mode: 'not-found', tools: {}, banner: '(Tool-Container nicht gestartet)' };
+        if (res.status === 503) return { mode: 'boot-skip', tools: {}, banner: '(Tool-Container nicht gestartet)' };
+        if (!res.ok) {
+          return { mode: 'error', error: `HTTP ${res.status}` };
+        }
+        const j = await res.json();
+        return { mode: 'ok', tools: j.tools || {} };
+      } catch (e) {
+        if (e && e.name === 'AbortError') throw e;
+        return { mode: 'error', error: String((e && e.message) || e) };
+      }
+    }
+
+    async function pollToolsHealth(apps, host) {
+      if (toolsAbortCtl) toolsAbortCtl.abort();
+      toolsAbortCtl = new AbortController();
+      const signal = toolsAbortCtl.signal;
+      try {
+        const results = await Promise.all(apps.map((app) => fetchHealthFor(app.id, signal)));
+        if (signal.aborted) return;
+        results.forEach((r, i) => {
+          const app = apps[i];
+          if (r.mode === 'error') {
+            // Network/server fault: keep last-known snapshot, flag stale.
+            const prev = toolsByApp.get(app.id);
+            if (prev) {
+              toolsByApp.set(app.id, { ...prev, stale: true });
+            } else {
+              toolsByApp.set(app.id, { mode: 'error', tools: {}, stale: true });
+            }
+            console.error(`[tools/health] ${app.id}: ${r.error}`);
+            return;
+          }
+          toolsByApp.set(app.id, { ...r, stale: false });
+        });
+        updateToolsDom(host, apps);
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+        console.error('[tools/health] poll failed', e);
+      }
+    }
+
+    function startToolsPolling(apps, host) {
+      stopToolsPolling();
+      // First tick is performed by caller (loadApps). Subsequent ticks every 10 s.
+      toolsPollTimer = window.setInterval(() => {
+        if (document.visibilityState === 'hidden') return;
+        pollToolsHealth(apps, host);
+      }, 10000);
+    }
+
+    function stopToolsPolling() {
+      if (toolsPollTimer) {
+        clearInterval(toolsPollTimer);
+        toolsPollTimer = null;
+      }
+      if (toolsAbortCtl) {
+        toolsAbortCtl.abort();
+        toolsAbortCtl = null;
+      }
+    }
+
     function statusLabel(s) {
       return ({ in_bearbeitung: 'In Bearbeitung', review: 'Review', versiegelt: 'Versiegelt', eingereicht: 'Eingereicht', archiviert: 'Archiviert' })[s] ?? s;
     }
@@ -414,6 +820,7 @@
                 <i data-lucide="plus"></i><span>Neuer Fall</span>
               </button>
             </div>
+            ${renderToolsPanel(app)}
             ${renderFilterChips(all)}
             <div style="margin-top: 14px;">${rowsHtml}</div>
           </section>
@@ -421,9 +828,14 @@
       }).join('');
       host.innerHTML = sections;
       window.lucide && window.lucide.createIcons();
+      attachToolsHandlers(host);
+      applyButtonGating(host, apps);
 
       host.querySelectorAll('[data-action="new-case"]').forEach(btn => {
-        btn.addEventListener('click', () => openCreateModal(btn.dataset.app));
+        btn.addEventListener('click', () => {
+          if (btn.getAttribute('aria-disabled') === 'true') return;
+          openCreateModal(btn.dataset.app);
+        });
       });
       host.querySelectorAll('[data-action="del-case"]').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -486,7 +898,21 @@
           .then(r => r.ok ? r.json() : []);
         casesByApp.set(app.id, cases);
       }));
+      // P9: Initialer Tool-Health-Fetch parallel zu allen Anwendungen.
+      // Ohne await wäre der erste Render ohne Dots — wir warten kurz, damit
+      // die Buttons schon im richtigen Gating-Zustand erscheinen.
+      const initCtl = new AbortController();
+      const initial = await Promise.all(apps.map((app) => fetchHealthFor(app.id, initCtl.signal).catch((e) => ({ mode: 'error', error: String(e) }))));
+      initial.forEach((r, i) => {
+        if (r && r.mode !== 'error') {
+          toolsByApp.set(apps[i].id, { ...r, stale: false });
+        } else if (r) {
+          toolsByApp.set(apps[i].id, { mode: 'error', tools: {}, stale: true });
+          if (r.error) console.error(`[tools/health] ${apps[i].id}: ${r.error}`);
+        }
+      });
       paintSections(host, apps);
+      startToolsPolling(apps, host);
     }
 
     function openCreateModal(appId) {
@@ -553,6 +979,18 @@
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeCreateModal();
       });
+      // P9: Polling-Pause bei Tab-Hidden, Resume bei sichtbar.
+      document.addEventListener('visibilitychange', () => {
+        const apps = window.__loadedApps || [];
+        const host = document.getElementById('app-list');
+        if (document.visibilityState === 'hidden') {
+          if (toolsAbortCtl) toolsAbortCtl.abort();
+        } else if (apps.length && host) {
+          // Sofortiger Refresh beim Zurückkommen, dann läuft das Intervall weiter.
+          pollToolsHealth(apps, host);
+        }
+      });
+      window.addEventListener('pagehide', stopToolsPolling);
     });
   </script>
 </body>
