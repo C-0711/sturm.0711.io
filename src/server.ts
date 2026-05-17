@@ -1035,6 +1035,57 @@ app.get(
   },
 );
 
+// ── GET /api/applications/:appId/instances/:caseId/runs/:runId/progress ──
+// Liefert die Liste der bisher fertigen Stages eines laufenden (oder fertigen)
+// Runs. Quelle ist die Verzeichnisstruktur unter runs/<workflowId>/<runId>/:
+// pro fertiger Stage existiert ein Unterordner mit output.json. Wir müssen
+// den workflowId nicht kennen — wir scannen runs/ nach dem (eindeutigen)
+// runId. Endpunkt ist token-frei, gleicher Scope wie /runs/:runId/summary.
+app.get(
+  '/api/applications/:appId/instances/:caseId/runs/:runId/progress',
+  async (req, res) => {
+    const { appId, caseId, runId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    if (!inst.runs.includes(runId)) {
+      return res.status(404).json({ error: 'run not in case' });
+    }
+    // Bevorzugte Auflösung: extraction-Workflow der App. Wenn der run-Ordner
+    // dort nicht existiert (z.B. weil ein anderer Workflow den Run erzeugt
+    // hat), fallen wir auf einen Scan aller Workflows zurück.
+    const primary = app_.workflows.extraction;
+    const candidates: string[] = [];
+    if (primary) candidates.push(primary);
+    try {
+      const wfDirs = await fs.promises.readdir(RUNS_DIR, { withFileTypes: true });
+      for (const d of wfDirs) {
+        if (d.isDirectory() && !candidates.includes(d.name)) candidates.push(d.name);
+      }
+    } catch { /* RUNS_DIR fehlt — ignorieren */ }
+
+    for (const wfId of candidates) {
+      const runDir = path.join(RUNS_DIR, wfId, runId);
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(runDir, { withFileTypes: true });
+      } catch { continue; }
+      const completedStages = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith('_'))
+        .map((e) => e.name);
+      const hasResult = entries.some((e) => e.isFile() && e.name === '_result.json');
+      return res.json({
+        runId,
+        workflowId: wfId,
+        completedStages,
+        finished: hasResult,
+      });
+    }
+    return res.status(404).json({ error: 'run not found' });
+  },
+);
+
 // ── GET /api/applications/:appId/instances/:caseId/download/:artifact ──
 // Liefert die versiegelten Artefakte des Falls zum Download. Wir erlauben
 // genau zwei: master.json (signierter Snapshot, master.signed-Variante aus

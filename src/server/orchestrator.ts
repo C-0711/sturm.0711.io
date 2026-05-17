@@ -517,6 +517,23 @@ export async function runChatLoopSync(
   initialMessages: ChatMessage[],
   caseIdHint: string | undefined,
 ): Promise<SyncChatResult> {
+  return runChatLoopSyncWithProgress(opts, initialMessages, caseIdHint, null);
+}
+
+/**
+ * Variante mit Progress-Callback. Identisch zu `runChatLoopSync`, ruft aber
+ * vor und nach jedem Tool-Call den `send`-Callback auf — gedacht fuer
+ * `/chat-stream`, das die gleichen Schritte als SSE-Events ausgibt. Wenn
+ * `send` null ist, verhaelt sich die Funktion exakt wie `runChatLoopSync`.
+ */
+export type ProgressSend = (event: string, payload: unknown) => void;
+
+export async function runChatLoopSyncWithProgress(
+  opts: OrchestratorOptions,
+  initialMessages: ChatMessage[],
+  caseIdHint: string | undefined,
+  send: ProgressSend | null,
+): Promise<SyncChatResult> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const rootCwd = opts.rootCwd ?? process.cwd();
   const maxIterations = opts.maxIterations ?? 6;
@@ -568,6 +585,7 @@ export async function runChatLoopSync(
     // Execute the tool.
     const tool = TOOLS_BY_NAME.get(tc.name);
     const args = safeParseArgs(tc.arguments);
+    if (send) send('tool_call', { name: tc.name, args });
     const tCall = Date.now();
     let result: unknown;
     if (!tool) {
@@ -580,6 +598,7 @@ export async function runChatLoopSync(
       }
     }
     const ms = Date.now() - tCall;
+    if (send) send('tool_result', { name: tc.name, result, ms });
     steps.push({ kind: 'tool_call', name: tc.name, args, result, ms });
     // Append assistant message (with the raw tool_call syntax) + a "tool result" hint.
     messages.push({ role: 'assistant', content: reply.content });
@@ -596,6 +615,27 @@ export async function runChatLoopSync(
     totalMs: Date.now() - tStart,
     mode: 'fallback-prompt-tools',
   };
+}
+
+/** Splits `text` into chunks of at most `maxLen` chars, preferring whitespace
+ *  boundaries so the typewriter feel doesn't break mid-word. */
+function chunkText(text: string, maxLen: number): string[] {
+  if (!text || text.length === 0) return [];
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    let end = Math.min(i + maxLen, text.length);
+    if (end < text.length) {
+      // Try to break at last whitespace within [i+maxLen/2, end]
+      const slice = text.slice(i, end);
+      const wsIdx = Math.max(slice.lastIndexOf(' '), slice.lastIndexOf('\n'));
+      if (wsIdx > Math.floor(maxLen / 2)) end = i + wsIdx + 1;
+    }
+    chunks.push(text.slice(i, end));
+    i = end;
+  }
+  return chunks;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -667,6 +707,63 @@ export function createOrchestratorRouter(opts: OrchestratorOptions): Router {
       res.json(result);
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  // ── Streaming chat — discrete SSE events on top of chat-sync ────────
+  // Same loop as /chat-sync, but emits SSE events as steps complete server-
+  // side:
+  //   event: tool_call   per tc BEFORE the handler runs (name, args)
+  //   event: tool_result per tc AFTER the handler returns (name, result, ms)
+  //   event: token_chunk per ~64-char slice of the final reply
+  //                      (40 ms spacing for smooth typewriter feel)
+  //   event: done        at end with { iterations, totalMs, mode }
+  //   event: error       on failure
+  // This avoids re-introducing the helmet+SSE flush bug from real vLLM
+  // streaming — chunks are split server-side, not pulled from vLLM stream.
+  router.post('/chat-stream', async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as {
+      caseId?: string;
+      messages?: ChatMessage[];
+      appId?: string;
+    };
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    if (messages.length === 0) {
+      return res.status(400).json({ error: 'messages (Array) erforderlich' });
+    }
+    if (body.appId && body.appId !== opts.appId) {
+      return res.status(400).json({ error: `appId mismatch: erwartet ${opts.appId}` });
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+    try { res.write(': sturm-orchestrator open\n\n'); } catch { /* tolerant */ }
+
+    let clientClosed = false;
+    req.on('close', () => { clientClosed = true; });
+    const send: ProgressSend = (name, payload) => {
+      if (clientClosed) return;
+      try { res.write(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`); }
+      catch { /* tolerant */ }
+    };
+
+    try {
+      const result = await runChatLoopSyncWithProgress(opts, messages, body.caseId, send);
+      // Stream the final reply as token_chunk events for smooth UX.
+      const chunks = chunkText(result.reply, 64);
+      for (const delta of chunks) {
+        if (clientClosed) break;
+        send('token_chunk', { delta });
+        await new Promise((r) => setTimeout(r, 40));
+      }
+      send('done', { iterations: result.iterations, totalMs: result.totalMs, mode: result.mode });
+    } catch (e) {
+      send('error', { message: (e as Error).message });
+      send('done', { iterations: 0, totalMs: 0, mode: 'error' });
+    } finally {
+      try { res.end(); } catch { /* tolerant */ }
     }
   });
 
