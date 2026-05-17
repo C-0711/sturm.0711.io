@@ -58,12 +58,31 @@ export class GitChainClient {
     return path.join(this.repoRoot, type, namespace, `${identifier}.git`);
   }
 
+  private normalizeContainerRow(row: any): Container {
+    const data = row.data ?? {};
+    return {
+      id: row.container_id ?? row.id,
+      type: row.type,
+      namespace: row.namespace,
+      identifier: row.identifier,
+      git_url: data.git_url ?? this.makeGitUrl(row.type, row.namespace, row.identifier),
+      display_name: data.display_name ?? row.name ?? row.identifier,
+      description: row.description ?? data.description ?? undefined,
+      latest_tag: data.latest_tag ?? undefined,
+      latest_commit: data.latest_commit ?? undefined,
+      visibility: row.visibility ?? data.visibility ?? 'private',
+      mandant_id: data.mandant_id ?? undefined,
+      tenant_id: data.tenant_id ?? undefined,
+      relations: data.relations ?? undefined,
+      created_at: row.created_at?.toISOString?.() ?? row.created_at,
+      updated_at: row.updated_at?.toISOString?.() ?? row.updated_at,
+    };
+  }
+
   async getContainer(id: string): Promise<Container | null> {
-    const res = await this.pool.query<Container>(
-      'SELECT * FROM registry.containers WHERE id = $1',
-      [id],
-    );
-    return res.rows[0] ?? null;
+    const res = await this.pool.query('SELECT * FROM containers WHERE container_id = $1', [id]);
+    if (res.rows.length === 0) return null;
+    return this.normalizeContainerRow(res.rows[0]);
   }
 
   async createContainer(input: CreateContainerInput): Promise<Container> {
@@ -73,41 +92,61 @@ export class GitChainClient {
     const existing = await this.getContainer(id);
     if (existing) return existing;
 
-    const res = await this.pool.query<Container>(
-      `INSERT INTO registry.containers
-        (id, type, namespace, identifier, git_url, display_name, description, visibility, mandant_id, tenant_id, relations, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
-       RETURNING *`,
-      [
-        id,
-        input.type,
-        input.namespace,
-        input.identifier,
-        gitUrl,
-        input.display_name,
-        input.description ?? null,
-        input.visibility ?? 'private',
-        input.mandant_id ?? null,
-        input.tenant_id ?? null,
-        JSON.stringify(input.relations ?? {}),
-      ],
-    );
-    return res.rows[0];
+    const data = {
+      git_url: gitUrl,
+      display_name: input.display_name,
+      description: input.description ?? null,
+      visibility: input.visibility ?? 'private',
+      mandant_id: input.mandant_id ?? null,
+      tenant_id: input.tenant_id ?? null,
+      relations: input.relations ?? {},
+    };
+
+    const res = await this.pool.query('INSERT INTO containers (container_id, name, namespace, description, visibility, identifier, type, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *', [
+      id,
+      input.identifier,
+      input.namespace,
+      input.description ?? null,
+      input.visibility ?? 'private',
+      input.identifier,
+      input.type,
+      JSON.stringify(data),
+    ]);
+    return this.normalizeContainerRow(res.rows[0]);
   }
 
   async updateLatestCommit(id: string, sha: string): Promise<void> {
     await this.pool.query(
-      'UPDATE registry.containers SET latest_commit = $1, updated_at = NOW() WHERE id = $2',
+      `UPDATE containers
+       SET data = jsonb_set(COALESCE(data, '{}'::jsonb), '{latest_commit}', to_jsonb($1::text), true),
+           updated_at = NOW()
+       WHERE container_id = $2`,
       [sha, id],
     );
   }
 
   async addCitation(source_id: string, target_id: string, relationship: string): Promise<void> {
+    const source = await this.getContainer(source_id);
+    if (!source) return;
+
+    const existingRelations = (source.relations?.citations as unknown[] | undefined) ?? [];
+    const nextCitation = { source_id, target_id, relationship };
+    const alreadyExists = existingRelations.some(
+      (citation) => citation && typeof citation === 'object' && (citation as any).source_id === source_id && (citation as any).target_id === target_id && (citation as any).relationship === relationship,
+    );
+    if (alreadyExists) return;
+
+    const updatedRelations = {
+      ...source.relations,
+      citations: [...existingRelations, nextCitation],
+    };
+
     await this.pool.query(
-      `INSERT INTO registry.citations (source_id, target_id, relationship)
-       VALUES ($1,$2,$3)
-       ON CONFLICT (source_id, target_id, relationship) DO NOTHING`,
-      [source_id, target_id, relationship],
+      `UPDATE containers
+       SET data = jsonb_set(COALESCE(data, '{}'::jsonb), '{relations}', $1::jsonb, true),
+           updated_at = NOW()
+       WHERE container_id = $2`,
+      [JSON.stringify(updatedRelations), source_id],
     );
   }
 
@@ -115,11 +154,8 @@ export class GitChainClient {
     const args: unknown[] = [mandant_id];
     const typeFilter = type ? ' AND type = $2' : '';
     if (type) args.push(type);
-    const res = await this.pool.query<Container>(
-      `SELECT * FROM registry.containers WHERE mandant_id = $1${typeFilter} ORDER BY created_at DESC`,
-      args,
-    );
-    return res.rows;
+    const res = await this.pool.query(`SELECT * FROM containers WHERE data->>'mandant_id' = $1${typeFilter} ORDER BY created_at DESC`, args);
+    return res.rows.map((row) => this.normalizeContainerRow(row));
   }
 
   // --------------- Git operations ---------------
@@ -179,7 +215,13 @@ export class GitChainClient {
 
   async setMandantId(workspaceId: string, mandantId: string, tenantId: string): Promise<void> {
     await this.pool.query(
-      'UPDATE registry.containers SET mandant_id = $1, tenant_id = $2, updated_at = NOW() WHERE id = $3',
+      `UPDATE containers
+       SET data = jsonb_set(
+         jsonb_set(COALESCE(data, '{}'::jsonb), '{mandant_id}', to_jsonb($1::text), true),
+         '{tenant_id}', to_jsonb($2::text), true
+       ),
+       updated_at = NOW()
+       WHERE container_id = $3`,
       [mandantId, tenantId, workspaceId],
     );
   }
@@ -205,27 +247,31 @@ export class GitChainClient {
     if (!workspace) throw new Error(`workspace not found: ${input.workspace_id}`);
 
     if (created) {
+      const data = {
+        git_url: this.makeGitUrl('tax_case', namespace, input.tax_case_identifier),
+        display_name: input.display_name,
+        visibility: 'private',
+        mandant_id: input.mandant_id,
+        tenant_id: workspace.tenant_id ?? null,
+        veranlagungsjahr: input.veranlagungsjahr,
+        steuerart: input.steuerart,
+        status: 'in_bearbeitung',
+        mandant_container_id: `0711:mandant:${namespace}:${input.mandant_id}`,
+        finanzamt: input.finanzamt ?? null,
+      };
       await this.pool.query(
-        `INSERT INTO registry.containers
-          (id, type, namespace, identifier, git_url, display_name, visibility, mandant_id, tenant_id, relations, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`,
+        `INSERT INTO containers
+          (container_id, name, namespace, description, visibility, identifier, type, data)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [
           taxCaseId,
-          'tax_case',
-          namespace,
           input.tax_case_identifier,
-          this.makeGitUrl('tax_case', namespace, input.tax_case_identifier),
+          namespace,
           input.display_name,
           'private',
-          input.mandant_id,
-          workspace.tenant_id ?? null,
-          JSON.stringify({
-            veranlagungsjahr: input.veranlagungsjahr,
-            steuerart: input.steuerart,
-            status: 'in_bearbeitung',
-            mandant_container_id: `0711:mandant:${namespace}:${input.mandant_id}`,
-            finanzamt: input.finanzamt ?? null,
-          }),
+          input.tax_case_identifier,
+          'tax_case',
+          JSON.stringify(data),
         ],
       );
       await this.ensureBareRepo('tax_case', namespace, input.tax_case_identifier);
@@ -278,7 +324,7 @@ export class GitChainClient {
 
     } catch (err) {
       if (created) {
-        await this.pool.query('DELETE FROM registry.containers WHERE id = $1', [taxCaseId]).catch(() => undefined);
+        await this.pool.query('DELETE FROM containers WHERE container_id = $1', [taxCaseId]).catch(() => undefined);
         await fs.rm(tcBare, { recursive: true, force: true }).catch(() => undefined);
       }
       throw err;
@@ -295,12 +341,18 @@ export class GitChainClient {
     tx_hash?: string;
     block_number?: number;
   }): Promise<void> {
+    const res = await this.pool.query<{ id: string }>(
+      'SELECT id FROM containers WHERE container_id = $1',
+      [input.container_id],
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error(`container not found: ${input.container_id}`);
+
     await this.pool.query(
-      `INSERT INTO registry.anchors (container_id, tag, commit_hash, network, tx_hash, block_number, anchored_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT (container_id, tag) DO NOTHING`,
+      `INSERT INTO container_anchors (container_id, tag, commit_hash, network, tx_hash, block_number, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
       [
-        input.container_id,
+        row.id,
         input.tag,
         input.commit_hash,
         input.network ?? 'base-mainnet',
@@ -312,9 +364,12 @@ export class GitChainClient {
 
   async deleteContainer(id: string): Promise<void> {
     const [, type, namespace, identifier] = id.split(':');
-    await this.pool.query('DELETE FROM registry.citations WHERE source_id = $1 OR target_id = $1', [id]);
-    await this.pool.query('DELETE FROM registry.anchors WHERE container_id = $1', [id]);
-    await this.pool.query('DELETE FROM registry.containers WHERE id = $1', [id]);
+    const containerRes = await this.pool.query<{ id: string }>('SELECT id FROM containers WHERE container_id = $1', [id]);
+    const row = containerRes.rows[0];
+    if (row) {
+      await this.pool.query('DELETE FROM container_anchors WHERE container_id = $1', [row.id]).catch(() => undefined);
+    }
+    await this.pool.query('DELETE FROM containers WHERE container_id = $1', [id]).catch(() => undefined);
     if (type && namespace && identifier) {
       const barePath = this.bareRepoPath(type, namespace, identifier);
       await fs.rm(barePath, { recursive: true, force: true }).catch(() => undefined);

@@ -138,31 +138,25 @@ async function run() {
     }
 
     // 14. Verify citation tax_case → derived_from → workspace
-    const citationRows = await client['pool'].query<{ source_id: string; target_id: string; relationship: string }>(
-      'SELECT source_id, target_id, relationship FROM registry.citations WHERE source_id = $1 AND target_id = $2 AND relationship = $3',
-      [TAX_CASE_ID, TEST_CONTAINER_ID, 'derived_from'],
+    const promoted = await client.getContainer(TAX_CASE_ID);
+    if (!promoted) throw new Error(`tax_case not found after promote: ${TAX_CASE_ID}`);
+    const citationList = (promoted.relations?.citations as Array<Record<string, string>> | undefined) ?? [];
+    const matchingCitation = citationList.find(
+      (citation) => citation.source_id === TAX_CASE_ID && citation.target_id === TEST_CONTAINER_ID && citation.relationship === 'derived_from',
     );
-    if (citationRows.rows.length === 0) throw new Error('citation tax_case → derived_from → workspace not found');
+    if (!matchingCitation) throw new Error('citation tax_case → derived_from → workspace not found');
     console.log('[test] phase2: citation tax_case → derived_from → workspace ✓');
 
     console.log('\n[test] ALL CHECKS PASSED (Phase 1 + Phase 2)');
 
   } finally {
-    // Cleanup citations before containers (no cascade)
-    try {
-      await client['pool'].query(
-        'DELETE FROM registry.citations WHERE source_id IN ($1,$2) OR target_id IN ($1,$2)',
-        [TEST_CONTAINER_ID, TAX_CASE_ID],
-      );
-      console.log('[test] cleanup: citations deleted');
-    } catch { /* ignore */ }
     // Cleanup DB rows
     try {
-      await client['pool'].query('DELETE FROM registry.containers WHERE id = $1', [TAX_CASE_ID]);
+      await client['pool'].query('DELETE FROM containers WHERE container_id = $1', [TAX_CASE_ID]);
       console.log('[test] cleanup: tax_case DB row deleted');
     } catch { /* ignore */ }
     try {
-      await client['pool'].query('DELETE FROM registry.containers WHERE id = $1', [TEST_CONTAINER_ID]);
+      await client['pool'].query('DELETE FROM containers WHERE container_id = $1', [TEST_CONTAINER_ID]);
       console.log('[test] cleanup: workspace DB row deleted');
     } catch { /* ignore */ }
     // Cleanup bare repos

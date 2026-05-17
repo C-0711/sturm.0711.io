@@ -1336,7 +1336,7 @@ export function buildElsterV6VisionWorkflow() {
           callConcurrency: 1,            // single call, no concurrency needed
           rejectWisoPlaceholders: true,
           fallbackToV5: true,
-          maxTokensPerCall: 6000,        // single big call needs more output budget
+          maxTokensPerCall: 12000,       // r9 only got ~10 fields filled → 6k was the cap
           perCallTimeoutMs: 240_000,
           renderDpi: 150,
           // R8 lesson: 400 cap + alphabetical-anlage sort dropped VOR (last)

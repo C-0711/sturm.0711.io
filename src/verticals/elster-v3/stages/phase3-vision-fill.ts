@@ -423,7 +423,24 @@ export const phase3VisionFillStage = defineStage<
             prompt_tokens: r.promptTokens,
             completion_tokens: r.completionTokens,
             fieldsFound,
+            fieldMapSize: fieldMap.fields.length,
           });
+          // Persist raw vision response per batch for offline diagnosis.
+          // Without this we can't tell whether the model wrote 5 fields and
+          // stopped, wrote 500 fields all-NULL, or hit a token cap.
+          await ctx.artifacts.write(
+            `phase3_vision_raw/batch-${idx}.json`,
+            {
+              idx,
+              pages: pngs.length,
+              promptTokens: r.promptTokens,
+              completionTokens: r.completionTokens,
+              wallclockMs: r.wallclockMs,
+              fieldsAskedFor: fieldMap.fields.length,
+              fieldsAnswered: fieldsFound,
+              parsed,
+            },
+          );
           return {
             idx,
             parsed,

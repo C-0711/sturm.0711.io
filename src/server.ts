@@ -23,6 +23,8 @@ import { createJobsRouter } from './server/jobs.ts';
 import { JobRunner } from './lib/job-runner.ts';
 import { registerJobHandlers } from './server/job-handlers.ts';
 import { resolveMasterKey } from './lib/master-signer.ts';
+import { createCtxRouter } from './lib/ctx-server.ts';
+import { createCtxBenchRouter } from './lib/ctx-bench-server.ts';
 import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
@@ -1344,6 +1346,18 @@ app.use('/api/integrations', requireBearerToken, createIntegrationsRouter({
 // ============ Standalone classify (used by /studio-ocr.html on file drop) ============
 
 app.use('/api/classify', requireBearerToken, schemaGenerateLimiter, createClassifyRouter(UPLOADS_DIR));
+
+// ============ ctx — drop-in context container surface ============
+// Mounted WITHOUT requireBearerToken to match CLAUDE.md playground posture.
+app.use('/ctx', express.json({ limit: '5mb' }), createCtxRouter({
+  ollamaUrl: process.env.OLLAMA_URL,
+  embedCpu: process.env.EMBED_CPU === '1',
+}));
+// Cross-LLM token-savings benchmark — SSE-streaming backend for ctx-demo.html.
+app.use('/api/ctx-bench', express.json({ limit: '1mb' }), createCtxBenchRouter({
+  ollamaUrl: process.env.OLLAMA_URL,
+  embedCpu: process.env.EMBED_CPU === '1',
+}));
 
 // ============ User-defined workflows (designer-authored, persistent) ============
 // Mounted WITHOUT requireBearerToken intentionally — designer is local-dev tool.

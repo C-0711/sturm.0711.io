@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>0711 · Context Container — Drop-in</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <style>
+    body {
+      margin: 0;
+      font-family: var(--font-inter, -apple-system, sans-serif);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 96px; }
+
+    header { margin-bottom: 36px; }
+    h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+    .sub { color: var(--color-text-secondary); font-size: 14px; margin: 0; }
+    .meta { font-size: 12px; color: var(--color-text-tertiary); margin-top: 8px; font-family: ui-monospace, "JetBrains Mono", monospace; }
+    .meta code { background: var(--color-bg-tertiary); padding: 2px 6px; border-radius: 3px; }
+
+    section { margin: 28px 0; }
+    section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-secondary); margin: 0 0 12px; font-weight: 600; }
+
+    textarea#raw {
+      width: 100%; box-sizing: border-box;
+      min-height: 240px;
+      padding: 14px;
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      resize: vertical;
+      color: var(--color-text-primary);
+    }
+    textarea#raw:focus { outline: none; border-color: var(--color-accent); }
+
+    /* Drop zone above the textarea */
+    .dropzone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 28px 20px;
+      margin-bottom: 10px;
+      border: 2px dashed var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg);
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .dropzone:hover {
+      background: var(--color-bg-hover);
+      border-color: var(--color-accent);
+      color: var(--color-text-primary);
+    }
+    .dropzone.dragover {
+      background: var(--color-accent-light);
+      border-color: var(--color-accent);
+      color: var(--color-text-primary);
+      border-style: solid;
+    }
+    .dropzone-icon { font-size: 28px; line-height: 1; }
+    .dropzone-headline { font-weight: 600; color: var(--color-text-primary); font-size: 14px; }
+    .dropzone-sub { font-size: 12px; color: var(--color-text-tertiary); }
+    .dropzone-loaded {
+      background: var(--color-bg-tertiary);
+      border-style: solid;
+      border-color: var(--color-success);
+    }
+    .dropzone-loaded .dropzone-headline { color: var(--color-success); }
+    .dropzone-loaded .dropzone-icon::before { content: "✓"; }
+    .dropzone-loaded .dropzone-icon:not(:empty)::before { content: ""; }
+
+    .controls {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      margin-top: 10px;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      transition: background 0.12s;
+    }
+    .btn:hover { background: var(--color-bg-hover); }
+    .btn-primary { background: var(--color-text-primary); color: var(--color-bg); border-color: var(--color-text-primary); }
+    .btn-primary:hover { background: var(--color-accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .name-input {
+      padding: 8px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: ui-monospace, monospace;
+      width: 200px;
+    }
+
+    /* DAG strip */
+    .dag {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .stage {
+      padding: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: var(--color-bg-tertiary);
+      font-size: 12px;
+      position: relative;
+      transition: background 0.18s, border-color 0.18s;
+    }
+    .stage .stage-num { font-size: 10px; color: var(--color-text-tertiary); }
+    .stage .stage-name { font-weight: 600; font-size: 13px; margin: 4px 0 4px; }
+    .stage .stage-desc { color: var(--color-text-secondary); font-size: 11px; line-height: 1.35; }
+    .stage .stage-state { font-size: 10px; margin-top: 8px; font-family: ui-monospace, monospace; }
+    .stage[data-state="idle"]    { opacity: 0.6; }
+    .stage[data-state="running"] { background: #fff8e6; border-color: var(--color-amber); }
+    .stage[data-state="ok"]      { background: #f1f7f0; border-color: var(--color-success); }
+    .stage[data-state="error"]   { background: #fbeded; border-color: var(--color-danger); }
+    .stage[data-state="running"] .stage-state::before { content: "▶ "; }
+    .stage[data-state="ok"]      .stage-state::before { content: "✓ "; color: var(--color-success); }
+    .stage[data-state="error"]   .stage-state::before { content: "✗ "; color: var(--color-danger); }
+
+    .panel {
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 16px;
+      background: var(--color-bg);
+    }
+    .panel + .panel { margin-top: 12px; }
+
+    .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 18px; font-size: 13px; }
+    .kv dt { color: var(--color-text-secondary); }
+    .kv dd { margin: 0; font-family: ui-monospace, monospace; }
+
+    .hits .hit {
+      padding: 10px 0;
+      border-top: 1px solid var(--color-border-light);
+      font-size: 13px;
+    }
+    .hits .hit:first-child { border-top: none; }
+    .hits .hit-head { display: flex; gap: 12px; align-items: baseline; font-family: ui-monospace, monospace; font-size: 12px; }
+    .hits .hit-score { color: var(--color-accent); font-weight: 600; }
+    .hits .hit-path { color: var(--color-text-secondary); }
+    .hits .hit-preview { color: var(--color-text-secondary); margin-top: 4px; font-size: 12px; line-height: 1.45; }
+
+    .query-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .query-row input[type="text"] {
+      flex: 1; padding: 8px 12px; font-size: 13px;
+      border-radius: 6px; border: 1px solid var(--color-border);
+      background: var(--color-bg); color: var(--color-text-primary);
+    }
+    .query-row input[type="number"] {
+      width: 60px; padding: 8px 10px; font-size: 13px;
+      border-radius: 6px; border: 1px solid var(--color-border);
+      background: var(--color-bg); color: var(--color-text-primary);
+    }
+
+    pre.snippet {
+      background: var(--color-bg-tertiary);
+      padding: 12px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      overflow-x: auto;
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      margin: 8px 0 18px;
+      border: 1px solid var(--color-border-light);
+    }
+    .snippet-row { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+    .snippet-row h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-secondary); }
+    .copy-btn { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg); cursor: pointer; }
+    .copy-btn:hover { background: var(--color-bg-hover); }
+
+    .hidden { display: none; }
+    a { color: var(--color-accent); }
+
+    /* Benchmark section */
+    .bench-intro { font-size: 13px; color: var(--color-text-secondary); margin: 0 0 14px; line-height: 1.5; }
+    .bench-intro code { background: var(--color-bg-tertiary); padding: 1px 5px; border-radius: 3px; font-size: 11.5px; }
+    .bench-panel { display: flex; flex-direction: column; gap: 12px; }
+    .bench-meta { font-size: 12px; color: var(--color-text-secondary); font-family: ui-monospace, monospace; }
+    .bench-meta b { color: var(--color-text-primary); }
+    .bench-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .bench-toggle { font-size: 12px; color: var(--color-text-secondary); cursor: pointer; user-select: none; }
+    .bench-toggle input { vertical-align: middle; margin-right: 4px; }
+    .bench-progress {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--color-bg-tertiary);
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      color: var(--color-text-secondary);
+      max-height: 220px;
+      overflow-y: auto;
+      line-height: 1.55;
+    }
+    .bench-progress .ok    { color: var(--color-success); }
+    .bench-progress .err   { color: var(--color-danger); }
+    .bench-progress .head  { color: var(--color-text-primary); font-weight: 600; }
+    .bench-progress .row   { display: block; }
+
+    .bench-table table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 14px; }
+    .bench-table th, .bench-table td {
+      padding: 6px 10px;
+      text-align: right;
+      border-bottom: 1px solid var(--color-border-light);
+      font-variant-numeric: tabular-nums;
+    }
+    .bench-table th { text-align: left; font-weight: 600; color: var(--color-text-secondary); background: var(--color-bg-tertiary); }
+    .bench-table th:first-child, .bench-table td:first-child { text-align: left; font-family: ui-monospace, monospace; }
+    .bench-table td.savings-good { color: var(--color-success); font-weight: 600; }
+    .bench-table td.pending { color: var(--color-text-tertiary); font-style: italic; }
+    .bench-table td.error { color: var(--color-danger); }
+    .bench-table td.running { color: var(--color-amber); }
+
+    .bench-summary { margin-top: 18px; padding: 14px; background: var(--color-bg-tertiary); border-radius: 6px; }
+    .bench-summary h3 { margin: 0 0 8px; font-size: 13px; }
+    .bench-summary table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .bench-summary th, .bench-summary td {
+      padding: 5px 10px;
+      text-align: right;
+      border-bottom: 1px solid var(--color-border-light);
+      font-variant-numeric: tabular-nums;
+    }
+    .bench-summary th { text-align: left; font-weight: 600; color: var(--color-text-secondary); }
+    .bench-summary th:first-child, .bench-summary td:first-child { text-align: left; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Context Container — Drop-in</h1>
+  <p class="sub">Paste a first context window from any LLM. The other LLMs can jump on it.</p>
+  <p class="meta">Workflow: <code>ctx-bootstrap</code> · 5 stages · runs locally · cross-LLM via plain HTTP</p>
+</header>
+
+<section>
+  <h2>1. Drop your first context window</h2>
+
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload transcript file">
+    <div class="dropzone-icon" id="dropzoneIcon">📥</div>
+    <div class="dropzone-headline" id="dropzoneHead">Drop a file here, or click to browse</div>
+    <div class="dropzone-sub" id="dropzoneSub">accepts .txt · .md · .json · .html — or paste below</div>
+  </div>
+  <input type="file" id="file" accept=".txt,.md,.json,.html" class="hidden">
+
+  <textarea id="raw" placeholder="…or paste a conversation transcript, a prompt, or a JSON export from ChatGPT / Claude / Gemini.&#10;&#10;Supported shapes:&#10;  • Markdown with **User:** / **Assistant:** turn markers&#10;  • OpenAI export JSON ({messages: [...]})&#10;  • Claude messages-array JSON&#10;  • Plain prompt text (treated as one atom)"></textarea>
+
+  <div class="controls">
+    <button class="btn" id="sampleBtn">↻ Load sample</button>
+    <input type="text" class="name-input" id="name" placeholder="container name" value="my-ctx">
+    <button class="btn btn-primary" id="buildBtn">▶ Build context</button>
+  </div>
+</section>
+
+<section id="dagSection" class="hidden">
+  <h2>2. Workflow</h2>
+  <div class="dag">
+    <div class="stage" data-state="idle" data-stage="ingest">
+      <div class="stage-num">stage 1/5</div>
+      <div class="stage-name">Ingest</div>
+      <div class="stage-desc">Allocate container ID, persist source</div>
+      <div class="stage-state">idle</div>
+    </div>
+    <div class="stage" data-state="idle" data-stage="parse">
+      <div class="stage-num">stage 2/5</div>
+      <div class="stage-name">Parse</div>
+      <div class="stage-desc">Turns + code blocks → atoms</div>
+      <div class="stage-state">idle</div>
+    </div>
+    <div class="stage" data-state="idle" data-stage="atomize">
+      <div class="stage-num">stage 3/5</div>
+      <div class="stage-name">Atomize</div>
+      <div class="stage-desc">atoms/code/&lt;slug&gt;.md</div>
+      <div class="stage-state">idle</div>
+    </div>
+    <div class="stage" data-state="idle" data-stage="index">
+      <div class="stage-num">stage 4/5</div>
+      <div class="stage-name">Embed + Quantize</div>
+      <div class="stage-desc">EmbeddingGemma + MRL×TurboQuant</div>
+      <div class="stage-state">idle</div>
+    </div>
+    <div class="stage" data-state="idle" data-stage="publish">
+      <div class="stage-num">stage 5/5</div>
+      <div class="stage-name">Publish</div>
+      <div class="stage-desc">Register + emit retrieve URL</div>
+      <div class="stage-state">idle</div>
+    </div>
+  </div>
+</section>
+
+<section id="resultSection" class="hidden">
+  <h2>3. Your container</h2>
+  <div class="panel">
+    <dl class="kv">
+      <dt>Container ID</dt>          <dd id="r-id">—</dd>
+      <dt>Short ID</dt>              <dd id="r-short">—</dd>
+      <dt>Atoms</dt>                 <dd id="r-atoms">—</dd>
+      <dt>Native dim</dt>            <dd id="r-dim">—</dd>
+      <dt>Build time</dt>            <dd id="r-time">—</dd>
+      <dt>Retrieve URL</dt>          <dd id="r-url">—</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="playgroundSection" class="hidden">
+  <h2>4. Retrieval playground</h2>
+  <div class="panel">
+    <div class="query-row">
+      <input type="text" id="query" placeholder="Ask the container something…">
+      <input type="number" id="k" value="5" min="1" max="20">
+      <button class="btn btn-primary" id="retrieveBtn">Retrieve</button>
+    </div>
+    <div class="hits" id="hits"></div>
+  </div>
+</section>
+
+<section id="benchSection" class="hidden">
+  <h2>5. Cross-LLM benchmark — how much does ctx save?</h2>
+  <div class="panel">
+    <p class="bench-intro">
+      Run 4 predefined queries against 4 LLMs in two modes each — once with the full transcript
+      stuffed into context (<em>baseline</em>), once with ctx top-K atoms (<em>ctx</em>). Token
+      counts come straight from the providers (Mistral <code>usage</code>, Ollama
+      <code>eval_count</code>).
+    </p>
+    <div id="benchPanel" class="bench-panel">
+      <div class="bench-meta" id="benchMeta">Loading model panel…</div>
+      <div class="bench-controls">
+        <label class="bench-toggle">
+          <input type="checkbox" id="benchSkipBaseline">
+          skip baseline pass (faster — only ctx mode)
+        </label>
+        <button class="btn btn-primary" id="benchRunBtn">▶ Run benchmark</button>
+      </div>
+    </div>
+    <div id="benchProgress" class="bench-progress hidden"></div>
+    <div id="benchTable" class="bench-table hidden"></div>
+    <div id="benchSummary" class="bench-summary hidden"></div>
+  </div>
+</section>
+
+<section id="snippetsSection" class="hidden">
+  <h2>6. Cross-LLM snippets</h2>
+
+  <div class="snippet-row"><h3>curl</h3><button class="copy-btn" data-copy="snippet-curl">copy</button></div>
+  <pre class="snippet" id="snippet-curl"></pre>
+
+  <div class="snippet-row"><h3>OpenAPI fragment — paste into a ChatGPT Custom GPT Action</h3><button class="copy-btn" data-copy="snippet-openapi">copy</button></div>
+  <pre class="snippet" id="snippet-openapi"></pre>
+
+  <div class="snippet-row"><h3>System-prompt preamble for any LLM</h3><button class="copy-btn" data-copy="snippet-preamble">copy</button></div>
+  <pre class="snippet" id="snippet-preamble"></pre>
+</section>
+
+</div>
+
+<script>
+const stageOrder = ['ingest', 'parse', 'atomize', 'index', 'publish'];
+const stageEls = Object.fromEntries(stageOrder.map(s => [s, document.querySelector(`.stage[data-stage="${s}"]`)]));
+
+function setStageState(id, state, info) {
+  const el = stageEls[id];
+  if (!el) return;
+  el.dataset.state = state;
+  const stateEl = el.querySelector('.stage-state');
+  stateEl.textContent = info ?? state;
+}
+function resetStages() {
+  for (const id of stageOrder) setStageState(id, 'idle', 'idle');
+}
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file');
+
+async function ingestFile(f) {
+  if (!f) return;
+  const text = await f.text();
+  document.getElementById('raw').value = text;
+  // Auto-fill the container name from the filename (minus extension), if user didn't customize it
+  const nameField = document.getElementById('name');
+  if (!nameField.value || nameField.value === 'my-ctx') {
+    nameField.value = (f.name.replace(/\.[^.]+$/, '') || 'untitled')
+      .toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 32);
+  }
+  dropzone.classList.add('dropzone-loaded');
+  document.getElementById('dropzoneIcon').textContent = '✓';
+  document.getElementById('dropzoneHead').textContent = f.name;
+  document.getElementById('dropzoneSub').textContent =
+    `${text.length.toLocaleString()} chars · click to replace, or paste below to override`;
+}
+
+fileInput.addEventListener('change', (e) => ingestFile(e.target.files?.[0]));
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
+['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.add('dragover');
+}));
+['dragleave', 'dragend'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.remove('dragover');
+}));
+dropzone.addEventListener('drop', async (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.remove('dragover');
+  const f = e.dataTransfer?.files?.[0];
+  if (f) await ingestFile(f);
+});
+// Window-level drag handlers to prevent the browser from navigating away
+// when a drop misses the zone
+['dragover', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => {
+  if (e.target === dropzone || dropzone.contains(e.target)) return;
+  e.preventDefault();
+}));
+document.getElementById('sampleBtn').addEventListener('click', () => {
+  document.getElementById('raw').value = SAMPLE;
+  document.getElementById('name').value = 'abrechnung-demo';
+});
+
+document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => {
+  const id = btn.getAttribute('data-copy');
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'copied ✓';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+}));
+
+document.getElementById('buildBtn').addEventListener('click', async () => {
+  const raw = document.getElementById('raw').value.trim();
+  if (!raw) { alert('Paste a transcript or prompt first.'); return; }
+  const name = document.getElementById('name').value.trim() || 'untitled';
+
+  // Reset UI
+  document.getElementById('dagSection').classList.remove('hidden');
+  document.getElementById('resultSection').classList.add('hidden');
+  document.getElementById('playgroundSection').classList.add('hidden');
+  document.getElementById('snippetsSection').classList.add('hidden');
+  resetStages();
+
+  document.getElementById('buildBtn').disabled = true;
+
+  try {
+    await runWorkflow({ raw, name });
+  } catch (err) {
+    alert(`Build failed: ${err.message}`);
+  } finally {
+    document.getElementById('buildBtn').disabled = false;
+  }
+});
+
+async function runWorkflow(input) {
+  // POST to /api/workflows/ctx-bootstrap/run with JSON input. The server
+  // streams SSE events; we parse them and update the UI.
+  const res = await fetch('/api/workflows/ctx-bootstrap/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let publishOut = null;
+  let indexOut = null;
+  let parseOut = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const events = buf.split('\n\n');
+    buf = events.pop() ?? '';
+
+    for (const ev of events) {
+      const lines = ev.split('\n');
+      const evtLine = lines.find(l => l.startsWith('event: '));
+      const dataLine = lines.find(l => l.startsWith('data: '));
+      if (!dataLine) continue;
+      let payload;
+      try { payload = JSON.parse(dataLine.slice(6)); } catch { continue; }
+      const name = payload.name ?? (evtLine ? evtLine.slice(7) : null);
+
+      if (name === 'stage_start' && payload.stageId) {
+        setStageState(payload.stageId, 'running', 'running…');
+      } else if (name === 'stage_done' && payload.stageId) {
+        const ms = payload.payload?.ms;
+        setStageState(payload.stageId, 'ok', ms ? `ok · ${ms}ms` : 'ok');
+        if (payload.stageId === 'parse') parseOut = payload.payload?.output;
+        if (payload.stageId === 'index') indexOut = payload.payload?.output;
+        if (payload.stageId === 'publish') publishOut = payload.payload?.output;
+      } else if (name === 'stage_error' && payload.stageId) {
+        setStageState(payload.stageId, 'error', payload.payload?.message ?? 'error');
+        throw new Error(`stage ${payload.stageId} failed: ${payload.payload?.message ?? ''}`);
+      }
+    }
+  }
+
+  if (publishOut && indexOut) {
+    showResult(publishOut, indexOut, parseOut);
+  } else {
+    throw new Error('workflow ended without publish output');
+  }
+}
+
+function showResult(publish, index, parse) {
+  document.getElementById('r-id').textContent    = publish.containerId;
+  document.getElementById('r-short').textContent = publish.shortId;
+  document.getElementById('r-atoms').textContent = index.atomCount;
+  document.getElementById('r-dim').textContent   = index.nativeDim;
+  document.getElementById('r-time').textContent  = `${index.embedMs}ms embed + ${index.encodeMs}ms encode`;
+
+  const url = new URL(publish.retrieveUrl, location.href).toString();
+  const linkEl = document.createElement('a');
+  linkEl.href = url; linkEl.textContent = url;
+  document.getElementById('r-url').innerHTML = '';
+  document.getElementById('r-url').appendChild(linkEl);
+
+  document.getElementById('resultSection').classList.remove('hidden');
+  document.getElementById('playgroundSection').classList.remove('hidden');
+  document.getElementById('benchSection').classList.remove('hidden');
+  document.getElementById('snippetsSection').classList.remove('hidden');
+
+  // Populate snippets
+  renderSnippets(publish);
+
+  // Load bench panel
+  loadBenchPanel(publish.shortId);
+
+  // Stash for retrieve button
+  window.__currentShortId = publish.shortId;
+  window.__currentRetrieveUrl = url;
+}
+
+function renderSnippets(publish) {
+  const url = new URL(publish.retrieveUrl, location.href).toString();
+  document.getElementById('snippet-curl').textContent =
+    `curl -X POST ${url} \\\n  -H 'content-type: application/json' \\\n  -d '{"query": "...", "k": 5}'`;
+
+  document.getElementById('snippet-openapi').textContent = JSON.stringify({
+    openapi: '3.1.0',
+    info: { title: `0711 ctx — ${publish.shortId}`, version: '1.0' },
+    servers: [{ url: new URL('/', location.href).toString().replace(/\/$/, '') }],
+    paths: {
+      [`/ctx/${publish.shortId}/retrieve`]: {
+        post: {
+          summary: 'Retrieve top-K context atoms',
+          operationId: 'retrieveContext',
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: {
+              type: 'object', required: ['query'],
+              properties: { query: { type: 'string' }, k: { type: 'integer', default: 5 } },
+            }}},
+          },
+          responses: { '200': { description: 'Hits',
+            content: { 'application/json': { schema: { type: 'object' } } } } },
+        },
+      },
+    },
+  }, null, 2);
+
+  document.getElementById('snippet-preamble').textContent =
+`You have access to a retrieval tool called \`ctx\` that returns top-K
+context atoms from this project's container. The container was bootstrapped
+from a prior conversation. Before answering project-specific questions, call:
+
+  POST ${url}
+  Content-Type: application/json
+  { "query": "<your search>", "k": 5 }
+
+Treat returned atoms as authoritative project context. Each atom carries
+{slug, score, path, symbol, preview}. Cite path#symbol when you use one.`;
+}
+
+document.getElementById('retrieveBtn').addEventListener('click', async () => {
+  const query = document.getElementById('query').value.trim();
+  if (!query) return;
+  const k = Number(document.getElementById('k').value) || 5;
+  const hitsEl = document.getElementById('hits');
+  hitsEl.innerHTML = '<div style="font-size:12px; color: var(--color-text-tertiary)">searching…</div>';
+
+  const res = await fetch(`/ctx/${window.__currentShortId}/retrieve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, k }),
+  });
+  if (!res.ok) { hitsEl.textContent = `error: HTTP ${res.status}`; return; }
+  const data = await res.json();
+  hitsEl.innerHTML = '';
+  for (const h of data.hits ?? []) {
+    const div = document.createElement('div');
+    div.className = 'hit';
+    div.innerHTML = `
+      <div class="hit-head">
+        <span class="hit-score">${h.score.toFixed(4)}</span>
+        <span class="hit-path">${(h.path ?? '?')}#${(h.symbol ?? '?')}</span>
+      </div>
+      <div class="hit-preview"></div>`;
+    div.querySelector('.hit-preview').textContent = h.preview ?? '';
+    hitsEl.appendChild(div);
+  }
+});
+
+const SAMPLE = `**User:**
+I'm building a tax-statement renderer for German Einkommensteuer (ELSTER). The flow is: BMF MCP server computes \`zvE → Einkommensteuer → Solidaritätszuschlag\` from declared eCodes, and we render the result as a layered HTML "Pro-Abrechnung" with §-citations per row.
+
+Constraints:
+- Splittingtarif must be detected from veranlagungsart, not a separate flag.
+- Vorsorge-Höchstbetrag (§10 EStG) needs Phase-2 logic — basis + erweiterter Höchstbetrag.
+- Graceful degradation: if BMF MCP is down, we keep declared values and emit a kpi_warning.
+
+**Assistant:**
+Got it. The cleanest split is to let \`bmf-rechner-compute\` own the MCP call and produce a \`computed_layer\` that's merged into \`canonical_layer\`. The Pro-Abrechnung renderer reads the merged layer and never talks to BMF directly.
+
+For Splittingtarif:
+\`\`\`typescript
+const splitting = canonicalLayer['VeranlagungArt']?.value === 'zusammenveranlagung';
+const tarif = splitting ? 'Splittingtabelle' : 'Grundtabelle';
+\`\`\`
+
+The kpi_warning on MCP-down should include the timestamp and the last successful compute SHA so the audit log stays consistent.
+
+**User:**
+Where should the §10 Abs. 4 EStG branching live — in the BMF MCP or in our stage?
+
+**Assistant:**
+In BMF MCP. Our stage is dumb on tax law — it only declares eCodes and reads what comes back.`;
+
+// ─────────────────────────────────────────────────────────────────────
+// Cross-LLM benchmark
+// ─────────────────────────────────────────────────────────────────────
+
+let benchPanel = null; // { models: [...], prompts: [...] }
+
+async function loadBenchPanel(shortId) {
+  try {
+    const res = await fetch('/api/ctx-bench/panel');
+    if (!res.ok) throw new Error('panel fetch failed');
+    benchPanel = await res.json();
+    renderBenchMeta(shortId);
+  } catch (e) {
+    document.getElementById('benchMeta').textContent = `panel load error: ${e.message}`;
+  }
+}
+
+function renderBenchMeta(shortId) {
+  if (!benchPanel) return;
+  const m = document.getElementById('benchMeta');
+  const modelList = benchPanel.models.map(x =>
+    `<b>${x.label}</b><span style="color:var(--color-text-tertiary)"> (${x.provider})</span>`).join(' · ');
+  const promptList = benchPanel.prompts.map(p => p.id).join(' · ');
+  m.innerHTML = `models: ${modelList}<br>prompts: <b>${promptList}</b><br>container: <b>${shortId}</b>`;
+}
+
+document.getElementById('benchRunBtn').addEventListener('click', async () => {
+  if (!benchPanel) { alert('panel not loaded'); return; }
+  const shortId = window.__currentShortId;
+  if (!shortId) { alert('build a container first'); return; }
+  await runBench(shortId);
+});
+
+async function runBench(shortId) {
+  const btn = document.getElementById('benchRunBtn');
+  const progressEl = document.getElementById('benchProgress');
+  const tableEl = document.getElementById('benchTable');
+  const summaryEl = document.getElementById('benchSummary');
+  btn.disabled = true; btn.textContent = 'running…';
+  progressEl.classList.remove('hidden'); progressEl.innerHTML = '';
+  tableEl.classList.remove('hidden');
+  summaryEl.classList.add('hidden');
+
+  const skipBaseline = document.getElementById('benchSkipBaseline').checked;
+  const cells = new Map(); // key = `${model}|${prompt}|${mode}` → {state, tokens, latency, error, answer}
+
+  // Initialize table
+  renderBenchTable(cells, skipBaseline);
+
+  const log = (line, cls) => {
+    const span = document.createElement('span');
+    span.className = `row ${cls ?? ''}`;
+    span.textContent = line;
+    progressEl.appendChild(span);
+    progressEl.scrollTop = progressEl.scrollHeight;
+  };
+
+  try {
+    const res = await fetch('/api/ctx-bench/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ containerId: shortId, k: 5, skipBaseline }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const events = buf.split('\n\n');
+      buf = events.pop() ?? '';
+      for (const ev of events) {
+        const evtLine = ev.split('\n').find(l => l.startsWith('event: '));
+        const dataLine = ev.split('\n').find(l => l.startsWith('data: '));
+        if (!dataLine) continue;
+        let payload;
+        try { payload = JSON.parse(dataLine.slice(6)); } catch { continue; }
+        const name = evtLine ? evtLine.slice(7) : null;
+        handleBenchEvent(name, payload, cells, skipBaseline, log);
+      }
+    }
+  } catch (e) {
+    log(`FATAL: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Run benchmark';
+    renderBenchSummary(cells, skipBaseline);
+  }
+}
+
+function handleBenchEvent(name, payload, cells, skipBaseline, log) {
+  if (name === 'run_meta') {
+    log(`run: ${payload.shortId}  k=${payload.k}  ${payload.atomCount} atoms`, 'head');
+  } else if (name === 'baseline_loaded') {
+    log(`baseline source: ${payload.bytes.toLocaleString()} bytes (~${Math.ceil(payload.bytes/4).toLocaleString()} est. tokens)`);
+  } else if (name === 'prompt_start') {
+    log(`▸ prompt "${payload.id}"`, 'head');
+  } else if (name === 'ctx_retrieved') {
+    log(`  retrieved ${payload.hits} atoms (${payload.contextBytes.toLocaleString()} bytes, ${payload.retrieveMs}ms)`);
+  } else if (name === 'cell_start') {
+    const key = `${payload.model}|${payload.prompt}|${payload.mode}`;
+    cells.set(key, { state: 'running' });
+    renderBenchTable(cells, skipBaseline);
+  } else if (name === 'cell_done') {
+    const key = `${payload.model}|${payload.prompt}|${payload.mode}`;
+    cells.set(key, {
+      state: payload.error ? 'error' : 'done',
+      promptTokens: payload.promptTokens,
+      completionTokens: payload.completionTokens,
+      latencyMs: payload.latencyMs,
+      truncated: payload.truncated,
+      error: payload.error,
+      answer: payload.answer,
+    });
+    const tag = payload.error ? 'err' : 'ok';
+    const summary = payload.error
+      ? `ERROR ${payload.error.slice(0, 80)}`
+      : `prompt=${payload.promptTokens} out=${payload.completionTokens} ${payload.latencyMs}ms`;
+    log(`    [${payload.mode.padEnd(8)}] ${payload.model.padEnd(16)} ${summary}`, tag);
+    renderBenchTable(cells, skipBaseline);
+  } else if (name === 'run_done') {
+    log(`✓ done at ${payload.ts}`, 'ok');
+  } else if (name === 'run_error') {
+    log(`✗ ${payload.message}`, 'err');
+  }
+}
+
+function renderBenchTable(cells, skipBaseline) {
+  if (!benchPanel) return;
+  const el = document.getElementById('benchTable');
+  const cols = skipBaseline ? ['ctx_in', 'ctx_out', 'ctx_ms'] : ['baseline_in', 'ctx_in', 'savings', '%', 'ctx_ms'];
+  const headers = ['prompt × model'].concat(cols);
+  let html = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  for (const prompt of benchPanel.prompts) {
+    for (const m of benchPanel.models) {
+      const ctx = cells.get(`${m.label}|${prompt.id}|ctx`);
+      const base = cells.get(`${m.label}|${prompt.id}|baseline`);
+      html += '<tr>';
+      html += `<td>${prompt.id} <span style="color:var(--color-text-tertiary)">× ${m.label}</span></td>`;
+      if (skipBaseline) {
+        html += `<td>${fmtCell(ctx, 'promptTokens')}</td>`;
+        html += `<td>${fmtCell(ctx, 'completionTokens')}</td>`;
+        html += `<td>${fmtCell(ctx, 'latencyMs', 'ms')}</td>`;
+      } else {
+        html += `<td>${fmtCell(base, 'promptTokens')}</td>`;
+        html += `<td>${fmtCell(ctx, 'promptTokens')}</td>`;
+        if (base?.state === 'done' && ctx?.state === 'done') {
+          const sav = base.promptTokens - ctx.promptTokens;
+          const pct = base.promptTokens > 0 ? `${((sav / base.promptTokens) * 100).toFixed(1)}%` : '—';
+          html += `<td class="savings-good">${sav.toLocaleString()}</td>`;
+          html += `<td class="savings-good">${pct}</td>`;
+        } else {
+          html += `<td class="pending">—</td><td class="pending">—</td>`;
+        }
+        html += `<td>${fmtCell(ctx, 'latencyMs', 'ms')}</td>`;
+      }
+      html += '</tr>';
+    }
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function fmtCell(cell, field, suffix) {
+  if (!cell) return '<span class="pending">—</span>';
+  if (cell.state === 'running') return '<span class="running">…</span>';
+  if (cell.state === 'error') return '<span class="error">err</span>';
+  if (cell.state === 'done') {
+    const v = cell[field];
+    if (v == null) return '—';
+    return `${v.toLocaleString()}${suffix ?? ''}`;
+  }
+  return '—';
+}
+
+function renderBenchSummary(cells, skipBaseline) {
+  if (!benchPanel) return;
+  const el = document.getElementById('benchSummary');
+  // Per-model totals
+  let totalBase = 0, totalCtx = 0;
+  const perModel = benchPanel.models.map(m => {
+    let base = 0, ctx = 0, ctxMs = 0, count = 0;
+    for (const prompt of benchPanel.prompts) {
+      const b = cells.get(`${m.label}|${prompt.id}|baseline`);
+      const c = cells.get(`${m.label}|${prompt.id}|ctx`);
+      if (b?.state === 'done') base += b.promptTokens;
+      if (c?.state === 'done') { ctx += c.promptTokens; ctxMs += c.latencyMs; count++; }
+    }
+    totalBase += base; totalCtx += ctx;
+    return { label: m.label, base, ctx, meanCtxMs: count > 0 ? Math.round(ctxMs / count) : 0 };
+  });
+  const totalSav = totalBase - totalCtx;
+  const totalPct = totalBase > 0 ? `${((totalSav / totalBase) * 100).toFixed(1)}%` : '—';
+  let html = '<h3>Token-savings summary</h3><table><thead><tr><th>model</th><th>baseline_in</th><th>ctx_in</th><th>savings</th><th>mean ctx latency</th></tr></thead><tbody>';
+  for (const r of perModel) {
+    const sav = r.base - r.ctx;
+    const pct = r.base > 0 ? `${((sav / r.base) * 100).toFixed(1)}%` : '—';
+    html += `<tr><td>${r.label}</td><td>${r.base.toLocaleString() || '—'}</td><td>${r.ctx.toLocaleString()}</td><td>${sav.toLocaleString()} (${pct})</td><td>${r.meanCtxMs}ms</td></tr>`;
+  }
+  if (!skipBaseline && totalBase > 0) {
+    html += `<tr style="font-weight:600"><td>TOTAL</td><td>${totalBase.toLocaleString()}</td><td>${totalCtx.toLocaleString()}</td><td>${totalSav.toLocaleString()} (${totalPct})</td><td></td></tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+</script>
+</body>
+</html>
