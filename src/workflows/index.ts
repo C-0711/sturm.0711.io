@@ -21,12 +21,16 @@ import {
   buildElsterV52Workflow,
   buildElsterV52RagWorkflow,
   buildElsterV52RagEnsembleWorkflow,
+  buildElsterV6VisionWorkflow,
   buildElsterV4StrickerWorkflow,
 } from '../verticals/elster-v3/index.ts';
+import { registerStage } from '../core/registry.ts';
+import { phase3VisionFillStage } from '../verticals/elster-v3/stages/phase3-vision-fill.ts';
 import { registerElsterV3MultiStages, buildElsterV3MultiWorkflowWithSchema } from '../verticals/elster-v3/multi.ts';
 import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc/index.ts';
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
 import { registerSealStages, buildSteuerfallSealWorkflow } from './steuerfall-seal/index.ts';
+import { ctxBootstrapWorkflow, registerCtxBootstrapStages } from './ctx-bootstrap/index.ts';
 
 export function registerAllWorkflows(): void {
   registerWorkflow(helloOcrWorkflow);
@@ -44,6 +48,10 @@ export function registerAllWorkflows(): void {
   registerWorkflow(buildElsterV52Workflow());
   registerWorkflow(buildElsterV52RagWorkflow());
   registerWorkflow(buildElsterV52RagEnsembleWorkflow());
+  // v6: vision-first replacement for phase3LlmFill. Stage registered before
+  // the workflow so the runner can resolve `elster-v6/phase3-vision-fill`.
+  registerStage(phase3VisionFillStage);
+  registerWorkflow(buildElsterV6VisionWorkflow());
   registerWorkflow(buildElsterV4StrickerWorkflow());
   registerElsterV3MultiStages();
   registerWorkflow(buildElsterV3MultiWorkflowWithSchema());
@@ -57,6 +65,9 @@ export function registerAllWorkflows(): void {
   // Steuerfall-Versiegelung: HMAC-Snapshot + Merkle + Anchor.
   registerSealStages();
   registerWorkflow(buildSteuerfallSealWorkflow());
+  // Public showcase — der Workflow der den ctx-Workflow zeigt.
+  registerCtxBootstrapStages();
+  registerWorkflow(ctxBootstrapWorkflow);
 }
 
 export { helloOcrWorkflow };

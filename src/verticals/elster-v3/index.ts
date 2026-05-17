@@ -1251,6 +1251,151 @@ export function buildElsterV52RagWorkflow() {
 }
 
 /**
+ * elster-v6-vision — drop-in for v5_2-rag with phase3LlmFill replaced by
+ * phase3VisionFill (gemma4-mm vision over rendered PDF pages).
+ *
+ * SAME 11 stages, SAME edges, SAME containers as v5_2-rag. Only stage 7 swaps:
+ *   phase3LlmFill (text-only Gemma-4, ~52s, 28 calls, ~140k tokens)
+ *        →  phase3VisionFill (vision Gemma-4, ~20-30s, 2-3 calls, ~3-5k tokens)
+ *
+ * phase3VisionFill is CONTRACT-IDENTICAL to phase3LlmFill (same Phase3LlmFillOutput
+ * shape), so phases 4-7 (Disambig, Merge, BmfRechner, Validator) run unchanged.
+ *
+ * v6 spike measured on Stricker:
+ *   - 6 pages × 44 fields in 31s wallclock (2 vLLM calls × ~10-27s each)
+ *   - 42/44 non-NULL extraction; 24 fields v5.2-rag MISSED entirely
+ *     (5 Entfernungspauschale inputs, 4 Vorsorge inputs, Person A/B KAP split)
+ *   - WISO-456 placeholder correctly rejected (was poisoning v5.2-rag pre-fix)
+ *   - 5 fields where v5.2-rag picked WRONG line (Lohnsteuer 0,00 vs real 6.720,00,
+ *     Soli/KiSt swapped, Arbeitsmittel = WISO 456 vs real 103, KAP Person A's 109
+ *     vs Person B's 8) — v6 got them all correct
+ *
+ * On vision call failure (timeout, parse error, all batches failed), phase3VisionFill
+ * transparently falls back to phase3LlmFillStage — pipeline always completes.
+ *
+ * Activated for `steuerfall-est` via env `STURM_EXTRACTION_WORKFLOW=elster-v6-vision`.
+ */
+export function buildElsterV6VisionWorkflow() {
+  return defineWorkflow({
+    id: 'elster-v6-vision',
+    name: 'ELSTER v6 — Vision-First Extraction (gemma4-mm)',
+    description:
+      'v5.2-rag mit phase3LlmFill ersetzt durch phase3VisionFill (gemma4-mm Vision). ' +
+      'Alle anderen 10 Stages unverändert. Renderet PDF-Seiten via pdftoppm und sendet ' +
+      'sie in 4-Seiten-Batches an vLLM gemma4-mm mit JSON-Schema-constrained Decoding. ' +
+      'Fallback auf v5_2-rag phase3LlmFill bei Call-Fehler.',
+    input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
+    stages: {
+      ocr: {
+        uses: 'mistral-ocr',
+        inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
+      },
+      klassifizierung: {
+        uses: 'elster/klassifizierung',
+        config: { llmFallbackWhen: 'zero' },
+        inputs: { text: '${ocr.text}' },
+      },
+      felderKatalog: {
+        uses: 'elster-v4/felder-katalog',
+        config: {},
+        inputs: { erkannte_anlagen: '${klassifizierung.erkannte_anlagen}' },
+      },
+      quantumGround: {
+        uses: 'elster-v3/quantum-ground',
+        config: { maxPhrasen: 30, proPhraseK: 10, finalK: 50, pflichtScaffold: true, embed: { cpuOnly: true } },
+        inputs: { text: '${ocr.text}', anlagen: '${klassifizierung.erkannte_anlagen}' },
+      },
+      felderNarrow: {
+        uses: 'elster-v5_2-rag/felder-narrow',
+        config: { pflichtAlwaysKeep: true, passthroughOnEmptyRag: true, minPerAnlage: 250 },
+        inputs: {
+          felder_per_anlage: '${felderKatalog.per_anlage}',
+          kandidatenECodes: '${quantumGround.kandidatenECodes}',
+        },
+      },
+      phase1Regex: {
+        uses: 'elster-v5/phase1-regex',
+        config: { minDrucktextLength: 5 },
+        inputs: { text: '${ocr.text}', per_anlage: '${felderNarrow.felder_per_anlage}' },
+      },
+      // THE ONLY CHANGE vs v5_2-rag
+      phase3VisionFill: {
+        uses: 'elster-v6/phase3-vision-fill',
+        config: {
+          pagesPerCall: 4,
+          callConcurrency: 2,
+          rejectWisoPlaceholders: true,
+          fallbackToV5: true,
+          maxTokensPerCall: 2500,
+          perCallTimeoutMs: 60_000,
+          renderDpi: 200,
+          maxFieldsPerCall: 80,
+          schemaName: 'elster_v6_extract',
+        },
+        inputs: {
+          filePath: '${input.filePath}',
+          text: '${ocr.text}',
+          phase1_per_anlage: '${phase1Regex.per_anlage}',
+          felder_per_anlage: '${felderNarrow.felder_per_anlage}',
+        },
+      },
+      phase4Disambig: {
+        uses: 'elster-v5_1/phase4-entity-disambig',
+        config: {
+          provider: 'vllm', vllmUrl: 'http://localhost:11435', model: 'gemma4-mm',
+          temperature: 0, confidenceThreshold: 0.7, topK: 5, concurrency: 5, perCallTimeoutMs: 20_000,
+        },
+        inputs: {
+          text: '${ocr.text}',
+          phase1_per_anlage: '${phase1Regex.per_anlage}',
+          phase3_per_anlage: '${phase3VisionFill.per_anlage}',
+          felder_per_anlage: '${felderNarrow.felder_per_anlage}',
+        },
+      },
+      phase5Merge: {
+        uses: 'elster-v5/phase5-merge',
+        config: {},
+        inputs: {
+          phase1_per_anlage: '${phase1Regex.per_anlage}',
+          phase3_per_anlage: '${phase4Disambig.per_anlage}',
+        },
+      },
+      phase6BmfRechner: {
+        uses: 'elster-v5_2/bmf-rechner-compute',
+        config: { veranlagungsjahr: 2024, timeoutMs: 15_000, failHard: false },
+        inputs: { canonical_layer: '${phase5Merge.canonical_layer}' },
+      },
+      phase7Validator: {
+        uses: 'elster/validator',
+        config: { skipUnsupported: true },
+        inputs: { canonicalLayer: '${phase6BmfRechner.canonicalLayer}' },
+      },
+    },
+    edges: [
+      ['ocr', 'klassifizierung'],
+      ['klassifizierung', 'felderKatalog'],
+      ['klassifizierung', 'quantumGround'],
+      ['ocr', 'quantumGround'],
+      ['felderKatalog', 'felderNarrow'],
+      ['quantumGround', 'felderNarrow'],
+      ['felderNarrow', 'phase1Regex'],
+      ['ocr', 'phase1Regex'],
+      ['phase1Regex', 'phase3VisionFill'],
+      ['felderNarrow', 'phase3VisionFill'],
+      ['ocr', 'phase3VisionFill'],
+      ['phase1Regex', 'phase4Disambig'],
+      ['phase3VisionFill', 'phase4Disambig'],
+      ['felderNarrow', 'phase4Disambig'],
+      ['ocr', 'phase4Disambig'],
+      ['phase1Regex', 'phase5Merge'],
+      ['phase4Disambig', 'phase5Merge'],
+      ['phase5Merge', 'phase6BmfRechner'],
+      ['phase6BmfRechner', 'phase7Validator'],
+    ],
+  });
+}
+
+/**
  * Builds the elster-v5_2-rag-ensemble workflow — Variant of v5_2-rag where
  * Phase 3 runs as a 4-model ensemble (vLLM Gemma + Mistral-S + Mistral-L +
  * Claude Haiku). Voting per (anlage, eCode); ≥3 of 4 → ENSEMBLE_OK. Audit
