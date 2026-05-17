@@ -593,8 +593,18 @@ export const phase3VisionFillStage = defineStage<
       const still_missing: string[] = [];
 
       for (const f of anlageFelder) {
-        // Regex priority: skip eCodes phase1 already covered.
-        if (regexHits[f.eCode]) continue;
+        // Regex priority — but ONLY when the regex hit is clean. If phase1
+        // flagged it suspicious (WISO-Platzhalter or zeile-anchor failed),
+        // the vision answer wins (mirrors phase5-merge precedence). Without
+        // this, asking vision about VOR Zeile 11 → 4.703 was wasted because
+        // the restructure step would drop it in favour of regex's "456".
+        const existing = regexHits[f.eCode];
+        if (existing) {
+          const existingSuspect =
+            existing.repeat_suspicious === true ||
+            existing.zeile_anchored === false;
+          if (!existingSuspect) continue;
+        }
         const m = merged.get(f.eCode);
         if (m) {
           llm_hits[f.eCode] = {
