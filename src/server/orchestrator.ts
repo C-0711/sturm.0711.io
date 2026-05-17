@@ -105,7 +105,12 @@ function makeSseSink(res: Response): SseSink {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders?.();
+  // Force flush — without this, helmet-wrapped responses sometimes buffer
+  // SSE events until the response ends, defeating the streaming contract.
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+  // Send an initial comment event so the client sees the connection
+  // immediately (curl --max-time will at least show this byte).
+  try { res.write(': sturm-orchestrator open\n\n'); } catch { /* tolerant */ }
   res.on('close', () => { closed = true; });
   return {
     event(name, payload) {
@@ -312,7 +317,15 @@ export async function runChatLoop(
   for (const m of initialMessages) messages.push({ ...m });
 
   const tools = toOpenAiToolsSchema();
-  let useFallback = false;
+  // Many vLLM deployments don't start with --enable-auto-tool-choice. The
+  // OpenAI `tools` schema then returns 400 on the very first request. Set
+  // STURM_ORCHESTRATOR_FORCE_FALLBACK=1 to skip the failing probe and go
+  // straight to the prompt-engineered fallback. Default off; we let the
+  // catch-block detect-and-flip on the first error otherwise.
+  let useFallback = process.env['STURM_ORCHESTRATOR_FORCE_FALLBACK'] === '1'; // lint-no-env: allow — runtime feature flag, not a tool binding
+  if (useFallback) {
+    sse.event('mode', { mode: 'fallback-prompt-tools', reason: 'forced via STURM_ORCHESTRATOR_FORCE_FALLBACK' });
+  }
   const tStart = Date.now();
 
   for (let iter = 0; iter < maxIterations; iter++) {
@@ -332,13 +345,18 @@ export async function runChatLoop(
         onToken: (delta) => sse.event('token', { delta }),
       });
     } catch (e) {
-      if (e instanceof VllmHttpError && !useFallback && /tool|tools|function/i.test(e.body)) {
-        // vLLM unterstuetzt tool-use mit diesem Modell nicht — wechsele in Fallback.
+      const msg = (e as Error).message ?? String(e);
+      console.error(`[orchestrator] vLLM call failed (iter ${iter}, useFallback=${useFallback}):`, msg.slice(0, 200));
+      if (e instanceof VllmHttpError && !useFallback) {
+        // Any vLLM HTTP error during the FIRST tools-enabled call → assume
+        // tool-use unsupported, switch to prompt-engineered fallback. (Was
+        // gated on /tool|tools|function/i.test(body) but some vLLM versions
+        // return a generic 400 without those words; broaden the trigger.)
         sse.event('mode', { mode: 'fallback-prompt-tools', reason: e.body.slice(0, 120) });
         useFallback = true;
         continue;
       }
-      sse.event('error', { message: (e as Error).message });
+      sse.event('error', { message: msg });
       sse.event('done', { finishReason: 'error', totalMs: Date.now() - tStart });
       sse.end();
       return;
