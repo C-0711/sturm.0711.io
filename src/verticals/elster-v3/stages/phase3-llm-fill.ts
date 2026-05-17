@@ -251,6 +251,13 @@ export interface Phase3LlmFillConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Max number of anlagen processed concurrently. Default 4.
+   *  Combined with sliceConcurrency (4): up to 16 concurrent vLLM requests.
+   *  vLLM handles ~32+ via continuous batching. Tune down only if vLLM saturates.
+   *  Overrides the legacy `concurrency` field if both are set. */
+  anlageConcurrency?: number;
+  /** @deprecated use `anlageConcurrency`. Kept for backward compatibility —
+   *  reads as `anlageConcurrency` when the new field is unset. */
   concurrency?: number;
   stream?: boolean;
   /** Per-Anlage Hard-Timeout in ms. Bricht den vLLM-Call ab statt forever
@@ -490,7 +497,12 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
     const modelName = cfg.model ?? DEFAULT_MODEL_BY_PROVIDER[provider];
     const temperature = cfg.temperature ?? 0;
     const maxTokens = cfg.maxTokens ?? 2000;
-    const concurrency = Math.max(1, cfg.concurrency ?? 3);
+    // Anlagen-level worker pool size. New canonical name is `anlageConcurrency`;
+    // legacy `concurrency` is kept as fallback so existing workflow configs
+    // continue to work unchanged. Default raised from 3 → 4 to better reflect
+    // typical Stricker-class workloads (7 anlagen, vLLM handles 32+ concurrent
+    // via continuous batching).
+    const anlageConcurrency = Math.max(1, cfg.anlageConcurrency ?? cfg.concurrency ?? 4);
     const wantStream = (cfg.stream ?? true) && provider === 'vllm';
     const perAnlageTimeoutMs = cfg.perAnlageTimeoutMs ?? 60_000;
     const typedSchema = cfg.typedSchema ?? false;
@@ -507,7 +519,7 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
 
     const brief = await loadContainerBrief();
     let totalFilled = 0;
-    ctx.emit('phase3_start', { anlagen: anlagen.length, model: modelName, concurrency });
+    ctx.emit('phase3_start', { anlagen: anlagen.length, model: modelName, anlageConcurrency, sliceConcurrency });
 
     const processOne = async (anlage: string): Promise<void> => {
       const phase1Result = phase1[anlage];
@@ -785,7 +797,7 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
         await processOne(anlage);
       }
     };
-    const nWorkers = Math.min(concurrency, anlagen.length);
+    const nWorkers = Math.min(anlageConcurrency, anlagen.length);
     await Promise.all(Array.from({ length: nWorkers }, () => worker()));
 
     // Wenn ALLE Anlagen einen LLM-Error hatten und 0 Hits → das ist ein

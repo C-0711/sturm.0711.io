@@ -1116,7 +1116,11 @@ export function buildElsterV52RagWorkflow() {
           model: 'gemma4-mm',
           temperature: 0,
           maxTokens: 1500,
-          concurrency: 5,
+          // 2026-05-17: per-anlage outer-loop concurrency. Stricker has 7
+          // anlagen; with anlageConcurrency=7 they all process in parallel.
+          // Combined with sliceConcurrency=4 → up to 28 concurrent vLLM
+          // requests, well within vLLM continuous-batching limits.
+          anlageConcurrency: 7,
           stream: true,
           // 2026-05-16: timeout 90→180s, weil felderNarrow jetzt bis 250
           // Felder/Anlage durchlässt (Anlage N hat 134, KAP 81) und vLLM-
@@ -1282,22 +1286,22 @@ export function buildElsterV52RagEnsembleWorkflow() {
       },
       phase3Vllm: {
         uses: 'elster-v5/phase3-llm-fill',
-        config: { provider: 'vllm', model: 'gemma4-mm', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000, typedSchema: true },
+        config: { provider: 'vllm', model: 'gemma4-mm', temperature: 0, maxTokens: 2000, anlageConcurrency: 7, perAnlageTimeoutMs: 60_000, typedSchema: true },
         inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
       },
       phase3MistralS: {
         uses: 'elster-v5/phase3-llm-fill',
-        config: { provider: 'mistral', model: 'mistral-small-latest', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000 },
+        config: { provider: 'mistral', model: 'mistral-small-latest', temperature: 0, maxTokens: 2000, anlageConcurrency: 7, perAnlageTimeoutMs: 60_000 },
         inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
       },
       phase3MistralL: {
         uses: 'elster-v5/phase3-llm-fill',
-        config: { provider: 'mistral', model: 'mistral-large-latest', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000 },
+        config: { provider: 'mistral', model: 'mistral-large-latest', temperature: 0, maxTokens: 2000, anlageConcurrency: 7, perAnlageTimeoutMs: 60_000 },
         inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
       },
       phase3Claude: {
         uses: 'elster-v5/phase3-llm-fill',
-        config: { provider: 'anthropic', model: 'claude-haiku-4-5', temperature: 0, maxTokens: 2000, concurrency: 3, perAnlageTimeoutMs: 60_000 },
+        config: { provider: 'anthropic', model: 'claude-haiku-4-5', temperature: 0, maxTokens: 2000, anlageConcurrency: 7, perAnlageTimeoutMs: 60_000 },
         inputs: { text: '${ocr.text}', phase1_per_anlage: '${phase1Regex.per_anlage}', felder_per_anlage: '${felderNarrow.felder_per_anlage}' },
       },
       phase3Ensemble: {
