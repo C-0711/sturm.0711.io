@@ -24,12 +24,37 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { parseGermanMoney } from '../lib/normalize-number.ts';
 import type { ApplicationInstance, CaseDocument } from './applications.ts';
+
+/** Numerische Datentypen, für die `normalizedNumber` populated wird. Spiegelt
+ *  die Liste in phase5-merge.populateNormalizedNumber für ältere Runs ohne
+ *  vorhandenes normalizedNumber-Feld. */
+const NUMERIC_DATENTYPS = new Set<string>(['currency', 'amount', 'integer', 'percent', 'number']);
+
+/** Liefert die normalizedNumber für einen canonical-Eintrag. Bevorzugt das
+ *  bereits gesetzte Feld (phase5-merge schreibt es); fällt zurück auf einen
+ *  parseGermanMoney(value)-Versuch für ältere Runs. Liefert undefined für
+ *  nicht-numerische Datentypen. */
+function deriveNormalizedNumber(cv: CanonicalValue): number | undefined {
+  if (typeof cv.normalizedNumber === 'number' && Number.isFinite(cv.normalizedNumber)) {
+    return cv.normalizedNumber;
+  }
+  const dt = typeof cv.datentyp === 'string' ? cv.datentyp : '';
+  if (!NUMERIC_DATENTYPS.has(dt)) return undefined;
+  const n = parseGermanMoney(typeof cv.value === 'string' ? cv.value : null);
+  return n !== null ? n : undefined;
+}
 
 export interface CanonicalValue {
   eCode?: string;
   value?: string;
   normalized?: string | null;
+  /** Pre-parsed JS-number für numerische Datentypen (currency etc.). Wird
+   *  in phase5-merge gesetzt (siehe `populateNormalizedNumber`). Ground-
+   *  Truth-Vergleiche und arithmetische Konsumenten sollen DIESES Feld
+   *  lesen, nicht den deutschen Locale-String aus `value`. */
+  normalizedNumber?: number;
   origin?: string;
   anlage?: string;
   drucktext?: string;
@@ -43,6 +68,10 @@ export interface MergedField {
   eCode: string;
   value: string;
   normalized: string | null;
+  /** Pre-parsed JS-number — durchgereicht vom canonical_layer-Eintrag.
+   *  Single source of arithmetic truth für BMF-Pre-Filter, Ground-Truth-
+   *  Vergleich und Cross-Validator-Summen. */
+  normalizedNumber?: number;
   origin: string;
   anlage: string;
   drucktext: string;
@@ -243,6 +272,7 @@ export async function aggregateCase(
         eCode,
         value: String(c.raw.value ?? ''),
         normalized: c.normalized,
+        normalizedNumber: deriveNormalizedNumber(c.raw),
         origin: String(c.raw.origin ?? 'unknown'),
         anlage: String(c.raw.anlage ?? ''),
         drucktext: String(c.raw.drucktext ?? ''),
@@ -266,6 +296,7 @@ export async function aggregateCase(
       eCode,
       value: String(winner.raw.value ?? ''),
       normalized: winner.normalized,
+      normalizedNumber: deriveNormalizedNumber(winner.raw),
       origin: String(winner.raw.origin ?? 'unknown'),
       anlage: String(winner.raw.anlage ?? ''),
       drucktext: String(winner.raw.drucktext ?? ''),

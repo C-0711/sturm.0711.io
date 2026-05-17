@@ -222,6 +222,89 @@ async function main() {
     }
   }
 
+  // ── normalizedNumber: vorhanden im canonical_layer wird durchgereicht ───
+  console.log('\n=== aggregate: normalizedNumber wird durchgereicht ===');
+  {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sturm-agg-test-'));
+    try {
+      await makeRunDir(tmp, 'wf', 'r1', {
+        // Schon vom Producer (phase5-merge) gesetzt — Aggregation reicht durch.
+        E0200201: {
+          value: '1.781,98 EUR',
+          normalized: '178198',
+          normalizedNumber: 1781.98,
+          origin: 'REGEX_3F',
+          anlage: 'N',
+          drucktext: 'Bruttoarbeitslohn',
+          datentyp: 'currency',
+        },
+      });
+      const inst: ApplicationInstance = {
+        caseId: 'c', appId: 'a', displayName: 'd', mandantId: 'm',
+        status: 'in_bearbeitung', createdAt: 't', updatedAt: 't',
+        runs: ['r1'], workspacePath: 'ws',
+        documents: [makeDoc('r1', 'lohnsteuer.pdf', ['N'])],
+      };
+      const agg = await aggregateCase(inst, { runsDir: tmp, extractionWorkflowId: 'wf', loadPflichtFelder: async () => [] });
+      eq('normalizedNumber durchgereicht', agg.merged_layer.E0200201?.normalizedNumber, 1781.98);
+      eq('value bleibt original', agg.merged_layer.E0200201?.value, '1.781,98 EUR');
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  }
+
+  // ── normalizedNumber: fehlt im canonical_layer, wird aus value abgeleitet ───
+  console.log('\n=== aggregate: normalizedNumber-Fallback aus value (alter Run ohne Feld) ===');
+  {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sturm-agg-test-'));
+    try {
+      await makeRunDir(tmp, 'wf', 'r1', {
+        // Alter Run (vor diesem Feature) — kein normalizedNumber im Artefakt.
+        E0200201: {
+          value: '1.781,98 EUR',
+          normalized: '178198',
+          origin: 'REGEX_3F',
+          anlage: 'N',
+          drucktext: 'Bruttoarbeitslohn',
+          datentyp: 'currency',
+        },
+        // Stricker-Regression: deutsche Tausenderpunkt ohne Dezimalen.
+        E0700101: {
+          value: '6.011',
+          normalized: '601100',
+          origin: 'REGEX_3F',
+          anlage: 'SO',
+          drucktext: 'Spende',
+          datentyp: 'currency',
+        },
+        // Nicht-numerisch: kein normalizedNumber erwartet.
+        E9900001: {
+          value: 'Max Mustermann',
+          normalized: 'Max Mustermann',
+          origin: 'LLM_FSM',
+          anlage: 'ESt1A',
+          drucktext: 'Name',
+          datentyp: 'string',
+        },
+      });
+      const inst: ApplicationInstance = {
+        caseId: 'c', appId: 'a', displayName: 'd', mandantId: 'm',
+        status: 'in_bearbeitung', createdAt: 't', updatedAt: 't',
+        runs: ['r1'], workspacePath: 'ws',
+        documents: [makeDoc('r1', 'mixed.pdf', ['N', 'SO', 'ESt1A'])],
+      };
+      const agg = await aggregateCase(inst, { runsDir: tmp, extractionWorkflowId: 'wf', loadPflichtFelder: async () => [] });
+      eq('Hildburg-Fall: "1.781,98 EUR" → 1781.98',
+        agg.merged_layer.E0200201?.normalizedNumber, 1781.98);
+      eq('Stricker-Fall: "6.011" → 6011',
+        agg.merged_layer.E0700101?.normalizedNumber, 6011);
+      eq('string-Feld: kein normalizedNumber',
+        agg.merged_layer.E9900001?.normalizedNumber, undefined);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  }
+
   console.log(`\nResult: ${pass} pass, ${fail} fail`);
   if (fail > 0) {
     console.log('Failures:', failures);
