@@ -209,6 +209,9 @@ export const bmfRechnerComputeStage = defineStage<
         eCode: meta.eCode,
         value: String(raw),
         normalized: formatCurrencyAsCents(raw),
+        // BMF-Output ist bereits ein JS-`number` — keine String-Parsing-Runde
+        // nötig. Wird direkt durchgereicht als single source of arithmetic truth.
+        normalizedNumber: Number.isFinite(raw) ? raw : undefined,
         origin: 'BMF_RECHNER',
         anlage: meta.anlage,
         drucktext: meta.drucktext,

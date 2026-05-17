@@ -145,8 +145,10 @@ export class BmfMcpClient {
 
 /** Map a sturm canonical_layer (eCode → CanonicalValue) into the MCP's
  *  `elster_felder` format (eCode → German-notation string). Currency-eCodes
- *  werden aus `normalized` (Integer-Cents) zurück in "12345,67" gewandelt,
- *  Strings bleiben unverändert. Felder ohne value werden ausgelassen.
+ *  werden bevorzugt aus `normalizedNumber` (JS-number, single source of
+ *  truth) formatiert; fallback ist `normalized` (Integer-Cents) → "12345,67"
+ *  und zuletzt der Roh-`value`. Strings bleiben unverändert. Felder ohne
+ *  Value werden ausgelassen.
  *  Felder mit `trust === 'suspicious'` werden gefiltert — sie wären sonst
  *  Halluzinationen wie "456" für Bezeichnung/Betrag/Summe-Platzhalter, die
  *  in BMF-Mappings (z.B. pv_beitraege ← E0202604) gegen die echten Werte
@@ -155,6 +157,10 @@ export function canonicalLayerToElsterFelder(
   canonical: Record<string, {
     value: string;
     normalized: string | null;
+    /** Pre-parsed JS-number for numeric datentyps (currency etc.). Single
+     *  source of arithmetic truth — wenn gesetzt, bevorzugt vor `normalized`
+     *  (Integer-Cents-Round-Trip) und vor `value` (deutsche Locale-Strings). */
+    normalizedNumber?: number;
     datentyp: 'string' | 'date' | 'currency';
     trust?: 'high' | 'medium' | 'low' | 'suspicious';
   }>,
@@ -162,17 +168,34 @@ export function canonicalLayerToElsterFelder(
   const out: Record<string, string> = {};
   for (const [eCode, cv] of Object.entries(canonical)) {
     if (cv.trust === 'suspicious') continue; // verdächtige LLM-Halluzinationen raus
-    if (cv.datentyp === 'currency' && cv.normalized && /^-?\d+$/.test(cv.normalized)) {
-      // integer-cents → "x,xx" (Vorzeichen behalten)
-      const cents = parseInt(cv.normalized, 10);
-      const neg = cents < 0;
-      const abs = Math.abs(cents);
-      const euros = Math.floor(abs / 100);
-      const restCents = abs % 100;
-      out[eCode] = `${neg ? '-' : ''}${euros},${String(restCents).padStart(2, '0')}`;
+    if (cv.datentyp === 'currency') {
+      // Bevorzugt normalizedNumber (single source of arithmetic truth) →
+      // keine zweite Locale-Parsing-Runde nötig.
+      if (typeof cv.normalizedNumber === 'number' && Number.isFinite(cv.normalizedNumber)) {
+        out[eCode] = formatEuroDe(cv.normalizedNumber);
+      } else if (cv.normalized && /^-?\d+$/.test(cv.normalized)) {
+        // integer-cents → "x,xx" (Vorzeichen behalten)
+        const cents = parseInt(cv.normalized, 10);
+        out[eCode] = formatEuroDe(cents / 100);
+      } else if (cv.value) {
+        out[eCode] = cv.value;
+      }
     } else if (cv.value) {
       out[eCode] = cv.value;
     }
   }
   return out;
+}
+
+/** Format a JS number as German Euro notation `"x,xx"` (no thousand
+ *  separators — MCP expects locale-bare). Preserves sign and rounds to 2
+ *  decimal places. */
+function formatEuroDe(n: number): string {
+  const neg = n < 0;
+  const abs = Math.abs(n);
+  // Round to cents to avoid 1.234567 → "1,23456700"-style noise.
+  const cents = Math.round(abs * 100);
+  const euros = Math.floor(cents / 100);
+  const restCents = cents % 100;
+  return `${neg ? '-' : ''}${euros},${String(restCents).padStart(2, '0')}`;
 }

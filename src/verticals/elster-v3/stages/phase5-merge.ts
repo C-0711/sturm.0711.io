@@ -24,6 +24,7 @@ import {
   normalizeForElster,
   type ElsterDatentyp,
 } from '../../../lib/elster-catalog.ts';
+import { parseGermanMoney } from '../../../lib/normalize-number.ts';
 import type { Phase1AnlageResult, Phase1RegexHit } from './phase1-regex.ts';
 import type { Phase3AnlageResult, Phase3LlmHit } from './phase3-llm-fill.ts';
 
@@ -32,6 +33,17 @@ export interface CanonicalValue {
   value: string;
   /** Wire-Format (Currency = Integer-Cents, Date = DD.MM.YYYY, ...). */
   normalized: string | null;
+  /**
+   * Numerischer Wert für arithmetische Konsumenten (BMF-Rechner,
+   * Ground-Truth-Vergleich, Cross-Validator-Summen). Nur gesetzt für
+   * numerische Datentypen (currency, integer, amount, percent). `value`
+   * und `normalized` bleiben unangetastet — `normalizedNumber` ist additiv.
+   *
+   *   "1.781,98 EUR" → 1781.98
+   *   "6.011"        → 6011
+   *   "Nicht zutr."  → undefined
+   */
+  normalizedNumber?: number;
   origin: 'REGEX_100%' | 'REGEX_3F' | 'LLM_FSM' | 'BMF_RECHNER';
   anlage: string;
   drucktext: string;
@@ -169,6 +181,50 @@ function computeTrust(canonical: Record<string, CanonicalValue>): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Numeric normalization — populate CanonicalValue.normalizedNumber
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Numerische ELSTER-Datentypen, für die `normalizedNumber` gesetzt wird.
+ *
+ * Heute liefert der Katalog nur `currency` (siehe data/atoms.json). Die
+ * Liste deckt zusätzliche numerische Tags ab, die in anderen Workflows /
+ * BMF-Rechner-Outputs auftauchen können — additiv, kein Verhalten ändert
+ * sich für nicht-numerische Felder.
+ */
+const NUMERIC_DATENTYPS = new Set<string>([
+  'currency',
+  'amount',
+  'integer',
+  'percent',
+  'number',
+]);
+
+/** In-place: setzt normalizedNumber auf jedem numerischen Eintrag.
+ *
+ * Bevorzugt das bereits gewirte `normalized`-Feld (Integer-Cents für
+ * currency → /100 zurückrechnen). Fällt zurück auf den Roh-`value` via
+ * parseGermanMoney, falls `normalized` nicht numerisch parseable ist
+ * (z.B. bei LLM-Fills die normalizeForElster nicht durchlaufen haben).
+ */
+function populateNormalizedNumber(canonical: Record<string, CanonicalValue>): void {
+  for (const cv of Object.values(canonical)) {
+    if (!NUMERIC_DATENTYPS.has(cv.datentyp)) continue;
+    let n: number | null = null;
+    if (cv.datentyp === 'currency' && cv.normalized && /^-?\d+$/.test(cv.normalized)) {
+      // normalized ist Integer-Cents (siehe normalizeForElster) — zurück nach Euro.
+      n = parseInt(cv.normalized, 10) / 100;
+    } else {
+      // Andere numerische Typen oder unnormalisierte currency: parse value direkt.
+      n = parseGermanMoney(cv.value);
+    }
+    if (n !== null && Number.isFinite(n)) {
+      cv.normalizedNumber = n;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // XML-Builder
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -297,6 +353,11 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
         byDatentyp[h.datentyp] = (byDatentyp[h.datentyp] ?? 0) + 1;
       }
     }
+
+    // Numerische Werte vorparsen → normalizedNumber. Eine einzige Stelle,
+    // damit BMF-Rechner, Cross-Validator und Ground-Truth-Vergleich nicht
+    // jedes Mal das deutsche Format reverse-engineeren.
+    populateNormalizedNumber(canonical);
 
     // Trust-Scoring vor XML-Build, damit es in canonical_layer.json persistiert.
     computeTrust(canonical);
