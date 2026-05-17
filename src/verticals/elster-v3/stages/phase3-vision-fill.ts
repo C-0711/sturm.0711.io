@@ -329,20 +329,14 @@ export const phase3VisionFillStage = defineStage<
       return { per_anlage, totalFilled: 0, ms: Date.now() - tStart };
     }
 
-    // ── 3. Build text instructions (proven v6 spike pattern) ───────────
-    // We include the OCR text in the prompt as cross-reference: the vision
-    // pass sees the form layout, while OCR text provides character-level
-    // ground truth for numbers/dates. The model can pick whichever source
-    // is clearer per field. Crucial for Vorsorge eCodes where the table
-    // structure is easy to read visually but tiny numbers (4.703, 1.243)
-    // are easier to verify from text.
-    const ocrSnippet = typeof input.text === 'string'
-      ? input.text.slice(0, 8000)        // ~2k tokens budget
-      : '';
-    const instructions = [
+    // ── 3. Build text instruction PREFIX (OCR-text snippet built per batch
+    //       below so the prompt only contains the OCR for the pages the
+    //       batch is actually seeing). ─────────────────────────────────────
+    const fullOcrText = typeof input.text === 'string' ? input.text : '';
+    const instructionsPrefix = [
       'Du extrahierst ELSTER-Felder aus PDF-Seiten einer Steuererklaerung.',
       'Du siehst die Seiten als Bilder. Zusaetzlich folgt der OCR-Text',
-      'derselben Seiten als Cross-Reference fuer schwer lesbare Zahlen.',
+      'der GENAU DIESER Seiten als Cross-Reference fuer schwer lesbare Zahlen.',
       '',
       'Regeln:',
       '- Werte EXAKT wie auf dem Bild (deutsches Format z.B. "63.559,90",',
@@ -354,16 +348,26 @@ export const phase3VisionFillStage = defineStage<
       "  Person A's Anlage.",
       '- VERSUCHE moeglichst viele Felder zu fuellen, nicht nur die',
       '  offensichtlichen — verlasse dich auf BILD + OCR-TEXT zusammen.',
-      '',
-      '=== OCR-TEXT der Seiten (Anker fuer Zeilennummern + Zahlen) ===',
-      ocrSnippet,
-      '=== ENDE OCR-TEXT ===',
-      '',
+    ].join('\n');
+    const instructionsSuffix = [
       fieldMap.mapText,
       '',
       'Antworte mit JSON-Objekt nach Schema — keine Erklaerung.',
       'Fuelle so viele eCodes wie moeglich; NULL nur bei echter Unsicherheit.',
     ].join('\n');
+
+    // Slice the full OCR text into one chunk per PDF page by character offset.
+    // We don't have true page boundaries from OCR, so we approximate by
+    // equal slicing across pngPaths.length pages. Each batch then concats
+    // only the slices for its own pages.
+    const pageCount = pngPaths.length || 1;
+    const pageOcrChunks: string[] = [];
+    if (fullOcrText.length > 0) {
+      const sliceLen = Math.ceil(fullOcrText.length / pageCount);
+      for (let i = 0; i < pageCount; i++) {
+        pageOcrChunks.push(fullOcrText.slice(i * sliceLen, (i + 1) * sliceLen));
+      }
+    }
 
     // ── 4. Batch pages and call vision ─────────────────────────────────
     const batches = chunkArray(pngPaths, pagesPerCall);
@@ -382,12 +386,27 @@ export const phase3VisionFillStage = defineStage<
       batches,
       callConcurrency,
       async (pngs, idx) => {
+        // Build per-batch OCR slice: take the OCR chunks that correspond
+        // to the page indices in THIS batch (idx*pagesPerCall .. +pngs.length).
+        const startPage = idx * pagesPerCall;
+        const batchOcr = pageOcrChunks
+          .slice(startPage, startPage + pngs.length)
+          .join('\n--- Seitenwechsel ---\n');
+        const batchInstructions = [
+          instructionsPrefix,
+          '',
+          '=== OCR-TEXT NUR der Seiten in diesem Batch ===',
+          batchOcr,
+          '=== ENDE OCR-TEXT ===',
+          '',
+          instructionsSuffix,
+        ].join('\n');
         try {
           const r = await visionCaller({
             vllmUrl,
             model: modelName,
             imagePaths: pngs,
-            textInstructions: instructions,
+            textInstructions: batchInstructions,
             jsonSchema: fieldMap.jsonSchema,
             maxTokens: maxTokensPerCall,
             timeoutMs: perCallTimeoutMs,

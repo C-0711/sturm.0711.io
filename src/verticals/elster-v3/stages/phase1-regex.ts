@@ -473,6 +473,47 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
           threshold: repeatThreshold,
         });
       }
+
+      // Pass 2 — value-only repeat detector (WISO "456"-Style).
+      // WISO-Tests setzen denselben numerischen Platzhalter ("456") in viele
+      // Anlagen ein, ABER mit unterschiedlichem Drucktext pro Zeile (Kranken-
+      // versicherung Nr 25, Pflegeversicherung Nr 26 …). Die (value, drucktext)-
+      // Bucketing oben würde das nicht erkennen. Hier nochmal nur über den
+      // Wert gruppieren — mit höherer Schwelle und Ausschluss trivialer
+      // Kleinwerte (0, 1, 2), damit normale Wiederholungen nicht flaggen.
+      const valueBuckets = new Map<string, Occ[]>();
+      for (const [anlage, ar] of Object.entries(result)) {
+        for (const h of Object.values(ar.regex_hits)) {
+          if (h.datentyp !== 'currency') continue;
+          const valStr = String(h.value ?? '').trim();
+          if (!valStr) continue;
+          // Skip trivial values that legitimately recur (0, kleine Ganzzahlen).
+          // normalized ist hier integer-cents; 0..200 cents = nicht aussagekräftig.
+          const cents = Number(h.normalized);
+          if (!Number.isFinite(cents) || Math.abs(cents) <= 200) continue;
+          let arr = valueBuckets.get(valStr);
+          if (!arr) { arr = []; valueBuckets.set(valStr, arr); }
+          arr.push({ hit: h, anlage });
+        }
+      }
+      let valueRepeatFlags = 0;
+      for (const [, occs] of valueBuckets) {
+        // Höhere Schwelle als druck+value bucket: identical numeric value
+        // across ≥3 eCodes auf ≥2 Anlagen → WISO-Verdacht.
+        if (occs.length < 3) continue;
+        const distinctAnlagen = new Set(occs.map((o) => o.anlage));
+        if (distinctAnlagen.size < 2) continue;
+        for (const o of occs) {
+          if (o.hit.repeat_suspicious === true) continue;
+          o.hit.repeat_suspicious = true;
+          valueRepeatFlags++;
+        }
+      }
+      if (valueRepeatFlags > 0) {
+        ctx.emit('phase1_value_repeat_suspicion', {
+          flagged: valueRepeatFlags,
+        });
+      }
     }
 
     await ctx.artifacts.write('phase1_regex.json', result);
