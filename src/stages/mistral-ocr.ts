@@ -1,3 +1,6 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { defineStage } from '../core/stage.ts';
 import {
   callMistralOcrWithFallback,
@@ -11,6 +14,11 @@ import {
   type MistralOcrConfig as FullConfig,
   type ParsedOcrResponse,
 } from '../lib/mistral-ocr/index.ts';
+import {
+  readOcrCache,
+  sha256OfFile,
+  writeOcrCache,
+} from '../lib/ocr-cache.ts';
 
 export interface MistralOcrInput {
   /** Absoluter Dateipfad. */
@@ -86,6 +94,32 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
       };
     }
 
+    // ── OCR result cache (sha256 + model) ─────────────────────────────────
+    // Mistral OCR costs 4–5 s + API call per page. If the same PDF is uploaded
+    // twice (frequent during testing + inbox re-runs), we re-OCR from scratch.
+    // The cache lives OUTSIDE per-run artifacts (shared across runs); we still
+    // return the same output shape, and the per-run `ocr/output.json` is
+    // written by the runner regardless so audit trails stay intact.
+    //
+    // Cache key = sha256(file) + model. A schema/annotation override is NOT
+    // part of the key because document-annotation does not influence OCR text
+    // extraction itself; skipping the cache there would defeat the purpose.
+    // If a future feature makes annotation part of the OCR output a caller
+    // depends on, revisit the key.
+    const effectiveModel = cfg.model ?? 'mistral-ocr-latest';
+    const sha256 = await sha256OfFile(input.filePath);
+    // artifacts.absolutePath('') → <rootDir>/<workflowId>/<runId>;
+    // two `..` segments resolve to the runs root.
+    const runsRoot = path.resolve(ctx.artifacts.absolutePath(''), '..', '..');
+
+    const hit = await readOcrCache<MistralOcrOutput>(runsRoot, sha256);
+    if (hit && hit.model === effectiveModel) {
+      ctx.emit('ocr_cache_hit', { sha256, cachedAt: hit.cachedAt, model: hit.model });
+      ctx.logger.info(`OCR cache hit: ${sha256.slice(0, 12)} (cached ${hit.cachedAt})`);
+      return hit.output;
+    }
+    ctx.emit('ocr_cache_miss', { sha256 });
+
     // Upload via Files API (or reuse a pre-uploaded fileId), then resolve a
     // presigned URL. Mirrors the playground's Run-call shape and avoids
     // base64-encoding the bytes on every iteration.
@@ -119,7 +153,7 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
       });
     }
 
-    return {
+    const output: MistralOcrOutput = {
       model: parsed.model,
       pages: parsed.pages.map((p) => ({ index: p.index, markdown: p.markdown, chars: p.chars })),
       text: parsed.text,
@@ -128,5 +162,24 @@ export const mistralOcrStage = defineStage<MistralOcrInput, MistralOcrOutput, Mi
       ms: parsed.ms,
       parsed,
     };
+
+    // Best-effort cache write — never fail the stage if the disk is full or
+    // the runs dir is read-only.
+    try {
+      const stat = await fs.stat(input.filePath);
+      await writeOcrCache<MistralOcrOutput>(runsRoot, sha256, {
+        sha256,
+        filename: input.filename,
+        size: stat.size,
+        mime: mimeFromFilename(input.filename),
+        model: effectiveModel,
+        output,
+        cachedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      ctx.logger.warn(`OCR cache write failed (non-fatal): ${(e as Error).message}`);
+    }
+
+    return output;
   },
 });
