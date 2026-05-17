@@ -362,10 +362,20 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
         byDatentyp[h.datentyp] = (byDatentyp[h.datentyp] ?? 0) + 1;
       }
     }
-    // Pass 2: alle llm_hits — nur wo regex KEIN Wert hatte.
+    // Pass 2: alle llm_hits — nur wo regex KEIN Wert hatte ODER der
+    // Regex-Wert suspekt war (WISO-Platzhalter / kein Zeilen-Anker). In dem
+    // Fall darf LLM den Regex-Hit überschreiben — sonst bleibt z.B. die VOR-
+    // Zeile 11 dauerhaft auf "456" stehen, obwohl Vision "4.703" gelesen hat.
     for (const [, p3] of Object.entries(phase3)) {
       for (const [eCode, h] of Object.entries(p3.llm_hits as Record<string, Phase3LlmHit>)) {
-        if (eCode in canonical) continue; // regex hat Priorität
+        const existing = canonical[eCode];
+        if (existing) {
+          const existingSuspect =
+            existing.repeat_suspicious === true ||
+            existing.zeile_anchored === false;
+          if (!existingSuspect) continue; // regex hat Priorität
+          // sonst: LLM überschreibt suspekten Regex-Hit
+        }
         const normalized = normalizeForElster(h.value, h.datentyp);
         canonical[eCode] = {
           eCode,

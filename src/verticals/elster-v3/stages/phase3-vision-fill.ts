@@ -265,23 +265,43 @@ export const phase3VisionFillStage = defineStage<
       renderMs,
     });
 
-    // ── 2. Build field map for STILL-MISSING fields only ───────────────
+    // ── 2. Build field map for STILL-MISSING + SUSPICIOUS fields ───────
     // phase1Regex already filled ~30-50% of the catalog deterministically.
-    // Asking vision about THOSE fields wastes prompt budget — they'd be
+    // Asking vision about clean hits wastes prompt budget — they'd be
     // skipped at the cross-validation step anyway (regex wins in phase5).
-    // Restrict the field map to phase1.missing_ecodes per anlage so the
-    // model focuses on what's actually unsolved (Entfernungspauschale,
-    // Vorsorge, Person A/B KAP — the things v6 is meant to fix).
+    // BUT phase1Regex also produces SUSPICIOUS hits: WISO-placeholder
+    // values (repeat_suspicious=true) or fallback hits without zeile-anchor
+    // (zeile_anchored=false). Those poison canonical_layer (e.g. VOR shows
+    // "456 / 456" instead of "4.703 / 1.243"). We re-ask vision about
+    // those so it can correct or NULL them.
     const missingFelderMap: typeof felderMap = {};
+    let suspiciousReAskCount = 0;
     for (const anlage of anlagen) {
-      const missingSet = new Set(phase1[anlage]?.missing_ecodes ?? []);
+      const result = phase1[anlage];
+      if (!result) continue;
+      const askSet = new Set<string>(result.missing_ecodes ?? []);
+      for (const [eCode, hit] of Object.entries(result.regex_hits ?? {})) {
+        const isSuspicious =
+          hit.repeat_suspicious === true || hit.zeile_anchored === false;
+        if (isSuspicious) {
+          askSet.add(eCode);
+          suspiciousReAskCount++;
+        }
+      }
       const fullList = felderMap[anlage];
       if (!fullList) continue;
       missingFelderMap[anlage] = {
         anlage: fullList.anlage,
-        felder: fullList.felder.filter((f) => missingSet.has(f.eCode)),
+        felder: fullList.felder.filter((f) => askSet.has(f.eCode)),
       };
     }
+    ctx.emit('vision_field_set', {
+      missingFromPhase1: Object.values(phase1).reduce(
+        (s, r) => s + (r.missing_ecodes?.length ?? 0),
+        0,
+      ),
+      suspiciousReAsked: suspiciousReAskCount,
+    });
     const fieldMap = buildFieldMap({
       perAnlage: missingFelderMap,
       schemaName,
@@ -310,24 +330,39 @@ export const phase3VisionFillStage = defineStage<
     }
 
     // ── 3. Build text instructions (proven v6 spike pattern) ───────────
+    // We include the OCR text in the prompt as cross-reference: the vision
+    // pass sees the form layout, while OCR text provides character-level
+    // ground truth for numbers/dates. The model can pick whichever source
+    // is clearer per field. Crucial for Vorsorge eCodes where the table
+    // structure is easy to read visually but tiny numbers (4.703, 1.243)
+    // are easier to verify from text.
+    const ocrSnippet = typeof input.text === 'string'
+      ? input.text.slice(0, 8000)        // ~2k tokens budget
+      : '';
     const instructions = [
-      'Extrahiere die folgenden ELSTER-Felder aus den Bildern.',
-      'Werte exakt wie auf dem Bild (deutsches Format z.B. "63.559,90",',
-      'Datum DD.MM.YYYY, Text wortgenau).',
-      'Wenn ein Feld auf den gezeigten Seiten nicht eindeutig erkennbar',
-      'ist: NULL setzen.',
+      'Du extrahierst ELSTER-Felder aus PDF-Seiten einer Steuererklaerung.',
+      'Du siehst die Seiten als Bilder. Zusaetzlich folgt der OCR-Text',
+      'derselben Seiten als Cross-Reference fuer schwer lesbare Zahlen.',
       '',
-      'WICHTIG: Wenn ein Wert wie ein WISO-Test-Platzhalter aussieht',
-      '(z.B. Bezeichnung+Betrag beide "456" wiederholt auf verschiedenen',
-      'Zeilen), dann NULL setzen.',
+      'Regeln:',
+      '- Werte EXAKT wie auf dem Bild (deutsches Format z.B. "63.559,90",',
+      '  Datum DD.MM.YYYY, Text wortgenau).',
+      '- Wenn ein Feld auf den gezeigten Seiten nicht erkennbar ist: NULL.',
+      '- WISO-Test-Platzhalter (Bezeichnung+Betrag beide "456" wiederholt)',
+      '  → NULL setzen.',
+      '- Person B (Ehefrau) hat eigene Anlagen — Werte stehen NICHT in',
+      "  Person A's Anlage.",
+      '- VERSUCHE moeglichst viele Felder zu fuellen, nicht nur die',
+      '  offensichtlichen — verlasse dich auf BILD + OCR-TEXT zusammen.',
       '',
-      'Person B (Ehefrau) hat eigene Anlagen — Werte stehen NICHT in',
-      "Person A's Anlage.",
+      '=== OCR-TEXT der Seiten (Anker fuer Zeilennummern + Zahlen) ===',
+      ocrSnippet,
+      '=== ENDE OCR-TEXT ===',
       '',
       fieldMap.mapText,
       '',
-      'Antworte ausschliesslich mit dem JSON-Objekt nach Schema —',
-      'keine Erklaerung.',
+      'Antworte mit JSON-Objekt nach Schema — keine Erklaerung.',
+      'Fuelle so viele eCodes wie moeglich; NULL nur bei echter Unsicherheit.',
     ].join('\n');
 
     // ── 4. Batch pages and call vision ─────────────────────────────────
