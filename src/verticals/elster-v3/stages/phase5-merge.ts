@@ -71,6 +71,13 @@ export interface CanonicalValue {
   trust: 'high' | 'medium' | 'low' | 'suspicious';
   /** Maschinen-lesbare Gründe für den Trust-Level (UI kann Hover/Badge zeigen). */
   trust_reasons: string[];
+  /** Übernommen von phase1: leading Label-Token == vordruckzeile. Undefined =
+   *  Anchor nicht prüfbar (vordruckzeile fehlt). False = REGEX_3F-Fallback,
+   *  triggert trust='suspicious'. */
+  zeile_anchored?: boolean;
+  /** Übernommen von phase1: (value, drucktext) tritt in ≥3 eCodes über ≥2
+   *  Anlagen auf → WISO-Platzhalter-Verdacht, triggert trust='suspicious'. */
+  repeat_suspicious?: boolean;
 }
 
 export interface Phase5MergeInput {
@@ -140,6 +147,11 @@ function computeTrust(canonical: Record<string, CanonicalValue>): void {
     if (hallucinatedValues.has(valStr) && GENERIC_DRUCKTEXTS.has(v.drucktext.trim())) {
       trust = 'suspicious';
       reasons.push(`Wert "${valStr}" tritt in mehreren generischen Drucktext-Feldern auf — vermutlich OCR-Platzhalter`);
+    } else if (v.repeat_suspicious) {
+      // Cross-Anlage repeat detection aus phase1: gleiche (value, drucktext)
+      // in ≥3 eCodes über ≥2 Anlagen → WISO-Platzhalter (z.B. "Bezeichnung 456").
+      trust = 'suspicious';
+      reasons.push(`Wert "${valStr}" + Drucktext "${v.drucktext}" tritt in mehreren Anlagen auf — Platzhalter-Verdacht`);
     } else if (
       valStr === v.vordruckzeile &&
       /^\d{1,3}$/.test(valStr) &&
@@ -150,6 +162,11 @@ function computeTrust(canonical: Record<string, CanonicalValue>): void {
     } else if (v.origin === 'BMF_RECHNER') {
       trust = 'high';
       reasons.push('BMF Lane-1 deterministisch berechnet');
+    } else if (v.origin === 'REGEX_100%' && v.zeile_anchored === false) {
+      // 4-Faktor-Match aber führende Label-Nummer != vordruckzeile (z.B.
+      // Treffer in Tabellen-Header, der die Zeilennummer woanders enthält).
+      trust = 'suspicious';
+      reasons.push('Regex-Match ohne führenden Zeilen-Anker (vordruckzeile-Mismatch)');
     } else if (v.origin === 'REGEX_100%' && v.evidence_line) {
       trust = 'high';
       reasons.push('Regex-Match mit Belegzeile');
@@ -157,8 +174,21 @@ function computeTrust(canonical: Record<string, CanonicalValue>): void {
       trust = 'medium';
       reasons.push('Regex-Match (Belegzeile fehlt)');
     } else if (v.origin === 'REGEX_3F') {
-      trust = 'medium';
-      reasons.push('Regex-Match mit 3-Feld-Kontext');
+      // 3-Faktor-Fallback: nur dann 'medium' wenn der Treffer auch
+      // anchored ist (führende Zeilen-Nummer matched vordruckzeile).
+      // Sonst 'suspicious' — fängt WISO-Platzhalter "48 Bezeichnung 456"
+      // ab die auf Bezeichnung-eCodes anderer Anlagen matchen würden.
+      if (v.zeile_anchored === true) {
+        trust = 'medium';
+        reasons.push('Regex-Match mit 3-Feld-Kontext (Zeilen-Anker)');
+      } else if (v.zeile_anchored === undefined) {
+        // vordruckzeile unbekannt → Altverhalten beibehalten
+        trust = 'medium';
+        reasons.push('Regex-Match mit 3-Feld-Kontext (kein Zeilen-Anker prüfbar)');
+      } else {
+        trust = 'suspicious';
+        reasons.push('Regex-3F-Match ohne Zeilen-Anker — vordruckzeile-Mismatch');
+      }
     } else if (v.origin === 'LLM_FSM') {
       if (v.datentyp === 'currency' && valStr && !/^-?[\d.,]/.test(valStr)) {
         trust = 'suspicious';
@@ -324,6 +354,8 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
           evidence_line: h.evidence_line,
           trust: 'medium',
           trust_reasons: [],
+          zeile_anchored: h.zeile_anchored,
+          repeat_suspicious: h.repeat_suspicious,
         };
         fromRegex++;
         byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;
