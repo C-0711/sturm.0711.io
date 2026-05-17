@@ -22,6 +22,7 @@ import { createJobsRouter } from './server/jobs.ts';
 import { JobRunner } from './lib/job-runner.ts';
 import { registerJobHandlers } from './server/job-handlers.ts';
 import { resolveMasterKey } from './lib/master-signer.ts';
+import { createCtxRouter } from './lib/ctx-server.ts';
 import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
@@ -1095,48 +1096,57 @@ app.post(
       veranlagungsjahr: inst.veranlagungsjahr ?? null,
       merkle_root: merkleRoot,
     };
-    // P10: Lane-5 (`elster-lane5`) is required=false in the Anwendung roster,
-    // so we still gate with .has(). When unwired, we no longer silently
-    // construct an ElsterMcpClient — we return 503 so the UI can surface a
-    // clean "einreichung-not-configured" message.
-    const container = getToolContainer(appId);
-    if (!container?.has('elster-lane5')) {
-      return res.status(503).json({
+    // EXPORT contract (2026-05-17):
+    // The deployed Lane-5 MCP (ctaxv1-lane5-elster) does NOT have an
+    // `elster_einreichen` tool — it only has `erstelle_elster_xml` which
+    // GENERATES the XML. But the XML is already produced upstream by
+    // phase6BmfRechner and lives in master.json (eric_xml field). Real
+    // ELSTER-Schnittstelle submission requires production credentials
+    // + the ERiC client library and is OUT OF SCOPE for sturm.
+    //
+    // So: /export now materializes the existing eric_xml as a downloadable
+    // file in the case workspace + marks the case `eingereicht` (semantic:
+    // "ready for ELSTER submission"). The actual submission is a manual
+    // upload step performed by the steuerberater. If a real submission
+    // MCP is added later, this handler can call it via ctx.tools.
+    if (!ericXml) {
+      return res.status(409).json({
         erfolg: false,
-        reason: 'einreichung-not-configured',
-        message: 'Lane-5 (elster-lane5) ist in der Anwendung nicht gebunden. Tool-Roster prüfen.',
+        reason: 'no-eric-xml',
+        message: 'Versiegeltes master.json enthält keinen eric_xml. Phase 6 (BMF) prüfen.',
       });
     }
-    const lane5 = container.getByRole<McpHandle>('einreichung');
-    type ElsterEinreichenErgebnis = Awaited<
-      ReturnType<InstanceType<typeof import('./lib/elster-mcp-client.ts').ElsterMcpClient>['einreichen']>
-    >;
-    let result: ElsterEinreichenErgebnis;
-    {
-      try {
-        result = await lane5.call<ElsterEinreichenErgebnis>(
-          'elster_einreichen',
-          { eric_xml: ericXml, fall_metadata },
-        );
-      } catch (err) {
-        const msg = (err as Error).message ?? String(err);
-        result = {
-          erfolg: false,
-          reason: msg.includes('timeout') ? 'timeout' : 'mcp-error',
-          raw: msg,
-        };
-      }
+    // Write the XML to the case workspace + content-addressed by merkle root.
+    const ericXmlAbsPath = path.join(
+      ROOT,
+      inst.workspacePath,
+      `eric_${merkleRoot ? merkleRoot.slice(0, 12) : 'unsealed'}.xml`,
+    );
+    try {
+      await fs.promises.writeFile(ericXmlAbsPath, ericXml, 'utf-8');
+    } catch (err) {
+      return res.status(500).json({
+        erfolg: false,
+        reason: 'write-failed',
+        message: `Konnte ERiC-XML nicht schreiben: ${(err as Error).message}`,
+      });
     }
-    if (result.erfolg && result.einreichungs_id) {
-      inst.status = 'eingereicht';
-      inst.exportedAt = new Date().toISOString();
-      inst.einreichungsId = result.einreichungs_id;
-      await saveInstanceFile(APPLICATIONS_DIR, inst);
-    }
-    // Status-Code: 200 wenn erfolgreich, 503 wenn MCP nicht erreichbar
-    // (so kann das UI sauber zwischen "Service down" und Fehler unterscheiden).
-    const status = result.erfolg ? 200 : (result.reason === 'mcp-unavailable' ? 503 : 502);
-    return res.status(status).json(result);
+    inst.status = 'eingereicht';
+    inst.exportedAt = new Date().toISOString();
+    inst.einreichungsId = `local-${merkleRoot?.slice(0, 12) ?? Date.now().toString(36)}`;
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+
+    return res.status(200).json({
+      erfolg: true,
+      einreichungs_id: inst.einreichungsId,
+      eric_xml_path: path.relative(ROOT, ericXmlAbsPath),
+      eric_xml_size: ericXml.length,
+      eric_xml_sha_prefix: merkleRoot?.slice(0, 12) ?? null,
+      mode: 'local-export',
+      hinweis: 'ERiC-XML auf Festplatte abgelegt. Tatsächliche ELSTER-Übermittlung erfolgt ' +
+               'außerhalb von sturm (ERiC-Client + Schnittstellen-Credentials).',
+      download: `/api/applications/${appId}/instances/${caseId}/download/eric.xml`,
+    });
   },
 );
 
@@ -1247,6 +1257,15 @@ app.use('/api/integrations', requireBearerToken, createIntegrationsRouter({
 // ============ Standalone classify (used by /studio-ocr.html on file drop) ============
 
 app.use('/api/classify', requireBearerToken, schemaGenerateLimiter, createClassifyRouter(UPLOADS_DIR));
+
+// ============ ctx — drop-in context container HTTP surface ============
+// Cross-LLM retrieval endpoint. Mounted WITHOUT requireBearerToken: matches
+// the CLAUDE.md "Playground-Level, kein Auth" posture for sturm itself.
+// Behind an internet-facing reverse-proxy, gate this.
+app.use('/ctx', express.json({ limit: '5mb' }), createCtxRouter({
+  ollamaUrl: process.env.OLLAMA_URL,
+  embedCpu: process.env.EMBED_CPU === '1',
+}));
 
 // ============ User-defined workflows (designer-authored, persistent) ============
 // Mounted WITHOUT requireBearerToken intentionally — designer is local-dev tool.
@@ -1606,6 +1625,7 @@ app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html
 app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
 app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
 app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
+app.get('/ctx-demo.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-demo.html')));
 app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.get('/fleet', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
 app.get('/api/fleet/data', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
