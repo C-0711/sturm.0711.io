@@ -63,3 +63,6 @@ src/verticals/elster-v3/data/.backup-*
 # Application-Workspaces (per-case state — written at runtime)
 # Anchored to repo root so src/applications/ stays tracked.
 /applications/
+
+# E2E / probe / shootout report dirs — runtime artifacts
+/reports/
