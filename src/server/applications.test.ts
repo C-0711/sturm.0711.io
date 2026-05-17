@@ -17,6 +17,12 @@ import {
   saveInstanceFile,
   type ApplicationInstance,
 } from './applications.ts';
+import {
+  computeTrustBreakdown,
+  persistUploadToInbox,
+  readManifest,
+  recordDocumentRunCompletion,
+} from './inbox.ts';
 import { defineApplication } from '../core/application.ts';
 import { registerApplication } from '../core/registry.ts';
 
@@ -171,6 +177,83 @@ async function main() {
         (inst.caseId.match(/2023/g) || []).length === 1,
         inst.caseId,
       );
+    }
+
+    // ── computeTrustBreakdown: synthetic canonical_layer fixture ───────
+    console.log('\n=== computeTrustBreakdown counts trust tiers ===');
+    {
+      const layer = {
+        E1: { trust: 'high' },
+        E2: { trust: 'high' },
+        E3: { trust: 'medium' },
+        E4: { trust: 'suspicious' },
+        E5: { trust: 'low' },
+        E6: { /* no trust → counts as medium */ },
+        E7: { trust: 'unknown' /* unknown tier → ignored, see comment */ },
+      };
+      const tb = computeTrustBreakdown(layer);
+      eq('high count', tb.high, 2);
+      // E3 (medium) + E6 (default-to-medium) = 2, E7 unknown tier dropped
+      eq('medium count', tb.medium, 2);
+      eq('suspicious count', tb.suspicious, 1);
+      eq('low count', tb.low, 1);
+    }
+
+    console.log('\n=== computeTrustBreakdown handles null/empty input ===');
+    {
+      eq('null layer', computeTrustBreakdown(null), { high: 0, medium: 0, suspicious: 0, low: 0 });
+      eq('empty layer', computeTrustBreakdown({}), { high: 0, medium: 0, suspicious: 0, low: 0 });
+    }
+
+    // ── recordDocumentRunCompletion writes trustBreakdown ──────────────
+    console.log('\n=== recordDocumentRunCompletion persists trustBreakdown ===');
+    {
+      // Set up a temp workspace for a synthetic case.
+      const wsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sturm-inbox-test-'));
+      const inst = {
+        appId: 'tb-test',
+        caseId: 'tb-case',
+        workspacePath: wsRoot,
+      };
+      // Seed a fake upload by writing a temp file we can pass through
+      // persistUploadToInbox (it copies the bytes + writes the manifest).
+      const tempUpload = path.join(wsRoot, 'fake.pdf');
+      await fs.writeFile(tempUpload, 'pdf-bytes');
+      const doc = await persistUploadToInbox(wsRoot, inst, {
+        tempPath: tempUpload,
+        originalname: 'fake.pdf',
+        size: 9,
+        mimetype: 'application/pdf',
+      }, 'run-xyz');
+      assert('persistUploadToInbox returns runId match', doc.runId === 'run-xyz');
+
+      await recordDocumentRunCompletion(wsRoot, inst, 'run-xyz', {
+        anlagen: ['KAP'],
+        fieldsExtracted: 105,
+        trustBreakdown: { high: 36, medium: 46, suspicious: 17, low: 2 },
+      });
+
+      const m = await readManifest(wsRoot, inst);
+      assert('manifest has 1 doc', m.documents.length === 1);
+      const d = m.documents[0];
+      eq('anlagen persisted', d.anlagen, ['KAP']);
+      eq('fieldsExtracted persisted', d.fieldsExtracted, 105);
+      eq('trustBreakdown persisted', d.trustBreakdown, {
+        high: 36, medium: 46, suspicious: 17, low: 2,
+      });
+
+      // Backward-compat: a call without trustBreakdown must NOT erase the
+      // existing breakdown — only set-if-provided semantics.
+      await recordDocumentRunCompletion(wsRoot, inst, 'run-xyz', {
+        fieldsExtracted: 106,
+      });
+      const m2 = await readManifest(wsRoot, inst);
+      eq('trustBreakdown retained after partial update', m2.documents[0].trustBreakdown, {
+        high: 36, medium: 46, suspicious: 17, low: 2,
+      });
+      eq('fieldsExtracted updated', m2.documents[0].fieldsExtracted, 106);
+
+      await fs.rm(wsRoot, { recursive: true, force: true });
     }
 
   } finally {

@@ -29,6 +29,13 @@ export interface CaseDocument {
   anlagen?: string[];
   /** Anzahl extrahierter eCodes (kopiert nach Run-Ende). */
   fieldsExtracted?: number;
+  /**
+   * Pro-Dokument-Qualitätsverteilung der eCode-Felder im canonical_layer
+   * (Trust-Stufen high/medium/suspicious/low). Wird beim Run-Abschluss
+   * berechnet und in den Manifest geschrieben. Optional, weil ältere
+   * Manifests den Wert nicht haben — UI rendert dann keine Chip-Zeile.
+   */
+  trustBreakdown?: { high: number; medium: number; suspicious: number; low: number };
   mimeType?: string;
 }
 

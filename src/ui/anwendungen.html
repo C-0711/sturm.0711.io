@@ -141,10 +141,7 @@
     }
 
     .case-row {
-      display: grid;
-      grid-template-columns: 1fr auto auto auto auto;
-      align-items: center;
-      gap: 12px;
+      display: block;
       padding: 12px 14px;
       border: 1px solid var(--color-border);
       border-radius: 10px;
@@ -152,6 +149,12 @@
       color: inherit;
       transition: border-color .12s, background .12s;
       position: relative;
+    }
+    .case-row-head {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      align-items: center;
+      gap: 12px;
     }
     .case-row:hover { border-color: var(--color-accent); background: var(--color-bg-hover); }
     .case-row + .case-row { margin-top: 8px; }
@@ -194,6 +197,61 @@
       color: var(--color-text-secondary);
       white-space: nowrap;
     }
+    /* ── Per-Dokument Qualitäts-Strip (Trust-Breakdown) ─────────── */
+    .case-docs {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--color-border);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .case-doc {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size: 11.5px;
+      color: var(--color-text-secondary);
+      padding: 2px 0;
+    }
+    .case-doc .case-doc-name { flex: 1 1 auto; min-width: 0; }
+    .case-doc .case-doc-fields { white-space: nowrap; }
+    .case-doc-name {
+      color: var(--color-text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .case-doc-trust {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+    .case-doc-trust .ct { display: inline-flex; align-items: center; gap: 3px; }
+    .case-doc-anlagen {
+      color: var(--color-text-tertiary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .case-recompute {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: var(--color-text-tertiary);
+      background: transparent;
+      border: 1px dashed var(--color-border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .case-recompute:hover { color: var(--color-text-primary); border-color: var(--color-accent); }
+    .case-recompute[disabled] { opacity: 0.6; cursor: progress; }
+
     .case-status.in_bearbeitung { color: var(--color-text-primary); border-color: var(--color-accent); }
     .case-status.review { color: #d97706; border-color: #d97706; }
     .case-status.versiegelt { color: #059669; border-color: #059669; }
@@ -756,22 +814,75 @@
       const title = c.status === 'in_bearbeitung' ? 'Fall löschen' : 'Fall archivieren';
       return `
         <div class="case-row" data-case="${escapeHtml(c.caseId)}">
-          <a class="case-row-link" href="/steuerfall.html?app=${safeApp}&case=${safeId}">
-            <div>
-              <p class="case-title">${escapeHtml(c.displayName)}</p>
-              <p class="case-sub">${escapeHtml(c.caseId)} · Mandant ${escapeHtml(c.mandantId || '—')}</p>
-            </div>
-            <span class="case-meta">${c.runs?.length ?? 0} Run${(c.runs?.length ?? 0) === 1 ? '' : 's'}</span>
-            <span class="case-meta">${fmtDate(c.createdAt)}</span>
-            <span class="case-status ${escapeHtml(c.status)}">${escapeHtml(statusLabel(c.status))}</span>
-          </a>
-          <button class="case-row-del" data-action="del-case"
-                  data-app="${escapeHtml(appId)}"
-                  data-case="${escapeHtml(c.caseId)}"
-                  data-status="${escapeHtml(c.status)}"
-                  title="${title}">
-            <i data-lucide="${trashIcon}"></i>
-          </button>
+          <div class="case-row-head">
+            <a class="case-row-link" href="/steuerfall.html?app=${safeApp}&case=${safeId}">
+              <div>
+                <p class="case-title">${escapeHtml(c.displayName)}</p>
+                <p class="case-sub">${escapeHtml(c.caseId)} · Mandant ${escapeHtml(c.mandantId || '—')}</p>
+              </div>
+              <span class="case-meta">${c.runs?.length ?? 0} Run${(c.runs?.length ?? 0) === 1 ? '' : 's'}</span>
+              <span class="case-meta">${fmtDate(c.createdAt)}</span>
+              <span class="case-status ${escapeHtml(c.status)}">${escapeHtml(statusLabel(c.status))}</span>
+            </a>
+            <button class="case-row-del" data-action="del-case"
+                    data-app="${escapeHtml(appId)}"
+                    data-case="${escapeHtml(c.caseId)}"
+                    data-status="${escapeHtml(c.status)}"
+                    title="${title}">
+              <i data-lucide="${trashIcon}"></i>
+            </button>
+          </div>
+          ${renderCaseDocs(appId, c)}
+        </div>
+      `;
+    }
+
+    // ── Per-Dokument Qualitäts-Strip ────────────────────────────────
+    // Rendert pro Dokument im Manifest eine Zeile:
+    //   "<filename>  | 105 Felder · ● 36  ◐ 46  ✕ 17  ○ 2 | KAP, N, V"
+    // Trust-Mapping: ● green=high, ◐ amber=medium, ✕ red=suspicious,
+    //                ○ grey=low — gleich wie Tool-Roster-Legende.
+    // Wenn KEIN Dokument einen trustBreakdown hat, blendet die Funktion
+    // den ganzen Strip aus (Backfill-Link bleibt sichtbar, damit der
+    // Reviewer ihn anstoßen kann).
+    function renderCaseDocs(appId, c) {
+      const docs = Array.isArray(c.documents) ? c.documents : [];
+      if (docs.length === 0) return '';
+      const hasAnyBreakdown = docs.some(d => d.trustBreakdown);
+      const rows = docs.map(d => {
+        const tb = d.trustBreakdown || { high: 0, medium: 0, suspicious: 0, low: 0 };
+        const fields = typeof d.fieldsExtracted === 'number' ? d.fieldsExtracted : 0;
+        const anlagen = Array.isArray(d.anlagen) && d.anlagen.length
+          ? `· ${escapeHtml(d.anlagen.join(', '))}`
+          : '';
+        const trustChips = d.trustBreakdown
+          ? `<span class="case-doc-trust">
+               <span class="ct"><span class="tools-dot green">●</span>${tb.high}</span>
+               <span class="ct"><span class="tools-dot amber">◐</span>${tb.medium}</span>
+               <span class="ct"><span class="tools-dot red">✕</span>${tb.suspicious}</span>
+               <span class="ct"><span class="tools-dot grey">○</span>${tb.low}</span>
+             </span>`
+          : '<span class="case-doc-trust" title="Trust-Verteilung noch nicht berechnet — \'Qualität neu berechnen\' anstoßen">—</span>';
+        return `
+          <div class="case-doc" title="${escapeHtml(d.filename || '')}">
+            <span class="case-doc-name">${escapeHtml(d.filename || d.runId || '?')}</span>
+            <span class="case-doc-fields">${fields} Felder</span>
+            ${trustChips}
+            <span class="case-doc-anlagen">${anlagen}</span>
+          </div>
+        `;
+      }).join('');
+      const recomputeLabel = hasAnyBreakdown ? 'Qualität neu berechnen' : 'Qualität berechnen';
+      return `
+        <div class="case-docs">
+          ${rows}
+          <div>
+            <button class="case-recompute" data-action="recompute-quality"
+                    data-app="${escapeHtml(appId)}"
+                    data-case="${escapeHtml(c.caseId)}">
+              ${recomputeLabel}
+            </button>
+          </div>
         </div>
       `;
     }
@@ -844,6 +955,13 @@
           handleDelete(btn.dataset.app, btn.dataset.case, btn.dataset.status);
         });
       });
+      host.querySelectorAll('[data-action="recompute-quality"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await handleRecomputeQuality(btn);
+        });
+      });
       host.querySelectorAll('[data-filter-status]').forEach(chip => {
         chip.addEventListener('click', () => {
           filterState.status = chip.dataset.filterStatus;
@@ -883,6 +1001,37 @@
       }
       const apps = window.__loadedApps || [];
       paintSections(document.getElementById('app-list'), apps);
+    }
+
+    async function handleRecomputeQuality(btn) {
+      const appId = btn.dataset.app;
+      const caseId = btn.dataset.case;
+      if (!appId || !caseId) return;
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Berechne…';
+      try {
+        const res = await fetch(`/api/applications/${encodeURIComponent(appId)}/instances/${encodeURIComponent(caseId)}/recompute-quality`);
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          alert(`Fehler: ${j.error || res.status}`);
+          btn.disabled = false;
+          btn.textContent = original;
+          return;
+        }
+        const j = await res.json();
+        // Frischer instance-Snapshot direkt aus der Response nutzen — der
+        // Server liefert das vollständige Objekt inkl. updated documents[].
+        const arr = casesByApp.get(appId) || [];
+        const idx = arr.findIndex(c => c.caseId === caseId);
+        if (idx >= 0 && j.instance) arr[idx] = j.instance;
+        const apps = window.__loadedApps || [];
+        paintSections(document.getElementById('app-list'), apps);
+      } catch (e) {
+        alert(`Fehler: ${e?.message || e}`);
+        btn.disabled = false;
+        btn.textContent = original;
+      }
     }
 
     async function loadApps() {
