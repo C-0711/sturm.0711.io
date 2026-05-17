@@ -1332,8 +1332,13 @@ export function buildElsterV6VisionWorkflow() {
           // to 8 means typical ESt PDFs (≤8 pages) run as one call,
           // restoring the spike's whole-document context. Multi-doc cases
           // beyond 8 pages still batch.
-          pagesPerCall: 8,               // 6-page Stricker → 1 call
-          callConcurrency: 1,            // single call, no concurrency needed
+          // r9-r11 with pagesPerCall=4 (capped) saw batch 0 silently fail on
+          // vLLM (4 images + 25k-token prompt at --limit-mm-per-prompt).
+          // Switch to 2 pages per call: 3 batches × 2 pages run in parallel,
+          // each well under any vLLM input limit. Lost: 1 of-context-merge
+          // benefit (R8). Gained: reliability — every batch returns.
+          pagesPerCall: 2,
+          callConcurrency: 3,
           rejectWisoPlaceholders: true,
           fallbackToV5: true,
           // r9 (6k tokens, 400 cap) worked: VOR=5 hits, ESt1A=6, Nachzahlung €4143.
