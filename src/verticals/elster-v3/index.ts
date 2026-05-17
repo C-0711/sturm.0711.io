@@ -1333,12 +1333,12 @@ export function buildElsterV6VisionWorkflow() {
           // restoring the spike's whole-document context. Multi-doc cases
           // beyond 8 pages still batch.
           // r9-r11 with pagesPerCall=4 (capped) saw batch 0 silently fail on
-          // vLLM (4 images + 25k-token prompt at --limit-mm-per-prompt).
-          // Switch to 2 pages per call: 3 batches × 2 pages run in parallel,
-          // each well under any vLLM input limit. Lost: 1 of-context-merge
-          // benefit (R8). Gained: reliability — every batch returns.
+          // vLLM. r12-r14 with pagesPerCall=2 + concurrency=3: 2 batches
+          // returned 50-100 fields, but batch-2 always returned ~28 tokens
+          // (model "gave up" pattern). Hypothesis: parallel calls share
+          // KV cache state and one gets a degenerate output. Serializing.
           pagesPerCall: 2,
-          callConcurrency: 3,
+          callConcurrency: 1,
           rejectWisoPlaceholders: true,
           fallbackToV5: true,
           // r9 (6k tokens, 400 cap) worked: VOR=5 hits, ESt1A=6, Nachzahlung €4143.
