@@ -179,7 +179,9 @@ export function buildSteuerfallEstApplication() {
       'lane5:elster:einreichung:v1',
     ],
     workflows: {
-      extraction: 'elster-v5_2-rag',
+      // Env override: STURM_EXTRACTION_WORKFLOW (defaults to 'elster-v5_2-rag').
+      // Set to 'elster-v6-vision' to opt into the vision-first phase3 replacement.
+      extraction: process.env['STURM_EXTRACTION_WORKFLOW'] || 'elster-v5_2-rag', // lint-no-env: allow — Anwendung-config override
       seal: 'steuerfall-seal',
     },
     // Backwards-Compat: `mcps` + `rag` bleiben erhalten, damit ältere
