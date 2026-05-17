@@ -26,7 +26,8 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 
 # git is needed at runtime: simple-git invokes the binary for bare-repo ops.
-RUN apk add --no-cache git tini \
+# poppler-utils provides pdftoppm, used by src/lib/pdf-render.ts (v6 vision).
+RUN apk add --no-cache git tini poppler-utils \
  && addgroup -S sturm \
  && adduser  -S -G sturm sturm
 
