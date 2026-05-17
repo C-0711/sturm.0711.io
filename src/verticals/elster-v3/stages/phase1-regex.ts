@@ -48,6 +48,16 @@ export interface Phase1RegexHit {
   drucktext: string;
   vordruckzeile: string;
   datentyp: 'string' | 'date' | 'currency';
+  /** True wenn die OCR-Zeile mit der erwarteten vordruckzeile als
+   *  führendem Label-Token beginnt (z.B. "13 …" für vordruckzeile=13).
+   *  False = Fallback ohne Zeilen-Anker → soll downstream `trust='suspicious'`
+   *  triggern (siehe phase5-merge). Bei eCodes ohne vordruckzeile bleibt
+   *  das Flag undefined und wird wie ein anchored-Match behandelt. */
+  zeile_anchored?: boolean;
+  /** True wenn (value, drucktext) in ≥ repeatedValueSuspicionThreshold eCodes
+   *  über ≥2 Anlagen auftaucht — Signal für OCR-Platzhalter (z.B. WISO
+   *  "Bezeichnung 456" auf jeder Anlage). Post-Pass-Flag. */
+  repeat_suspicious?: boolean;
 }
 
 export interface Phase1AnlageResult {
@@ -86,6 +96,16 @@ export interface Phase1RegexConfig {
    *  wie E0200201/202/203/204 für "Bruttoarbeitslohn" – jede Variante
    *  bezieht sich auf einen anderen Kontext (Person A/B, sum/einz). */
   matchDuplicateECodes?: boolean;
+  /** Bei mehreren Kandidaten-Zeilen: bevorzuge diejenige, deren führendes
+   *  Label-Token === feld.vordruckzeile ist. Verhindert dass "48 Bezeichnung 456"
+   *  einen anderen Bezeichnung-eCode mit vordruckzeile=23 trifft. Default true
+   *  in v5.2-rag; auf false setzen für strikte Rückwärtskompatibilität (v4). */
+  vordruckzeileAnchor?: boolean;
+  /** Post-Pass: (value, drucktext) das in ≥ N eCodes über ≥2 Anlagen vorkommt
+   *  wird als OCR-Platzhalter (WISO "Bezeichnung 456") markiert (zeile_anchored
+   *  bleibt unverändert, aber repeat_suspicious=true). Downstream-trust wird
+   *  in phase5-merge auf 'suspicious' gesetzt. Default 3. Auf 0 setzen → off. */
+  repeatedValueSuspicionThreshold?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -153,6 +173,23 @@ function extractRawValueAfter(line: string, drucktextEnd: number, datentyp: Anla
       return tail.length > 0 ? tail : null;
     }
   }
+}
+
+/** Extrahiert die führende Label-Nummer aus einer OCR-Zeile.
+ *  Erkennt: "13 Arbeitnehmerbeiträge …" → "13"
+ *           " 22. b) Bezeichnung 456"   → "22"  (Dot/Sub-Marker erlaubt)
+ *           "| 5 | Lohnsteuer | 1.234 |" → "5"  (Markdown-Table-Cell)
+ *           "Arbeitnehmer 1.243"        → null (kein Label-Token)
+ *  Wir wollen nur isolierte 1-3-stellige Zahlen am Zeilen- bzw. Cell-Anfang.
+ *  Pure Hilfsfunktion, exportiert für Tests. */
+export function leadingLabelNumber(line: string): string | null {
+  // Markdown-Table: erste Zelle abstreifen, falls die erste Zelle leer/Marker
+  // ist und die nächste Zelle eine Zahl enthält.
+  const tableCell = line.match(/^\s*\|\s*([^|]+?)\s*\|/);
+  const head = tableCell ? tableCell[1] : line;
+  // Erkennt "13", " 13 ", "13.", "13. b)", "13)", "13 Arbeitnehmer…"
+  const m = head.match(/^\s*(\d{1,3})(?:[.)\s]|$)/);
+  return m ? m[1] : null;
 }
 
 /** BMF-formatRegex enthält Perl-Style `\Q...\E` (literal-Block) für Enum-
@@ -238,6 +275,8 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
     const minLen = cfg.minDrucktextLength ?? 5;
     const threeFaktor = cfg.threeFaktorFallback ?? true;
     const minLen3F = cfg.minDrucktextLength3F ?? 8;
+    const zeileAnchor = cfg.vordruckzeileAnchor ?? true;
+    const repeatThreshold = cfg.repeatedValueSuspicionThreshold ?? 3;
     // Duplikat-eCode-Match ist heute strukturell schon gegeben (jeder eCode hat
     // seine eigene Schleife). Flag bleibt für zukünftige Dedup-Variante reserviert.
     const _matchDuplicates = cfg.matchDuplicateECodes ?? true;
@@ -299,6 +338,14 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
           // depending on what its formatRegex accepts; also fixes \Q…\E.
           const accepted = passesFormatWithCoercion(baseNormalized, feld);
           if (accepted === null) return null;
+          // Bestimme ob die Zeile mit dem erwarteten Label-Token beginnt.
+          // Anchor-Check ist tolerant: ohne vordruckzeile → undefined (kein
+          // Downgrade); mit vordruckzeile → true/false.
+          let anchored: boolean | undefined;
+          if (hasZeile) {
+            const lead = leadingLabelNumber(line);
+            anchored = lead === feld.vordruckzeile;
+          }
           return {
             eCode: feld.eCode,
             value: rawValue,
@@ -310,23 +357,58 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
             drucktext: feld.drucktext,
             vordruckzeile: feld.vordruckzeile,
             datentyp: feld.datentyp,
+            zeile_anchored: anchored,
           };
         };
 
+        /** Wähle den besten Kandidaten aus N Treffern. Priorität:
+         *   1. anchored (führende Label-Nummer == vordruckzeile) + langer drucktext
+         *   2. anchored mit kürzerem drucktext
+         *   3. nicht-anchored, längster drucktext-Match
+         *   4. erster Match (Fallback) */
+        const pickBest = (cands: Phase1RegexHit[]): Phase1RegexHit | null => {
+          if (cands.length === 0) return null;
+          if (cands.length === 1) return cands[0];
+          // Sortier-Score: anchored vorne, dann nach drucktext.length absteigend.
+          // Wenn vordruckzeileAnchor=false → ignoriere anchored-Bit (legacy).
+          const scored = cands.map((c) => ({
+            c,
+            anchorScore: zeileAnchor && c.zeile_anchored === true ? 2
+                       : c.zeile_anchored === undefined ? 1
+                       : 0,
+            druckLen: c.drucktext.length,
+          }));
+          scored.sort((a, b) => {
+            if (a.anchorScore !== b.anchorScore) return b.anchorScore - a.anchorScore;
+            if (a.druckLen !== b.druckLen) return b.druckLen - a.druckLen;
+            return 0;
+          });
+          return scored[0].c;
+        };
+
         let hit: Phase1RegexHit | null = null;
-        // Pass A — 4-Faktor (streng)
+        // Pass A — 4-Faktor (streng) — kollektiere ALLE matchenden Zeilen,
+        // wähle die anchored bevorzugt.
         if (hasZeile) {
+          const cands: Phase1RegexHit[] = [];
           for (const rl of lines) {
             const h = tryLine(rl, true, 'REGEX_100%');
-            if (h) { hit = h; break; }
+            if (h) cands.push(h);
           }
+          hit = pickBest(cands);
         }
-        // Pass B — 3-Faktor (Quellbelege ohne ELSTER-Zeilenanker)
+        // Pass B — 3-Faktor (Quellbelege ohne ELSTER-Zeilenanker).
+        // Auch hier: sammle alle Kandidaten und wähle anchored bevorzugt.
+        // Das verhindert dass "48 Bezeichnung 456" (WISO-Platzhalter) einen
+        // Bezeichnung-eCode mit vordruckzeile=23 trifft, wenn es eine Zeile
+        // "23 Bezeichnung …" gibt.
         if (!hit && threeFaktor && feld.drucktext.length >= minLen3F) {
+          const cands: Phase1RegexHit[] = [];
           for (const rl of lines) {
             const h = tryLine(rl, false, 'REGEX_3F');
-            if (h) { hit = h; break; }
+            if (h) cands.push(h);
           }
+          hit = pickBest(cands);
         }
 
         if (hit) {
@@ -353,6 +435,44 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
         missing: missing_ecodes.length,
         durationMs: result[anlage].durationMs,
       });
+    }
+
+    // ── Post-Pass: cross-Anlage value-repeat suspicion ──────────────────
+    // Wenn dieselbe (value, drucktext)-Kombination in ≥ repeatThreshold
+    // eCodes über ≥2 Anlagen auftaucht → markiere alle als repeat_suspicious.
+    // Fängt WISO-Platzhalter wie "48 Bezeichnung 456" generisch ab (ohne
+    // Hardcoding der Zahlen). Downstream-Trust wird in phase5-merge auf
+    // 'suspicious' gesetzt → BMF-Pipeline ignoriert sie.
+    if (repeatThreshold > 0) {
+      type Occ = { hit: Phase1RegexHit; anlage: string };
+      const buckets = new Map<string, Occ[]>();
+      for (const [anlage, ar] of Object.entries(result)) {
+        for (const h of Object.values(ar.regex_hits)) {
+          const valStr = String(h.value ?? '').trim();
+          const druckStr = (h.drucktext ?? '').trim();
+          if (!valStr || !druckStr) continue;
+          const key = `${valStr} ${druckStr}`;
+          let arr = buckets.get(key);
+          if (!arr) { arr = []; buckets.set(key, arr); }
+          arr.push({ hit: h, anlage });
+        }
+      }
+      let repeatFlags = 0;
+      for (const [, occs] of buckets) {
+        if (occs.length < repeatThreshold) continue;
+        const distinctAnlagen = new Set(occs.map((o) => o.anlage));
+        if (distinctAnlagen.size < 2) continue;
+        for (const o of occs) {
+          o.hit.repeat_suspicious = true;
+          repeatFlags++;
+        }
+      }
+      if (repeatFlags > 0) {
+        ctx.emit('phase1_repeat_suspicion', {
+          flagged: repeatFlags,
+          threshold: repeatThreshold,
+        });
+      }
     }
 
     await ctx.artifacts.write('phase1_regex.json', result);
