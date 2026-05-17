@@ -11,7 +11,8 @@ import { registerAllWorkflows } from './workflows/index.ts';
 import { registerAllApplications } from './applications/index.ts';
 import { listWorkflows, getWorkflow, listStages, getStage, listApplications, getApplication } from './core/registry.ts';
 import { ToolContainer, getToolContainer } from './core/tools/tool-container.ts';
-import type { McpHandle } from './core/tools/handles.ts';
+import type { McpHandle, LlmHandle } from './core/tools/handles.ts';
+import { createOrchestratorRouter } from './server/orchestrator.ts';
 import { runWorkflow } from './core/runner.ts';
 import { formatSseEvent } from './core/events.ts';
 import type { WorkflowDef } from './core/types.ts';
@@ -91,6 +92,21 @@ if (process.env.STURM_TOOLS_BOOT === 'skip') {
 } else {
   const tools = await ToolContainer.bootAll();
   console.log(`  Tool-Container: ${tools.size} Anwendung(en) initialisiert`);
+}
+
+// Orchestrator: Gemma-4 Steuerassistent fuer steuerfall-est. Wird hier
+// post-boot konfiguriert, weil wir die vLLM-URL aus dem LlmHandle.meta
+// nehmen (kein direkter env-read).
+function resolveOrchestratorVllm(): { baseUrl: string; model: string } | null {
+  const container = getToolContainer('steuerfall-est');
+  if (!container) return null;
+  try {
+    const llm = container.getByRole<LlmHandle>('extraction-llm');
+    const baseUrl = llm.meta.baseUrl ?? 'http://localhost:11435';
+    return { baseUrl, model: llm.meta.model };
+  } catch {
+    return null;
+  }
 }
 // Snapshot built-in IDs BEFORE user-workflows get registered. The workflows-user
 // router uses this to decide what's a "true" built-in vs what's user-owned.
@@ -244,6 +260,27 @@ app.get('/api/applications/:id', (req, res) => {
 
 // Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
 app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
+
+// ── Orchestrator: Gemma-4 Steuerassistent ──────────────────────────────
+// SSE-Stream-Surface unter /api/orchestrator + Vanilla-Chat-UI unter
+// /orchestrator. Wird nur registriert, wenn der ToolContainer fuer
+// steuerfall-est einen erreichbaren Extraction-LLM (vLLM/Gemma) bietet.
+{
+  const vllm = resolveOrchestratorVllm();
+  if (vllm) {
+    app.use('/api/orchestrator', express.json(), createOrchestratorRouter({
+      appId: 'steuerfall-est',
+      vllmUrl: vllm.baseUrl,
+      modelName: vllm.model,
+      applicationsDir: APPLICATIONS_DIR,
+      runsDir: RUNS_DIR,
+      rootCwd: ROOT,
+    }));
+    console.log(`  Orchestrator:   /api/orchestrator → ${vllm.baseUrl} (${vllm.model})`);
+  } else {
+    console.log('  Orchestrator:   nicht aktiviert (kein extraction-llm fuer steuerfall-est)');
+  }
+}
 
 // ── GET /api/applications/:appId/instances/:caseId/result ──────────────
 // Liefert das Aggregat des letzten extraction-Runs eines Falls:
@@ -1614,6 +1651,8 @@ app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designe
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
 app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
+app.get('/orchestrator', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
+app.get('/orchestrator.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
 app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
 app.get('/ctx-demo.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-demo.html')));
 app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
