@@ -589,9 +589,39 @@ export const phase3VisionFillStage = defineStage<
           droppedRepeat++;
         }
       }
-      if (droppedSelfEqual > 0 || droppedRepeat > 0) {
+      // 7c. drop "model rambled the same value" — when one value appears
+      // for ≥5 eCodes regardless of anlage. R13 showed batch-1 starting
+      // strong then degenerating into {"E0205609":"104","E0205610":"104",...}
+      // for 60+ eCodes after exhausting attention around 1000 completion
+      // tokens. The (value+drucktext) bucket above misses this because
+      // drucktexts differ.
+      const valueOnlyBuckets = new Map<string, string[]>();
+      for (const [eCode, hit] of merged) {
+        const v = hit.value.trim();
+        if (!v) continue;
+        let arr = valueOnlyBuckets.get(v);
+        if (!arr) {
+          arr = [];
+          valueOnlyBuckets.set(v, arr);
+        }
+        arr.push(eCode);
+      }
+      let droppedValueRepeat = 0;
+      for (const [v, eCodes] of valueOnlyBuckets) {
+        if (eCodes.length < 5) continue;
+        for (const ec of eCodes) {
+          merged.delete(ec);
+          droppedValueRepeat++;
+        }
+        ctx.emit('vision_value_rambling_dropped', {
+          value: v,
+          eCodes: eCodes.length,
+        });
+      }
+      if (droppedSelfEqual > 0 || droppedRepeat > 0 || droppedValueRepeat > 0) {
         ctx.emit('vision_wiso_rejected', {
           droppedSelfEqual,
+          droppedValueRepeat,
           droppedRepeat,
         });
       }
