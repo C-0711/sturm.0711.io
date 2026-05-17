@@ -35,15 +35,19 @@ export interface CommitAndAnchorOutput {
   anchor: {
     container_id: string;
     tag: string;
-    commit_hash: string;
+    /** Git commit SHA from gitchain — null when anchor was skipped (best-effort failure). */
+    commit_hash: string | null;
     network: string;
     tx_hash: string | null;
     block_number: number | null;
     anchored_at: string;
+    /** Set when the gitchain anchor was skipped due to registry/DB unavailability. */
+    anchor_warning?: string | null;
   };
   /** Convenience aliases used by downstream consumers (P8+). */
   containerId: string;
-  commitSha: string;
+  /** null when gitchain anchor was best-effort-skipped. */
+  commitSha: string | null;
   merkleRoot: string;
   sealedAt: string;
 }
@@ -106,45 +110,57 @@ export const commitAndAnchorStage = defineStage<
 
     const containerId = `0711:${containerType}:${containerNamespace}:${caseId}`;
 
-    // --- gitchain: ensure container, init workdir as git checkout ---
-    const gc = getGitChainClient();
-
-    // createContainer is idempotent (returns existing on conflict).
-    await gc.createContainer({
-      type: containerType,
-      namespace: containerNamespace,
-      identifier: caseId,
-      display_name: `Steuerfall ${appId}/${caseId}`,
-      description: `Versiegelter Steuerfall (${appId})`,
-      visibility: 'private',
-      relations: { appId, caseId },
-    });
-    await gc.cloneOrInit(containerId, wsAbs);
-
-    // Materialize master.json onto disk so gitchain can commit it. This is
-    // the one legitimate non-artifact disk write — the gitchain checkout IS
-    // the source of truth, ctx.artifacts is the run-scoped audit copy.
+    // Materialize master.json onto disk first (independent of gitchain).
+    // This is the one legitimate non-artifact disk write — the gitchain
+    // checkout IS the source of truth, ctx.artifacts is the run-scoped
+    // audit copy.
     const masterPath = path.join(sealDir, 'master.json');
     await fs.writeFile(masterPath, JSON.stringify(master, null, 2), 'utf-8');
 
-    const authorName = process.env['STURM_GIT_AUTHOR_NAME'] ?? 'sturm-sealer'; // lint-no-env: allow — git author identity is process-level, not a tool binding
-    const authorEmail = process.env['STURM_GIT_AUTHOR_EMAIL'] ?? 'seal@0711.io'; // lint-no-env: allow — git author identity is process-level, not a tool binding
-    const commitSha = await gc.commitAndPush(
-      wsAbs,
-      `seal: ${appId}/${caseId} merkle=${merkleRoot.slice(0, 12)}`,
-      { name: authorName, email: authorEmail },
-    );
-
     const sealedAt = new Date().toISOString();
     const anchorTag = `${tag}-${sealedAt.replace(/[:.]/g, '-')}`;
+    let commitSha: string | null = null;
+    let anchorWarning: string | null = null;
 
-    await gc.recordAnchor({
-      container_id: containerId,
-      tag: anchorTag,
-      commit_hash: commitSha,
-      network,
-      // tx_hash / block_number remain undefined until on-chain emit lands.
-    });
+    // --- gitchain: best-effort. If the registry DB / API is unreachable,
+    // log a warning + complete the seal locally. The seal master is still
+    // signed + on disk; downstream export/audit can proceed. A reconciler
+    // (future) can re-attempt the gitchain anchor once the DB is back.
+    try {
+      const gc = getGitChainClient();
+      // createContainer is idempotent (returns existing on conflict).
+      await gc.createContainer({
+        type: containerType,
+        namespace: containerNamespace,
+        identifier: caseId,
+        display_name: `Steuerfall ${appId}/${caseId}`,
+        description: `Versiegelter Steuerfall (${appId})`,
+        visibility: 'private',
+        relations: { appId, caseId },
+      });
+      await gc.cloneOrInit(containerId, wsAbs);
+      const authorName = process.env['STURM_GIT_AUTHOR_NAME'] ?? 'sturm-sealer'; // lint-no-env: allow — git author identity is process-level, not a tool binding
+      const authorEmail = process.env['STURM_GIT_AUTHOR_EMAIL'] ?? 'seal@0711.io'; // lint-no-env: allow — git author identity is process-level, not a tool binding
+      commitSha = await gc.commitAndPush(
+        wsAbs,
+        `seal: ${appId}/${caseId} merkle=${merkleRoot.slice(0, 12)}`,
+        { name: authorName, email: authorEmail },
+      );
+      await gc.recordAnchor({
+        container_id: containerId,
+        tag: anchorTag,
+        commit_hash: commitSha,
+        network,
+        // tx_hash / block_number remain undefined until on-chain emit lands.
+      });
+    } catch (err) {
+      anchorWarning = err instanceof Error ? err.message : String(err);
+      ctx.logger.warn(
+        `gitchain anchor failed (best-effort): ${anchorWarning}. ` +
+          `Seal master.json is on disk; downstream export can proceed.`,
+      );
+      ctx.emit('anchor_skipped', { reason: anchorWarning, containerId });
+    }
 
     const anchor: CommitAndAnchorOutput['anchor'] = {
       container_id: containerId,
@@ -154,6 +170,7 @@ export const commitAndAnchorStage = defineStage<
       tx_hash: null,
       block_number: null,
       anchored_at: sealedAt,
+      anchor_warning: anchorWarning,
     };
 
     // Audit-trail artefacts. Pure ctx.artifacts.write — no direct fs here.
