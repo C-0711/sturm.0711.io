@@ -1322,19 +1322,17 @@ export function buildElsterV6VisionWorkflow() {
       phase3VisionFill: {
         uses: 'elster-v6/phase3-vision-fill',
         config: {
-          // 2026-05-17: tuned after first prod run.
-          // pagesPerCall=2 (was 4): 4-page calls hit 60s timeout on Stricker;
-          //   2-page calls take ~30-40s comfortably.
-          // perCallTimeoutMs=180_000 (was 60_000): give the model headroom.
-          // maxFieldsPerCall=250 (was 80): let the model see ALL pflicht fields
-          //   so we don't drop critical eCodes (Vorsorge, Entfernungspauschale).
-          pagesPerCall: 2,
-          callConcurrency: 3,            // 3 parallel × 2 pages = 6 pages of Stricker
+          // 2026-05-17 v3 tuning after Stricker retry:
+          // Vision inference dominated wallclock (125s for 2 pages @ 200dpi).
+          // Lower DPI → smaller image tokens → faster inference.
+          // Also: missing-only field-map now keeps per-call payload small.
+          pagesPerCall: 3,               // 6-page Stricker → 2 calls
+          callConcurrency: 3,            // both batches parallel (+ headroom)
           rejectWisoPlaceholders: true,
           fallbackToV5: true,
-          maxTokensPerCall: 3500,        // larger field map → larger output
-          perCallTimeoutMs: 180_000,
-          renderDpi: 200,
+          maxTokensPerCall: 3500,
+          perCallTimeoutMs: 240_000,     // 240s — vision can be slow on dense forms
+          renderDpi: 150,                // 200→150 cuts image-token count ~44%
           maxFieldsPerCall: 250,
           schemaName: 'elster_v6_extract',
         },
