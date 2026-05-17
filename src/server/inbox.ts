@@ -160,7 +160,11 @@ export async function recordDocumentRunCompletion(
   rootCwd: string,
   instance: { workspacePath: string; appId: string; caseId: string },
   runId: string,
-  details: { anlagen?: string[]; fieldsExtracted?: number },
+  details: {
+    anlagen?: string[];
+    fieldsExtracted?: number;
+    trustBreakdown?: { high: number; medium: number; suspicious: number; low: number };
+  },
 ): Promise<void> {
   const lockKey = `${instance.appId}|${instance.caseId}`;
   await withCaseLock(lockKey, async () => {
@@ -169,6 +173,25 @@ export async function recordDocumentRunCompletion(
     if (!doc) return;
     if (details.anlagen) doc.anlagen = details.anlagen;
     if (typeof details.fieldsExtracted === 'number') doc.fieldsExtracted = details.fieldsExtracted;
+    if (details.trustBreakdown) doc.trustBreakdown = details.trustBreakdown;
     await writeManifest(rootCwd, instance, m);
   });
+}
+
+/**
+ * Berechnet die Trust-Verteilung (high/medium/suspicious/low) aus einem
+ * canonical_layer-Objekt. Felder ohne `trust` werden als `medium`
+ * gezählt — das matcht das Default-Verhalten der Stages, die `trust` nur
+ * für sicher klassifizierte Werte setzen.
+ */
+export function computeTrustBreakdown(
+  layer: Record<string, unknown> | null | undefined,
+): { high: number; medium: number; suspicious: number; low: number } {
+  const out = { high: 0, medium: 0, suspicious: 0, low: 0 };
+  if (!layer || typeof layer !== 'object') return out;
+  for (const v of Object.values(layer)) {
+    const t = ((v as { trust?: string } | null | undefined)?.trust ?? 'medium') as keyof typeof out;
+    if (t in out) out[t]++;
+  }
+  return out;
 }

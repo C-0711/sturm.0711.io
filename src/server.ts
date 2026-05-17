@@ -39,7 +39,13 @@ const syncWorkspaceContainer = async (_containerId: string, _workspacePath: stri
 };
 const promoteWorkspaceToTaxCase = async (..._args: unknown[]): Promise<null> => null;
 import { computeWorkflowStats } from './server/workflow-stats.ts';
-import { persistUploadToInbox, recordDocumentRunCompletion } from './server/inbox.ts';
+import {
+  persistUploadToInbox,
+  recordDocumentRunCompletion,
+  computeTrustBreakdown,
+  readManifest,
+  writeManifest,
+} from './server/inbox.ts';
 import {
   applyOverrides,
   deleteStageOverride,
@@ -319,6 +325,81 @@ app.get(
   },
 );
 
+// ── GET /api/applications/:appId/instances/:caseId/recompute-quality ───
+// Backfill für ältere Manifests: läuft pro Dokument im Manifest, liest
+// das canonical_layer des zugehörigen runId aus dem extraction-Workflow
+// und schreibt die Trust-Verteilung (high/medium/suspicious/low) zurück
+// ins Manifest. Re-Runt KEINEN Workflow — nur lesen + Manifest-Update.
+// Idempotent: mehrfaches Aufrufen erzeugt dieselben Counts.
+app.get(
+  '/api/applications/:appId/instances/:caseId/recompute-quality',
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+
+    const manifest = await readManifest(ROOT, inst);
+    let updated = 0;
+    let missing = 0;
+    for (const doc of manifest.documents) {
+      if (!doc.runId) { missing++; continue; }
+      const runDir = path.join(RUNS_DIR, extractionId, doc.runId);
+      // Bevorzugt phase6BmfRechner/canonical_layer.json (rich), fallback
+      // auf phase5Merge/canonical_layer.json. Manche Runs schreiben das
+      // canonical_layer auch als Top-Level-Artefakt (canonical_layer.json
+      // im Run-Root) — den nutzen wir als drittes Fallback.
+      const candidates = [
+        path.join(runDir, 'phase6BmfRechner', 'canonical_layer.json'),
+        path.join(runDir, 'phase5Merge', 'canonical_layer.json'),
+        path.join(runDir, 'canonical_layer.json'),
+      ];
+      let layer: Record<string, unknown> | null = null;
+      let fieldsExtracted: number | undefined;
+      for (const f of candidates) {
+        try {
+          const raw = await fs.promises.readFile(f, 'utf-8');
+          const parsed = JSON.parse(raw) as unknown;
+          // Wenn die Datei selbst die Karte ist (eCode → Feld), nimm sie
+          // direkt — sonst greife auf `.canonical_layer` zu.
+          const obj = (parsed && typeof parsed === 'object')
+            ? (parsed as Record<string, unknown>)
+            : null;
+          if (obj && 'canonical_layer' in obj && obj.canonical_layer && typeof obj.canonical_layer === 'object') {
+            layer = obj.canonical_layer as Record<string, unknown>;
+          } else if (obj) {
+            layer = obj;
+          }
+          if (layer && Object.keys(layer).length > 0) break;
+          layer = null;
+        } catch { /* try next */ }
+      }
+      if (!layer) { missing++; continue; }
+      fieldsExtracted = Object.keys(layer).length;
+      doc.trustBreakdown = computeTrustBreakdown(layer);
+      if (typeof doc.fieldsExtracted !== 'number') doc.fieldsExtracted = fieldsExtracted;
+      updated++;
+    }
+    await writeManifest(ROOT, inst, manifest);
+    // Instanz-Datei spiegelt Manifest — Documents im Instance-JSON
+    // ebenfalls aktualisieren, damit der nächste GET die Counts sieht.
+    inst.documents = manifest.documents;
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+    res.json({
+      caseId,
+      appId,
+      workflowId: extractionId,
+      documentsTotal: manifest.documents.length,
+      documentsUpdated: updated,
+      documentsMissingArtifact: missing,
+      instance: inst,
+    });
+  },
+);
+
 // ── POST /api/applications/:appId/instances/:caseId/upload ─────────────
 // Multipart file upload triggert den extraction-Workflow der Anwendung
 // (z.B. elster-v5_2-rag). SSE-Stream wie /api/workflows/:id/run. Run-ID
@@ -393,6 +474,7 @@ app.post(
         await recordDocumentRunCompletion(ROOT, inst, run.runId, {
           anlagen: klass?.erkannte_anlagen,
           fieldsExtracted: layer ? Object.keys(layer).length : 0,
+          trustBreakdown: computeTrustBreakdown(layer),
         });
       }
     } catch { /* errors emitted as events */ }
@@ -494,6 +576,7 @@ app.post(
           await recordDocumentRunCompletion(ROOT, inst, run.runId, {
             anlagen: klass?.erkannte_anlagen,
             fieldsExtracted: layer ? Object.keys(layer).length : 0,
+            trustBreakdown: computeTrustBreakdown(layer),
           });
           res.write(formatSseEvent({
             name: 'doc_done',
