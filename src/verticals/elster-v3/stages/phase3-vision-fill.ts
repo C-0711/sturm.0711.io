@@ -186,6 +186,9 @@ export const phase3VisionFillStage = defineStage<
   async run(input, ctx) {
     const tStart = Date.now();
     const cfg = ctx.config ?? {};
+    // Cap of 4 is the vLLM --limit-mm-per-prompt {image: 4} runtime limit.
+    // Going higher would cause vLLM to reject the request. To fit more pages
+    // per call, either restart vLLM with a higher cap, or accept the batch.
     const pagesPerCall = Math.max(1, Math.min(4, cfg.pagesPerCall ?? 4));
     const callConcurrency = Math.max(1, cfg.callConcurrency ?? 2);
     const rejectWiso = cfg.rejectWisoPlaceholders ?? true;

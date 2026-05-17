@@ -1336,13 +1336,14 @@ export function buildElsterV6VisionWorkflow() {
           callConcurrency: 1,            // single call, no concurrency needed
           rejectWisoPlaceholders: true,
           fallbackToV5: true,
-          maxTokensPerCall: 12000,       // r9 only got ~10 fields filled → 6k was the cap
+          // r9 (6k tokens, 400 cap) worked: VOR=5 hits, ESt1A=6, Nachzahlung €4143.
+          // r10 (12k tokens, 800 cap) regressed: batch 0 failed → 1 hit total.
+          // Reverting to r9 settings. The remaining gap is Entfernungspauschale
+          // (E0203504) which vision needs to extract — solved by next iteration.
+          maxTokensPerCall: 6000,
           perCallTimeoutMs: 240_000,
           renderDpi: 150,
-          // R8 lesson: 400 cap + alphabetical-anlage sort dropped VOR (last)
-          // and most of SA from the field map → vision was never asked about
-          // Vorsorgeaufwand. Bump to 800 so the full narrowed catalog
-          // (~500-700 fields after phase1-missing filter) fits in one call.
+          // r9 worked with 800 cap (VOR=5 hits). r8 with 400 dropped VOR/SA.
           maxFieldsPerCall: 800,
           schemaName: 'elster_v6_extract',
         },
