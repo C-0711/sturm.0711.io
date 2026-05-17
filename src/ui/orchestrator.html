@@ -423,7 +423,9 @@
         const chipsByName = []; // FIFO: matches tool_call→tool_result pairs
 
         try {
-          const res = await fetch('/api/orchestrator/chat', {
+          // Use /chat-sync (non-streaming JSON) — more reliable in this env.
+          // Streaming /chat still exists but hangs in some helmet+SSE combos.
+          const res = await fetch('/api/orchestrator/chat-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -434,21 +436,19 @@
             signal: ac.signal,
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = '';
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            // SSE: events separated by blank line
-            let sepIdx;
-            while ((sepIdx = buf.indexOf('\n\n')) >= 0) {
-              const block = buf.slice(0, sepIdx);
-              buf = buf.slice(sepIdx + 2);
-              handleSseBlock(block);
+          const result = await res.json();
+          if (result.mode) statusLine.textContent = `Modus: ${result.mode}`;
+          // Render each tool step as a chip with its result, then the final reply.
+          for (const step of result.steps || []) {
+            if (step.kind === 'tool_call') {
+              const chip = bubble.appendToolChip(step.name, step.args || {}, null);
+              chip.fulfill(step.result, step.ms || 0);
             }
           }
+          if (result.reply) {
+            bubble.appendToken(result.reply);
+          }
+          statusLine.textContent = `Fertig (${result.iterations} Iteration(en), ${result.totalMs} ms)`;
         } catch (e) {
           if (e.name !== 'AbortError') {
             bubble.appendToken(`\n[Fehler: ${e.message}]`);
