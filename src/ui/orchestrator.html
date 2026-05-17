@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>STURM Steuerassistent</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <style>
+    body {
+      margin: 0;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .orch-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg-secondary);
+      gap: 14px;
+    }
+    .orch-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .orch-title-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 6px var(--color-success);
+    }
+    .orch-case-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--color-text-secondary);
+    }
+    .orch-case-picker select {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      min-width: 240px;
+      font-family: inherit;
+    }
+    .orch-case-picker select:focus { outline: 1px solid var(--color-accent); outline-offset: 0; }
+
+    .orch-chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-width: 920px;
+      width: 100%;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+    .orch-empty {
+      color: var(--color-text-tertiary);
+      font-size: 13px;
+      text-align: center;
+      margin-top: 60px;
+      line-height: 1.6;
+    }
+    .orch-empty kbd {
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .orch-empty .hint {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      max-width: 560px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .orch-empty .hint button {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .orch-empty .hint button:hover {
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
+    }
+
+    .orch-msg {
+      display: flex;
+      gap: 10px;
+      max-width: 100%;
+    }
+    .orch-msg.user { justify-content: flex-end; }
+    .orch-bubble {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      max-width: 78%;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .orch-msg.user .orch-bubble {
+      background: var(--color-accent);
+      color: var(--color-bg);
+      border-bottom-right-radius: 4px;
+    }
+    .orch-msg.assistant .orch-bubble {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-bottom-left-radius: 4px;
+    }
+    .orch-msg .orch-bubble .cursor {
+      display: inline-block;
+      width: 6px;
+      height: 14px;
+      background: var(--color-accent);
+      vertical-align: text-bottom;
+      animation: blink 0.9s steps(2, start) infinite;
+      margin-left: 2px;
+    }
+    @keyframes blink { to { visibility: hidden; } }
+
+    .orch-tool-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      margin: 4px 4px 4px 0;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      background: var(--color-thinking-bg);
+      border: 1px solid var(--color-thinking-border);
+      border-radius: 14px;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .orch-tool-chip.success { color: var(--color-success); border-color: var(--color-success); }
+    .orch-tool-chip.error   { color: var(--color-danger);  border-color: var(--color-danger); }
+    .orch-tool-chip:hover { background: var(--color-bg-hover); }
+    .orch-tool-detail {
+      margin: 4px 0 8px;
+      padding: 8px 10px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .orch-tool-detail[hidden] { display: none; }
+
+    .orch-input-row {
+      border-top: 1px solid var(--color-border);
+      padding: 14px 20px 18px;
+      background: var(--color-bg-secondary);
+    }
+    .orch-input-wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .orch-input {
+      flex: 1;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--color-text-primary);
+      font: inherit;
+      font-size: 13.5px;
+      line-height: 1.5;
+      resize: none;
+      min-height: 40px;
+      max-height: 200px;
+      box-sizing: border-box;
+    }
+    .orch-input:focus { outline: 1px solid var(--color-accent); border-color: var(--color-accent); }
+    .orch-send {
+      background: var(--color-accent);
+      color: var(--color-bg);
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      height: 40px;
+    }
+    .orch-send:hover { filter: brightness(1.07); }
+    .orch-send:disabled {
+      background: var(--color-bg-hover);
+      color: var(--color-text-tertiary);
+      cursor: not-allowed;
+      filter: none;
+    }
+    .orch-abort {
+      background: transparent;
+      color: var(--color-danger);
+      border: 1px solid var(--color-danger);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      height: 40px;
+    }
+    .orch-status {
+      max-width: 920px;
+      margin: 6px auto 0;
+      font-size: 11.5px;
+      color: var(--color-text-tertiary);
+      text-align: right;
+      min-height: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header class="orch-header">
+    <div class="orch-title">
+      <span class="orch-title-dot" id="orchDot" title="bereit"></span>
+      <span>STURM-Steuerassistent</span>
+      <span style="color: var(--color-text-tertiary); font-weight: 400; font-size: 12px;">· steuerfall-est</span>
+    </div>
+    <div class="orch-case-picker">
+      <label for="caseSelect">Fall:</label>
+      <select id="caseSelect">
+        <option value="">— kein Fall ausgewaehlt —</option>
+      </select>
+    </div>
+  </header>
+
+  <main class="orch-chat" id="chatLog">
+    <div class="orch-empty" id="emptyState">
+      Frag mich etwas zu einem deiner Steuerfaelle. <kbd>Cmd</kbd>+<kbd>Enter</kbd> sendet.
+      <div class="hint">
+        <button data-prompt="Liste alle offenen Faelle.">Liste alle offenen Faelle</button>
+        <button data-prompt="Was ist die Auswertung des ausgewaehlten Falls?">Auswertung anzeigen</button>
+        <button data-prompt="Welche Pflichtfelder fehlen noch?">Pflichtluecken pruefen</button>
+        <button data-prompt="Wie ist der Status der gebundenen Werkzeuge?">Tool-Health pruefen</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="orch-input-row">
+    <div class="orch-input-wrap">
+      <textarea
+        class="orch-input"
+        id="userInput"
+        placeholder="Frag den STURM-Steuerassistent…"
+        rows="1"
+      ></textarea>
+      <button class="orch-send" id="sendBtn">Senden</button>
+      <button class="orch-abort" id="abortBtn" hidden>Abbrechen</button>
+    </div>
+    <div class="orch-status" id="statusLine"></div>
+  </div>
+
+  <script>
+    (function () {
+      const APP_ID = 'steuerfall-est';
+      const chatLog = document.getElementById('chatLog');
+      const emptyState = document.getElementById('emptyState');
+      const userInput = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const abortBtn = document.getElementById('abortBtn');
+      const caseSelect = document.getElementById('caseSelect');
+      const statusLine = document.getElementById('statusLine');
+      const dot = document.getElementById('orchDot');
+
+      /** Conversation history sent to the server with each request. */
+      const history = [];
+      let currentAbort = null;
+
+      // ── Case-Picker laden ───────────────────────────────────────────
+      async function loadCases() {
+        try {
+          const r = await fetch(`/api/applications/${APP_ID}/instances`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const items = await r.json();
+          caseSelect.innerHTML = '<option value="">— kein Fall ausgewaehlt —</option>';
+          for (const inst of items) {
+            const opt = document.createElement('option');
+            opt.value = inst.caseId;
+            const yr = inst.veranlagungsjahr ? ` · ${inst.veranlagungsjahr}` : '';
+            opt.textContent = `${inst.displayName}${yr} (${inst.status})`;
+            caseSelect.appendChild(opt);
+          }
+          // Auto-select erster Fall
+          if (items.length > 0 && !caseSelect.value) caseSelect.value = items[0].caseId;
+        } catch (e) {
+          statusLine.textContent = `Faelle konnten nicht geladen werden: ${e.message}`;
+        }
+      }
+
+      // ── Bubble-Helpers ──────────────────────────────────────────────
+      function ensureNotEmpty() {
+        if (emptyState && emptyState.parentNode) emptyState.remove();
+      }
+
+      function appendUserBubble(text) {
+        ensureNotEmpty();
+        const wrap = document.createElement('div');
+        wrap.className = 'orch-msg user';
+        const bubble = document.createElement('div');
+        bubble.className = 'orch-bubble';
+        bubble.textContent = text;
+        wrap.appendChild(bubble);
+        chatLog.appendChild(wrap);
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      function startAssistantBubble() {
+        ensureNotEmpty();
+        const wrap = document.createElement('div');
+        wrap.className = 'orch-msg assistant';
+        const bubble = document.createElement('div');
+        bubble.className = 'orch-bubble';
+        const textSpan = document.createElement('span');
+        textSpan.className = 'text';
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        bubble.appendChild(textSpan);
+        bubble.appendChild(cursor);
+        wrap.appendChild(bubble);
+        chatLog.appendChild(wrap);
+        chatLog.scrollTop = chatLog.scrollHeight;
+        return {
+          appendToken(delta) {
+            textSpan.textContent += delta;
+            chatLog.scrollTop = chatLog.scrollHeight;
+          },
+          appendToolChip(name, args, resultPromise) {
+            const chip = document.createElement('button');
+            chip.className = 'orch-tool-chip';
+            const argPreview = Object.keys(args || {}).length > 0
+              ? Object.entries(args).slice(0, 2).map(([k, v]) => `${k}=${shortJson(v)}`).join(', ')
+              : '';
+            chip.textContent = `▶ ${name}(${argPreview})`;
+            const detail = document.createElement('pre');
+            detail.className = 'orch-tool-detail';
+            detail.hidden = true;
+            detail.textContent = 'laeuft…';
+            chip.addEventListener('click', () => { detail.hidden = !detail.hidden; });
+            // Insert before cursor
+            bubble.insertBefore(chip, cursor);
+            bubble.insertBefore(detail, cursor);
+            return {
+              fulfill(result, durationMs) {
+                const ok = !(result && typeof result === 'object' && 'error' in result);
+                chip.classList.add(ok ? 'success' : 'error');
+                chip.textContent = `${ok ? '✓' : '✕'} ${name}(${argPreview}) · ${durationMs}ms`;
+                try { detail.textContent = JSON.stringify(result, null, 2); }
+                catch { detail.textContent = String(result); }
+              },
+            };
+          },
+          finalize() {
+            cursor.remove();
+            return textSpan.textContent;
+          },
+        };
+      }
+
+      function shortJson(v) {
+        if (v == null) return 'null';
+        if (typeof v === 'string') return v.length > 24 ? `"${v.slice(0, 24)}…"` : `"${v}"`;
+        if (typeof v === 'object') return Array.isArray(v) ? '[…]' : '{…}';
+        return String(v);
+      }
+
+      // ── Send-Loop ───────────────────────────────────────────────────
+      async function send(text) {
+        if (currentAbort) return;
+        text = text.trim();
+        if (!text) return;
+        appendUserBubble(text);
+        history.push({ role: 'user', content: text });
+        userInput.value = '';
+        userInput.style.height = '40px';
+        sendBtn.disabled = true;
+        abortBtn.hidden = false;
+        dot.style.background = 'var(--color-amber)';
+        statusLine.textContent = 'Assistent denkt nach…';
+
+        const bubble = startAssistantBubble();
+        const ac = new AbortController();
+        currentAbort = ac;
+        const chipsByName = []; // FIFO: matches tool_call→tool_result pairs
+
+        try {
+          const res = await fetch('/api/orchestrator/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              caseId: caseSelect.value || undefined,
+              appId: APP_ID,
+              messages: history,
+            }),
+            signal: ac.signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            // SSE: events separated by blank line
+            let sepIdx;
+            while ((sepIdx = buf.indexOf('\n\n')) >= 0) {
+              const block = buf.slice(0, sepIdx);
+              buf = buf.slice(sepIdx + 2);
+              handleSseBlock(block);
+            }
+          }
+        } catch (e) {
+          if (e.name !== 'AbortError') {
+            bubble.appendToken(`\n[Fehler: ${e.message}]`);
+          }
+        } finally {
+          const finalText = bubble.finalize();
+          if (finalText && finalText.length > 0) {
+            history.push({ role: 'assistant', content: finalText });
+          }
+          currentAbort = null;
+          sendBtn.disabled = false;
+          abortBtn.hidden = true;
+          dot.style.background = 'var(--color-success)';
+          statusLine.textContent = '';
+        }
+
+        function handleSseBlock(block) {
+          let eventName = 'message';
+          let data = '';
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) data += line.slice(5).trim();
+          }
+          if (!data) return;
+          let payload;
+          try { payload = JSON.parse(data); } catch { return; }
+          if (eventName === 'token') {
+            bubble.appendToken(payload.delta || '');
+          } else if (eventName === 'tool_call') {
+            const chip = bubble.appendToolChip(payload.name, payload.args, null);
+            chipsByName.push({ name: payload.name, chip, started: Date.now() });
+          } else if (eventName === 'tool_result') {
+            const idx = chipsByName.findIndex((c) => c.name === payload.name && !c.fulfilled);
+            const entry = idx >= 0 ? chipsByName[idx] : null;
+            if (entry) {
+              entry.chip.fulfill(payload.result, payload.durationMs ?? (Date.now() - entry.started));
+              entry.fulfilled = true;
+            }
+          } else if (eventName === 'mode') {
+            statusLine.textContent = `Modus: ${payload.mode}`;
+          } else if (eventName === 'done') {
+            statusLine.textContent = `Fertig (${payload.finishReason}, ${payload.totalMs} ms)`;
+          } else if (eventName === 'error') {
+            bubble.appendToken(`\n[Fehler: ${payload.message}]`);
+          }
+        }
+      }
+
+      // ── Event-Wiring ────────────────────────────────────────────────
+      sendBtn.addEventListener('click', () => send(userInput.value));
+      abortBtn.addEventListener('click', () => { if (currentAbort) currentAbort.abort(); });
+      userInput.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          send(userInput.value);
+        }
+      });
+      userInput.addEventListener('input', () => {
+        userInput.style.height = '40px';
+        userInput.style.height = Math.min(200, userInput.scrollHeight) + 'px';
+      });
+      if (emptyState) {
+        emptyState.addEventListener('click', (e) => {
+          const t = e.target.closest('button[data-prompt]');
+          if (t) { userInput.value = t.getAttribute('data-prompt'); send(userInput.value); }
+        });
+      }
+
+      // ── Init ────────────────────────────────────────────────────────
+      loadCases();
+    })();
+  </script>
+</body>
+</html>
