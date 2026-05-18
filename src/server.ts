@@ -59,6 +59,7 @@ import {
   writeStageOverride,
 } from './core/config-overrides.ts';
 import { startUploadSweep } from './server/upload-sweep.ts';
+import { registerVorjahresUploadEndpoint } from './server/vorjahres-upload-handler.ts';
 import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
 import {
   getSchemaIndex,
@@ -825,6 +826,17 @@ app.post(
     res.end();
   },
 );
+
+// ── POST /api/applications/:appId/instances/:caseId/vorjahres-upload ───
+// Mandanten-Onboarding via Vorjahres-Erklärung — triggert den Workflow
+// `vorjahres-kontext-extract` und persistiert den CaseContext am Case.
+registerVorjahresUploadEndpoint(app, {
+  rootDir: ROOT,
+  runsDir: RUNS_DIR,
+  uploadsDir: UPLOADS_DIR,
+  applicationsDir: APPLICATIONS_DIR,
+  requireBearerToken,
+});
 
 // ── DELETE /api/applications/:appId/instances/:caseId/documents/:runId ─
 // Löscht einen Beleg aus dem Fall: Manifest-Eintrag, Inbox-Datei,

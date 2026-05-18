@@ -23,6 +23,7 @@ import {
   buildElsterV52RagEnsembleWorkflow,
   buildElsterV6VisionWorkflow,
   buildElsterV4StrickerWorkflow,
+  buildVorjahresKontextWorkflow,
 } from '../verticals/elster-v3/index.ts';
 import { registerStage } from '../core/registry.ts';
 import { phase3VisionFillStage } from '../verticals/elster-v3/stages/phase3-vision-fill.ts';
@@ -52,6 +53,8 @@ export function registerAllWorkflows(): void {
   registerStage(phase3VisionFillStage);
   registerWorkflow(buildElsterV6VisionWorkflow());
   registerWorkflow(buildElsterV4StrickerWorkflow());
+  // Vorjahres-Kontext-Workflow (Slice 1a Mandanten-Onboarding via Vorjahres-Erklärung)
+  registerWorkflow(buildVorjahresKontextWorkflow());
   registerElsterV3MultiStages();
   registerWorkflow(buildElsterV3MultiWorkflowWithSchema());
   registerWorkflow(buildOcrShootoutWorkflow());

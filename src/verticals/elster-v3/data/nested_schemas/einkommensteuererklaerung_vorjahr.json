@@ -1,0 +1,330 @@
+{
+  "name": "einkommensteuererklaerung_vorjahr_extraction",
+  "doc_class": "einkommensteuererklaerung_vorjahr",
+  "description": "Strict json_schema für komplette Vorjahres-Einkommensteuererklärung (z.B. 2023). Wird genutzt, um aus dem PDF-Export einer Vorjahres-Erklärung den Mandanten-Kontext zu rekonstruieren: erwartete Anlagen, Veranlagungsart (Splittingtarif!), Daueranschnitte (Pendlerpauschale, Werbungskosten, KV-Beiträge). Engführung der Folge-Pipeline (felderNarrow → phase3 → phase5) auf nur die tatsächlich relevanten eCodes pro Anlage statt 250 Stück blind durch das LLM zu jagen.",
+  "anlage": "ESt1A+",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "hauptvordruck": {
+        "type": "object",
+        "description": "ESt1A Hauptvordruck — Stammdaten beider Personen, Adresse, Bankverbindung, Veranlagungsart Z.19, Religion.",
+        "additionalProperties": false,
+        "properties": {
+          "steuerjahr": { "type": "integer", "description": "Veranlagungsjahr der Vorjahres-Erklärung (z.B. 2023)." },
+          "veranlagungsart": {
+            "type": "string",
+            "enum": ["zusammenveranlagung", "einzelveranlagung", "ledig", "getrennt", "verwitwet_splitting"],
+            "description": "Veranlagungsart aus ESt1A Z.19 — Zusammenveranlagung (Ehegatten-Splitting) vs Einzelveranlagung. Triggert in der Folge-Pipeline den Splittingtarif im BMF-Rechner."
+          },
+          "person_a": {
+            "type": "object",
+            "description": "Steuerpflichtige Hauptperson (ESt1A Z.4-12).",
+            "additionalProperties": false,
+            "properties": {
+              "familienname": { "type": "string", "description": "Familienname — ESt1A E0100201." },
+              "vorname": { "type": "string", "description": "Vorname — ESt1A E0100301." },
+              "geburtsdatum": { "type": "string", "description": "Geburtsdatum DD.MM.YYYY — ESt1A E0100702." },
+              "idnr": { "type": "string", "description": "11-stellige Steuer-Identifikationsnummer — ESt1A E0100081." },
+              "religion": {
+                "type": "string",
+                "enum": ["ev", "rk", "ak", "is", "fr", "fb", "lt", "rf", "vd", "--", ""],
+                "description": "Konfessionsschlüssel — ESt1A E0100402."
+              },
+              "beruf": { "type": "string", "description": "Ausgeübter Beruf — ESt1A E0100802." }
+            },
+            "required": ["familienname", "vorname", "idnr"]
+          },
+          "person_b": {
+            "type": "object",
+            "description": "Ehegatte/Lebenspartner (ESt1A Z.13-18). Bei Einzelveranlagung weglassen.",
+            "additionalProperties": false,
+            "properties": {
+              "familienname": { "type": "string", "description": "Familienname Partner — ESt1A E0101201." },
+              "vorname": { "type": "string", "description": "Vorname Partner — ESt1A E0101301." },
+              "geburtsdatum": { "type": "string", "description": "Geburtsdatum Partner — ESt1A E0101702." },
+              "idnr": { "type": "string", "description": "IdNr Partner — ESt1A E0101081." },
+              "religion": {
+                "type": "string",
+                "enum": ["ev", "rk", "ak", "is", "fr", "fb", "lt", "rf", "vd", "--", ""],
+                "description": "Konfession Partner — ESt1A E0100502."
+              },
+              "beruf": { "type": "string", "description": "Beruf Partner." }
+            }
+          },
+          "adresse": {
+            "type": "object",
+            "description": "Wohnadresse am 31.12. des Veranlagungsjahres.",
+            "additionalProperties": false,
+            "properties": {
+              "strasse": { "type": "string", "description": "Straße — ESt1A E0101701." },
+              "hausnummer": { "type": "string", "description": "Hausnummer — ESt1A E0101801." },
+              "plz": { "type": "string", "description": "PLZ — ESt1A E0102001." },
+              "ort": { "type": "string", "description": "Wohnort — ESt1A E0102101." }
+            }
+          },
+          "bankverbindung": {
+            "type": "object",
+            "description": "Bankverbindung für Erstattung/Nachzahlung — ESt1A Z.23-25.",
+            "additionalProperties": false,
+            "properties": {
+              "iban": { "type": "string", "description": "IBAN — ESt1A E0102301." },
+              "bic": { "type": "string", "description": "BIC — ESt1A E0102401." },
+              "kontoinhaber": { "type": "string", "description": "Kontoinhaber falls abweichend." }
+            }
+          }
+        },
+        "required": ["steuerjahr", "veranlagungsart", "person_a"]
+      },
+
+      "anlage_sa": {
+        "type": "object",
+        "description": "Anlage SA — Sonderausgaben (Kirchensteuer gezahlt/erstattet, Spenden, Mitgliedsbeiträge).",
+        "additionalProperties": false,
+        "properties": {
+          "kirchensteuer_gezahlt": { "type": "number", "description": "Im Veranlagungsjahr gezahlte KirchSt (Vorauszahlungen + Nachzahlungen aus VZ-Vorjahr) — Anlage SA E0701401." },
+          "kirchensteuer_erstattet": { "type": "number", "description": "Im Veranlagungsjahr erstattete KirchSt — Anlage SA E0701501." },
+          "spenden_steuerbegunstigte_zwecke": { "type": "number", "description": "Zuwendungen für steuerbegünstigte Zwecke (Spenden) — Anlage SA E0701801." },
+          "mitgliedsbeitrage_politische_parteien": { "type": "number", "description": "Mitgliedsbeiträge an politische Parteien — Anlage SA E0702101." },
+          "mitgliedsbeitrage_vereine": { "type": "number", "description": "Mitgliedsbeiträge an gemeinnützige Vereine — Anlage SA E0702301." }
+        }
+      },
+
+      "anlage_n": {
+        "type": "object",
+        "description": "Anlage N — Einkünfte aus nichtselbständiger Arbeit + Werbungskosten.",
+        "additionalProperties": false,
+        "properties": {
+          "person": {
+            "type": "string",
+            "enum": ["a", "b"],
+            "description": "Welcher Person zuzuordnen (a=Hauptperson, b=Partner). Bei Zusammenveranlagung beide möglich."
+          },
+          "arbeitslohn": {
+            "type": "object",
+            "description": "Lohn-Block aus LStB (Z.5-9 in Anlage N 2023).",
+            "additionalProperties": false,
+            "properties": {
+              "bruttoarbeitslohn": { "type": "number", "description": "Bruttoarbeitslohn — Anlage N E0200201." },
+              "lohnsteuer": { "type": "number", "description": "Einbehaltene Lohnsteuer — Anlage N E0200301." },
+              "solidaritaetszuschlag": { "type": "number", "description": "SolZ — Anlage N E0200401." },
+              "kirchensteuer_arbeitnehmer": { "type": "number", "description": "KirchSt AN — Anlage N E0200501." },
+              "kirchensteuer_partner": { "type": "number", "description": "KirchSt Partner (Konfessionsverschiedenheit) — Anlage N E0200601." },
+              "steuerklasse": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6"], "description": "Steuerklasse." }
+            }
+          },
+          "pendlerpauschale": {
+            "type": "object",
+            "description": "Entfernungspauschale Z.30-34 Anlage N — wird zum Daueranschnitt für Folge-Jahre.",
+            "additionalProperties": false,
+            "properties": {
+              "ziel_plz": { "type": "string", "description": "PLZ des Arbeitsstätten-Orts — Anlage N E0203203." },
+              "ziel_ort": { "type": "string", "description": "Ort der Arbeitsstätte — Anlage N E0203204." },
+              "ziel_strasse": { "type": "string", "description": "Straße der Arbeitsstätte — Anlage N E0203205." },
+              "arbeitstage": { "type": "integer", "description": "Anzahl Arbeitstage im Jahr (typisch 220) — Anlage N E0203301." },
+              "entfernung_km": { "type": "number", "description": "Einfache Entfernung Wohnung→Arbeit in km — Anlage N E0203401." },
+              "verkehrsmittel": {
+                "type": "string",
+                "enum": ["pkw", "oepnv", "fahrrad", "gemischt", "fussgaenger"],
+                "description": "Hauptverkehrsmittel."
+              },
+              "entfernungspauschale_eur": { "type": "number", "description": "Vom Steuerpflichtigen errechnete Gesamt-Entfernungspauschale in € — Anlage N E0203504." }
+            }
+          },
+          "arbeitsmittel": {
+            "type": "object",
+            "description": "Arbeitsmittel Z.57-59 — typisch Pauschbetrag 110 € oder Einzelposten.",
+            "additionalProperties": false,
+            "properties": {
+              "summe": { "type": "number", "description": "Summe Arbeitsmittel-Aufwendungen — Anlage N E0204301." },
+              "einzelposten": {
+                "type": "array",
+                "description": "Optional: Einzel-Positionen wenn aufgeschlüsselt.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "bezeichnung": { "type": "string" },
+                    "betrag": { "type": "number" }
+                  }
+                }
+              }
+            }
+          },
+          "weitere_werbungskosten": {
+            "type": "array",
+            "description": "Weitere Werbungskosten Z.65-67 — Bezeichnung+Betrag (Kontoführungsgebühren, Berufsverband, Fortbildung, Rechtsschutz, Bewerbungen). Werden ALLE als Daueranschnitt-Kandidaten erfasst.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "bezeichnung": { "type": "string", "description": "Klartext-Bezeichnung — z.B. 'Kontoführungsgebühren', 'Berufsverband ver.di'." },
+                "betrag": { "type": "number", "description": "Betrag in €." },
+                "kategorie": {
+                  "type": "string",
+                  "enum": [
+                    "kontofuehrungsgebuehren",
+                    "berufsverband",
+                    "fortbildung",
+                    "rechtsschutzversicherung",
+                    "bewerbung",
+                    "arbeitszimmer",
+                    "fachliteratur",
+                    "sonstiges"
+                  ],
+                  "description": "Klassifikation der Werbungskosten-Position (für Daueranschnitt-Heuristik)."
+                }
+              },
+              "required": ["bezeichnung", "betrag"]
+            }
+          }
+        }
+      },
+
+      "anlage_kap_person_a": {
+        "type": "object",
+        "description": "Anlage KAP Hauptperson — Kapitalerträge + Günstigerprüfung.",
+        "additionalProperties": false,
+        "properties": {
+          "antrag_guenstigerpruefung": { "type": "boolean", "description": "Antrag auf Günstigerprüfung Z.4 — Anlage KAP E2300401." },
+          "antrag_ueberpruefung_steuereinbehalt": { "type": "boolean", "description": "Antrag auf Überprüfung des Steuereinbehalts Z.5." },
+          "kapitalertraege_brutto": { "type": "number", "description": "Kapitalerträge brutto Z.7 — Anlage KAP E2300701." },
+          "sparerpauschbetrag": { "type": "number", "description": "Sparerpauschbetrag (max 1000 € einzeln / 2000 € zusammen)." },
+          "kapitalertragsteuer": { "type": "number", "description": "Einbehaltene KESt — Anlage KAP E2304301." },
+          "solidaritaetszuschlag_kap": { "type": "number", "description": "SolZ auf KESt — Anlage KAP E2304401." },
+          "kirchensteuer_kap": { "type": "number", "description": "KirchSt auf KESt — Anlage KAP E2304501." }
+        }
+      },
+
+      "anlage_kap_person_b": {
+        "type": "object",
+        "description": "Anlage KAP Partner — analog Person A.",
+        "additionalProperties": false,
+        "properties": {
+          "antrag_guenstigerpruefung": { "type": "boolean", "description": "Antrag Günstigerprüfung Partner." },
+          "antrag_ueberpruefung_steuereinbehalt": { "type": "boolean" },
+          "kapitalertraege_brutto": { "type": "number", "description": "Kapitalerträge brutto Partner." },
+          "sparerpauschbetrag": { "type": "number" },
+          "kapitalertragsteuer": { "type": "number" },
+          "solidaritaetszuschlag_kap": { "type": "number" },
+          "kirchensteuer_kap": { "type": "number" }
+        }
+      },
+
+      "anlage_vor": {
+        "type": "object",
+        "description": "Anlage VOR — Vorsorgeaufwand (RV, KV, PV, AV).",
+        "additionalProperties": false,
+        "properties": {
+          "rv_arbeitnehmer": { "type": "number", "description": "AN-Anteil gesetzliche RV — Anlage VOR E2000401." },
+          "rv_arbeitgeber": { "type": "number", "description": "AG-Anteil RV (steuerfrei) — Anlage VOR E2000801." },
+          "berufsstaendisch_arbeitnehmer": { "type": "number", "description": "AN-Anteil berufsständische Versorgung — Anlage VOR E2000501." },
+          "kv_arbeitnehmer": { "type": "number", "description": "Beiträge gesetzliche KV — Anlage VOR E2001203." },
+          "pv_arbeitnehmer": { "type": "number", "description": "Beiträge soziale PV — Anlage VOR E2001505." },
+          "av_arbeitnehmer": { "type": "number", "description": "Beiträge Arbeitslosenversicherung — Anlage VOR E2004403." },
+          "zusatzversorgung": { "type": "number", "description": "Steuerpflichtige Beiträge Zusatzversorgung." },
+          "private_kv_pv": { "type": "number", "description": "Beiträge zur privaten KV/PV (Basisabsicherung)." }
+        }
+      },
+
+      "anlage_av": {
+        "type": "object",
+        "description": "Anlage AV — Riester-Rente / Altersvorsorge.",
+        "additionalProperties": false,
+        "properties": {
+          "beitraege_eigen": { "type": "number", "description": "Eigene Beiträge Riester-Vertrag." },
+          "zulagen": { "type": "number", "description": "Gewährte Zulagen." },
+          "anbieter": { "type": "string", "description": "Anbieter-Name (z.B. 'Allianz RiesterRente Klassik')." },
+          "vertragsnummer": { "type": "string" }
+        }
+      },
+
+      "anlage_kind": {
+        "type": "object",
+        "description": "Anlage Kind — pro Kind ein Eintrag.",
+        "additionalProperties": false,
+        "properties": {
+          "kinder": {
+            "type": "array",
+            "description": "Liste aller Kinder die in der Vorjahres-Erklärung erfasst sind.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "vorname": { "type": "string" },
+                "familienname": { "type": "string" },
+                "geburtsdatum": { "type": "string", "description": "DD.MM.YYYY." },
+                "idnr": { "type": "string", "description": "IdNr des Kindes." },
+                "kindschaftsverhaeltnis": { "type": "string", "enum": ["leiblich", "adoptiv", "pflege", "stief"] },
+                "betreuungskosten": { "type": "number", "description": "Kinderbetreuungskosten (bis vollendetes 14. Lebensjahr)." },
+                "schulgeld": { "type": "number" }
+              },
+              "required": ["vorname", "geburtsdatum"]
+            }
+          }
+        }
+      },
+
+      "anlage_v": {
+        "type": "object",
+        "description": "Anlage V — Einkünfte aus Vermietung und Verpachtung.",
+        "additionalProperties": false,
+        "properties": {
+          "objekte": {
+            "type": "array",
+            "description": "Pro vermietete Immobilie ein Eintrag.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "adresse": { "type": "string" },
+                "mieteinnahmen": { "type": "number", "description": "Bruttomieteinnahmen p.a." },
+                "umlagen": { "type": "number" },
+                "werbungskosten_summe": { "type": "number" },
+                "afa": { "type": "number", "description": "AfA Gebäude." },
+                "schuldzinsen": { "type": "number" }
+              }
+            }
+          }
+        }
+      },
+
+      "anlage_r": {
+        "type": "object",
+        "description": "Anlage R — Renten (gesetzliche RV, Versorgungsbezüge, Pensionsfonds).",
+        "additionalProperties": false,
+        "properties": {
+          "renten": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "art": { "type": "string", "enum": ["gesetzlich", "berufsstaendisch", "privat", "ausland", "betrieblich"] },
+                "leistungstraeger": { "type": "string" },
+                "jahresbetrag": { "type": "number" },
+                "rentenbeginn": { "type": "string", "description": "DD.MM.YYYY." },
+                "anpassungsbetrag": { "type": "number" }
+              }
+            }
+          }
+        }
+      },
+
+      "anlage_agb": {
+        "type": "object",
+        "description": "Anlage Außergewöhnliche Belastungen (Krankheit, Behinderung, Pflege).",
+        "additionalProperties": false,
+        "properties": {
+          "krankheitskosten": { "type": "number" },
+          "pflegekosten": { "type": "number" },
+          "behinderungsgrad_person_a": { "type": "integer" },
+          "behinderungsgrad_person_b": { "type": "integer" },
+          "unterhaltsleistungen": { "type": "number" }
+        }
+      }
+    },
+    "required": ["hauptvordruck"]
+  }
+}

@@ -46,6 +46,8 @@ import { llmDisambigStage } from './stages/llm-disambig.ts';
 import { finalizeExtractionStage } from './stages/finalize-extraction.ts';
 // Belegtyp-spezifische Layer-1-Vorextraktion (Gemma-4 + nested_schemas)
 import { layer1PrepopStage } from './stages/layer1-prepop-stage.ts';
+// Vorjahres-Erklärung → CaseContext (Engführung für Folge-Pipeline)
+import { vorjahresKontextExtractStage } from './stages/vorjahres-kontext-extract.ts';
 
 export const ELSTER_V3_VERTICAL_META = {
   standardId: 'elster-v3',
@@ -100,6 +102,60 @@ export function registerElsterV3Stages(): void {
   registerStage(finalizeExtractionStage);
   // Belegtyp-spezifische Layer-1-Vorextraktion (v5_2-rag-Eingang)
   registerStage(layer1PrepopStage);
+  // Vorjahres-Erklärung → CaseContext (vorjahres-kontext-extract-Workflow)
+  registerStage(vorjahresKontextExtractStage);
+}
+
+/**
+ * Vorjahres-Kontext-Workflow: User lädt vor dem eigentlichen Belege-Upload
+ * seine Vorjahres-Einkommensteuererklärung hoch. OCR + LLM-Extraktion via
+ * Gemma-4 produzieren einen CaseContext (erwartete Anlagen, Veranlagungsart,
+ * Daueranschnitte) der die Folge-Pipeline (felderNarrow + phase3LlmFill)
+ * von ~250 Feldern pro Anlage auf ~20 reduziert → 3× schnellere Extraktion.
+ */
+export function buildVorjahresKontextWorkflow() {
+  return defineWorkflow({
+    id: 'vorjahres-kontext-extract',
+    name: 'Vorjahres-Erklärung → Mandanten-Kontext',
+    description:
+      'Liest eine komplette Vorjahres-Einkommensteuererklärung (PDF) via Gemma-4 ' +
+      'Vision-OCR + strict json_schema-Extraktion und produziert einen CaseContext ' +
+      '(erwartete Anlagen, Veranlagungsart für Splittingtarif, Daueranschnitte wie ' +
+      'Pendlerpauschale, fehlende Belege für Folgejahr). Engführt die nachfolgenden ' +
+      'Extraktions-Workflows um Faktor ~3 durch eCode-Whitelist pro Anlage.',
+    input: {
+      type: 'file',
+      accept: ['pdf', 'png', 'jpg', 'jpeg'],
+      maxSizeMb: 50,
+    },
+    stages: {
+      ocr: {
+        uses: 'gemma-vision-ocr',
+        config: { dpi: 200, maxTokens: 4096 },
+        inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
+      },
+      vorjahresKontext: {
+        uses: 'elster-v3/vorjahres-kontext-extract',
+        config: {
+          provider: 'vllm',
+          model: 'gemma4-mm',
+          maxTokens: 4000,
+          concurrency: 5,
+          perPageTimeoutMs: 90_000,
+          singleCallPageThreshold: 4,
+        },
+        inputs: {
+          pages: '${ocr.pages}',
+          text: '${ocr.text}',
+          filename: '${input.filename}',
+          vorjahr: '${input.vorjahr}',
+        },
+      },
+    },
+    edges: [
+      ['ocr', 'vorjahresKontext'],
+    ],
+  });
 }
 
 /**
