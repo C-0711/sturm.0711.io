@@ -179,9 +179,11 @@ export function buildSteuerfallEstApplication() {
       'lane5:elster:einreichung:v1',
     ],
     workflows: {
-      // Env override: STURM_EXTRACTION_WORKFLOW (defaults to 'elster-v5_2-rag').
-      // Set to 'elster-v6-vision' to opt into the vision-first phase3 replacement.
-      extraction: process.env['STURM_EXTRACTION_WORKFLOW'] || 'elster-v5_2-rag', // lint-no-env: allow — Anwendung-config override
+      // Default seit 2026-05-18: elster-v6-vision. Umgeht das 78k OCR-Token-
+      // Budget das phase3LlmFill bei großen PDFs (Hauptvordruck 30+ Seiten)
+      // killt — v6 schickt Page-PNGs direkt an Gemma-4 Vision. Env override
+      // STURM_EXTRACTION_WORKFLOW für Ausnahmen.
+      extraction: process.env['STURM_EXTRACTION_WORKFLOW'] || 'elster-v6-vision', // lint-no-env: allow — Anwendung-config override
       seal: 'steuerfall-seal',
     },
     // Backwards-Compat: `mcps` + `rag` bleiben erhalten, damit ältere

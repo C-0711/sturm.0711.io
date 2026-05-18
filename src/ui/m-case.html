@@ -406,21 +406,8 @@
       <p class="sub" id="case-sub"></p>
       <div class="case-meta" id="case-meta"></div>
 
-      <!-- Pipeline-Toggle: betrifft nur NEUE Uploads -->
-      <div class="pipeline-row hidden" id="pipeline-row">
-        <span class="label">Pipeline:</span>
-        <div class="pipeline-switch" role="radiogroup" aria-label="Extraction-Workflow">
-          <button type="button" role="radio" data-wf="elster-v5_2-rag"
-                  id="wf-rag"     title="4-LLM-Ensemble + TurboQuant-RAG (Standard, höchste Feldzahl)">
-            v5.2 RAG-Ensemble
-          </button>
-          <button type="button" role="radio" data-wf="elster-v6-vision"
-                  id="wf-vision"  title="Gemma-4 Vision direkt über Seitenbilder (schneller, weniger Halluzination)">
-            v6 Gemma-4 Vision
-          </button>
-        </div>
-        <span class="note">betrifft nur neue Uploads</span>
-      </div>
+      <!-- Pipeline-Auswahl entfernt 2026-05-18: einheitlich elster-v6-vision
+           (Gemma-4 Vision direkt über Seitenbilder, umgeht OCR-Token-Budget). -->
     </header>
 
     <!-- Tabs -->
@@ -635,7 +622,7 @@
     const data = await r.json();
     CASE_DATA = data;
     renderCaseHeader(data);
-    renderPipelineToggle(data);
+    // renderPipelineToggle(data); // entfernt 2026-05-18: v6-vision fix-default
     renderBelegeTable(data);
   }
 
@@ -1051,7 +1038,13 @@
     body.innerHTML = '<div class="empty"><div>Felder werden geladen&hellip;</div></div>';
     let r;
     try {
-      r = await fetch(API_BASE + '/aggregate?bmf=0', { credentials: 'include' });
+      // Liest aus master.json (gleiche Quelle wie Abrechnung) statt
+      // /aggregate?bmf=0. /aggregate scanned das workflow-runs-Verzeichnis
+      // direkt + krachte wenn inst.extractionWorkflow nicht dem tatsächlich
+      // verwendeten Workflow entspricht (siehe Felder-Tab-Bug 2026-05-18).
+      // /master ist der vom Server nach jedem doc_done refreshte case-level
+      // State — single source of truth.
+      r = await fetch(API_BASE + '/master', { credentials: 'include' });
     } catch {
       body.innerHTML = '<div class="empty"><div class="empty-headline">Felder gerade nicht verfügbar.</div><div>Bitte später erneut versuchen.</div></div>';
       return;
