@@ -624,6 +624,9 @@
         <select id="felder-anlage">
           <option value="">Alle Anlagen</option>
         </select>
+        <select id="felder-dokument" title="Nach Beleg filtern">
+          <option value="">Alle Belege</option>
+        </select>
         <input type="search" id="felder-suche" placeholder="Suche Bezeichnung oder eCode&hellip;" />
         <span class="filter-count" id="felder-count"></span>
         <button type="button" class="viewer-toggle" data-toggle="felder" title="PDF-Quelle bei Hover anzeigen">
@@ -1318,6 +1321,7 @@
     FELDER_DATA = data;
     FELDER_LOADED = true;
     populateAnlagenFilter(data);
+    populateDokumentFilter(data);
     renderFelder();
   }
 
@@ -1342,18 +1346,46 @@
     if (current && anlagen.has(current)) sel.value = current;
   }
 
+  function populateDokumentFilter(data) {
+    // Sammle alle Filenames die als Quelle in merged_layer auftauchen + Count pro Beleg.
+    // Sortierung: nach Häufigkeit absteigend (häufigster Beleg zuerst).
+    const merged = (data && data.merged_layer) || {};
+    const counts = new Map();
+    for (const f of Object.values(merged)) {
+      const seen = new Set();
+      for (const s of (f && f.confirmed_by) || []) {
+        const fn = s && s.filename;
+        if (!fn || seen.has(fn)) continue;
+        seen.add(fn);
+        counts.set(fn, (counts.get(fn) || 0) + 1);
+      }
+    }
+    const sel = document.getElementById('felder-dokument');
+    if (!sel) return;
+    const current = sel.value;
+    const docs = Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    sel.innerHTML = '<option value="">Alle Belege</option>'
+      + docs.map(([fn, n]) => '<option value="' + escapeHtml(fn) + '">' + escapeHtml(fn) + ' (' + n + ')</option>').join('');
+    if (current && counts.has(current)) sel.value = current;
+  }
+
   function renderFelder() {
     const body = document.getElementById('felder-body');
     if (!FELDER_DATA) { body.innerHTML = ''; return; }
     const merged = FELDER_DATA.merged_layer || {};
     const conflicts = new Set((FELDER_DATA.conflicts || []).map(c => c.eCode));
     const anlageFilter = (document.getElementById('felder-anlage').value || '').toUpperCase();
+    const dokFilter = (document.getElementById('felder-dokument') || {}).value || '';
     const q = (document.getElementById('felder-suche').value || '').toLowerCase().trim();
 
     // Felder-Liste vorbereiten + filtern
     const entries = Object.entries(merged).filter(([eCode, f]) => {
       if (!f) return false;
       if (anlageFilter && String(f.anlage || '').toUpperCase() !== anlageFilter) return false;
+      if (dokFilter) {
+        const sources = f.confirmed_by || [];
+        if (!sources.some(s => s && s.filename === dokFilter)) return false;
+      }
       if (q) {
         const hay = (eCode + ' ' + (f.drucktext || '')).toLowerCase();
         if (hay.indexOf(q) < 0) return false;
@@ -1432,6 +1464,7 @@
   }
 
   document.getElementById('felder-anlage').addEventListener('change', renderFelder);
+  document.getElementById('felder-dokument').addEventListener('change', renderFelder);
   document.getElementById('felder-suche').addEventListener('input', renderFelder);
 
   // ── Source-Viewer (split-screen rechts in Felder + Abrechnung) ────────
