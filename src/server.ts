@@ -851,6 +851,11 @@ app.post(
   },
 );
 
+// ── GET /api/_deploycheck ── sanity ping for deploy verification ───────
+app.get('/api/_deploycheck', (_req, res) => {
+  res.json({ deployedAt: '__V5_DEPLOY_CHECK__', ts: new Date().toISOString() });
+});
+
 // ── GET /api/applications/:appId/instances/:caseId/aggregate ──────────
 // Case-Level-Layer-Aggregation über alle hochgeladenen Belege des Falls.
 // Liefert merged_layer, conflicts, pflicht-coverage, missing-list +
