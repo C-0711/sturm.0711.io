@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Quelle anzeigen — Pro-Abrechnung</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, "Inter", "Segoe UI", sans-serif;
+    background: #1a1d23;
+    color: #e8e8e8;
+    overflow: hidden;
+    height: 100vh;
+  }
+  header {
+    height: 56px;
+    padding: 0 16px;
+    display: flex; align-items: center; gap: 16px;
+    background: #0f1216;
+    border-bottom: 1px solid #2a2e36;
+  }
+  header h1 { font-size: 14px; font-weight: 600; margin: 0; flex-shrink: 0; }
+  header .crumb {
+    color: #8a92a0;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  header .crumb b { color: #fdd663; font-weight: 600; }
+  .snippet {
+    margin-left: auto;
+    background: #2c2f3a;
+    color: #fdd663;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  main {
+    height: calc(100vh - 56px);
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+  }
+  .page-wrap {
+    background: white;
+    border: 1px solid #2a2e36;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    position: relative;
+    max-width: 1100px;
+    width: 100%;
+  }
+  .page-wrap img { display: block; width: 100%; height: auto; }
+  .page-wrap .overlay {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(253, 214, 99, .35);
+    border: 2px solid #fdd663;
+    border-radius: 2px;
+    box-shadow: 0 0 0 4px rgba(253, 214, 99, .15);
+    display: none;
+  }
+  .empty {
+    color: #8a92a0;
+    margin: 80px auto;
+    text-align: center;
+    font-size: 14px;
+  }
+  .empty code { color: #fdd663; background: #2c2f3a; padding: 2px 6px; border-radius: 3px; }
+  .err {
+    color: #f28b82;
+    margin: 80px auto;
+    text-align: center;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Quelle</h1>
+  <div class="crumb" id="crumb"></div>
+  <div class="snippet" id="snippet" hidden></div>
+</header>
+<main id="main">
+  <div class="empty" id="msg">Lade Seite …</div>
+</main>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const file = qs.get('file');     // sha256 hex
+  const page = parseInt(qs.get('page') || '1', 10);
+  const snippetText = qs.get('snippet') || '';
+  const filename = qs.get('filename') || '';
+
+  const main = document.getElementById('main');
+  const msg = document.getElementById('msg');
+  const crumb = document.getElementById('crumb');
+  const snippetBox = document.getElementById('snippet');
+
+  if (filename) crumb.innerHTML = `<b>${escapeHtml(filename)}</b> · Seite ${page}`;
+  else crumb.textContent = `sha256:${(file || '').slice(0, 12)}… · Seite ${page}`;
+  if (snippetText) {
+    snippetBox.hidden = false;
+    snippetBox.textContent = `"${snippetText}"`;
+  }
+
+  if (!file || !/^[0-9a-f]{64}$/i.test(file)) {
+    msg.className = 'err';
+    msg.textContent = 'Fehlender oder ungültiger file-Parameter (sha256 hex erwartet).';
+  } else {
+    loadPage();
+  }
+
+  async function loadPage() {
+    const imgUrl = `/api/source-page/${file}/${page}`;
+    try {
+      const r = await fetch(imgUrl, { method: 'HEAD' });
+      if (!r.ok) {
+        msg.className = 'err';
+        msg.innerHTML = `Seite nicht im PDF-Cache.<br>
+          <small>Lauf den Workflow mindestens einmal mit dieser Datei, damit pdf-render die PNGs erzeugt.</small>`;
+        return;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'page-wrap';
+      const img = document.createElement('img');
+      img.src = imgUrl;
+      img.alt = `Seite ${page} von ${filename || file.slice(0, 12)}`;
+      wrap.appendChild(img);
+      main.replaceChildren(wrap);
+    } catch (e) {
+      msg.className = 'err';
+      msg.textContent = `Fehler: ${e.message}`;
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+</script>
+</body>
+</html>

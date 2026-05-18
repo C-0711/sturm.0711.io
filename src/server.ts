@@ -906,6 +906,35 @@ app.get('/api/_deploycheck', (_req, res) => {
   res.json({ deployedAt: '__V5_DEPLOY_CHECK__', ts: new Date().toISOString() });
 });
 
+// ── GET /api/source-page/:sha256/:page ─────────────────────────────────
+// Streams a cached PDF-render PNG by content hash (P6 source viewer).
+// Path constrained: sha256 must be hex, page must be 1-based ≤ 50.
+// No directory traversal possible. Token-frei (UI is open).
+app.get(
+  '/api/source-page/:sha256/:page',
+  async (req, res) => {
+    const sha = String(req.params.sha256 ?? '');
+    const page = parseInt(req.params.page ?? '0', 10);
+    if (!/^[0-9a-f]{64}$/i.test(sha)) {
+      return res.status(400).json({ error: 'invalid sha256' });
+    }
+    if (!Number.isFinite(page) || page < 1 || page > 50) {
+      return res.status(400).json({ error: 'invalid page (1-50)' });
+    }
+    const pngPath = path.join(RUNS_DIR, '_pdf_render', sha, `page-${page}.png`);
+    try {
+      const stat = await fs.promises.stat(pngPath);
+      if (!stat.isFile()) return res.status(404).json({ error: 'not found' });
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
+      res.setHeader('Content-Length', String(stat.size));
+      fs.createReadStream(pngPath).pipe(res);
+    } catch {
+      res.status(404).json({ error: 'not cached — run pdf-render first' });
+    }
+  },
+);
+
 // ── GET /api/applications/:appId/instances/:caseId/master ─────────────
 // Persisted case-level state (P2). Returns the latest master.json from
 // disk; query ?refresh=1 forces a fresh compute + rewrite. UI consumers
