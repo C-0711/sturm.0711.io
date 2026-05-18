@@ -44,6 +44,8 @@ import { formatRegexValidateStage } from './stages/format-regex-validate.ts';
 import { confidenceGateStage } from './stages/confidence-gate.ts';
 import { llmDisambigStage } from './stages/llm-disambig.ts';
 import { finalizeExtractionStage } from './stages/finalize-extraction.ts';
+// Belegtyp-spezifische Layer-1-Vorextraktion (Gemma-4 + nested_schemas)
+import { layer1PrepopStage } from './stages/layer1-prepop-stage.ts';
 
 export const ELSTER_V3_VERTICAL_META = {
   standardId: 'elster-v3',
@@ -96,6 +98,8 @@ export function registerElsterV3Stages(): void {
   registerStage(confidenceGateStage); // legacy, bleibt für ältere Workflows
   registerStage(llmDisambigStage);
   registerStage(finalizeExtractionStage);
+  // Belegtyp-spezifische Layer-1-Vorextraktion (v5_2-rag-Eingang)
+  registerStage(layer1PrepopStage);
 }
 
 /**
@@ -1087,6 +1091,27 @@ export function buildElsterV52RagWorkflow() {
         config: { llmFallbackWhen: 'zero' },
         inputs: { text: '${ocr.text}' },
       },
+      // Belegtyp-spezifische Layer-1-Vorextraktion: pro OCR-Seite
+      // (Header-Heuristik → doc_class) ruft Gemma-4 vLLM mit dem passenden
+      // nested_schema und liefert ein prePopulatedLayer (eCode → Wert).
+      // Bei VAST 2024 verifiziert: 54 atomare Felder (inkl. LStB Z.22-27
+      // Vorsorge die phase3LlmFill konsistent verpasst) in ~3.7s parallel.
+      // No-op bei Belegtypen ohne nested_schema → klassischer Pfad.
+      layer1Prepop: {
+        uses: 'elster-v3/layer1-prepop',
+        config: {
+          provider: 'vllm',
+          model: 'gemma4-mm',
+          timeoutMsPerPage: 60_000,
+          maxTokens: 2000,
+          concurrency: 5,
+        },
+        inputs: {
+          pages: '${ocr.pages}',
+          text: '${ocr.text}',
+          filename: '${input.filename}',
+        },
+      },
       felderKatalog: {
         uses: 'elster-v4/felder-katalog',
         config: {},
@@ -1129,20 +1154,10 @@ export function buildElsterV52RagWorkflow() {
           model: 'gemma4-mm',
           temperature: 0,
           maxTokens: 1500,
-          // 2026-05-17: per-anlage outer-loop concurrency. Stricker has 7
-          // anlagen; with anlageConcurrency=7 they all process in parallel.
-          // Combined with sliceConcurrency=4 → up to 28 concurrent vLLM
-          // requests, well within vLLM continuous-batching limits.
           anlageConcurrency: 7,
           stream: true,
-          // 2026-05-16: timeout 90→180s, weil felderNarrow jetzt bis 250
-          // Felder/Anlage durchlässt (Anlage N hat 134, KAP 81) und vLLM-
-          // Decode bei einem einzelnen Call sonst über 90s rausläuft.
           perAnlageTimeoutMs: 180_000,
           typedSchema: true,
-          // Sub-Slicing JETZT aktiv: mit felderNarrow.minPerAnlage=250 haben
-          // große Anlagen (N=134, KAP=81) zu viele Felder für einen Call.
-          // 25er-Slices + 4 parallel = jede Anlage in ~2-3s erledigt.
           maxFieldsPerSlice: 25,
           sliceConcurrency: 4,
         },
@@ -1150,6 +1165,9 @@ export function buildElsterV52RagWorkflow() {
           text: '${ocr.text}',
           phase1_per_anlage: '${phase1Regex.per_anlage}',
           felder_per_anlage: '${felderNarrow.felder_per_anlage}',
+          // Pre-populated eCodes aus layer1Prepop — phase3LlmFill kann
+          // sie aus dem Schema filtern (siehe phase3-llm-fill.ts).
+          prePopulatedLayer: '${layer1Prepop.prePopulatedLayer}',
         },
       },
       phase4Disambig: {
@@ -1177,6 +1195,9 @@ export function buildElsterV52RagWorkflow() {
         inputs: {
           phase1_per_anlage: '${phase1Regex.per_anlage}',
           phase3_per_anlage: '${phase4Disambig.per_anlage}',
+          // Höchste Trust-Quelle: Layer-1-Prepop mit nested_schema
+          // (strict json_schema-validierte Belegtyp-Extraktion).
+          prePopulatedLayer: '${layer1Prepop.prePopulatedLayer}',
         },
       },
       phase6BmfRechner: {
@@ -1196,6 +1217,7 @@ export function buildElsterV52RagWorkflow() {
     },
     edges: [
       ['ocr', 'klassifizierung'],
+      ['ocr', 'layer1Prepop'],
       ['klassifizierung', 'felderKatalog'],
       ['klassifizierung', 'quantumGround'],
       ['ocr', 'quantumGround'],
@@ -1206,12 +1228,14 @@ export function buildElsterV52RagWorkflow() {
       ['phase1Regex', 'phase3LlmFill'],
       ['felderNarrow', 'phase3LlmFill'],
       ['ocr', 'phase3LlmFill'],
+      ['layer1Prepop', 'phase3LlmFill'],
       ['phase1Regex', 'phase4Disambig'],
       ['phase3LlmFill', 'phase4Disambig'],
       ['felderNarrow', 'phase4Disambig'],
       ['ocr', 'phase4Disambig'],
       ['phase1Regex', 'phase5Merge'],
       ['phase4Disambig', 'phase5Merge'],
+      ['layer1Prepop', 'phase5Merge'],
       ['phase5Merge', 'phase6BmfRechner'],
       ['phase6BmfRechner', 'phase7Validator'],
     ],

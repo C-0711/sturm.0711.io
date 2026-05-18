@@ -44,7 +44,7 @@ export interface CanonicalValue {
    *   "Nicht zutr."  → undefined
    */
   normalizedNumber?: number;
-  origin: 'REGEX_100%' | 'REGEX_3F' | 'LLM_FSM' | 'BMF_RECHNER';
+  origin: 'REGEX_100%' | 'REGEX_3F' | 'LLM_FSM' | 'BMF_RECHNER' | 'LAYER1_NESTED';
   anlage: string;
   drucktext: string;
   vordruckzeile: string;
@@ -90,6 +90,21 @@ export interface CanonicalValue {
 export interface Phase5MergeInput {
   phase1_per_anlage: Record<string, Phase1AnlageResult>;
   phase3_per_anlage: Record<string, Phase3AnlageResult>;
+  /** Optional: vorab-extrahierte eCodes aus layer1-prepop (Belegtyp-spezifisches
+   *  nested_schema via Gemma-4 strict json_schema). Höchste Trust-Priorität. */
+  prePopulatedLayer?: Record<string, {
+    eCode: string;
+    value: string;
+    normalized: string | null;
+    normalizedNumber?: number;
+    datentyp: string;
+    anlage: string;
+    drucktext: string;
+    vordruckzeile: string;
+    origin?: string;
+    trust?: string;
+    source?: { filename?: string; page?: number; pathInNested?: string };
+  }>;
 }
 
 export interface Phase5MergeOutput {
@@ -101,6 +116,7 @@ export interface Phase5MergeOutput {
     total: number;
     from_regex: number;
     from_llm: number;
+    from_layer1: number;
     by_anlage: Record<string, number>;
     by_datentyp: Record<string, number>;
     by_trust: Record<string, number>;
@@ -339,15 +355,42 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
     // cat.get('atoms').
     const phase1 = input.phase1_per_anlage ?? {};
     const phase3 = input.phase3_per_anlage ?? {};
+    const prePopulated = input.prePopulatedLayer ?? {};
     const canonical: Record<string, CanonicalValue> = {};
     let fromRegex = 0;
     let fromLlm = 0;
+    let fromLayer1 = 0;
     const byAnlage: Record<string, number> = {};
     const byDatentyp: Record<string, number> = {};
 
-    // Pass 1: alle regex_hits — höchste Priorität.
+    // Pass 0: alle prePopulatedLayer-eCodes — HÖCHSTE Priorität.
+    // Quelle: layer1-prepop mit Belegtyp-spezifischem strict json_schema
+    // (Gemma-4). Wird in Pass 1+2 nicht überschrieben.
+    for (const [eCode, h] of Object.entries(prePopulated)) {
+      canonical[eCode] = {
+        eCode,
+        value: h.value,
+        normalized: h.normalized,
+        normalizedNumber: h.normalizedNumber,
+        origin: (h.origin as CanonicalValue['origin']) ?? 'LAYER1_NESTED',
+        anlage: h.anlage,
+        drucktext: h.drucktext,
+        vordruckzeile: h.vordruckzeile,
+        datentyp: h.datentyp as ElsterDatentyp,
+        kontextPath: null,
+        trust: (h.trust as CanonicalValue['trust']) ?? 'high',
+        trust_reasons: ['layer1_nested_schema'],
+        ...(typeof h.source?.page === 'number' ? { page: h.source.page } : {}),
+      } as CanonicalValue;
+      fromLayer1++;
+      byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;
+      byDatentyp[h.datentyp] = (byDatentyp[h.datentyp] ?? 0) + 1;
+    }
+
+    // Pass 1: alle regex_hits — überschreiben NICHT Pass-0 LAYER1-Werte.
     for (const [, p1] of Object.entries(phase1)) {
       for (const [eCode, h] of Object.entries(p1.regex_hits as Record<string, Phase1RegexHit>)) {
+        if (canonical[eCode]?.origin === 'LAYER1_NESTED') continue;
         canonical[eCode] = {
           eCode,
           value: h.value,
@@ -378,6 +421,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
       for (const [eCode, h] of Object.entries(p3.llm_hits as Record<string, Phase3LlmHit>)) {
         const existing = canonical[eCode];
         if (existing) {
+          if (existing.origin === 'LAYER1_NESTED') continue; // LAYER1 hat Priorität
           const existingSuspect =
             existing.repeat_suspicious === true ||
             existing.zeile_anchored === false;
@@ -423,6 +467,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
       total: Object.keys(canonical).length,
       from_regex: fromRegex,
       from_llm: fromLlm,
+      from_layer1: fromLayer1,
       anlagen: Object.keys(byAnlage).length,
       trust: trustCounts,
     });
@@ -434,6 +479,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
         total: Object.keys(canonical).length,
         from_regex: fromRegex,
         from_llm: fromLlm,
+        from_layer1: fromLayer1,
         by_anlage: byAnlage,
         by_datentyp: byDatentyp,
         by_trust: trustCounts,

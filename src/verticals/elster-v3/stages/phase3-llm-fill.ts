@@ -212,6 +212,11 @@ export interface Phase3LlmFillInput {
   phase1_per_anlage: Record<string, Phase1AnlageResult>;
   /** Output von felder-katalog — für die Atom-Metadata der missing_ecodes. */
   felder_per_anlage: Record<string, AnlagenFelderListe>;
+  /** Optional: pre-populated eCodes von layer1-prepop (nested_schema-basierte
+   *  Belegtyp-Extraktion). Diese eCodes werden aus der Schema-Property-Liste
+   *  und Felder-Iteration GEFILTERT, sodass phase3 sie nicht nochmal generiert.
+   *  Trust-Hierarchie in phase5-merge: LAYER1_NESTED > REGEX > LLM_FSM. */
+  prePopulatedLayer?: Record<string, unknown>;
 }
 
 export interface Phase3LlmHit {
@@ -516,6 +521,14 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
 
     const phase1 = input.phase1_per_anlage ?? {};
     const felderMap = input.felder_per_anlage ?? {};
+    // Pre-populated eCodes (von layer1-prepop / nested_schema-Extraktion):
+    // Diese werden aus missingEcodes UND missingFelder gefiltert → phase3
+    // baut für sie kein Schema und ruft kein LLM. Spart Tokens + verhindert
+    // dass phase3 die Layer-1-Werte überschreibt.
+    const prePopulated = new Set(Object.keys(input.prePopulatedLayer ?? {}));
+    if (prePopulated.size > 0) {
+      ctx.emit('phase3_prepop_skip', { skipped: prePopulated.size, sample: Array.from(prePopulated).slice(0, 10) });
+    }
     const results: Record<string, Phase3AnlageResult> = {};
     const anlagen = Object.keys(phase1);
     if (anlagen.length === 0) {
@@ -546,7 +559,10 @@ export const phase3LlmFillStage = defineStage<Phase3LlmFillInput, Phase3LlmFillO
         return;
       }
 
-      const missingEcodes = new Set(phase1Result.missing_ecodes);
+      // Pre-populated eCodes herausfiltern — die liefert layer1-prepop schon.
+      const missingEcodes = new Set(
+        phase1Result.missing_ecodes.filter((e) => !prePopulated.has(e)),
+      );
       const missingFelder = (liste?.felder ?? []).filter((f) => missingEcodes.has(f.eCode));
       if (missingFelder.length === 0) {
         results[anlage] = {
