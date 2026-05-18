@@ -1076,13 +1076,12 @@ export function buildElsterV52RagWorkflow() {
         config: { dpi: 200, maxTokens: 4096 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
-      // Round-1 Vorschau läuft PARALLEL zur OCR (kein edge → eigene Layer-1).
-      // Liefert nach ~1-3s erkannte Anlagen + wichtige Werte aus dem Bild.
-      indikation: {
-        uses: 'beleg-indikation',
-        config: { dpi: 150, maxTokens: 800, timeoutMs: 30_000 },
-        inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
-      },
+      // Round-1 Vorschau läuft NICHT mehr im Workflow — sondern eager
+      // ungethrottelt im upload-bulk Handler (src/server.ts via
+      // runBelegIndikation). Grund: jeder Workflow-Stage-Error cancelt alle
+      // Folge-Layer; eine 30s-Timeout-Indikation darf nicht die ganze
+      // Pipeline killen. Strict no-fallback — UI-Indikator kommt aus dem
+      // Handler-Pfad oder gar nicht.
       klassifizierung: {
         uses: 'elster/klassifizierung',
         config: { llmFallbackWhen: 'zero' },
@@ -1303,13 +1302,12 @@ export function buildElsterV6VisionWorkflow() {
         config: { dpi: 200, maxTokens: 4096 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
-      // Round-1 Vorschau läuft PARALLEL zur OCR (kein edge → eigene Layer-1).
-      // Liefert nach ~1-3s erkannte Anlagen + wichtige Werte aus dem Bild.
-      indikation: {
-        uses: 'beleg-indikation',
-        config: { dpi: 150, maxTokens: 800, timeoutMs: 30_000 },
-        inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
-      },
+      // Round-1 Vorschau läuft NICHT mehr im Workflow — sondern eager
+      // ungethrottelt im upload-bulk Handler (src/server.ts via
+      // runBelegIndikation). Grund: jeder Workflow-Stage-Error cancelt alle
+      // Folge-Layer; eine 30s-Timeout-Indikation darf nicht die ganze
+      // Pipeline killen. Strict no-fallback — UI-Indikator kommt aus dem
+      // Handler-Pfad oder gar nicht.
       klassifizierung: {
         uses: 'elster/klassifizierung',
         config: { llmFallbackWhen: 'zero' },
