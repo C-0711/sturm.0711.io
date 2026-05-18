@@ -81,8 +81,16 @@ export interface MergedField {
    *  (BMF-Pre-Filter, Review-UI) zwischen high/medium/low/suspicious
    *  unterscheiden kann. */
   trust?: 'high' | 'medium' | 'low' | 'suspicious';
-  /** Alle Belege, die diesen Wert geliefert haben. */
-  confirmed_by: Array<{ runId: string; filename: string }>;
+  /** Alle Belege, die diesen Wert geliefert haben. P1 citations infra:
+   *  each entry can carry the page number (0-based) and the OCR snippet
+   *  (evidence_line) it came from, so the Pro-Abrechnung UI can render
+   *  a clickable chip "Stricker_ESt.pdf · Seite 5 · Bruttoarbeitslohn …". */
+  confirmed_by: Array<{
+    runId: string;
+    filename: string;
+    page?: number;
+    snippet?: string;
+  }>;
   /** Confidence: 1 = einziger Beleg, n>1 = bestätigt. */
   confidence_count: number;
 }
@@ -239,7 +247,7 @@ export async function aggregateCase(
   const perCode = new Map<string, Map<string, {
     raw: CanonicalValue;
     normalized: string | null;
-    sources: Array<{ runId: string; filename: string }>;
+    sources: Array<{ runId: string; filename: string; page?: number; snippet?: string }>;
   }>>();
 
   for (const { runId, layer } of runLayers) {
@@ -250,13 +258,23 @@ export async function aggregateCase(
       if (!cv || typeof cv !== 'object') continue;
       const norm = cv.normalized ?? cv.value ?? null;
       const key = normalizeForCompare(norm);
+      // P1 citation: page from phase1-regex / phase3-vision-fill (propagated
+      // through phase5-merge into canonical_layer); snippet from
+      // evidence_line (regex only — vision hits don't have one yet).
+      const page = (cv as { page?: number }).page;
+      const snippet = typeof cv.evidence_line === 'string' ? cv.evidence_line : undefined;
+      const src: { runId: string; filename: string; page?: number; snippet?: string } = {
+        runId, filename,
+        ...(typeof page === 'number' && page >= 0 ? { page } : {}),
+        ...(snippet ? { snippet } : {}),
+      };
       if (!perCode.has(eCode)) perCode.set(eCode, new Map());
       const bucket = perCode.get(eCode)!;
       const ex = bucket.get(key);
       if (ex) {
-        ex.sources.push({ runId, filename });
+        ex.sources.push(src);
       } else {
-        bucket.set(key, { raw: cv, normalized: norm, sources: [{ runId, filename }] });
+        bucket.set(key, { raw: cv, normalized: norm, sources: [src] });
       }
     }
   }
