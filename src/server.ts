@@ -1202,14 +1202,30 @@ app.get(
     if (!/^[0-9a-f]{64}$/i.test(sha)) return res.status(400).json({ error: 'invalid sha256' });
     if (!Number.isFinite(page) || page < 1 || page > 100) return res.status(400).json({ error: 'invalid page' });
     if (!snippet) return res.json({ matches: [] });
-    // PDF path: uploads are content-addressed (sha256 filename)
-    const pdfPath = path.join(UPLOADS_DIR, sha);
+    // PDF path: uploads sind multer-random, sha256 ist im Case-Manifest →
+    // Walk applications-data manifests, find doc mit matching sha256.
+    let pdfPath: string | null = null;
     try {
-      const st = await fs.promises.stat(pdfPath);
-      if (!st.isFile()) return res.status(404).json({ error: 'pdf not found' });
-    } catch {
-      return res.status(404).json({ error: 'pdf not found' });
-    }
+      const appDir = path.join(APPLICATIONS_DIR, 'steuerfall-est');
+      const files = await fs.promises.readdir(appDir);
+      for (const f of files) {
+        if (!f.endsWith('.json')) continue;
+        try {
+          const raw = await fs.promises.readFile(path.join(appDir, f), 'utf8');
+          const inst = JSON.parse(raw) as { workspacePath?: string; documents?: Array<{ sha256?: string; inboxPath?: string }> };
+          const doc = (inst.documents ?? []).find((d) => d.sha256 === sha);
+          if (doc && inst.workspacePath && doc.inboxPath) {
+            const cand = path.join(ROOT, inst.workspacePath, doc.inboxPath);
+            try {
+              await fs.promises.stat(cand);
+              pdfPath = cand;
+              break;
+            } catch { /* try next */ }
+          }
+        } catch { /* skip corrupt */ }
+      }
+    } catch { /* dir missing */ }
+    if (!pdfPath) return res.status(404).json({ error: 'pdf not found for sha' });
     try {
       const { findSnippetBboxes } = await import('./server/pdf-bbox.ts');
       const matches = await findSnippetBboxes(pdfPath, page, snippet);
