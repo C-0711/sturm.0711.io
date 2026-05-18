@@ -21,9 +21,40 @@
  */
 export function splitOcrByPages(text: string): string[] {
   if (typeof text !== 'string' || text.length === 0) return [''];
+  const headerRx = /Seite (\d+) von \d+/;
   const parts = text.split(/(?=Seite \d+ von \d+)/);
   const cleaned = parts.map((p) => p.trim()).filter((p) => p.length > 0);
-  return cleaned.length > 0 ? cleaned : [text];
+  if (cleaned.length === 0) return [text];
+
+  // Bucket sections by the page NUMBER from their header. This handles two
+  // common artifacts:
+  //   1. Leading noise before the first "Seite 1 von M" marker (else page-0
+  //      would be that noise → off-by-one indexing for all downstream).
+  //   2. Mistral OCR emitting "Seite N von M" twice on the same page (header
+  //      + content start) → multiple sections collapse into the same page.
+  // Sections without a header are discarded (they belong to no page).
+  const byPage = new Map<number, string[]>();
+  let maxPage = -1;
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.length === 0) continue;
+    const m = trimmed.match(headerRx);
+    if (!m) continue; // drop unheadered noise (e.g. before Seite 1)
+    const pageIdx = parseInt(m[1], 10) - 1; // 1-based → 0-based
+    if (pageIdx < 0) continue;
+    const bucket = byPage.get(pageIdx) ?? [];
+    bucket.push(trimmed);
+    byPage.set(pageIdx, bucket);
+    if (pageIdx > maxPage) maxPage = pageIdx;
+  }
+  if (maxPage < 0) return [text]; // no headers found → keep original behavior
+
+  const out: string[] = [];
+  for (let i = 0; i <= maxPage; i++) {
+    const chunks = byPage.get(i) ?? [];
+    out.push(chunks.join('\n\n'));
+  }
+  return out;
 }
 
 /** Anlage key → list of regex patterns that, if any match a page's text,
