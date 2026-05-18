@@ -271,21 +271,25 @@ async function main() {
   await page.screenshot({ path: path.join(screenshotsDir, '01-dashboard.png'), fullPage: true });
   log('  logged in');
 
-  // ── 2. Case anlegen (via UI Dashboard) ───────────────────────────────
+  // ── 2. Case anlegen (POST via page's session, robuster als waitForResponse) ─
   log('Step 2: create case');
   const caseName = args.caseName || `E2E ${new Date().toISOString().slice(0, 19)}`;
-  // Use the dashboard "Neuer Fall" button — works because we're on /m/dashboard now.
-  await page.click('#newCaseBtn');
-  await page.waitForSelector('#displayName', { timeout: 5000 });
-  await page.type('#displayName', caseName, { delay: 10 });
-  // Submit; this returns JSON with caseId.
-  const caseRespPromise = page.waitForResponse((r) =>
-    r.url().includes('/api/m/cases') && r.request().method() === 'POST');
-  await page.click('#modalSubmit');
-  const caseResp = await caseRespPromise;
-  const caseData = await caseResp.json();
-  const caseId = caseData.caseId;
-  if (!caseId) throw new Error(`case create failed: ${JSON.stringify(caseData)}`);
+  const caseData = await page.evaluate(async (name) => {
+    const r = await fetch('/api/m/cases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ displayName: name, veranlagungsjahr: 2024 }),
+    });
+    const ct = r.headers.get('content-type') || '';
+    const body = ct.includes('json') ? await r.json() : await r.text();
+    return { status: r.status, body };
+  }, caseName);
+  if (caseData.status !== 200 && caseData.status !== 201) {
+    throw new Error(`case create HTTP ${caseData.status}: ${JSON.stringify(caseData.body).slice(0, 200)}`);
+  }
+  const caseId = caseData.body?.caseId;
+  if (!caseId) throw new Error(`case create no caseId: ${JSON.stringify(caseData.body)}`);
   log(`  caseId=${caseId}`);
 
   // ── 3. Navigate to case page ─────────────────────────────────────────
