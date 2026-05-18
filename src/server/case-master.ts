@@ -92,6 +92,7 @@ export async function writeCaseMaster(
               normalizedNumber: (v as { normalizedNumber?: number }).normalizedNumber,
               datentyp: (v.datentyp as 'string' | 'date' | 'currency') ?? 'string',
               trust: (v as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust,
+              origin: (v as { origin?: string }).origin,
             },
           ]),
         ),
@@ -101,6 +102,27 @@ export async function writeCaseMaster(
         erklaerungsjahr: inst.veranlagungsjahr ?? 2024,
         elster_felder: felder,
       });
+      // Falls BMF berechnete eCodes liefert (zvE, ESt, Soli, Erstattung),
+      // wieder ins merged_layer mergen — damit der eric_xml die berechneten
+      // Felder mit-enthält, nicht nur die deklarierten Eingaben.
+      const bmfErgebnis = bmf as { daten?: { berechnungsdetails?: { rechenschritte?: Array<{ ecode?: string; wert?: number | string }> } } };
+      const rechenschritte = bmfErgebnis?.daten?.berechnungsdetails?.rechenschritte ?? [];
+      for (const rs of rechenschritte) {
+        if (!rs?.ecode || rs.wert == null || agg.merged_layer[rs.ecode]) continue;
+        agg.merged_layer[rs.ecode] = {
+          eCode: rs.ecode,
+          value: String(rs.wert),
+          normalized: String(rs.wert),
+          normalizedNumber: typeof rs.wert === 'number' ? rs.wert : Number(rs.wert) || undefined,
+          datentyp: 'currency',
+          origin: 'BMF_RECHNER',
+          trust: 'high',
+          anlage: 'BMF',
+          drucktext: '',
+          vordruckzeile: '',
+          confirmed_by: [],
+        } as never;
+      }
     } catch (err) {
       const e = err as Error & { cause?: unknown };
       const cause = e.cause instanceof Error ? e.cause.message : e.cause;
@@ -110,6 +132,19 @@ export async function writeCaseMaster(
         message: e.message,
         cause: cause ?? null,
       };
+    }
+  }
+
+  // Case-weite ERiC-XML aus dem aggregierten + BMF-erweiterten merged_layer.
+  // Bisher wurde xml_payload nur pro per-Dokument-Run gebaut → master.eric_xml
+  // war leer. Jetzt sortiert nach Anlage + vordruckzeile + eCode (deterministisch).
+  let eric_xml = '';
+  if (Object.keys(agg.merged_layer).length > 0) {
+    try {
+      const { buildEricXml } = await import('../verticals/elster-v3/stages/phase5-merge.ts');
+      eric_xml = buildEricXml(agg.merged_layer as never);
+    } catch (err) {
+      console.error('[case-master] buildEricXml failed:', (err as Error).message);
     }
   }
 
@@ -136,6 +171,7 @@ export async function writeCaseMaster(
     pflicht_missing: agg.pflicht_missing,
     stats: agg.stats,
     bmf,
+    eric_xml,
   };
 
   const masterPath = path.join(opts.workspaceBase, inst.workspacePath, 'master.json');

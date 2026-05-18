@@ -163,11 +163,18 @@ export function canonicalLayerToElsterFelder(
     normalizedNumber?: number;
     datentyp: 'string' | 'date' | 'currency';
     trust?: 'high' | 'medium' | 'low' | 'suspicious';
+    origin?: string;
   }>,
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [eCode, cv] of Object.entries(canonical)) {
-    if (cv.trust === 'suspicious') continue; // verdächtige LLM-Halluzinationen raus
+    // Trust-Filter: NUR LLM-Halluzinationen droppen, nicht REGEX-Treffer.
+    // Phase5-merge markiert REGEX_100% als 'suspicious' wenn zeile_anchored
+    // false ist (z.B. Markdown-Table-Format "| $^5$ Bruttoarbeitslohn |" wird
+    // vom Anker-Check nicht erkannt). Solche Werte sind aber echt — Quelle
+    // ist gesicherter OCR-Text-Match. Strict no-fallback: nur LLM_*
+    // suspicious-Treffer raus, REGEX_* + BMF_RECHNER bleiben drin.
+    if (cv.trust === 'suspicious' && cv.origin && /^LLM/i.test(cv.origin)) continue;
     if (cv.datentyp === 'currency') {
       // Bevorzugt normalizedNumber (single source of arithmetic truth) →
       // keine zweite Locale-Parsing-Runde nötig.
