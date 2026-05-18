@@ -109,7 +109,7 @@ export interface QuantumGroundConfig {
    *  trotzdem behalten werden (gegen Fehlklassifikation). Default 5. */
   outOfAnlageTail?: number;
   /** Forward to gemma-embed. */
-  embed?: Pick<GemmaEmbedOptions, 'url' | 'model' | 'cpuOnly'>;
+  embed?: Pick<GemmaEmbedOptions, 'url' | 'model' | 'cpuOnly' | 'provider'>;
 }
 
 export interface KandidatECode {
