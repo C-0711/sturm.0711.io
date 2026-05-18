@@ -222,7 +222,9 @@
   document.getElementById('back-link').href = `/steuerfall.html?app=${encodeURIComponent(APP)}&case=${encodeURIComponent(CASE)}`;
   document.getElementById('json-link').href = `/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/master`;
 
-  const r = await fetch(`/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/master`);
+  // ?refresh=1 — persistierte master.json kann nach Upload-Race veraltet
+  // sein (writeCaseMaster lief bevor alle Stage-Outputs geflusht waren).
+  const r = await fetch(`/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/master?refresh=1`);
   if (!r.ok) { document.getElementById('loading').textContent = `HTTP ${r.status} beim Laden des Falls`; return; }
   const data = await r.json();
   render(data);

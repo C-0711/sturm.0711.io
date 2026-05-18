@@ -63,17 +63,32 @@ export async function writeCaseMaster(
     runsDir: opts.runsDir,
     extractionWorkflowId: opts.extractionWorkflowId,
   });
-  // Retry guard: empty merged_layer but ≥1 ok-state run → likely the
-  // stage-output flush race. Wait + recompute once.
-  if (Object.keys(agg.merged_layer).length === 0 && (inst.runs?.length ?? 0) > 0) {
+  // Retry guard: empty merged_layer but ≥1 ok-state run → wahrscheinlich
+  // Stage-Output-Flush-Race (writeCaseMaster lief bevor phase5Merge oder
+  // phase7Validator JSON auf Disk geschrieben war). Mehrfach mit Backoff.
+  let attempt = 0;
+  while (Object.keys(agg.merged_layer).length === 0 && (inst.runs?.length ?? 0) > 0 && attempt < 4) {
     const anyOk = agg.documents?.some((d) => d.state === 'ok' || d.state === 'partial');
-    if (anyOk) {
-      await new Promise((r) => setTimeout(r, 500));
-      agg = await aggregateCase(inst, {
-        runsDir: opts.runsDir,
-        extractionWorkflowId: opts.extractionWorkflowId,
-      });
-    }
+    if (!anyOk) break;
+    attempt++;
+    await new Promise((r) => setTimeout(r, 500 * attempt));
+    agg = await aggregateCase(inst, {
+      runsDir: opts.runsDir,
+      extractionWorkflowId: opts.extractionWorkflowId,
+    });
+  }
+  // Wenn IMMER NOCH leer obwohl runs existieren → master NICHT überschreiben,
+  // sondern existierende (möglicherweise teilbefüllte) master.json behalten.
+  // Verhindert dass per-doc Race die UI auf 0 setzt.
+  if (Object.keys(agg.merged_layer).length === 0 && (inst.runs?.length ?? 0) > 0) {
+    const existingPath = path.join(opts.workspaceBase, inst.workspacePath, 'master.json');
+    try {
+      const existingRaw = await fs.readFile(existingPath, 'utf-8');
+      const existing = JSON.parse(existingRaw) as { merged_layer?: Record<string, unknown> };
+      if (existing.merged_layer && Object.keys(existing.merged_layer).length > 0) {
+        return { path: existingPath, master: existing as Record<string, unknown> };
+      }
+    } catch { /* no existing master, continue and write empty */ }
   }
 
   // Optional BMF re-compute over the merged layer.

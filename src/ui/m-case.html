@@ -1044,7 +1044,10 @@
       // verwendeten Workflow entspricht (siehe Felder-Tab-Bug 2026-05-18).
       // /master ist der vom Server nach jedem doc_done refreshte case-level
       // State — single source of truth.
-      r = await fetch(API_BASE + '/master', { credentials: 'include' });
+      // ?refresh=1 weil die persistierte master.json bei Upload-Race manchmal
+      // mit 0 Feldern landet (writeCaseMaster lief bevor alle Stage-Outputs
+      // geflusht waren). Refresh regeneriert sicher aus den Run-Artefakten.
+      r = await fetch(API_BASE + '/master?refresh=1', { credentials: 'include' });
     } catch {
       body.innerHTML = '<div class="empty"><div class="empty-headline">Felder gerade nicht verfügbar.</div><div>Bitte später erneut versuchen.</div></div>';
       return;
