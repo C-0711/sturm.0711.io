@@ -1151,7 +1151,9 @@ app.get(
     if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
-    const extractionId = app_.workflows.extraction;
+    // Respect per-case extractionWorkflow override (set via PATCH /api/m/cases/:id).
+    // Picker: query > inst.extractionWorkflow > app default.
+    const extractionId = pickExtractionWorkflow(req, inst, app_);
     if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
 
     const { readCaseMaster, writeCaseMaster } = await import('./server/case-master.ts');
@@ -1192,7 +1194,9 @@ app.get(
     if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
-    const extractionId = app_.workflows.extraction;
+    // Respect per-case extractionWorkflow override (set via PATCH /api/m/cases/:id).
+    // Picker: query > inst.extractionWorkflow > app default.
+    const extractionId = pickExtractionWorkflow(req, inst, app_);
     if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
 
     const { aggregateCase } = await import('./server/aggregation.ts');
