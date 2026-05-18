@@ -189,6 +189,20 @@ export async function writeCaseMaster(
     eric_xml,
   };
 
+  // Cross-Document Reasoning via Gemma-4 — läuft EINMAL pro Master-Refresh,
+  // NICHT pro Doc. Liefert Warnings + Year-Carry-over-Entscheidungen +
+  // Person-A/B-Zuordnung + Konsistenz-Checks. Non-blocking: bei Fehler
+  // bleibt cross_doc_audit als leeres Result mit reason im master.
+  try {
+    const { runCrossDocAudit } = await import('./cross-doc-audit.ts');
+    const audit = await runCrossDocAudit(master as never);
+    (master as { cross_doc_audit?: unknown }).cross_doc_audit = audit;
+  } catch (err) {
+    (master as { cross_doc_audit?: unknown }).cross_doc_audit = {
+      ran: false, reason: (err as Error).message, warnings: [], summary: '',
+    };
+  }
+
   const masterPath = path.join(opts.workspaceBase, inst.workspacePath, 'master.json');
   await fs.mkdir(path.dirname(masterPath), { recursive: true });
   await fs.writeFile(masterPath, JSON.stringify(master, null, 2));

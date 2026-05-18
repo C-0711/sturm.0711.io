@@ -113,6 +113,28 @@
     .hinweise h4 { margin: 0 0 6px; font-size: 11px; color: var(--payback); }
     .hinweise li { margin-bottom: 6px; }
 
+    /* Cross-Doc-Audit (Gemma-4) */
+    .cd-audit {
+      margin-top: 16px; padding: 12px 14px;
+      border: 1px solid var(--rule); border-left: 3px solid #5a8fd0;
+      background: #f7faff; border-radius: 4px; font-size: 11px;
+    }
+    .cd-audit h4 { margin: 0 0 8px; font-size: 12px; color: #2b5a99; }
+    .cd-summary { margin: 0 0 10px; font-size: 11px; font-style: italic; color: var(--ink); }
+    .cd-warnings { list-style: none; padding: 0; margin: 0 0 8px; }
+    .cd-warnings li { padding: 6px 8px; margin-bottom: 4px; border-radius: 3px; }
+    .cd-warn-info  { background: #eef4fc; }
+    .cd-warn-warn  { background: #fff4d6; }
+    .cd-warn-error { background: #fbeded; color: #8c3a3a; }
+    .cd-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .cd-section { margin-top: 8px; }
+    .cd-section ul { margin: 4px 0 0 18px; padding: 0; }
+    .cd-section li { margin-bottom: 2px; }
+    .cd-audit code { background: var(--pill); padding: 1px 4px; border-radius: 2px; font-size: 10px; }
+    .cd-audit-skip { background: var(--pill); border-left-color: var(--muted); color: var(--muted); padding: 6px 10px; font-size: 10px; }
+    .cd-audit-clean { background: #f1f7f0; border-left-color: var(--refund); }
+    .cd-audit-clean h4 { color: #3a6b3a; }
+
     .audit { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--rule); }
     .audit-pills { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; }
     .audit-pill { padding: 2px 9px; border-radius: 12px; background: var(--pill); color: var(--ink); }
@@ -463,6 +485,64 @@ function escapeHtml(s) {
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
 }
+
+// Cross-Doc-Audit (Gemma-4 reasoning über master.json)
+function renderCrossDocAudit(audit) {
+  if (!audit || !audit.ran) {
+    if (audit && audit.reason) {
+      return `<div class="cd-audit cd-audit-skip">
+        <small>Cross-Doc-Audit (Gemma-4) nicht ausgeführt: ${escapeHtml(audit.reason)}</small>
+      </div>`;
+    }
+    return '';
+  }
+  const warnings = Array.isArray(audit.warnings) ? audit.warnings : [];
+  const yearOk = Array.isArray(audit.year_carryover_ok) ? audit.year_carryover_ok : [];
+  const yearBlocked = Array.isArray(audit.year_carryover_blocked) ? audit.year_carryover_blocked : [];
+  const personen = Array.isArray(audit.person_zuordnung) ? audit.person_zuordnung : [];
+  const missing = Array.isArray(audit.missing_anlagen) ? audit.missing_anlagen : [];
+  const summary = typeof audit.summary === 'string' ? audit.summary : '';
+  if (warnings.length === 0 && yearBlocked.length === 0 && missing.length === 0 && !summary) {
+    return `<div class="cd-audit cd-audit-clean">
+      <h4>✓ Cross-Doc-Audit (Gemma-4)</h4>
+      <small>Keine Auffälligkeiten über alle Belege hinweg.</small>
+    </div>`;
+  }
+  const sevClass = (s) => s === 'error' ? 'cd-warn-error' : (s === 'warn' ? 'cd-warn-warn' : 'cd-warn-info');
+  const sevIcon = (s) => s === 'error' ? '🛑' : (s === 'warn' ? '⚠️' : 'ℹ️');
+  return `<div class="cd-audit">
+    <h4>🤖 Cross-Doc-Audit (Gemma-4)</h4>
+    ${summary ? `<p class="cd-summary">${escapeHtml(summary)}</p>` : ''}
+    ${warnings.length > 0 ? `
+      <ul class="cd-warnings">
+        ${warnings.map((w) => `<li class="${sevClass(w.severity)}">
+          ${sevIcon(w.severity)} <b>${escapeHtml(w.kategorie || '')}:</b> ${escapeHtml(w.message || '')}
+          ${(w.betrifft_ecodes || []).length ? `<div class="cd-meta">eCodes: ${w.betrifft_ecodes.map(e => `<code>${escapeHtml(e)}</code>`).join(' ')}</div>` : ''}
+          ${(w.betrifft_dokumente || []).length ? `<div class="cd-meta">Belege: ${w.betrifft_dokumente.map(d => `<span class="pill pill-doc">${escapeHtml(d)}</span>`).join(' ')}</div>` : ''}
+        </li>`).join('')}
+      </ul>` : ''}
+    ${missing.length > 0 ? `
+      <div class="cd-section">
+        <b>Vermutlich fehlende Anlagen:</b>
+        <ul>${missing.map((m) => `<li>Anlage <b>${escapeHtml(m.anlage)}</b> — ${escapeHtml(m.reason || '')}</li>`).join('')}</ul>
+      </div>` : ''}
+    ${yearBlocked.length > 0 ? `
+      <div class="cd-section">
+        <b>Jahresgebundene Werte aus anderem VZ — nicht anrechenbar:</b>
+        <ul>${yearBlocked.map((y) => `<li><code>${escapeHtml(y.ecode)}</code> aus VZ ${y.from_jahr} — ${escapeHtml(y.reason || '')}</li>`).join('')}</ul>
+      </div>` : ''}
+    ${yearOk.length > 0 ? `
+      <div class="cd-section">
+        <b>Jahresübergreifend übernommen (Stammdaten / Pauschalen):</b>
+        <ul>${yearOk.map((y) => `<li><code>${escapeHtml(y.ecode)}</code> aus VZ ${y.from_jahr} — ${escapeHtml(y.reason || '')}</li>`).join('')}</ul>
+      </div>` : ''}
+    ${personen.length > 0 ? `
+      <div class="cd-section">
+        <b>Personen-Zuordnung pro Beleg:</b>
+        <ul>${personen.map((p) => `<li><span class="pill pill-doc">${escapeHtml(p.dokument)}</span> → <b>Person ${escapeHtml(p.person)}</b> · ${escapeHtml(p.begruendung || '')}</li>`).join('')}</ul>
+      </div>` : ''}
+  </div>`;
+}
 function escapeAttr(s) {
   return escapeHtml(s);
 }
@@ -699,6 +779,8 @@ Quelle: ${escapeHtml(sb.bmf_referenz || '§32a EStG')} · Grenzsatz ${(Number(da
         ${(daten.fehlende_belege || []).map(b => `<li><b>${escapeHtml(b.category || '')}</b> (${fmtEur(b.betrag || 0)}) — benötigt: ${escapeHtml((b.erforderliche_belege || []).join(', '))}. <span style="font-family:var(--mono);font-size:10px">${escapeHtml(b.legal_reference || '')}</span></li>`).join('')}
       </ul>
     </div>` : ''}
+
+    ${renderCrossDocAudit(data.cross_doc_audit)}
 
     <div class="audit">
       <b>Audit-Trail · ${Object.keys(ml).length} eCodes aus ${(data.documents || []).length} Belegen extrahiert · Konflikte: ${(data.conflicts || []).length}</b>
