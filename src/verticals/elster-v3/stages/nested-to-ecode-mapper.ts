@@ -1,20 +1,15 @@
 /**
- * Mapper: Layer-1 nested JSON (von nested_schemas/) → flacher
- * canonical_layer eCode-Record für phase5-merge.
+ * @deprecated 2026-05-18 — DUPLICATE of canonical projection logic in
+ *   src/verticals/elster/lib/deterministic-rules.ts (PROJECTION_RULES +
+ *   applyProjections()). Wird in PHASE 3 vollständig entfernt zusammen mit
+ *   dem Konsumenten-Refactor (layer1-prepop-stage ruft applyProjections()
+ *   statt nestedToECodes()). Bis dahin bleibt diese Datei nur weil
+ *   layer1-prepop-stage.ts noch importiert.
  *
- * Pro doc_class wird ein expliziter Pfad→eCode-Mapper definiert. Die
- * eCode-Hinweise in den Schema-`description`-Feldern sind die Wahrheit;
- * dieser Mapper transliert das Mapping in Code. Schema-Änderungen müssen
- * hier nachgezogen werden — bewusste Kopplung, weil eCode-Routing
- * sicherheitskritisch ist (kein description-parsing).
- *
- * Output-Eintrag: { eCode, value, normalized, datentyp, anlage, drucktext,
- *   vordruckzeile, origin: 'LAYER1_NESTED', trust: 'high', source: {...} }
- *
- * Trust = 'high' weil:
- *   • Strict json_schema-Validation hat den Wert garantiert
- *   • Belegtyp-spezifisches Schema verhindert eCode-Verwechslung
- *   • Der Quell-Beleg ist via meta.sourceFilename/page identifiziert
+ * Original-Doku (zum Verständnis):
+ * Mapper: Layer-1 nested JSON → flacher canonical_layer eCode-Record für
+ * phase5-merge. Hardcoded Pfad→eCode pro doc_class. Wird ersetzt durch die
+ * Container-deklarative rules.json (gebaut aus PROJECTION_RULES).
  */
 import type { DocClass } from '../data/belegtyp-doc-class.ts';
 

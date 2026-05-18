@@ -1,0 +1,12 @@
+{
+  "id": "0711:context:ctax:elster-felder",
+  "type": "context",
+  "namespace": "ctax",
+  "identifier": "elster-felder",
+  "display_name": "CTAX ELSTER-Felddefinitionen 2024",
+  "description": "2.222 ELSTER-Felder fuer das deutsche Steuersystem, 686 BMF-Mappings, 97 Trigger-Felder",
+  "language": "de",
+  "tags": ["elster", "steuer", "felder", "2024", "bmf"],
+  "schema_version": 2,
+  "version": 1
+}

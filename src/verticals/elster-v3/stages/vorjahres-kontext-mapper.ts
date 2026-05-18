@@ -1,17 +1,15 @@
 /**
- * Mapper: Vorjahres-Erklärung (nested JSON aus einkommensteuererklaerung_vorjahr.json)
- * → CaseContext (siehe src/server/applications.ts).
+ * @deprecated 2026-05-18 — hardcoded eCode-Mapper-Logik wird ersetzt durch die
+ *   Container-deklarative PROJECTION_RULES in
+ *   src/verticals/elster/lib/deterministic-rules.ts. Wird in PHASE 3
+ *   vollständig entfernt zusammen mit dem Konsumenten-Refactor
+ *   (vorjahres-kontext-extract ruft applyProjections() + leitet CaseContext
+ *   aus dem resulting layer.codes ab). Bis dahin bleibt die Datei nur weil
+ *   vorjahres-kontext-extract.ts noch importiert.
  *
- * Aus dem extrahierten Vorjahres-PDF rekonstruieren wir den Mandanten-Kontext
- * für die Folge-Pipeline:
- *   • expected_anlagen[]      — welche Anlagen tauchen im Vorjahr auf?
- *   • expected_ecodes_by_anlage{} — pro Anlage die eCodes, die letztes Jahr
- *                                   Werte hatten → felderNarrow + phase3LlmFill
- *                                   engführen ihr Schema darauf.
- *   • veranlagungsart         — direkt aus hauptvordruck.veranlagungsart.
- *   • anzahl_kinder           — Länge von anlage_kind.kinder.
- *   • daueranschnitte[]       — Pendlerpauschale, Werbungskosten, KV/RV-Beiträge.
- *   • missing_belege_erwartet[] — aus expected_anlagen abgeleitet.
+ * Original-Doku (zum Verständnis):
+ * Mapper: Vorjahres-Erklärung (nested JSON aus einkommensteuererklaerung_vorjahr.json)
+ * → CaseContext (siehe src/server/applications.ts). Hardcoded Pfad→eCode.
  */
 import type { CaseContext } from '../../../server/applications.ts';
 

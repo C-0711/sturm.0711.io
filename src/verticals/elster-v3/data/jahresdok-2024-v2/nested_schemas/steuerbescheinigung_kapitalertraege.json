@@ -1,0 +1,138 @@
+{
+  "name": "steuerbescheinigung_kapitalertraege_extraction",
+  "doc_class": "steuerbescheinigung_kapitalertraege",
+  "description": "Layer-1 strict JSON-Schema für deutsche Steuerbescheinigung über Kapitalerträge (Bankbescheinigung nach § 45a EStG). Anders als 'mitteilung_kapitalertraege' (= nur freigestellter Betrag via Freistellungsauftrag) enthält die volle Steuerbescheinigung die ABGEZOGENEN Steuern: Kapitalertragsteuer (KAP E1904701/E1900701-Inland, E1900702-Ausland), Solidaritätszuschlag, ggf. Kirchensteuer (E1904801). Quellen: Banken, Depots, Lebensversicherer.",
+  "anlage": "KAP",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "glaeubiger": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Person, der die Kapitalerträge zugeflossen sind (= Steuerpflichtiger).",
+        "properties": {
+          "rolle": {
+            "type": "string",
+            "enum": ["hauptperson", "ehegatte_lebenspartner", "gemeinschaftskonto", "unbekannt"]
+          },
+          "name": { "type": "string" },
+          "steuer_id": { "type": "string" },
+          "anschrift": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "ausstellende_stelle": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Bank/Depot/Versicherung, die die Bescheinigung ausgestellt hat.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Originalname wie aufgedruckt; Entity-Resolution-Layer normalisiert ggf."
+          },
+          "anschrift": { "type": "string" },
+          "bic": { "type": "string" },
+          "depot_oder_kontonummer": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "veranlagungszeitraum": {
+        "type": "string",
+        "description": "Jahr (z.B. '2024') oder Zeitraum (z.B. '01.01.2024 - 31.12.2024')."
+      },
+      "kapitalertraege": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Aggregat-Summen aus der Bescheinigung. Felder sind als Cents/EUR-Beträge zu lesen.",
+        "properties": {
+          "hoehe_kapitalertraege_inland_eur": {
+            "type": "number",
+            "description": "Kapitalerträge die der deutschen KapESt unterlegen haben (KAP E1900701, E1901501)."
+          },
+          "hoehe_kapitalertraege_ausland_eur": {
+            "type": "number",
+            "description": "Ausländische Kapitalerträge ohne KapESt-Einbehalt (KAP E1900702 / Anlage AUS)."
+          },
+          "ersatzbemessungsgrundlage_eur": {
+            "type": "number",
+            "description": "Falls die Bank eine Ersatzbemessungsgrundlage angesetzt hat (sehr selten)."
+          },
+          "in_anspruch_genommener_sparer_pauschbetrag_eur": {
+            "type": "number",
+            "description": "Vom Steuerpflichtigen via Freistellungsauftrag genutzter Anteil des Sparer-Pauschbetrags (KAP E1901401)."
+          },
+          "nicht_ausgeglichene_verluste_eur": {
+            "type": "number",
+            "description": "Verlust-Topf aus Aktien / Sonstige (verschiedene KAP_BET-Felder)."
+          },
+          "verluste_aktien_eur": { "type": "number" },
+          "verluste_termingeschaefte_eur": { "type": "number" }
+        }
+      },
+      "abgezogene_steuern": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Tatsächlich von der Bank einbehaltene Steuern. Diese landen in den 'angerechnete Steuern'-eCodes der KAP-Anlage.",
+        "properties": {
+          "kapitalertragsteuer_eur": {
+            "type": "number",
+            "description": "Einbehaltene Kapitalertragsteuer in EUR. KAP E1904701 (Standard) bzw. E1905502 / E1905301 (alternativ)."
+          },
+          "solidaritaetszuschlag_eur": {
+            "type": "number",
+            "description": "Einbehaltener Solidaritätszuschlag auf KapESt."
+          },
+          "kirchensteuer_eur": {
+            "type": "number",
+            "description": "Einbehaltene Kirchensteuer zur KapESt. KAP E1904801. Nur wenn der Steuerpflichtige kirchensteuerpflichtig ist (E1900601=true)."
+          },
+          "anzurechnende_auslaendische_steuer_eur": {
+            "type": "number",
+            "description": "Anrechenbare ausländische Quellensteuer (Anlage AUS)."
+          }
+        }
+      },
+      "freistellungsauftrag": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Falls die Bank gleichzeitig einen Freistellungsauftrag dokumentiert.",
+        "properties": {
+          "betrag_eur": { "type": "number" },
+          "ausgeschoepft": { "type": "boolean" },
+          "gueltig_ab": { "type": "string", "description": "ISO-8601-Datum YYYY-MM-DD." },
+          "gueltig_bis": { "type": "string", "description": "ISO-8601-Datum YYYY-MM-DD." }
+        }
+      },
+      "kennzeichen": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Relevante Kennzeichen der Bescheinigung, die für die KAP-Anlage gebraucht werden.",
+        "properties": {
+          "ist_gemeinschaftskonto": {
+            "type": "boolean",
+            "description": "true = Erträge müssen 50/50 zwischen Hauptperson und Ehegatte aufgeteilt werden."
+          },
+          "kirchensteuer_einbehalten": {
+            "type": "boolean",
+            "description": "true = Bank hat KiSt automatisch einbehalten (Kennzeichen für E1900601)."
+          },
+          "guenstigerpruefung_relevant": {
+            "type": "boolean",
+            "description": "Heuristik: bei niedrigem Grenzsteuersatz (Ehegatten ohne weiteres Einkommen) → Günstigerprüfung beantragen (KAP E1900401). Layer 2 / Rules entscheidet final."
+          }
+        }
+      },
+      "abruf_metadaten": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "abrufzeitpunkt": { "type": "string" },
+          "uebernommen": { "type": "boolean" },
+          "transferticket": { "type": "string" }
+        }
+      }
+    },
+    "required": ["glaeubiger", "ausstellende_stelle", "kapitalertraege"]
+  }
+}

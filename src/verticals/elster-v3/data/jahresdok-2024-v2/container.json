@@ -1,0 +1,76 @@
+{
+  "anchor_block_number": 45728495,
+  "anchor_chain": "base-mainnet",
+  "anchor_tx_hash": "0x648ec8dfb0b5dc965ad8fc159b69201824302bbdc07320da9a635be01c939926",
+  "catalog_version": "Jahresdokumentation_10_2024 1.xml",
+  "container_sha256": "35acc7a280bd980e949d44e6ad3f8dee043fd38abafd5e5a589342d57716bd9c",
+  "created_at": "2026-05-06T08:00:36.938Z",
+  "description": "ELSTER v2 \u2014 extends v1 Jahresdokumentation 2024 (2287 eCodes) with 6 nested OCR schemas (lohnsteuerbescheinigung, mitteilung_kapitalertraege, personaldaten_hauptvordruck, religionszugehoerigkeit, spendenquittung, steuerbescheinigung_kapitalertraege) and 29 deterministic projection rules (mapping nested-schema fields \u2192 eCodes). Lineage: prev = 0711:elster:bmf:jahresdok-2024:v1 (block 45726006).",
+  "display_name": "ELSTER Jahresdokumentation 2024 + Beleg-Schemas + Projection-Rules (v2)",
+  "embeddings": {
+    "atoms_cbor": {
+      "bytes": 2013307,
+      "deterministic": true,
+      "sha256": "77b8201883b08822fd0097a1000c351ee576d7ca32f5aa66e6461712114c2d1c"
+    },
+    "count": 2322,
+    "dim": 1024,
+    "fp32_bytes": 9510912,
+    "model": "bge-m3",
+    "provider": "ollama",
+    "tq": {
+      "algorithm": "TurboQuant (PolarQuant b=3 + QJL)",
+      "b_mse": 3,
+      "compression_vs_fp32": 3.53,
+      "d": 1024,
+      "format": "0711-tq-v1",
+      "package": "@0711/qjl@0.1.0",
+      "per_atom_bytes": 1160,
+      "reference": "arxiv:2504.19874",
+      "seed": 42,
+      "total_bytes": 2693520
+    }
+  },
+  "id": "0711:elster:bmf:jahresdok-2024:v2",
+  "identifier": "jahresdok-2024",
+  "issuer_fingerprint": "sha256:ab0f4cf082af4c65832ab576b1c81a7129803eaf6188289ca9e28b76f824406e",
+  "lineage": {
+    "previous_anchor_block": 45726006,
+    "previous_anchor_tx": "0x23622f0759eaaea9f7764b2456c6e162f60aed7714aabf817c5ceb3005416c0a",
+    "previous_merkle_root": "66e8ddf58ea9861de6bd8cb9051e32ec3c44d0a07be9c013296a3bc1b76157bd",
+    "previous_version": "0711:elster:bmf:jahresdok-2024:v1"
+  },
+  "merkle_root": "1509fdf6a84a52a1e7515537389f2c939fd5271d78e0bcafea9a362b96d19f78",
+  "namespace": "elster",
+  "schema_version": 5,
+  "signature": {
+    "algorithm": "ed25519",
+    "canonical_digest": "202b4731d2e694d43538e5e83ae4660aa5a69dce3163febf7eceffd6dd56b9be",
+    "signed_at": "2026-05-08T13:33:55.972189Z",
+    "value": "ckXoNxt5wtG7+LaariFg2i/osPa7Mci26yFJpzILtYCY3nO/goYgjtaL36BGtAoQitHxaSgkoqrGG7WqI4iaDw=="
+  },
+  "stats": {
+    "anlagen_count": 35,
+    "atoms_total": 2322,
+    "datentyp_distribution": {
+      "string": 2287
+    },
+    "pflicht_codes": 19,
+    "rules_count": 29,
+    "schemas_count": 6
+  },
+  "type": "catalog",
+  "updated_at": "2026-05-08T13:33:55.972189Z",
+  "upgrades": [
+    {
+      "at": "2026-05-08T13:33:55.972189Z",
+      "by": "0711:agent:0711:bombas:v1",
+      "from": "zero-vector placeholders for 35 atoms (schema+rule)",
+      "kind": "embeddings_upgrade",
+      "previous_anchor_block": 45728495,
+      "previous_anchor_tx": "0x648ec8dfb0b5dc965ad8fc159b69201824302bbdc07320da9a635be01c939926",
+      "to": "full bge-m3 embeddings for all 2322 atoms + TurboQuant CBOR"
+    }
+  ],
+  "version": "v5.1"
+}

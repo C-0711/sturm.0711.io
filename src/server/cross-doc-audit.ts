@@ -143,7 +143,7 @@ export async function runCrossDocAudit(
   // Default: Gemma-4 vLLM on H200v. VLLM_URL aus env (Container-Setup).
   const baseUrl = opts.baseUrl ?? process.env['VLLM_URL'] ?? 'http://host.docker.internal:11435'; // lint-no-env: cross-doc-audit
   const model = opts.model ?? 'gemma4-mm';
-  const timeoutMs = opts.timeoutMs ?? 60_000;
+  const timeoutMs = opts.timeoutMs ?? 25_000;
   const compact = compactMaster(master);
   const userText = PROMPT(master.jahr ?? null) + '\n\n--- master.json ---\n' + JSON.stringify(compact, null, 2);
 

@@ -1,0 +1,111 @@
+{
+  "name": "personaldaten_hauptvordruck_extraction",
+  "doc_class": "personaldaten_hauptvordruck",
+  "description": "Layer-1 strict JSON-Schema für den ESt1A-Hauptvordruck Stammdaten-Block (Steuerpflichtige Person + Ehegatte + Adresse + Bankverbindung). DECKT NICHT die nachgelagerten Anlagen (N, KAP, SO, SA, ...) ab — wenn ein Beleg die VOLLE Erklärung enthält, nur die ersten Seiten verwenden. Für Multi-Anlagen-Bundles ist Phase-D Multi-Page-Splitting nötig.",
+  "anlage": "ESt1A",
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "veranlagungsjahr": {
+        "type": "integer",
+        "description": "Veranlagungszeitraum, z.B. 2023, 2024."
+      },
+      "art_der_erklaerung": {
+        "type": "string",
+        "enum": ["einkommensteuererklaerung", "antrag_auf_lohnsteuer_ermaessigung", "vereinfachte_erklaerung", "antragsveranlagung", "unbekannt"],
+        "description": "ESt1A Zeile 'Art der Erklärung'."
+      },
+      "veranlagungsart": {
+        "type": "string",
+        "enum": ["einzelveranlagung", "zusammenveranlagung", "getrennte_veranlagung", "besondere_veranlagung", "unbekannt"],
+        "description": "ESt1A Zeile 19 — Veranlagungsart bei Ehegatten/Lebenspartnern."
+      },
+      "finanzamt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Z.B. 'Altenkirchen-Hachenburg'." },
+          "steuernummer": { "type": "string", "description": "Z.B. '02/171/51864'." }
+        }
+      },
+      "steuerpflichtige_person": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Hauptperson (bei Zusammenveranlagung: Person A / Ehemann / Lebenspartner A). ESt1A Zeilen 8-18.",
+        "properties": {
+          "steuer_id": { "type": "string", "description": "11-stellig. ESt1A E0100081." },
+          "geburtsdatum": { "type": "string", "description": "ISO-8601 YYYY-MM-DD." },
+          "familienname": { "type": "string", "description": "ESt1A E0100201." },
+          "vorname": { "type": "string", "description": "ESt1A E0100301." },
+          "religion": { "type": "string", "description": "Original-OCR-Text. ESt1A E0100402 nach Mapping." },
+          "beruf": { "type": "string", "description": "Ausgeübter Beruf." },
+          "anschrift": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "strasse": { "type": "string" },
+              "hausnummer": { "type": "string" },
+              "postleitzahl": { "type": "string" },
+              "ort": { "type": "string" },
+              "land": { "type": "string", "description": "ISO-3166-Code, default 'DE'." }
+            }
+          },
+          "verheiratet_seit": {
+            "type": "string",
+            "description": "ISO-8601 YYYY-MM-DD. ESt1A Zeile 18 (Verheiratet / Lebenspartnerschaft begründet seit dem ...)."
+          },
+          "telefon": { "type": "string", "description": "Telefonische Rückfragen — ESt1A Zeile 7." }
+        },
+        "required": ["familienname", "vorname"]
+      },
+      "ehepartner": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Nur bei Zusammenveranlagung: Person B / Ehefrau / Lebenspartner B. ESt1A Zeilen 20-23.",
+        "properties": {
+          "steuer_id": { "type": "string", "description": "11-stellig. ESt1A E0100082." },
+          "geburtsdatum": { "type": "string", "description": "ISO-8601 YYYY-MM-DD." },
+          "familienname": { "type": "string", "description": "ESt1A E0100501." },
+          "vorname": { "type": "string", "description": "ESt1A E0100601." },
+          "religion": { "type": "string", "description": "ESt1A E0100502 nach Mapping." }
+        }
+      },
+      "bankverbindung": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "ESt1A Zeilen 30-33 — IBAN für Steuererstattung.",
+        "properties": {
+          "iban": { "type": "string" },
+          "bic": { "type": "string" },
+          "kontoinhaber": {
+            "type": "string",
+            "enum": ["steuerpflichtige_person", "ehepartner_a", "ehepartner_b", "gemeinschaftskonto", "abweichender_kontoinhaber", "unbekannt"]
+          },
+          "abweichender_kontoinhaber_name": { "type": "string" }
+        }
+      },
+      "kinder_anzahl": {
+        "type": "integer",
+        "description": "Anzahl Kinder, für die die Anlage Kind ausgefüllt wurde. Aus dem ESt1A Hauptvordruck heraus zu zählen."
+      },
+      "anlagen_im_bundle": {
+        "type": "array",
+        "description": "Welche Anlagen in der Erklärung enthalten sind (heuristisch aus Section-Headern: 'Anlage N', 'Anlage KAP', 'Anlage SO', ...). Audit-Information.",
+        "items": {
+          "type": "string",
+          "enum": ["N", "N_AUS", "N_GRE", "KAP", "SO", "SA", "AV", "AUS", "K", "Kind", "L", "G", "S", "U", "VOR", "FW", "WA_ESt", "ESt1A_U", "Unterhalt", "U", "andere"]
+        }
+      },
+      "abruf_metadaten": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ausfertigung_datum": { "type": "string", "description": "ISO-8601 YYYY-MM-DD." },
+          "drucksoftware": { "type": "string", "description": "Z.B. 'WISO Steuer 2024, Buhl, Hannover' oder 'ERIC-Print 41.4.4/ESt_2023 41.4.2'." }
+        }
+      }
+    },
+    "required": ["steuerpflichtige_person"]
+  }
+}

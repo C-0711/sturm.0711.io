@@ -1,0 +1,307 @@
+[
+  {
+    "targetCode": "E0108405",
+    "applicableDocClasses": [
+      "spendenquittung"
+    ],
+    "sourcePath": "spenden",
+    "aggregator": "sum",
+    "description": "Geleistete Spenden an Empfänger im Inland (gemeinnützige Zwecke), § 10b EStG",
+    "rechtsgrundlage": "§ 10b EStG",
+    "filter_signature": "(d: any) => d?.art === 'Spende' && isCertifiedDE(d)"
+  },
+  {
+    "targetCode": "E0108508",
+    "applicableDocClasses": [
+      "spendenquittung"
+    ],
+    "sourcePath": "spenden",
+    "aggregator": "sum",
+    "description": "Mitgliedsbeiträge an steuerbegünstigte Körperschaften (separate Behandlung von Spenden), § 10b Abs. 1 Satz 8 EStG",
+    "rechtsgrundlage": "§ 10b Abs. 1 Satz 8 EStG",
+    "filter_signature": "(d: any) => d?.art === 'Mitgliedsbeitrag' && isCertifiedDE(d)"
+  },
+  {
+    "targetCode": "E0105502",
+    "applicableDocClasses": [
+      "spendenquittung"
+    ],
+    "sourcePath": "spenden",
+    "aggregator": "sum",
+    "description": "Geleistete Spenden an Empfänger im EU/EWR-Ausland, § 10b EStG",
+    "rechtsgrundlage": "§ 10b EStG",
+    "filter_signature": "(d: any) => d?.art === 'Spende' && isCertifiedEU(d)"
+  },
+  {
+    "targetCode": "E0107208",
+    "applicableDocClasses": [
+      "haushaltsnahe_dienstleistungen"
+    ],
+    "sourcePath": "service_items",
+    "aggregator": "sum",
+    "ceiling": 4000,
+    "description": "Haushaltsnahe Dienstleistungen, § 35a Abs. 2 EStG",
+    "rechtsgrundlage": "§ 35a Abs. 2 EStG",
+    "filter_signature": "(s: any) => s?.category === 'haushaltsnah' || s?.is_haushaltsnah === true"
+  },
+  {
+    "targetCode": "E0200201",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "lohn.bruttoarbeitslohn",
+    "aggregator": "first",
+    "description": "Bruttoarbeitslohn (Anlage N Zeile 5)",
+    "rechtsgrundlage": "§ 19 Abs. 1 EStG"
+  },
+  {
+    "targetCode": "E0200301",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "lohn.lohnsteuer_einbehalten",
+    "aggregator": "first",
+    "description": "Einbehaltene Lohnsteuer",
+    "rechtsgrundlage": "§ 38 EStG"
+  },
+  {
+    "targetCode": "E0200401",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "lohn.solidaritaetszuschlag_einbehalten",
+    "aggregator": "first",
+    "description": "Einbehaltener Solidaritätszuschlag",
+    "rechtsgrundlage": "SolzG"
+  },
+  {
+    "targetCode": "E0200501",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "lohn.kirchensteuer_arbeitnehmer_einbehalten",
+    "aggregator": "first",
+    "description": "Kirchensteuer des Arbeitnehmers",
+    "rechtsgrundlage": "§ 51a EStG"
+  },
+  {
+    "targetCode": "E0200801",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "versorgungsbezug.versorgungsbezug_brutto",
+    "aggregator": "first",
+    "description": "Steuerbegünstigte Versorgungsbezüge (im Bruttoarbeitslohn enthalten)",
+    "rechtsgrundlage": "§ 19 Abs. 2 EStG"
+  },
+  {
+    "targetCode": "E0200902",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "versorgungsbezug.bemessungsgrundlage_freibetrag",
+    "aggregator": "first",
+    "description": "Bemessungsgrundlage für den Versorgungsfreibetrag",
+    "rechtsgrundlage": "§ 19 Abs. 2 EStG"
+  },
+  {
+    "targetCode": "E0201003",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "zeitraum.von_monat",
+    "aggregator": "first",
+    "description": "Bei unterjähriger Zahlung: erster Monat, für den Versorgungsbezüge gezahlt wurden (laut Nr. 30 LStB)",
+    "rechtsgrundlage": "§ 19 Abs. 2 EStG"
+  },
+  {
+    "targetCode": "E0201203",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "zeitraum.bis_monat",
+    "aggregator": "first",
+    "description": "Bei unterjähriger Zahlung: letzter Monat, für den Versorgungsbezüge gezahlt wurden (laut Nr. 30 LStB)",
+    "rechtsgrundlage": "§ 19 Abs. 2 EStG"
+  },
+  {
+    "targetCode": "E0201307",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "versorgungsbezug.versorgungsbeginn_jahr",
+    "aggregator": "first",
+    "description": "Maßgebendes Kalenderjahr des Versorgungsbeginns (laut Nr. 30 LStB)",
+    "rechtsgrundlage": "§ 19 Abs. 2 EStG"
+  },
+  {
+    "targetCode": "E0200002",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "arbeitnehmer.steuerklasse",
+    "aggregator": "first",
+    "description": "Steuerklasse (Anlage N)",
+    "rechtsgrundlage": "§ 38b EStG"
+  },
+  {
+    "targetCode": "E0100402",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung",
+      "religionszugehoerigkeit",
+      "steuerkonto_transferticket"
+    ],
+    "sourcePath": "arbeitnehmer.konfession",
+    "aggregator": "first",
+    "description": "Religion / Konfession Person A (ESt1A)",
+    "rechtsgrundlage": "§ 51a EStG"
+  },
+  {
+    "targetCode": "E0100081",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung",
+      "rentenbezugsmitteilung",
+      "steuerkonto_transferticket",
+      "beitragsbescheinigung_kranken_p"
+    ],
+    "sourcePath": "arbeitnehmer.steuer_id",
+    "aggregator": "first",
+    "description": "Steuer-Identifikationsnummer Person A (ESt1A)",
+    "rechtsgrundlage": "§ 139b AO"
+  },
+  {
+    "targetCode": "E0100201",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung",
+      "rentenbezugsmitteilung",
+      "steuerkonto_transferticket"
+    ],
+    "sourcePath": "arbeitnehmer.familienname",
+    "aggregator": "first",
+    "description": "Familienname Person A (ESt1A)",
+    "rechtsgrundlage": "§ 25 EStG"
+  },
+  {
+    "targetCode": "E0100301",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung",
+      "rentenbezugsmitteilung",
+      "steuerkonto_transferticket"
+    ],
+    "sourcePath": "arbeitnehmer.vorname",
+    "aggregator": "first",
+    "description": "Vorname Person A (ESt1A)",
+    "rechtsgrundlage": "§ 25 EStG"
+  },
+  {
+    "targetCode": "E2003807",
+    "applicableDocClasses": [
+      "lohnsteuerbescheinigung"
+    ],
+    "sourcePath": "sozialversicherung.private_kv_pv_nachgewiesen",
+    "aggregator": "first",
+    "description": "Private Krankenversicherung laut Nr. 24b der Lohnsteuerbescheinigung (Anlage VOR)",
+    "rechtsgrundlage": "§ 10 Abs. 1 Nr. 3 EStG"
+  },
+  {
+    "targetCode": "E1901401",
+    "applicableDocClasses": [
+      "mitteilung_kapitalertraege"
+    ],
+    "sourcePath": "summen.summe_freigestellt_eur",
+    "aggregator": "first",
+    "description": "In Anspruch genommener Sparer-Pauschbetrag (Anlage KAP Zeile 16) — aus VaSt-Mitteilung freigestellte Erträge",
+    "rechtsgrundlage": "§ 20 Abs. 9 EStG"
+  },
+  {
+    "targetCode": "E1901401",
+    "applicableDocClasses": [
+      "mitteilung_kapitalertraege"
+    ],
+    "sourcePath": "freigestellte_kapitalertraege",
+    "aggregator": "sum",
+    "description": "Sparer-Pauschbetrag (Fallback aus freigestellte_kapitalertraege[])",
+    "rechtsgrundlage": "§ 20 Abs. 9 EStG",
+    "filter_signature": "(e: any) => typeof e?.betrag_eur === 'number' && e.betrag_eur > 0"
+  },
+  {
+    "targetCode": "E1900701",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "kapitalertraege.hoehe_kapitalertraege_inland_eur",
+    "aggregator": "first",
+    "description": "Kapitalerträge (KAP Zeile 7) — inländische Kapitalerträge der KapESt unterlegen",
+    "rechtsgrundlage": "§ 32d Abs. 1 EStG"
+  },
+  {
+    "targetCode": "E1900702",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "kapitalertraege.hoehe_kapitalertraege_ausland_eur",
+    "aggregator": "first",
+    "description": "Kapitalerträge (KAP Zeile 7 Ausland) — ausländische Kapitalerträge ohne KapESt",
+    "rechtsgrundlage": "§ 32d Abs. 1 EStG"
+  },
+  {
+    "targetCode": "E1901501",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "kapitalertraege.hoehe_kapitalertraege_inland_eur",
+    "aggregator": "first",
+    "description": "Inländische Kapitalerträge (KAP Zeile 18, ohne Beträge laut Zeilen 24-26a)",
+    "rechtsgrundlage": "§ 32d Abs. 1 EStG"
+  },
+  {
+    "targetCode": "E1901702",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "kapitalertraege.hoehe_kapitalertraege_ausland_eur",
+    "aggregator": "first",
+    "description": "Ausländische Kapitalerträge (KAP Zeile 19)",
+    "rechtsgrundlage": "§ 32d Abs. 1 EStG"
+  },
+  {
+    "targetCode": "E1901401",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "kapitalertraege.in_anspruch_genommener_sparer_pauschbetrag_eur",
+    "aggregator": "first",
+    "description": "In Anspruch genommener Sparer-Pauschbetrag (KAP Zeile 16)",
+    "rechtsgrundlage": "§ 20 Abs. 9 EStG"
+  },
+  {
+    "targetCode": "E1904701",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "abgezogene_steuern.kapitalertragsteuer_eur",
+    "aggregator": "first",
+    "description": "Kapitalertragsteuer (KAP Zeile 37) — von der Bank einbehaltene KapESt",
+    "rechtsgrundlage": "§ 43 Abs. 5 EStG"
+  },
+  {
+    "targetCode": "E1904801",
+    "applicableDocClasses": [
+      "steuerbescheinigung_kapitalertraege"
+    ],
+    "sourcePath": "abgezogene_steuern.kirchensteuer_eur",
+    "aggregator": "first",
+    "description": "Kirchensteuer zur Kapitalertragsteuer (KAP) — nur wenn kirchensteuerpflichtig",
+    "rechtsgrundlage": "§ 51a Abs. 2c EStG"
+  },
+  {
+    "targetCode": "E1900601",
+    "applicableDocClasses": [
+      "religionszugehoerigkeit"
+    ],
+    "sourcePath": "personen",
+    "aggregator": "count",
+    "description": "Kirchensteuerpflicht-Flag (KAP Zeile 6) — count > 0 ⇒ kirchensteuerpflichtig, einbehaltene KiSt zur KapESt überprüfen",
+    "rechtsgrundlage": "§ 51a Abs. 2c EStG"
+  }
+]
