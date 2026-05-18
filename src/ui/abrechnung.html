@@ -410,10 +410,12 @@ function resolveSource(entry, masterDocs) {
       sha = docMeta.sha256;
     }
   }
-  if (!sha || typeof first.page !== 'number' || first.page < 0) return null;
+  if (!sha) return null;
+  // Page tolerant: wenn keine Seite bekannt → Page 1, sonst 1-based für Viewer-URL.
+  const page = (typeof first.page === 'number' && first.page >= 0) ? first.page + 1 : 1;
   return {
     sha256: sha,
-    page: first.page + 1, // 1-based for the viewer URL
+    page,
     filename: first.filename,
     snippet: first.snippet || '',
   };

@@ -914,10 +914,19 @@
           parts.push('<span class="ind-typ">' + escapeHtml(ind.belegtyp) + '</span>');
         }
         if (Array.isArray(ind.wichtige_werte) && ind.wichtige_werte.length > 0) {
-          const w = ind.wichtige_werte.slice(0, 3).map((v) =>
-            '<span class="ind-wert"><span class="ind-wert-label">' + escapeHtml(v.label) + ':</span> ' +
-            '<span class="ind-wert-value">' + escapeHtml(v.value) + '</span></span>'
-          ).join(' · ');
+          const sha = (typeof d.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(d.sha256)) ? d.sha256 : '';
+          const w = ind.wichtige_werte.slice(0, 3).map((v) => {
+            const snippet = (v.label + ' ' + v.value).slice(0, 120);
+            const dataAttrs = sha
+              ? ' data-sha256="' + escapeHtml(sha) + '"'
+                + ' data-page="1"'
+                + ' data-filename="' + escapeHtml(filename) + '"'
+                + ' data-snippet="' + escapeHtml(snippet) + '"'
+              : '';
+            return '<span class="ind-wert"' + dataAttrs + '><span class="ind-wert-label">'
+              + escapeHtml(v.label) + ':</span> '
+              + '<span class="ind-wert-value">' + escapeHtml(v.value) + '</span></span>';
+          }).join(' · ');
           parts.push(w);
         }
         if (parts.length > 0) {
@@ -1576,18 +1585,38 @@
     else if (e.key === '0')         { document.getElementById(panel + '-zoom-reset')?.click(); e.preventDefault(); }
   });
 
-  // Hover-Handler im Felder-Body: delegated, weil .felder-row dynamisch ist.
-  document.getElementById('felder-body').addEventListener('mouseover', (e) => {
-    const row = e.target.closest('.felder-row');
-    if (!row) return;
-    const sha = row.getAttribute('data-sha256');
-    const page = Number(row.getAttribute('data-page') || '1');
-    const snippet = row.getAttribute('data-snippet') || '';
-    const filename = row.getAttribute('data-filename') || '';
-    // Highlight active row
-    document.querySelectorAll('.felder-row.viewer-active').forEach(r => r.classList.remove('viewer-active'));
-    row.classList.add('viewer-active');
-    showSource('felder', sha, page, snippet, filename);
+  // Hover-Handler: delegated auf body, fängt JEDES Element mit data-sha256+data-page.
+  // Funktioniert damit für Felder-Tab (.felder-row), Belege-Tab (.ind-wert),
+  // und alles andere was die Attribute trägt. 150ms Debounce verhindert Sprung
+  // beim Drüberwischen, lastKey verhindert No-op-Updates.
+  let HOVER_TIMER = null;
+  let HOVER_LAST_KEY = '';
+  document.body.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-sha256][data-page]');
+    if (!el) return;
+    const sha = el.getAttribute('data-sha256');
+    if (!sha) return;
+    const page = Number(el.getAttribute('data-page') || '1');
+    const snippet = el.getAttribute('data-snippet') || '';
+    const filename = el.getAttribute('data-filename') || '';
+    const key = sha + ':' + page + ':' + snippet;
+    if (key === HOVER_LAST_KEY) return;
+    // Nur feuern wenn das Element zu einem Panel mit Viewer gehört
+    // UND dieses Panel gerade aktiv ist (Belege-Tab hat keinen Viewer).
+    const ownerPanel = el.closest('#panel-felder, #panel-abrechnung');
+    if (!ownerPanel || !ownerPanel.classList.contains('active')) return;
+    const panel = ownerPanel.id === 'panel-felder' ? 'felder' : 'abrechnung';
+    if (HOVER_TIMER) clearTimeout(HOVER_TIMER);
+    HOVER_TIMER = setTimeout(() => {
+      HOVER_LAST_KEY = key;
+      // Highlight active row im Felder-Tab.
+      const row = el.closest('.felder-row');
+      if (row) {
+        document.querySelectorAll('.felder-row.viewer-active').forEach(r => r.classList.remove('viewer-active'));
+        row.classList.add('viewer-active');
+      }
+      showSource(panel, sha, page, snippet, filename);
+    }, 150);
   });
 
   // Cross-frame: die Abrechnung-iframe schickt postMessage{type:'src',sha256,page,snippet,filename}
