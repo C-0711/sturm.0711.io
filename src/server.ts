@@ -730,7 +730,35 @@ app.post(
       }
     };
 
-    // Concurrency-limited Pool
+    // ── Round-1 Indikation: ALLE Dokumente parallel + ungethrottelt ──────
+    // Vor dem (gethrottelten) Workflow-Pool feuern wir Mistral Small Vision
+    // für jedes Dokument SOFORT — die Indikation soll für alle Dokumente
+    // innerhalb von ~3s sichtbar sein, unabhängig davon wann die jeweilige
+    // Heavy-Pipeline dran ist (Gemma-OCR cappt bei concurrency=4).
+    void (async () => {
+      const { runBelegIndikation } = await import('./stages/beleg-indikation.ts');
+      await Promise.all(files.map(async (file, idx) => {
+        if (aborted) return;
+        try {
+          const result = await runBelegIndikation(
+            { filePath: file.path, filename: file.originalname },
+            { dpi: 150, maxTokens: 800, timeoutMs: 15_000 },
+          );
+          if (aborted) return;
+          res.write(formatSseEvent({
+            name: 'beleg_indikation',
+            runId: '',
+            workflowId: def.id,
+            at: new Date().toISOString(),
+            payload: { docIdx: idx, filename: file.originalname, ...result },
+          }));
+        } catch (err) {
+          console.warn('[bulk] eager indikation failed for', file.originalname, ':', (err as Error).message);
+        }
+      }));
+    })();
+
+    // Concurrency-limited Pool für die schwere Pipeline (OCR + Extraction).
     let nextIdx = 0;
     async function worker() {
       while (!aborted) {

@@ -110,6 +110,70 @@ async function firstPageImage(filePath: string, filename: string, dpi: number): 
   }
 }
 
+/**
+ * Pure helper: runs the same Mistral Small Vision call as the stage but
+ * without StageContext. Used by the bulk-upload handler to fire eager
+ * indications for ALL uploaded files in parallel (ungethrottelt) so the
+ * UI sees Anlagen + wichtige Werte within ~3s for the whole batch.
+ */
+export async function runBelegIndikation(
+  input: BelegIndikationInput,
+  cfg?: BelegIndikationConfig,
+  signal?: AbortSignal,
+): Promise<BelegIndikationOutput> {
+  const t0 = Date.now();
+  const baseUrl = cfg?.baseUrl ?? 'https://api.mistral.ai';
+  const model = cfg?.model ?? 'mistral-small-latest';
+  const dpi = cfg?.dpi ?? 150;
+  const maxTokens = cfg?.maxTokens ?? 800;
+  const timeoutMs = cfg?.timeoutMs ?? 15_000;
+  const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env
+  if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
+
+  const img = await firstPageImage(input.filePath, input.filename, dpi);
+  const b64 = img.toString('base64');
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model, max_tokens: maxTokens, temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: PROMPT },
+          { type: 'image_url', image_url: `data:image/png;base64,${b64}` },
+        ] }],
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`beleg-indikation HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = data.choices?.[0]?.message?.content ?? '{}';
+    let parsed: { belegtyp?: string; anlagen?: string[]; wichtige_werte?: Array<{ label?: string; value?: string }> } = {};
+    try { parsed = JSON.parse(raw); } catch { /* keep empty */ }
+    const allowed = new Set(ALLOWED_ANLAGEN);
+    const anlagen = (parsed.anlagen ?? []).map((a) => String(a).trim()).filter((a) => allowed.has(a));
+    const belegtyp = typeof parsed.belegtyp === 'string' ? parsed.belegtyp.trim() : null;
+    const wichtige_werte = (parsed.wichtige_werte ?? [])
+      .filter((e) => e && typeof e === 'object')
+      .map((e) => ({ label: String(e.label ?? '').trim(), value: String(e.value ?? '').trim() }))
+      .filter((e) => e.label && e.value)
+      .slice(0, 6);
+    return { anlagen, belegtyp, wichtige_werte, ms: Date.now() - t0 };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 export const belegIndikationStage = defineStage<
   BelegIndikationInput,
   BelegIndikationOutput,
