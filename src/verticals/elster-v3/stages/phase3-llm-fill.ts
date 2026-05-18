@@ -224,6 +224,11 @@ export interface Phase3LlmHit {
   drucktext: string;
   vordruckzeile: string;
   datentyp: 'string' | 'date' | 'currency';
+  /** Citation (P1): 0-based index of the OCR page that produced this hit.
+   *  Populated by phase3-vision-fill (first page index of the chunk that
+   *  returned the value). Undefined when the producing stage didn't track
+   *  per-page provenance (text-only phase3-llm-fill). */
+  page?: number;
 }
 
 export interface Phase3AnlageResult {

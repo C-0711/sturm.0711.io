@@ -136,6 +136,9 @@ interface FlatHit {
   value: string;
   /** Which batch produced this value (for cross-page consistency audit). */
   batchIdx: number;
+  /** First page (0-based) of the chunk that produced this value. Used by
+   *  P1 citations infra → Phase3LlmHit.page → CanonicalValue.page → UI. */
+  page?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -356,6 +359,7 @@ export const phase3VisionFillStage = defineStage<
       idx: number;
       label: string;            // human-readable chunk id, e.g. "pages-1-4"
       anlagen: string[];        // anlagen targeted in this chunk
+      pageIdxs: number[];       // 0-based PDF page indices covered by chunk
       parsed: Record<string, string | null>;
       error: Error | null;
       wallclockMs: number;
@@ -492,6 +496,7 @@ export const phase3VisionFillStage = defineStage<
         );
         outcomes.push({
           idx, label: chunkLabel, anlagen: targetAnlagen,
+          pageIdxs: chunk.pageIdxs,
           parsed, error: null,
           wallclockMs: r.wallclockMs,
           promptTokens: r.promptTokens,
@@ -516,6 +521,7 @@ export const phase3VisionFillStage = defineStage<
         );
         outcomes.push({
           idx, label: chunkLabel, anlagen: targetAnlagen,
+          pageIdxs: chunk.pageIdxs,
           parsed: {}, error: e,
           wallclockMs: 0, promptTokens: 0, completionTokens: 0,
         });
@@ -584,7 +590,13 @@ export const phase3VisionFillStage = defineStage<
             nextBatch: o.idx,
           });
         }
-        merged.set(eCode, { eCode, value: valStr, batchIdx: o.idx });
+        // First page of the chunk that produced this answer — best citation
+        // we have without per-page vision (the chunk's images cover those pages).
+        const page = o.pageIdxs[0];
+        merged.set(eCode, {
+          eCode, value: valStr, batchIdx: o.idx,
+          ...(typeof page === 'number' && page >= 0 ? { page } : {}),
+        });
       }
     }
 
@@ -741,6 +753,7 @@ export const phase3VisionFillStage = defineStage<
             drucktext: f.drucktext,
             vordruckzeile: f.vordruckzeile,
             datentyp: f.datentyp,
+            ...(typeof m.page === 'number' ? { page: m.page } : {}),
           };
         } else if (f.pflicht) {
           still_missing.push(f.eCode);

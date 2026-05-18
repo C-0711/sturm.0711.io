@@ -78,6 +78,13 @@ export interface CanonicalValue {
   /** Übernommen von phase1: (value, drucktext) tritt in ≥3 eCodes über ≥2
    *  Anlagen auf → WISO-Platzhalter-Verdacht, triggert trust='suspicious'. */
   repeat_suspicious?: boolean;
+  /** Citation (P1): 0-based index of the OCR page that produced this value.
+   *  Propagated from phase1-regex.Phase1RegexHit.page (regex hits) OR
+   *  phase3-vision-fill.Phase3LlmHit.page (vision/LLM hits, = first page
+   *  of the chunk that produced it). Undefined for BMF_RECHNER computed
+   *  values and for text-only LLM hits. Used by Pro-Abrechnung UI + the
+   *  P6 source-viewer to render clickable "jump to page N" chips. */
+  page?: number;
 }
 
 export interface Phase5MergeInput {
@@ -356,6 +363,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
           trust_reasons: [],
           zeile_anchored: h.zeile_anchored,
           repeat_suspicious: h.repeat_suspicious,
+          ...(typeof h.page === 'number' ? { page: h.page } : {}),
         };
         fromRegex++;
         byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;
@@ -389,6 +397,7 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
           kontextPath: h.kontextPath,
           trust: 'medium',
           trust_reasons: [],
+          ...(typeof h.page === 'number' ? { page: h.page } : {}),
         };
         fromLlm++;
         byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;

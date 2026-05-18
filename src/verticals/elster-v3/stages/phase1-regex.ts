@@ -58,6 +58,12 @@ export interface Phase1RegexHit {
    *  über ≥2 Anlagen auftaucht — Signal für OCR-Platzhalter (z.B. WISO
    *  "Bezeichnung 456" auf jeder Anlage). Post-Pass-Flag. */
   repeat_suspicious?: boolean;
+  /** Citation: 0-based index of the OCR page where `evidence_line` was found.
+   *  Populated when the OCR input includes per-page text; left undefined when
+   *  upstream only provided the joined string. Downstream (phase5-merge →
+   *  canonical_layer → aggregate → Pro-Abrechnung UI) uses this to render
+   *  clickable "jump to source page" chips. */
+  page?: number;
 }
 
 export interface Phase1AnlageResult {
@@ -290,6 +296,28 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
     // `ctx.tools.get('elster-catalog')` here when this stage needs cat.get('atoms').
     const perAnlage = input.per_anlage ?? {};
     const lines = input.text.split(/\r?\n/);
+
+    // Citation infra (P1): build line→page index so each hit can carry the
+    // 0-based page where its evidence_line was found. Tracks the current
+    // page by parsing "Seite N von M" markers as we walk the lines. Lines
+    // before the first marker stay on page -1 (unknown). Mirrors the
+    // splitOcrByPages logic in lib/page-anlage-detect.ts.
+    const pageByLine: number[] = new Array(lines.length);
+    {
+      let currentPage = -1; // before first "Seite N" marker
+      const headerRx = /Seite\s+(\d+)\s+von\s+\d+/;
+      for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(headerRx);
+        if (m) {
+          const parsed = parseInt(m[1], 10);
+          if (Number.isFinite(parsed) && parsed >= 1) {
+            currentPage = parsed - 1; // 1-based → 0-based
+          }
+        }
+        pageByLine[i] = currentPage;
+      }
+    }
+
     const result: Record<string, Phase1AnlageResult> = {};
     let totalHits = 0;
     let totalMissing = 0;
@@ -313,8 +341,10 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
         const hasZeile = feld.vordruckzeile && /^\d+$/.test(feld.vordruckzeile);
         const zeileRx = hasZeile ? new RegExp(`\\b${feld.vordruckzeile}\\b`) : null;
 
-        /** Try one line, return hit if matches all factors (or null). */
-        const tryLine = (rawLine: string, requireZeile: boolean, origin: 'REGEX_100%' | 'REGEX_3F'): Phase1RegexHit | null => {
+        /** Try one line, return hit if matches all factors (or null).
+         *  lineIdx is the index into `lines` (and `pageByLine`) so the hit
+         *  can carry the 0-based page where it was matched. */
+        const tryLine = (rawLine: string, lineIdx: number, requireZeile: boolean, origin: 'REGEX_100%' | 'REGEX_3F'): Phase1RegexHit | null => {
           const line = rawLine.trim();
           if (line.length === 0) return null;
           if (requireZeile && zeileRx && !zeileRx.test(line)) return null;
@@ -346,6 +376,7 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
             const lead = leadingLabelNumber(line);
             anchored = lead === feld.vordruckzeile;
           }
+          const page = pageByLine[lineIdx];
           return {
             eCode: feld.eCode,
             value: rawValue,
@@ -358,6 +389,7 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
             vordruckzeile: feld.vordruckzeile,
             datentyp: feld.datentyp,
             zeile_anchored: anchored,
+            ...(page >= 0 ? { page } : {}),
           };
         };
 
@@ -391,8 +423,8 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
         // wähle die anchored bevorzugt.
         if (hasZeile) {
           const cands: Phase1RegexHit[] = [];
-          for (const rl of lines) {
-            const h = tryLine(rl, true, 'REGEX_100%');
+          for (let i = 0; i < lines.length; i++) {
+            const h = tryLine(lines[i], i, true, 'REGEX_100%');
             if (h) cands.push(h);
           }
           hit = pickBest(cands);
@@ -404,8 +436,8 @@ export const phase1RegexStage = defineStage<Phase1RegexInput, Phase1RegexOutput,
         // "23 Bezeichnung …" gibt.
         if (!hit && threeFaktor && feld.drucktext.length >= minLen3F) {
           const cands: Phase1RegexHit[] = [];
-          for (const rl of lines) {
-            const h = tryLine(rl, false, 'REGEX_3F');
+          for (let i = 0; i < lines.length; i++) {
+            const h = tryLine(lines[i], i, false, 'REGEX_3F');
             if (h) cands.push(h);
           }
           hit = pickBest(cands);
