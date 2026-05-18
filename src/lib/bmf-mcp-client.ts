@@ -175,6 +175,11 @@ export function canonicalLayerToElsterFelder(
     // ist gesicherter OCR-Text-Match. Strict no-fallback: nur LLM_*
     // suspicious-Treffer raus, REGEX_* + BMF_RECHNER bleiben drin.
     if (cv.trust === 'suspicious' && cv.origin && /^LLM/i.test(cv.origin)) continue;
+    // BMF MCP versucht jeden elster_felder-Wert in float() zu parsen — String-
+    // Felder wie "Bezeichnung" oder ": Kontoführungsgebühren" crashen den Call.
+    // Daher: NUR currency + date Felder an BMF (numerische Steuerwirkung).
+    // String/Stammdaten-Felder gehören ins eric_xml, nicht in den Rechner.
+    if (cv.datentyp !== 'currency' && cv.datentyp !== 'date') continue;
     if (cv.datentyp === 'currency') {
       // Bevorzugt normalizedNumber (single source of arithmetic truth) →
       // keine zweite Locale-Parsing-Runde nötig.
@@ -188,6 +193,7 @@ export function canonicalLayerToElsterFelder(
         out[eCode] = cv.value;
       }
     } else if (cv.value) {
+      // date — durchreichen (BMF kann das verarbeiten)
       out[eCode] = cv.value;
     }
   }
