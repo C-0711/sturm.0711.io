@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Steuerfall · Fall-Detail</title>
   <link rel="stylesheet" href="/design-system/colors_and_type.css" />
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg" />
   <style>
     body {
       margin: 0;
@@ -14,39 +15,842 @@
       line-height: 1.5;
     }
     .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 96px; }
+
+    /* Topbar — Mandanten-Identität rechts oben, schlicht */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin-bottom: 28px;
+    }
+    .topbar a { color: var(--color-text-secondary); text-decoration: none; }
+    .topbar a:hover { color: var(--color-text-primary); text-decoration: underline; }
+    .topbar .me { display: flex; gap: 12px; align-items: center; }
+    .topbar .me-email { color: var(--color-text-secondary); }
+
+    header.case-head { margin-bottom: 24px; }
     h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
-    .sub { color: var(--color-text-secondary); font-size: 14px; margin: 0 0 36px; }
-    .tabs { display: flex; gap: 8px; margin: 24px 0; border-bottom: 1px solid var(--color-border); }
+    .sub { color: var(--color-text-secondary); font-size: 14px; margin: 0; }
+    .case-meta { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin: 28px 0 24px;
+      border-bottom: 1px solid var(--color-border);
+    }
     .tab {
-      padding: 10px 16px;
+      padding: 10px 18px;
       font-size: 13px;
       color: var(--color-text-secondary);
       border-bottom: 2px solid transparent;
       cursor: pointer;
+      background: none;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      margin-bottom: -1px;
+      font-family: inherit;
     }
-    .tab.active { color: var(--color-text-primary); border-color: var(--color-accent); font-weight: 500; }
-    .stub {
-      padding: 16px;
+    .tab:hover { color: var(--color-text-primary); }
+    .tab.active {
+      color: var(--color-text-primary);
+      border-bottom-color: var(--color-accent);
+      font-weight: 500;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Dropzone */
+    .dropzone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 36px 24px;
+      margin-bottom: 24px;
+      border: 2px dashed var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg);
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      user-select: none;
+    }
+    .dropzone:hover {
+      background: var(--color-bg-hover);
+      border-color: var(--color-accent);
+      color: var(--color-text-primary);
+    }
+    .dropzone.dragover {
+      background: var(--color-accent-light);
+      border-color: var(--color-accent);
+      color: var(--color-text-primary);
+      border-style: solid;
+    }
+    .dropzone-headline { font-weight: 600; color: var(--color-text-primary); font-size: 14px; }
+    .dropzone-sub { font-size: 12px; color: var(--color-text-tertiary); }
+    .dropzone input[type="file"] { display: none; }
+
+    /* Upload-Status-Liste während Verarbeitung */
+    .upload-status {
+      margin-bottom: 24px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .upload-status:empty { display: none; }
+    .upload-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .upload-row:last-child { border-bottom: none; }
+    .upload-row .name { font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      font-size: 11px;
+      border-radius: 999px;
+      font-family: inherit;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+    }
+    .chip.running { background: #fff8e6; border-color: var(--color-amber); color: #8a6500; }
+    .chip.ok      { background: #f1f7f0; border-color: var(--color-success); color: #3a6b3a; }
+    .chip.error   { background: #fbeded; border-color: var(--color-danger); color: #8c3a3a; }
+
+    /* Belege-Tabelle */
+    table.belege, table.felder {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.belege th, table.belege td,
+    table.felder th, table.felder td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--color-border-light);
+      vertical-align: top;
+    }
+    table.belege th, table.felder th {
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-tertiary);
+      border-bottom: 1px solid var(--color-border);
+    }
+    table.belege tr:hover td, table.felder tr:hover td { background: var(--color-bg-hover); }
+    .file-name {
+      color: var(--color-text-primary);
+      text-decoration: none;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .file-name:hover { color: var(--color-accent); text-decoration: underline; }
+    .file-name.disabled { color: var(--color-text-secondary); cursor: default; pointer-events: none; }
+
+    .row-action {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      padding: 2px 6px;
+      font-family: inherit;
+    }
+    .row-action:hover { color: var(--color-danger); }
+
+    /* Felder-Filter */
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .filter-row select, .filter-row input {
+      padding: 7px 11px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: inherit;
+    }
+    .filter-row input { flex: 1; min-width: 200px; }
+    .filter-row select:focus, .filter-row input:focus {
+      outline: none;
+      border-color: var(--color-accent);
+    }
+    .filter-count {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin-left: auto;
+    }
+
+    /* Felder-Tabelle */
+    .anlage-group { margin-bottom: 28px; }
+    .anlage-head {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary);
+      margin: 0 0 8px;
+      font-weight: 600;
+    }
+    .anlage-head .anlage-count { color: var(--color-text-tertiary); font-weight: 400; margin-left: 6px; }
+    .ecode { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--color-text-secondary); }
+    .drucktext { font-size: 13px; }
+    .wert { font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-text-primary); }
+    .quelle { font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-text-tertiary); word-break: break-all; }
+    .conflict-marker { color: var(--color-danger); font-size: 11px; font-weight: 600; }
+    .conflict-marker:empty { display: none; }
+
+    /* Empty + Error States */
+    .empty {
+      padding: 32px 20px;
       border: 1px dashed var(--color-border);
       border-radius: 6px;
       font-size: 13px;
       color: var(--color-text-secondary);
       background: var(--color-bg-tertiary);
+      text-align: center;
     }
+    .empty .empty-headline {
+      color: var(--color-text-primary);
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .error-block {
+      padding: 18px 20px;
+      border: 1px solid var(--color-danger);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--color-text-primary);
+      background: #fbeded;
+    }
+    .error-block a {
+      color: var(--color-accent);
+      display: inline-block;
+      margin-top: 8px;
+    }
+
+    /* Iframe Abrechnung */
+    .frame-wrap {
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--color-bg);
+    }
+    .frame-wrap iframe {
+      width: 100%;
+      height: calc(100vh - 240px);
+      min-height: 480px;
+      border: none;
+      display: block;
+    }
+
+    /* Fall-nicht-gefunden Zustand */
+    .full-error {
+      max-width: 520px;
+      margin: 80px auto;
+      padding: 28px 32px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg);
+      text-align: center;
+    }
+    .full-error h2 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+    .full-error p { margin: 0 0 16px; color: var(--color-text-secondary); font-size: 14px; }
+    .full-error a {
+      color: var(--color-accent);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .full-error a:hover { text-decoration: underline; }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Fall-Detail</h1>
-    <p class="sub">Belege, Felder und Abrechnung für diesen Fall.</p>
-    <div class="tabs">
-      <div class="tab active">Belege</div>
-      <div class="tab">Erkannte Felder</div>
-      <div class="tab">Abrechnung</div>
+
+    <!-- Topbar -->
+    <div class="topbar" id="topbar">
+      <a href="/m/dashboard">&larr; Übersicht</a>
+      <div class="me hidden" id="me">
+        <span class="me-email" id="me-email"></span>
+        <a href="#" id="me-logout">Abmelden</a>
+      </div>
     </div>
-    <div class="stub">
-      Fall-Detail wird gerade gebaut. Hier erscheinen Drop-Zone für Belege, Tabelle erkannter Felder und die finale Abrechnung.
-    </div>
+
+    <!-- Fall-Kopfzeile -->
+    <header class="case-head" id="case-head">
+      <h1 id="case-title">&hellip;</h1>
+      <p class="sub" id="case-sub"></p>
+      <div class="case-meta" id="case-meta"></div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="belege" role="tab">Belege</button>
+      <button class="tab" data-tab="felder" role="tab">Erkannte Felder</button>
+      <button class="tab" data-tab="abrechnung" role="tab">Abrechnung</button>
+    </nav>
+
+    <!-- Panel: Belege -->
+    <section class="panel active" id="panel-belege" role="tabpanel">
+      <label class="dropzone" id="dropzone">
+        <div class="dropzone-headline">Belege hier ablegen oder klicken zum Auswählen</div>
+        <div class="dropzone-sub">PDF, JPG oder PNG &middot; mehrere Dateien möglich</div>
+        <input type="file" id="file-input" multiple accept="application/pdf,image/jpeg,image/png" />
+      </label>
+
+      <div class="upload-status" id="upload-status"></div>
+
+      <div id="belege-area">
+        <div class="empty" id="belege-empty">
+          <div class="empty-headline">Noch keine Belege hochgeladen.</div>
+          <div>Ziehe deine Steuerunterlagen in die Fläche oben oder klicke zum Auswählen.</div>
+        </div>
+        <table class="belege hidden" id="belege-table">
+          <thead>
+            <tr>
+              <th>Dateiname</th>
+              <th>Kategorie</th>
+              <th>Status</th>
+              <th>Hochgeladen</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Panel: Erkannte Felder -->
+    <section class="panel" id="panel-felder" role="tabpanel">
+      <div class="filter-row">
+        <select id="felder-anlage">
+          <option value="">Alle Anlagen</option>
+        </select>
+        <input type="search" id="felder-suche" placeholder="Suche Bezeichnung oder eCode&hellip;" />
+        <span class="filter-count" id="felder-count"></span>
+      </div>
+      <div id="felder-body">
+        <div class="empty">
+          <div class="empty-headline">Noch keine Felder erkannt.</div>
+          <div>Lade Belege im Tab &bdquo;Belege&rdquo; hoch.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel: Abrechnung -->
+    <section class="panel" id="panel-abrechnung" role="tabpanel">
+      <div class="frame-wrap">
+        <iframe id="abrechnung-frame" title="Abrechnung"></iframe>
+      </div>
+    </section>
+
   </div>
+
+  <!-- Voll-Fehler-Container (Case nicht gefunden / kein Zugriff) -->
+  <template id="tpl-full-error">
+    <div class="full-error">
+      <h2>Fall nicht gefunden oder kein Zugriff</h2>
+      <p>Dieser Fall ist entweder nicht (mehr) vorhanden oder du bist nicht berechtigt, ihn zu sehen.</p>
+      <a href="/m/dashboard">&larr; Zurück zum Dashboard</a>
+    </div>
+  </template>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── URL & Konstanten ────────────────────────────────────────────────
+  const CASE_ID = decodeURIComponent(window.location.pathname.split('/').pop() || '');
+  const APP_ID = 'steuerfall-est';
+  const API_BASE = '/api/applications/' + encodeURIComponent(APP_ID) + '/instances/' + encodeURIComponent(CASE_ID);
+
+  // Anlage → Kategorie-Mapping (Stammdaten/Einkünfte/Ausgaben)
+  function anlagenZuKategorie(anlagen) {
+    if (!Array.isArray(anlagen) || anlagen.length === 0) return '?';
+    const set = new Set(anlagen.map(a => String(a).toUpperCase()));
+    const einkuenfte = ['N', 'KAP', 'G', 'S', 'L', 'R', 'V'];
+    const ausgaben   = ['SA', 'VOR', 'AV', 'AVEUER', 'AUSSERORDENTLICHE'];
+    const stamm      = ['EST1A', 'ESTLA', 'HAUPTVORDRUCK'];
+    if (einkuenfte.some(x => set.has(x))) return 'Einkünfte';
+    if (ausgaben.some(x => set.has(x))) return 'Ausgaben';
+    if (stamm.some(x => set.has(x))) return 'Stammdaten';
+    return '?';
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('de-DE', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    } catch { return iso; }
+  }
+
+  function stateChip(state) {
+    if (state === 'ok')      return '<span class="chip ok">Fertig</span>';
+    if (state === 'partial') return '<span class="chip running">Teilweise</span>';
+    if (state === 'error')   return '<span class="chip error">Fehler</span>';
+    if (state === 'running') return '<span class="chip running">Wird verarbeitet&hellip;</span>';
+    return '<span class="chip">unbekannt</span>';
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // ── Auth-Probe ──────────────────────────────────────────────────────
+  async function probeAuth() {
+    try {
+      const r = await fetch('/api/m/me', { credentials: 'include' });
+      if (r.status === 401) {
+        window.location.href = '/m/login?next=' + encodeURIComponent(window.location.pathname + window.location.hash);
+        return null;
+      }
+      if (!r.ok) {
+        // Backend nicht da → wir zeigen die Seite trotzdem, aber ohne Identität
+        return null;
+      }
+      const data = await r.json();
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderMe(me) {
+    if (!me || !me.email) return;
+    const el = document.getElementById('me');
+    document.getElementById('me-email').textContent = me.email;
+    el.classList.remove('hidden');
+  }
+
+  document.getElementById('me-logout').addEventListener('click', async (e) => {
+    e.preventDefault();
+    try { await fetch('/api/m/logout', { method: 'POST', credentials: 'include' }); }
+    catch (_) {}
+    window.location.href = '/m/login';
+  });
+
+  // ── Case-Header laden ───────────────────────────────────────────────
+  let CASE_DATA = null;
+
+  async function loadCase() {
+    let r;
+    try {
+      r = await fetch(API_BASE, { credentials: 'include' });
+    } catch {
+      renderFullError();
+      return;
+    }
+    if (r.status === 401 || r.status === 403 || r.status === 404) {
+      renderFullError();
+      return;
+    }
+    if (!r.ok) {
+      renderFullError();
+      return;
+    }
+    const data = await r.json();
+    CASE_DATA = data;
+    renderCaseHeader(data);
+    renderBelegeTable(data);
+  }
+
+  function renderFullError() {
+    const wrap = document.querySelector('.wrap');
+    const tpl = document.getElementById('tpl-full-error');
+    wrap.innerHTML = '';
+    wrap.appendChild(tpl.content.cloneNode(true));
+  }
+
+  function renderCaseHeader(inst) {
+    const title = inst.displayName || ('Fall ' + CASE_ID);
+    const jahr = inst.veranlagungsjahr || '';
+    document.getElementById('case-title').textContent = title;
+    const sub = jahr ? ('Veranlagungsjahr ' + jahr) : 'Steuerfall';
+    document.getElementById('case-sub').textContent = sub;
+
+    const meta = [];
+    if (inst.status) meta.push('Status: ' + inst.status);
+    if (Array.isArray(inst.documents)) meta.push(inst.documents.length + ' Beleg(e)');
+    document.getElementById('case-meta').textContent = meta.join(' · ');
+
+    document.title = title + ' · Steuerfall';
+  }
+
+  // ── Belege-Tabelle ──────────────────────────────────────────────────
+  function renderBelegeTable(inst) {
+    const docs = Array.isArray(inst.documents) ? inst.documents : [];
+    const tbody = document.querySelector('#belege-table tbody');
+    const table = document.getElementById('belege-table');
+    const empty = document.getElementById('belege-empty');
+
+    if (docs.length === 0) {
+      table.classList.add('hidden');
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    table.classList.remove('hidden');
+    tbody.innerHTML = docs.map((d) => {
+      const filename = d.filename || '(unbekannte Datei)';
+      const kategorie = anlagenZuKategorie(d.anlagen);
+      const state = d.state || (typeof d.fieldsExtracted === 'number' && d.fieldsExtracted > 0 ? 'ok' : 'unknown');
+      const uploaded = fmtDate(d.uploadedAt);
+      // Keine PDF-View-Route — Datei als Klar-Text. Sobald P1 sie liefert,
+      // kann hier ein Link daraus werden.
+      const nameCell = '<span class="file-name disabled" title="Beleg-Vorschau in Vorbereitung">' + escapeHtml(filename) + '</span>';
+      return '<tr>'
+        + '<td>' + nameCell + '</td>'
+        + '<td>' + escapeHtml(kategorie) + '</td>'
+        + '<td>' + stateChip(state) + '</td>'
+        + '<td>' + escapeHtml(uploaded) + '</td>'
+        + '<td><button class="row-action" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Löschen</button></td>'
+        + '</tr>';
+    }).join('');
+
+    // Lösch-Handler (DELETE-Endpoint kann fehlen — dann freundliche Meldung)
+    tbody.querySelectorAll('button.row-action').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.getAttribute('data-filename') || '';
+        const runId = btn.getAttribute('data-runid') || '';
+        if (!confirm('Beleg „' + filename + '" wirklich entfernen?')) return;
+        try {
+          const r = await fetch(API_BASE + '/documents/' + encodeURIComponent(runId), {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          if (r.ok || r.status === 204) {
+            await loadCase();
+          } else {
+            alert('Löschen ist gerade nicht verfügbar.');
+          }
+        } catch {
+          alert('Löschen ist gerade nicht verfügbar.');
+        }
+      });
+    });
+  }
+
+  // ── Upload (Drag & Drop + Browse) + SSE-Status ──────────────────────
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const statusList = document.getElementById('upload-status');
+
+  ['dragenter', 'dragover'].forEach(ev => {
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover'); });
+  });
+  ['dragleave', 'drop'].forEach(ev => {
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover'); });
+  });
+  dropzone.addEventListener('drop', (e) => {
+    const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+    if (files.length) startUpload(files);
+  });
+  fileInput.addEventListener('change', () => {
+    const files = Array.from(fileInput.files || []);
+    if (files.length) startUpload(files);
+    fileInput.value = '';
+  });
+
+  function setStatusRow(idx, filename, state) {
+    let row = statusList.querySelector('[data-idx="' + idx + '"]');
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'upload-row';
+      row.setAttribute('data-idx', String(idx));
+      row.innerHTML = '<span class="name"></span><span class="chip-slot"></span>';
+      statusList.appendChild(row);
+    }
+    row.querySelector('.name').textContent = filename;
+    row.querySelector('.chip-slot').innerHTML = stateChip(state);
+  }
+
+  async function startUpload(files) {
+    // Status-Liste leeren und initial befüllen
+    statusList.innerHTML = '';
+    files.forEach((f, i) => setStatusRow(i, f.name, 'running'));
+
+    const fd = new FormData();
+    for (const f of files) fd.append('files', f, f.name);
+
+    let response;
+    try {
+      response = await fetch(API_BASE + '/upload-bulk', {
+        method: 'POST',
+        body: fd,
+        credentials: 'include',
+      });
+    } catch {
+      files.forEach((f, i) => setStatusRow(i, f.name, 'error'));
+      return;
+    }
+
+    if (!response.ok) {
+      files.forEach((f, i) => setStatusRow(i, f.name, 'error'));
+      return;
+    }
+
+    // SSE-Stream parsen (Content-Type: text/event-stream)
+    const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+    if (!reader) {
+      // Fallback: kein Streaming möglich — Status auf ok nach Komplett-Response
+      files.forEach((f, i) => setStatusRow(i, f.name, 'ok'));
+      await loadCase();
+      await reloadFelderIfVisible();
+      return;
+    }
+
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    function handleEvent(eventName, dataStr) {
+      let data = null;
+      try { data = JSON.parse(dataStr); } catch { return; }
+      const payload = (data && data.payload) || {};
+      const idx = typeof payload.docIdx === 'number' ? payload.docIdx : null;
+      const evName = eventName || data.name || '';
+      const filename = (idx != null && files[idx]) ? files[idx].name : (payload.filename || '');
+
+      if (evName === 'doc_start' && idx != null) {
+        setStatusRow(idx, filename, 'running');
+      } else if (evName === 'doc_done' && idx != null) {
+        const ok = payload.state === 'ok';
+        setStatusRow(idx, filename, ok ? 'ok' : 'error');
+      } else if (evName === 'doc_error' && idx != null) {
+        setStatusRow(idx, filename, 'error');
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE-Frames sind durch \n\n getrennt
+      let sep;
+      while ((sep = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        let evName = '';
+        let dataStr = '';
+        frame.split('\n').forEach(line => {
+          if (line.startsWith('event:')) evName = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+        });
+        if (dataStr) handleEvent(evName, dataStr);
+      }
+    }
+
+    // Nach Bulk-Done: Case + Felder neu laden
+    await loadCase();
+    await reloadFelderIfVisible();
+  }
+
+  // ── Erkannte Felder ─────────────────────────────────────────────────
+  let FELDER_DATA = null;
+  let FELDER_LOADED = false;
+
+  async function loadFelder() {
+    const body = document.getElementById('felder-body');
+    body.innerHTML = '<div class="empty"><div>Felder werden geladen&hellip;</div></div>';
+    let r;
+    try {
+      r = await fetch(API_BASE + '/aggregate?bmf=0', { credentials: 'include' });
+    } catch {
+      body.innerHTML = '<div class="empty"><div class="empty-headline">Felder gerade nicht verfügbar.</div><div>Bitte später erneut versuchen.</div></div>';
+      return;
+    }
+    if (!r.ok) {
+      if (r.status === 404) {
+        body.innerHTML = '<div class="empty"><div class="empty-headline">Noch keine Felder erkannt.</div><div>Lade Belege im Tab &bdquo;Belege&rdquo; hoch.</div></div>';
+      } else {
+        body.innerHTML = '<div class="empty"><div class="empty-headline">Felder gerade nicht verfügbar.</div><div>Bitte später erneut versuchen.</div></div>';
+      }
+      return;
+    }
+    const data = await r.json();
+    FELDER_DATA = data;
+    FELDER_LOADED = true;
+    populateAnlagenFilter(data);
+    renderFelder();
+  }
+
+  async function reloadFelderIfVisible() {
+    if (document.getElementById('panel-felder').classList.contains('active')) {
+      await loadFelder();
+    } else {
+      FELDER_LOADED = false; // beim nächsten Tab-Wechsel neu laden
+    }
+  }
+
+  function populateAnlagenFilter(data) {
+    const merged = (data && data.merged_layer) || {};
+    const anlagen = new Set();
+    for (const f of Object.values(merged)) {
+      if (f && f.anlage) anlagen.add(String(f.anlage));
+    }
+    const sel = document.getElementById('felder-anlage');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Alle Anlagen</option>'
+      + Array.from(anlagen).sort().map(a => '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + '</option>').join('');
+    if (current && anlagen.has(current)) sel.value = current;
+  }
+
+  function renderFelder() {
+    const body = document.getElementById('felder-body');
+    if (!FELDER_DATA) { body.innerHTML = ''; return; }
+    const merged = FELDER_DATA.merged_layer || {};
+    const conflicts = new Set((FELDER_DATA.conflicts || []).map(c => c.eCode));
+    const anlageFilter = (document.getElementById('felder-anlage').value || '').toUpperCase();
+    const q = (document.getElementById('felder-suche').value || '').toLowerCase().trim();
+
+    // Felder-Liste vorbereiten + filtern
+    const entries = Object.entries(merged).filter(([eCode, f]) => {
+      if (!f) return false;
+      if (anlageFilter && String(f.anlage || '').toUpperCase() !== anlageFilter) return false;
+      if (q) {
+        const hay = (eCode + ' ' + (f.drucktext || '')).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+
+    const total = Object.keys(merged).length;
+    document.getElementById('felder-count').textContent = entries.length === total
+      ? (total + ' Feld(er)')
+      : (entries.length + ' von ' + total);
+
+    if (entries.length === 0) {
+      if (total === 0) {
+        body.innerHTML = '<div class="empty"><div class="empty-headline">Noch keine Felder erkannt.</div><div>Lade Belege im Tab &bdquo;Belege&rdquo; hoch.</div></div>';
+      } else {
+        body.innerHTML = '<div class="empty"><div>Kein Treffer für die aktuelle Filterung.</div></div>';
+      }
+      return;
+    }
+
+    // Gruppieren nach Anlage
+    const grouped = new Map();
+    for (const [eCode, f] of entries) {
+      const a = String(f.anlage || '?');
+      if (!grouped.has(a)) grouped.set(a, []);
+      grouped.get(a).push([eCode, f]);
+    }
+    const anlagenSorted = Array.from(grouped.keys()).sort();
+
+    const parts = anlagenSorted.map(anlage => {
+      const rows = grouped.get(anlage)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([eCode, f]) => {
+          const wert = f.normalized || f.value || '';
+          const quellen = (f.confirmed_by || []).map(s => s.filename).filter(Boolean);
+          const quelle = quellen.length ? Array.from(new Set(quellen)).join(', ') : '';
+          const zeile = f.vordruckzeile ? ('Zeile ' + escapeHtml(f.vordruckzeile)) : '';
+          const conflict = conflicts.has(eCode) ? '<span class="conflict-marker">abweichende Quellen</span>' : '';
+          return '<tr>'
+            + '<td class="ecode">' + escapeHtml(eCode) + '</td>'
+            + '<td class="drucktext">' + escapeHtml(f.drucktext || '') + '<div class="quelle">' + zeile + (zeile && conflict ? ' · ' : '') + conflict + '</div></td>'
+            + '<td class="wert">' + escapeHtml(wert) + '</td>'
+            + '<td class="quelle">' + escapeHtml(quelle) + '</td>'
+            + '</tr>';
+        }).join('');
+      return '<div class="anlage-group">'
+        + '<h3 class="anlage-head">Anlage ' + escapeHtml(anlage) + '<span class="anlage-count">(' + grouped.get(anlage).length + ')</span></h3>'
+        + '<table class="felder">'
+        + '<thead><tr><th style="width:120px">eCode</th><th>Bezeichnung</th><th style="width:140px">Wert</th><th style="width:200px">Quelle</th></tr></thead>'
+        + '<tbody>' + rows + '</tbody>'
+        + '</table>'
+        + '</div>';
+    });
+
+    body.innerHTML = parts.join('');
+  }
+
+  document.getElementById('felder-anlage').addEventListener('change', renderFelder);
+  document.getElementById('felder-suche').addEventListener('input', renderFelder);
+
+  // ── Tabs & URL-Hash ─────────────────────────────────────────────────
+  function setActiveTab(name) {
+    const valid = ['belege', 'felder', 'abrechnung'];
+    if (!valid.includes(name)) name = 'belege';
+
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('active', t.getAttribute('data-tab') === name);
+    });
+    document.querySelectorAll('.panel').forEach(p => {
+      p.classList.toggle('active', p.id === ('panel-' + name));
+    });
+
+    // Hash aktualisieren ohne Scroll-Sprung
+    if (window.location.hash !== '#' + name) {
+      history.replaceState(null, '', '#' + name);
+    }
+
+    if (name === 'felder' && !FELDER_LOADED) {
+      loadFelder();
+    }
+    if (name === 'abrechnung') {
+      const frame = document.getElementById('abrechnung-frame');
+      if (!frame.src) {
+        frame.src = '/abrechnung.html?app=' + encodeURIComponent(APP_ID) + '&case=' + encodeURIComponent(CASE_ID);
+      }
+    }
+  }
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => setActiveTab(t.getAttribute('data-tab')));
+  });
+
+  window.addEventListener('hashchange', () => {
+    const name = (window.location.hash || '').replace(/^#/, '');
+    setActiveTab(name);
+  });
+
+  // ── Init ────────────────────────────────────────────────────────────
+  (async function init() {
+    const me = await probeAuth();
+    if (me) renderMe(me);
+    // Wenn keine caseId in URL: freundliche Fehlerseite
+    if (!CASE_ID || CASE_ID === 'case') {
+      renderFullError();
+      return;
+    }
+    await loadCase();
+    const initialTab = (window.location.hash || '').replace(/^#/, '') || 'belege';
+    setActiveTab(initialTab);
+  })();
+})();
+</script>
 </body>
 </html>
