@@ -27,6 +27,8 @@ import { createCtxRouter } from './lib/ctx-server.ts';
 import { createCtxBenchRouter } from './lib/ctx-bench-server.ts';
 import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
+import { createMandantenAuthRouter } from './server/m-auth.ts';
+import { createMandantenCasesRouter, createOwnershipGuard } from './server/m-cases.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
 import {
@@ -72,6 +74,10 @@ const RUNS_DIR = path.join(ROOT, 'runs');
 const WORKSPACES_DIR = path.join(ROOT, 'workspaces');
 const USER_WORKFLOWS_DIR = path.join(ROOT, 'workflows-user');
 const APPLICATIONS_DIR = path.join(ROOT, 'applications-data');
+// Mandanten-Useraccounts (Mandanten-Workspace, /m/*-Surface). Liegt unter
+// runs/ damit es per Default gitignored ist — User-JSONs enthalten
+// Passwort-Hashes.
+const USERS_DIR = path.join(RUNS_DIR, '_users');
 const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
 const PIPELINES_DIR = path.join(__dirname, 'pipelines-seed');
 const UI_DIR = path.join(__dirname, 'ui');
@@ -81,6 +87,7 @@ fs.mkdirSync(RUNS_DIR, { recursive: true });
 fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 fs.mkdirSync(USER_WORKFLOWS_DIR, { recursive: true });
 fs.mkdirSync(APPLICATIONS_DIR, { recursive: true });
+fs.mkdirSync(USERS_DIR, { recursive: true });
 
 // Bootstrap-Registries
 registerAllStages();
@@ -259,6 +266,19 @@ app.get('/api/applications/:id', (req, res) => {
   if (!def) return res.status(404).json({ error: `application not found: ${req.params.id}` });
   res.json(def);
 });
+
+// Ownership-Guard für Mandanten-Cookies. Greift NUR wenn sturm-session-Cookie
+// gesetzt UND der Fall einen ownerUserId hat. Bearer-Aufrufe (Admin) und
+// Legacy-Cases ohne Owner werden durchgelassen. Muss VOR den
+// Instance-Handlern montiert sein. Siehe docs/MANDANTEN_WORKSPACE.md.
+app.use(
+  '/api/applications/:appId/instances/:caseId',
+  createOwnershipGuard({
+    applicationsDir: APPLICATIONS_DIR,
+    workspacesDir: WORKSPACES_DIR,
+    usersDir: USERS_DIR,
+  }),
+);
 
 // Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
 app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
@@ -1344,6 +1364,23 @@ app.use(sessionCookieMiddleware(sessionsOpts));
 
 // Session redeem is PUBLIC (no Bearer) — sessionId in body is the auth.
 app.use('/api/sessions', createSessionRedeemRouter(sessionsOpts));
+
+// ── Mandanten-Surface (/api/m/*) ──────────────────────────────────────
+// Auth + Cases für die /m/* HTML-Surface. Nutzt dieselbe Session-Mechanik
+// (sturm-session-Cookie) wie das Embed-Flow, aber mit User+Workspace-Stub.
+// Siehe docs/MANDANTEN_WORKSPACE.md.
+app.use('/api/m', createMandantenAuthRouter({
+  usersDir: USERS_DIR,
+  workspacesDir: WORKSPACES_DIR,
+  cookieName: sessionsOpts.cookieName,
+  secureCookie: sessionsOpts.secureCookie,
+}));
+app.use('/api/m', createMandantenCasesRouter({
+  usersDir: USERS_DIR,
+  workspacesDir: WORKSPACES_DIR,
+  applicationsDir: APPLICATIONS_DIR,
+  runsDir: RUNS_DIR,
+}));
 
 app.use('/api/jobs', requireBearerToken, createJobsRouter(jobRunner));
 app.use('/api/pipelines', requireBearerToken, createPipelinesRouter(PIPELINES_DIR));

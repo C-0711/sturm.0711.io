@@ -5,9 +5,15 @@ logs/
 .env.*
 !.env.example
 
-# Run-Artefakte (sensible Case-Daten)
-runs/
+# Run-Artefakte (sensible Case-Daten). `/runs/*` statt `runs/` damit
+# Unterverzeichnisse selektiv re-included werden können.
+/runs/*
 uploads/
+# Mandanten-User-Verzeichnis tracken (.gitkeep), aber NICHT die User-JSONs
+# (enthalten Passwort-Hashes).
+!/runs/_users/
+/runs/_users/*
+!/runs/_users/.gitkeep
 
 # User-defined workflows (designer-authored) — kept local
 workflows-user/
