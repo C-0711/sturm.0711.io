@@ -115,7 +115,20 @@
       border-bottom: 1px solid var(--color-border-light);
     }
     .upload-row:last-child { border-bottom: none; }
-    .upload-row .name { font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+    .upload-row .name { font-family: ui-monospace, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+    .upload-row .anlagen-hint { flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 10px; font-size: 11px; color: var(--color-text-tertiary); overflow: hidden; }
+    .upload-row .anlagen-hint:empty { padding: 0; }
+    .upload-row .anlage-source { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-tertiary); margin-right: 2px; }
+    .upload-row .anlage-chip {
+      display: inline-block;
+      padding: 1px 7px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      border-radius: 999px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+    }
 
     .chip {
       display: inline-flex;
@@ -705,6 +718,18 @@
                   if (chipCell) chipCell.innerHTML = stateChip(ok ? 'ok' : 'error');
                 } else if (env.name === 'doc_error') {
                   if (chipCell) chipCell.innerHTML = stateChip('error');
+                } else if ((env.name === 'llm_hits' || env.name === 'regex_hits')
+                           && Array.isArray(env.payload?.anlagen)
+                           && env.payload.anlagen.length > 0) {
+                  // Round-1 Mistral / Regex Indikator direkt in der Zeile —
+                  // ersetzt "Wird verarbeitet…" durch "Erkannt: KAP, N, VOR".
+                  if (chipCell) {
+                    const label = env.name === 'llm_hits' ? 'Mistral' : 'Regex';
+                    const chips = env.payload.anlagen
+                      .map((a) => '<span class="anlage-chip">' + escapeHtml(String(a)) + '</span>')
+                      .join('');
+                    chipCell.innerHTML = '<span class="chip running">' + label + ': ' + chips + '</span>';
+                  }
                 }
               } catch { /* ignore */ }
             }
@@ -748,11 +773,24 @@
       row = document.createElement('div');
       row.className = 'upload-row';
       row.setAttribute('data-idx', String(idx));
-      row.innerHTML = '<span class="name"></span><span class="chip-slot"></span>';
+      row.innerHTML = '<span class="name"></span><span class="anlagen-hint"></span><span class="chip-slot"></span>';
       statusList.appendChild(row);
     }
     row.querySelector('.name').textContent = filename;
     row.querySelector('.chip-slot').innerHTML = stateChip(state);
+  }
+
+  // Mistral Small / regex Anlagen-Indikator pro Upload-Zeile (Round-1).
+  // Wird gesetzt sobald `llm_hits` oder `regex_hits` Event eintrifft.
+  function setAnlagenHint(idx, anlagen, source) {
+    const row = statusList.querySelector('[data-idx="' + idx + '"]');
+    if (!row) return;
+    const slot = row.querySelector('.anlagen-hint');
+    if (!slot) return;
+    if (!Array.isArray(anlagen) || anlagen.length === 0) return;
+    const list = anlagen.map((a) => '<span class="anlage-chip">' + escapeHtml(String(a)) + '</span>').join('');
+    const label = source === 'llm' ? 'Mistral' : 'Regex';
+    slot.innerHTML = '<span class="anlage-source">' + label + ':</span> ' + list;
   }
 
   async function startUpload(files) {
@@ -806,8 +844,18 @@
       } else if (evName === 'doc_done' && idx != null) {
         const ok = payload.state === 'ok';
         setStatusRow(idx, filename, ok ? 'ok' : 'error');
+        if (ok && Array.isArray(payload.anlagen) && payload.anlagen.length > 0) {
+          setAnlagenHint(idx, payload.anlagen, 'final');
+        }
       } else if (evName === 'doc_error' && idx != null) {
         setStatusRow(idx, filename, 'error');
+      } else if (evName === 'regex_hits' && idx != null && Array.isArray(payload.anlagen)) {
+        // Frühe Indikation aus Regex (sofort nach OCR).
+        setAnlagenHint(idx, payload.anlagen, 'regex');
+      } else if (evName === 'llm_hits' && idx != null && Array.isArray(payload.anlagen)) {
+        // Round-1 Indikation aus Mistral Small (kurz nach Regex).
+        // Überschreibt das Regex-Label, weil Mistral das engere Set liefert.
+        setAnlagenHint(idx, payload.anlagen, 'llm');
       }
     }
 
