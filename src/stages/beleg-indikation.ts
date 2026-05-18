@@ -201,11 +201,6 @@ export const belegIndikationStage = defineStage<
   },
 
   async run(input, ctx) {
-    // KRITISCH: Diese Stage ist NICHT BLOCKIEREND. Bei Fehler/Timeout
-    // gibt sie ein leeres Result zurück statt zu throwen, weil sonst der
-    // Runner alle Folge-Stages (klassifizierung, OCR, Extraction, BMF)
-    // skippt. Indikation ist ein UX-Vorschau-Signal — Ausfall darf
-    // niemals die Hauptpipeline nuken.
     const t0 = Date.now();
     const baseUrl = ctx.config?.baseUrl ?? 'https://api.mistral.ai';
     const model = ctx.config?.model ?? 'mistral-small-latest';
@@ -213,19 +208,9 @@ export const belegIndikationStage = defineStage<
     const maxTokens = ctx.config?.maxTokens ?? 800;
     const timeoutMs = ctx.config?.timeoutMs ?? 30_000;
     const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env: round-1 indication uses Mistral API directly
-    const empty: BelegIndikationOutput = { anlagen: [], belegtyp: null, wichtige_werte: [], ms: 0 };
-    if (!apiKey) {
-      ctx.logger.warn('beleg-indikation: MISTRAL_API_KEY nicht gesetzt — Indikation übersprungen');
-      return { ...empty, ms: Date.now() - t0 };
-    }
+    if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
 
-    let img: Buffer;
-    try {
-      img = await firstPageImage(input.filePath, input.filename, dpi);
-    } catch (err) {
-      ctx.logger.warn('beleg-indikation: firstPageImage failed (non-blocking)', { error: (err as Error).message });
-      return { ...empty, ms: Date.now() - t0 };
-    }
+    const img = await firstPageImage(input.filePath, input.filename, dpi);
     const b64 = img.toString('base64');
 
     const controller = new AbortController();
@@ -254,10 +239,7 @@ export const belegIndikationStage = defineStage<
       });
       if (!res.ok) {
         const text = await res.text();
-        ctx.logger.warn('beleg-indikation: HTTP error (non-blocking)', {
-          status: res.status, body: text.slice(0, 200),
-        });
-        return { ...empty, ms: Date.now() - t0 };
+        throw new Error(`beleg-indikation HTTP ${res.status}: ${text.slice(0, 200)}`);
       }
       const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const raw = data.choices?.[0]?.message?.content ?? '{}';
@@ -282,14 +264,6 @@ export const belegIndikationStage = defineStage<
       ctx.emit('beleg_indikation', result);
       await ctx.artifacts.write('indikation.json', result);
       return result;
-    } catch (err) {
-      // Timeout, network error, etc. — alles non-blocking.
-      const isAbort = controller.signal.aborted;
-      ctx.logger.warn(`beleg-indikation: ${isAbort ? 'timed out' : 'failed'} (non-blocking)`, {
-        error: (err as Error).message,
-        timeoutMs,
-      });
-      return { ...empty, ms: Date.now() - t0 };
     } finally {
       clearTimeout(timer);
       ctx.signal?.removeEventListener('abort', onAbort);
