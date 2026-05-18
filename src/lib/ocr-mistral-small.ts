@@ -176,22 +176,49 @@ async function transcribeOneBatch(args: {
   }
 }
 
-/** Split the model's joined output into pages by `Seite N von M` markers.
- *  Falls back to a single page containing everything if no markers are
- *  found. expectedPages is used to detect/repair drift (e.g. model
- *  emits 5 pages when there were 6 — we pad with empties). */
+/** Split the model's joined output into pages by `Seite N von M` markers,
+ *  grouping by the page NUMBER (Mistral Small emits the header twice on
+ *  some pages — once at the page break, once at the start of content).
+ *  Sections without a header are appended to the previous detected page.
+ *
+ *  Returns exactly `expectedPages` entries: missing pages become empty
+ *  strings, excess pages (rare) collapse into the last page.
+ */
 function splitByPageMarkers(text: string, expectedPages: number): OcrPage[] {
   if (typeof text !== 'string' || text.length === 0) {
-    return [{ index: 0, markdown: '' }];
+    return Array.from({ length: expectedPages }, (_, i) => ({ index: i, markdown: '' }));
   }
+  const headerRx = /Seite (\d+) von \d+/;
   const parts = text.split(/(?=Seite \d+ von \d+)/);
-  const cleaned = parts.map((p) => p.trim()).filter((p) => p.length > 0);
-  if (cleaned.length === 0) return [{ index: 0, markdown: text }];
-  const pages: OcrPage[] = cleaned.map((md, i) => ({ index: i, markdown: md }));
-  // Pad to expectedPages so downstream (per-page rendering, citations)
-  // doesn't see a length mismatch.
-  while (pages.length < expectedPages) {
-    pages.push({ index: pages.length, markdown: '' });
+
+  // Bucket each part by the page number from its header. Parts without
+  // a header get appended to whichever bucket was last seen (or page 0).
+  const byPage = new Map<number, string[]>();
+  let lastPage = 0;
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.length === 0) continue;
+    const m = trimmed.match(headerRx);
+    const pageNum = m ? parseInt(m[1], 10) - 1 : lastPage; // 1-based → 0-based
+    if (!byPage.has(pageNum)) byPage.set(pageNum, []);
+    byPage.get(pageNum)!.push(trimmed);
+    lastPage = pageNum;
+  }
+
+  const pages: OcrPage[] = [];
+  const totalSlots = Math.max(expectedPages, ...Array.from(byPage.keys()).map((k) => k + 1));
+  for (let i = 0; i < totalSlots; i++) {
+    const chunks = byPage.get(i) ?? [];
+    pages.push({ index: i, markdown: chunks.join('\n\n') });
+  }
+  // Trim trailing extras into the last expected page if model over-emitted.
+  if (pages.length > expectedPages) {
+    const tail = pages.slice(expectedPages).map((p) => p.markdown).join('\n\n');
+    pages.length = expectedPages;
+    pages[expectedPages - 1] = {
+      index: expectedPages - 1,
+      markdown: pages[expectedPages - 1].markdown + (tail ? '\n\n' + tail : ''),
+    };
   }
   return pages;
 }
