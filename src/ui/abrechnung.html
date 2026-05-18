@@ -374,6 +374,40 @@ function vNum(ml, ecode) {
 // rendered PDF page with the snippet highlighted.
 //   "Anlage N · Z.5 · stricker.pdf ↗"  ←  clickable
 //   "Anlage N · Z.5 · stricker.pdf"    ←  fallback (no page info)
+// Resolves the first source (filename + sha256 + page + snippet) for an entry.
+// Returns null when not enough info to build a viewer link.
+function resolveSource(entry, masterDocs) {
+  if (!entry) return null;
+  const sources = entry.confirmed_by || [];
+  const first = sources[0];
+  if (!first || !first.filename) return null;
+  let sha = null;
+  if (Array.isArray(masterDocs)) {
+    const docMeta = masterDocs.find((d) => d.filename === first.filename);
+    if (docMeta && typeof docMeta.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(docMeta.sha256)) {
+      sha = docMeta.sha256;
+    }
+  }
+  if (!sha || typeof first.page !== 'number' || first.page < 0) return null;
+  return {
+    sha256: sha,
+    page: first.page + 1, // 1-based for the viewer URL
+    filename: first.filename,
+    snippet: first.snippet || '',
+  };
+}
+
+// Builds inline HTML attributes carrying source info — to put on ANY element
+// (tr, td, span) so the body-level mouseover handler can pick it up.
+function sourceDataAttrs(entry, masterDocs) {
+  const s = resolveSource(entry, masterDocs);
+  if (!s) return '';
+  return ` data-sha256="${escapeAttr(s.sha256)}"`
+       + ` data-page="${s.page}"`
+       + ` data-filename="${escapeAttr(s.filename)}"`
+       + (s.snippet ? ` data-snippet="${escapeAttr(s.snippet)}"` : '');
+}
+
 function evidence(entry, ml, masterDocs) {
   if (!entry) return '';
   const z = entry.vordruckzeile ? `Z.${entry.vordruckzeile}` : '';
@@ -535,7 +569,7 @@ function render(data) {
 
     <h2><span class="num">1.</span>Einkünfte aus nichtselbständiger Arbeit <span class="pill">§19 EStG · Anlage N</span></h2>
     <table class="ledger">
-      <tr><td class="lbl">Bruttoarbeitslohn (Lohnsteuerbescheinigung 2023)</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
+      <tr${sourceDataAttrs(ml.E0200201, data.documents)}><td class="lbl">Bruttoarbeitslohn (Lohnsteuerbescheinigung 2023)</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
       <tr><td class="cite" colspan="2">[E0200201 · ${evidence(ml.E0200201, ml, data.documents)}]</td></tr>
       <tr class="subtotal"><td class="lbl">Summe der Einnahmen</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
       <tr><td class="lbl">− Werbungskosten <span class="pill">§9 EStG</span></td><td class="amt deduct">${fmtEur(Number(ev.werbungskosten || 0))}</td></tr>
@@ -546,13 +580,13 @@ function render(data) {
     <h2><span class="num">2.</span>Sonderausgaben <span class="pill">§10 EStG · Anlage VOR + SA</span></h2>
     <h3>2.1 Vorsorgeaufwendungen (§10 Abs. 1 Nr. 2-3a EStG)</h3>
     <table class="ledger">
-      <tr><td class="lbl">Arbeitnehmer-Beiträge Rentenversicherung</td><td class="amt">${fmtEur(rv)}</td></tr>
+      <tr${sourceDataAttrs(ml.E2000401, data.documents)}><td class="lbl">Arbeitnehmer-Beiträge Rentenversicherung</td><td class="amt">${fmtEur(rv)}</td></tr>
       <tr><td class="cite" colspan="2">[E2000401 · Anlage VOR Z.4 · Nr. 23 a/b LSt-Besch.]</td></tr>
-      <tr><td class="lbl">+ Arbeitgeber-Anteil zur Basisversorgung</td><td class="amt">${fmtEur(rvAg)}</td></tr>
+      <tr${sourceDataAttrs(ml.E2000801, data.documents)}><td class="lbl">+ Arbeitgeber-Anteil zur Basisversorgung</td><td class="amt">${fmtEur(rvAg)}</td></tr>
       <tr><td class="cite" colspan="2">[E2000801 · Anlage VOR Z.9 · Nr. 22 a/b LSt-Besch.]</td></tr>
-      <tr><td class="lbl">Krankenversicherung (AN-Anteil)</td><td class="amt">${fmtEur(kv)}</td></tr>
+      <tr${sourceDataAttrs(ml.E2001203, data.documents)}><td class="lbl">Krankenversicherung (AN-Anteil)</td><td class="amt">${fmtEur(kv)}</td></tr>
       <tr><td class="cite" colspan="2">[E2001203 · Anlage VOR Z.11 · Nr. 25 LSt-Besch.]</td></tr>
-      <tr><td class="lbl">Pflegeversicherung (AN-Anteil)</td><td class="amt">${fmtEur(pv)}</td></tr>
+      <tr${sourceDataAttrs(ml.E2001505, data.documents)}><td class="lbl">Pflegeversicherung (AN-Anteil)</td><td class="amt">${fmtEur(pv)}</td></tr>
       <tr><td class="cite" colspan="2">[E2001505 · Anlage VOR Z.13 · Nr. 26 LSt-Besch.]</td></tr>
       <tr class="subtotal"><td class="lbl">Summe Vorsorge-Beiträge (vor Höchstbetragsabzug)</td><td class="amt">${fmtEur(rv + rvAg + kv + pv)}</td></tr>
     </table>
@@ -784,20 +818,38 @@ Quelle: ${escapeHtml(sb.bmf_referenz || '§32a EStG')} · Grenzsatz ${(Number(da
   });
 })();
 
-// ── Cross-Frame: Hover über ev-link Chips → postMessage an Parent
-// (m-case.html). Parent zeigt die PDF-Seite im rechten Viewer-Pane.
-document.body.addEventListener('mouseover', (e) => {
-  const a = e.target.closest('a.ev-link[data-sha256]');
-  if (!a) return;
-  const msg = {
-    type: 'sturm-source-hover',
-    sha256: a.getAttribute('data-sha256'),
-    page: Number(a.getAttribute('data-page') || '1'),
-    filename: a.getAttribute('data-filename') || '',
-    snippet: a.getAttribute('data-snippet') || '',
-  };
-  try { parent.postMessage(msg, '*'); } catch (_) { /* same-origin only */ }
-});
+// ── Cross-Frame: Hover über JEDES Element mit data-sha256 → postMessage
+// an Parent (m-case.html). Mit 150ms-Debounce damit Spalten-Wischen den
+// Viewer nicht hektisch herumspringen lässt. Letzter Hover bleibt kleben
+// (kein Auto-Reset auf mouseleave).
+(function () {
+  const HOVER_DELAY_MS = 150;
+  let hoverTimer = null;
+  let lastSent = '';
+  document.body.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-sha256][data-page]');
+    if (!el) return;
+    const key = el.getAttribute('data-sha256') + ':' + el.getAttribute('data-page');
+    if (key === lastSent) return; // bereits aktiv
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      lastSent = key;
+      const msg = {
+        type: 'sturm-source-hover',
+        sha256: el.getAttribute('data-sha256'),
+        page: Number(el.getAttribute('data-page') || '1'),
+        filename: el.getAttribute('data-filename') || '',
+        snippet: el.getAttribute('data-snippet') || '',
+      };
+      try { parent.postMessage(msg, '*'); } catch (_) { /* same-origin only */ }
+    }, HOVER_DELAY_MS);
+  });
+  document.body.addEventListener('mouseout', () => {
+    // Falls Maus die Region verlässt bevor der Debounce feuert → abbrechen.
+    // Aber lastSent NICHT resetten — der bisherige Pin im Viewer bleibt.
+    clearTimeout(hoverTimer);
+  });
+})();
 </script>
 
 </body>
