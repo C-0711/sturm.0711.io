@@ -116,14 +116,48 @@ async function llmClassify(
   temperature: number,
   signal?: AbortSignal,
 ): Promise<string[]> {
+  // Mapping cheat-sheet: receipts/contracts/IDs that don't visibly contain
+  // "Anlage X" headers still belong to specific Anlagen. Give the model
+  // enough examples so it can infer from document TYPE, not just from
+  // explicit form labels. Fixes the v6 regression where WhatsApp-photographed
+  // receipts came back as 0 anlagen.
   const prompt = [
-    'Du bekommst den Text einer gescannten Einkommensteuererklärung.',
-    'Welche der folgenden ELSTER-Anlagen kommen im Dokument vor?',
-    'Antworte ausschließlich mit einem JSON-Objekt der Form {"anlagen": ["NAME1", ...]}.',
-    'Gib nur Namen aus dieser Liste zurück:',
+    'Du bekommst den OCR-Text eines Belegs für eine deutsche Einkommen-',
+    'steuererklärung. Das kann sein:',
+    '  • der ELSTER-Vordruck selbst (mit "Anlage N", "Anlage VOR", …)',
+    '  • eine Lohnsteuerbescheinigung, Steuerbescheinigung, Renten-',
+    '    bezugsmitteilung, Beitragsbescheinigung KV/PV',
+    '  • eine Rechnung, Quittung, Spendenbestätigung, Handwerker-Rechnung,',
+    '    Beleg zu Werbungskosten, Arztrechnung, Apothekenquittung etc.',
+    '  • ein Foto eines Belegs (WhatsApp, Handy, Scanner)',
+    '',
+    'AUFGABE: Welche ELSTER-Anlagen sind für DIESEN Beleg relevant?',
+    'Schließe aus dem Inhalt auf die zugehörige Anlage — auch wenn das',
+    'Wort "Anlage" nicht vorkommt. Beispiele:',
+    '  • Lohnsteuerbescheinigung / Brutto / Lohnsteuer → "N" (+ "VOR" wenn',
+    '    KV/PV/RV-Beiträge angegeben)',
+    '  • Steuerbescheinigung Bank / Kapitalerträge / Zinsen → "KAP"',
+    '  • Rentenbezugsmitteilung / DRV / Rente → "R"',
+    '  • Krankenkasse / KV-Beitrag / PV-Beitrag → "VOR"',
+    '  • Spendenquittung / Mitgliedsbeitrag Verein → "SA"',
+    '  • Handwerker-/Reinigungsrechnung Haushalt → "SA" (§35a)',
+    '  • Vermietungseinnahmen / Mietvertrag → "V"',
+    '  • Steuerklasse / Identifikationsnummer / Stammdaten → "ESt1A"',
+    '  • Kinderbetreuung / Schulgeld → "Kind"',
+    '  • Riester / Rürup / private Altersvorsorge → "AV"',
+    '',
+    'Mehrere Anlagen pro Beleg sind möglich (z.B. Lohnsteuerbescheinigung',
+    'liefert N und VOR). Lieber EINE plausible Anlage nennen als 0 — wenn',
+    'der Text z.B. nur eine Quittung mit Betrag zeigt, ist "SA" ein guter',
+    'Default für Sonderausgaben/Spende. NUR wenn der Inhalt absolut keinen',
+    'Bezug zur Steuer hat (z.B. Werbeflyer, leeres Bild, Selfie), gib [].',
+    '',
+    'Erlaubte Anlagen-Namen (gib NUR Werte aus dieser Liste zurück):',
     anlagenNames.join(', '),
     '',
-    '--- Dokument ---',
+    'Antwortformat (strikt): {"anlagen": ["NAME1", ...]}  — keine Erklärung.',
+    '',
+    '--- BELEG-TEXT ---',
     text.slice(0, 30_000),
   ].join('\n');
 
