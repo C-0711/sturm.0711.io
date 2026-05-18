@@ -96,12 +96,22 @@ const PROMPT = (pageCount) => [
   '',
   'Regeln:',
   '- anlagen NUR aus dieser Liste: ' + ALLOWED_ANLAGEN.join(', '),
-  '- anlagen ist UNION aller Belege im Dokument (z.B. ["KAP","ESt1A"])',
+  '- anlagen ist UNION aller Belege im Dokument, OHNE Duplikate (z.B. ["KAP","ESt1A"])',
   '- belegtyp: bei mehreren Belegen Form "N× Typ + Typ" verwenden',
   '  (Wiederholungen mit N×, gleiche Bezeichnungen zusammenfassen)',
   '- wichtige_werte: 2-5 Einträge die der Nutzer auf einen Blick erfasst',
   '- Beträge mit Währung (z.B. "5,06 €"), Daten als DD.MM.YYYY',
   '- KEINE Erklärung, KEIN Markdown, NUR das JSON-Objekt',
+  '',
+  'WICHTIGES Mapping (Bescheinigung → Anlage-Code):',
+  '  Religionsbescheinigung / Kirchensteuer-Stammdaten  → "ESt1A"  (NICHT "R"!)',
+  '  Lohnsteuerbescheinigung / Brutto-Arbeitslohn       → "N"      (NICHT "L"!)',
+  '  Lohnsteuerbeschein. mit Nr. 22-26 (SV-Beiträge)    → "N" + "VOR"',
+  '  Mitteilung Kapitalerträge / Steuerbesch. Bank      → "KAP"',
+  '  Rentenbezugsmitteilung (DRV)                        → "R"',
+  '  Anlage Land- und Forstwirtschaft                    → "L"',
+  '  Spendenquittung / KV-Beitragsbescheinigung          → "SA" / "VOR"',
+  '  ELSTER-Hauptvordruck Einkommensteuererklärung       → "ESt1A"',
 ].filter(Boolean).join('\n');
 
 /** Rendert bis zu maxPages des PDFs/Bilds und gibt PNG-Buffers + page-count zurück. */
@@ -198,7 +208,9 @@ export async function runBelegIndikation(
     const raw = data.choices?.[0]?.message?.content ?? '{}';
     let parsed: { belegtyp?: string; anlagen?: string[]; wichtige_werte?: Array<{ label?: string; value?: string }> } = {};
     try { parsed = JSON.parse(raw); } catch { /* keep empty */ }
-    const anlagen = (parsed.anlagen ?? []).map((a) => String(a).trim()).filter((a) => allowed.has(a));
+    const anlagen = [...new Set(
+      (parsed.anlagen ?? []).map((a) => String(a).trim()).filter((a) => allowed.has(a))
+    )];
     const belegtyp = typeof parsed.belegtyp === 'string' ? parsed.belegtyp.trim() : null;
     const wichtige_werte = (parsed.wichtige_werte ?? [])
       .filter((e) => e && typeof e === 'object')
