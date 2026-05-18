@@ -1080,7 +1080,7 @@ export function buildElsterV52RagWorkflow() {
       // Liefert nach ~1-3s erkannte Anlagen + wichtige Werte aus dem Bild.
       indikation: {
         uses: 'beleg-indikation',
-        config: { dpi: 150, maxTokens: 800, timeoutMs: 15_000 },
+        config: { dpi: 150, maxTokens: 800, timeoutMs: 30_000 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {
@@ -1307,7 +1307,7 @@ export function buildElsterV6VisionWorkflow() {
       // Liefert nach ~1-3s erkannte Anlagen + wichtige Werte aus dem Bild.
       indikation: {
         uses: 'beleg-indikation',
-        config: { dpi: 150, maxTokens: 800, timeoutMs: 15_000 },
+        config: { dpi: 150, maxTokens: 800, timeoutMs: 30_000 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {

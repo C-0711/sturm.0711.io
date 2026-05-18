@@ -745,7 +745,7 @@ app.post(
         try {
           const result = await runBelegIndikation(
             { filePath: file.path, filename: file.originalname },
-            { dpi: 150, maxTokens: 800, timeoutMs: 15_000 },
+            { dpi: 150, maxTokens: 800, timeoutMs: 30_000 },
           );
           if (aborted) return;
           res.write(formatSseEvent({

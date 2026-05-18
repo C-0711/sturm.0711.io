@@ -16,12 +16,9 @@
  * `{ markdown: string }` envelope.
  */
 import { extname } from 'node:path';
-import { writeFile, mkdtemp, rm, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { defineStage } from '../core/stage.ts';
 import { renderPdfToPng } from '../lib/pdf-render.ts';
-import { callVllmVision, VllmVisionError } from '../lib/vllm-vision.ts';
 
 export interface GemmaVisionOcrInput {
   filePath: string;
@@ -56,20 +53,57 @@ const PROMPT =
   'flavored Markdown. Erhalte Überschriften (#), Listen (- bzw. 1.), Tabellen ' +
   '(| … | … |) und sinnvolle Zeilenumbrüche. Gib alle sichtbaren Werte wörtlich ' +
   'wieder — Namen, Beträge, Daten, IDs, Steuernummern, eTINs. KEINE ' +
-  'Erklärungen, KEINE Vorbemerkungen.';
+  'Erklärungen, KEINE Vorbemerkungen — nur der Markdown-Inhalt.';
 
-const SCHEMA = {
-  name: 'gemma_vision_ocr_page',
-  strict: true,
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['markdown'],
-    properties: {
-      markdown: { type: 'string' },
-    },
-  },
-} as const;
+/** Direkter vLLM-Aufruf für plain-text Markdown (kein JSON-Schema-Wrapper).
+ *  Grund: Gemma-4 produziert in JSON-Schema-Mode regelmäßig ungültige Unicode-
+ *  Escapes ("Bad Unicode escape in JSON at position N"), wenn der Markdown
+ *  Backslashes, Sonderzeichen oder Tabellen mit | enthält. Plain-text-Mode
+ *  hat dieses Problem nicht. */
+async function ocrPagePlain(
+  imagePath: string,
+  vllmUrl: string,
+  model: string,
+  maxTokens: number,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  const img = await readFile(imagePath);
+  const b64 = img.toString('base64');
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${vllmUrl.replace(/\/+$/, '')}/v1/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        temperature: 0,
+        stream: false,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
+            { type: 'text', text: PROMPT },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`gemma-vision-ocr vLLM ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content ?? '';
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
 
 async function pagePathsForInput(
   filePath: string,
@@ -145,18 +179,7 @@ export const gemmaVisionOcrStage = defineStage<
 
       const pageOutputs: Array<{ index: number; markdown: string; chars: number }> = [];
       for (let i = 0; i < paths.length; i++) {
-        const { parsed } = await callVllmVision<{ markdown: string }>({
-          vllmUrl,
-          model,
-          imagePaths: [paths[i]],
-          textInstructions: PROMPT,
-          jsonSchema: SCHEMA,
-          maxTokens,
-          temperature: 0,
-          timeoutMs,
-          signal: ctx.signal,
-        });
-        const md = parsed?.markdown ?? '';
+        const md = await ocrPagePlain(paths[i], vllmUrl, model, maxTokens, timeoutMs, ctx.signal);
         pageOutputs.push({ index: i, markdown: md, chars: md.length });
         // Stück für Stück: 200-char Preview pro Seite, damit das UI live
         // sieht was bisher extrahiert wurde (statt "Wird verarbeitet…").

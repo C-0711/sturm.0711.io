@@ -34,7 +34,7 @@ export interface BelegIndikationConfig {
   maxTokens?: number;
   /** PDF render dpi für erste Seite. Default 150 (schneller als OCR's 200). */
   dpi?: number;
-  /** Timeout pro Call. Default 15s. */
+  /** Timeout pro Call. Default 30s (Mistral kann bei großen Bildern langsam sein). */
   timeoutMs?: number;
 }
 
@@ -126,7 +126,7 @@ export async function runBelegIndikation(
   const model = cfg?.model ?? 'mistral-small-latest';
   const dpi = cfg?.dpi ?? 150;
   const maxTokens = cfg?.maxTokens ?? 800;
-  const timeoutMs = cfg?.timeoutMs ?? 15_000;
+  const timeoutMs = cfg?.timeoutMs ?? 30_000;
   const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env
   if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
 
@@ -206,7 +206,7 @@ export const belegIndikationStage = defineStage<
     const model = ctx.config?.model ?? 'mistral-small-latest';
     const dpi = ctx.config?.dpi ?? 150;
     const maxTokens = ctx.config?.maxTokens ?? 800;
-    const timeoutMs = ctx.config?.timeoutMs ?? 15_000;
+    const timeoutMs = ctx.config?.timeoutMs ?? 30_000;
     const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env: round-1 indication uses Mistral API directly
     if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
 
