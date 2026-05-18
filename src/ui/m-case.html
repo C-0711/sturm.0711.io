@@ -351,23 +351,48 @@
     }
     .viewer-toolbar {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
-      padding: 8px 10px;
+      padding: 6px 8px;
       border-bottom: 1px solid var(--color-border);
       background: var(--color-bg);
       flex-shrink: 0;
+      flex-wrap: wrap;
     }
     .viewer-toolbar select {
       flex: 1;
-      min-width: 0;
-      padding: 5px 8px;
+      min-width: 100px;
+      padding: 4px 6px;
       font: inherit;
       font-size: 12px;
       border: 1px solid var(--color-border);
       border-radius: 4px;
       background: white;
       max-width: 100%;
+    }
+    .viewer-toolbar button {
+      padding: 4px 8px;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1.4;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      color: var(--color-text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .viewer-toolbar button:hover { background: var(--color-bg-tertiary); }
+    .viewer-toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .viewer-toolbar input.page-input {
+      width: 40px;
+      padding: 4px 6px;
+      font: inherit;
+      font-size: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
     }
     .viewer-page-label {
       font-size: 11px;
@@ -557,6 +582,12 @@
             <select id="felder-doc-select" title="Dokument wählen">
               <option value="">Beleg auswählen…</option>
             </select>
+            <button type="button" id="felder-prev" title="Vorherige Seite (←)" disabled>‹</button>
+            <input type="number" class="page-input" id="felder-page-input" min="1" value="1" title="Seite" />
+            <button type="button" id="felder-next" title="Nächste Seite (→)" disabled>›</button>
+            <button type="button" id="felder-zoom-out" title="Zoom −">−</button>
+            <button type="button" id="felder-zoom-reset" title="Zoom 100%">100%</button>
+            <button type="button" id="felder-zoom-in" title="Zoom +">+</button>
             <span class="viewer-page-label" id="felder-page-label"></span>
           </div>
           <div class="viewer-canvas" id="felder-viewer-canvas">
@@ -577,6 +608,12 @@
             <select id="abrechnung-doc-select" title="Dokument wählen">
               <option value="">Beleg auswählen…</option>
             </select>
+            <button type="button" id="abrechnung-prev" title="Vorherige Seite (←)" disabled>‹</button>
+            <input type="number" class="page-input" id="abrechnung-page-input" min="1" value="1" title="Seite" />
+            <button type="button" id="abrechnung-next" title="Nächste Seite (→)" disabled>›</button>
+            <button type="button" id="abrechnung-zoom-out" title="Zoom −">−</button>
+            <button type="button" id="abrechnung-zoom-reset" title="Zoom 100%">100%</button>
+            <button type="button" id="abrechnung-zoom-in" title="Zoom +">+</button>
             <span class="viewer-page-label" id="abrechnung-page-label"></span>
           </div>
           <div class="viewer-canvas" id="abrechnung-viewer-canvas">
@@ -1305,41 +1342,140 @@
         return '<option value="' + escapeHtml(sha) + '" data-name="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
       }).join('');
   }
-  function showSource(panel, sha256, page, snippet, filename) {
+  // Per-Panel State: aktueller sha256, page, zoom, filename, snippet, maxPage.
+  // maxPage wird heuristisch ermittelt: wenn img.onerror feuert beim Klick
+  // "next", merken wir uns die letzte gültige Seite.
+  const VIEWER_STATE = {
+    felder: { sha: '', page: 1, zoom: 100, filename: '', snippet: '', maxPage: null },
+    abrechnung: { sha: '', page: 1, zoom: 100, filename: '', snippet: '', maxPage: null },
+  };
+
+  function renderViewer(panel) {
+    const s = VIEWER_STATE[panel];
     const canvas = document.getElementById(panel + '-viewer-canvas');
     const pageLabel = document.getElementById(panel + '-page-label');
+    const pageInput = document.getElementById(panel + '-page-input');
+    const prevBtn = document.getElementById(panel + '-prev');
+    const nextBtn = document.getElementById(panel + '-next');
     if (!canvas) return;
-    if (!sha256) {
-      canvas.innerHTML = '<div class="viewer-empty">Für diesen Wert ist keine Quelle hinterlegt.</div>';
+    if (!s.sha) {
+      canvas.innerHTML = '<div class="viewer-empty">Beleg auswählen oder über ein Feld hovern…</div>';
       if (pageLabel) pageLabel.textContent = '';
+      if (prevBtn) prevBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
       return;
     }
-    const pageOneBased = (typeof page === 'number' && page > 0) ? page : 1;
-    const url = '/api/source-page/' + encodeURIComponent(sha256) + '/' + pageOneBased + '.png';
-    canvas.innerHTML = '<img src="' + url + '" alt="' + escapeHtml(filename || sha256) + ' Seite ' + pageOneBased + '" />'
-      + (snippet ? '<div class="viewer-snippet">' + escapeHtml(snippet) + '</div>' : '');
-    if (pageLabel) pageLabel.textContent = (filename ? filename + ' · ' : '') + 'Seite ' + pageOneBased;
-    // Auch das doc-select syncen
+    const url = '/api/source-page/' + encodeURIComponent(s.sha) + '/' + s.page + '.png';
+    // zoom als width: <pct>% — erlaubt natürliches Scrolling im Container
+    const styleWidth = (s.zoom !== 100) ? (' style="width:' + s.zoom + '%"') : '';
+    canvas.innerHTML =
+      '<img src="' + url + '"' + styleWidth + ' alt="Seite ' + s.page + '" '
+        + 'onerror="window.__pdfPageError && window.__pdfPageError(\'' + panel + '\')" />'
+      + (s.snippet ? '<div class="viewer-snippet">' + escapeHtml(s.snippet) + '</div>' : '');
+    if (pageLabel) pageLabel.textContent = (s.filename ? s.filename + ' · ' : '')
+      + 'Seite ' + s.page + (s.maxPage ? '/' + s.maxPage : '') + ' · ' + s.zoom + '%';
+    if (pageInput) pageInput.value = String(s.page);
+    if (prevBtn) prevBtn.disabled = s.page <= 1;
+    if (nextBtn) nextBtn.disabled = s.maxPage != null && s.page >= s.maxPage;
+    // Sync select wenn nötig
     const sel = document.getElementById(panel + '-doc-select');
-    if (sel && sel.value !== sha256) sel.value = sha256;
+    if (sel && sel.value !== s.sha) sel.value = s.sha;
   }
-  // Doc-Select manuell: zeigt Seite 1 des gewählten Belegs
-  function bindDocSelect(panel) {
+
+  // Wenn die nächste Seite ein 404 liefert, war's die letzte. Im State merken.
+  window.__pdfPageError = function (panel) {
+    const s = VIEWER_STATE[panel];
+    if (!s) return;
+    // Wenn wir auf einer höheren Seite waren als bekannt → maxPage zurückklemmen.
+    if (s.page > 1) {
+      s.maxPage = s.page - 1;
+      s.page = s.maxPage;
+      renderViewer(panel);
+    }
+  };
+
+  function showSource(panel, sha256, page, snippet, filename) {
+    const s = VIEWER_STATE[panel];
+    if (!s) return;
+    const prevSha = s.sha;
+    s.sha = sha256 || '';
+    s.page = (typeof page === 'number' && page > 0) ? page : 1;
+    s.snippet = snippet || '';
+    s.filename = filename || '';
+    // Reset maxPage wenn neues Dokument
+    if (prevSha !== s.sha) s.maxPage = null;
+    renderViewer(panel);
+  }
+  // Doc-Select + Page-Nav + Zoom buttons per Panel
+  function bindViewerControls(panel) {
     const sel = document.getElementById(panel + '-doc-select');
-    if (!sel) return;
-    sel.addEventListener('change', () => {
+    if (sel) sel.addEventListener('change', () => {
       const sha = sel.value;
       const name = sel.options[sel.selectedIndex]?.dataset?.name;
       if (!sha) {
-        document.getElementById(panel + '-viewer-canvas').innerHTML = '<div class="viewer-empty">Beleg auswählen…</div>';
-        document.getElementById(panel + '-page-label').textContent = '';
+        VIEWER_STATE[panel] = { sha: '', page: 1, zoom: 100, filename: '', snippet: '', maxPage: null };
+        renderViewer(panel);
         return;
       }
-      showSource(panel, sha, 1, '', name);
+      showSource(panel, sha, 1, '', name || '');
+    });
+    const prev = document.getElementById(panel + '-prev');
+    if (prev) prev.addEventListener('click', () => {
+      const s = VIEWER_STATE[panel];
+      if (s.page > 1) { s.page--; renderViewer(panel); }
+    });
+    const next = document.getElementById(panel + '-next');
+    if (next) next.addEventListener('click', () => {
+      const s = VIEWER_STATE[panel];
+      // maxPage könnte null sein — Page hochzählen, onerror cappt
+      if (s.maxPage == null || s.page < s.maxPage) { s.page++; renderViewer(panel); }
+    });
+    const pageIn = document.getElementById(panel + '-page-input');
+    if (pageIn) pageIn.addEventListener('change', () => {
+      const n = Math.max(1, parseInt(pageIn.value, 10) || 1);
+      const s = VIEWER_STATE[panel];
+      s.page = (s.maxPage != null) ? Math.min(n, s.maxPage) : n;
+      renderViewer(panel);
+    });
+    const zin = document.getElementById(panel + '-zoom-in');
+    if (zin) zin.addEventListener('click', () => {
+      const s = VIEWER_STATE[panel];
+      s.zoom = Math.min(400, s.zoom + 25);
+      renderViewer(panel);
+    });
+    const zout = document.getElementById(panel + '-zoom-out');
+    if (zout) zout.addEventListener('click', () => {
+      const s = VIEWER_STATE[panel];
+      s.zoom = Math.max(25, s.zoom - 25);
+      renderViewer(panel);
+    });
+    const zreset = document.getElementById(panel + '-zoom-reset');
+    if (zreset) zreset.addEventListener('click', () => {
+      const s = VIEWER_STATE[panel];
+      s.zoom = 100;
+      renderViewer(panel);
     });
   }
-  bindDocSelect('felder');
-  bindDocSelect('abrechnung');
+  bindViewerControls('felder');
+  bindViewerControls('abrechnung');
+
+  // Keyboard-Shortcuts: ← / → blättern, +/- zoomen, im aktiven Panel
+  document.addEventListener('keydown', (e) => {
+    // nur wenn Fokus NICHT in einem Textfeld/Select ist
+    const tag = (document.activeElement?.tagName || '').toLowerCase();
+    if (['input','textarea','select'].includes(tag)) return;
+    // welches Panel ist aktiv?
+    const activePanel = document.querySelector('.panel.active');
+    const panel = activePanel && activePanel.id === 'panel-felder' ? 'felder'
+                : activePanel && activePanel.id === 'panel-abrechnung' ? 'abrechnung'
+                : null;
+    if (!panel || !VIEWER_STATE[panel].sha) return;
+    if (e.key === 'ArrowLeft')      { document.getElementById(panel + '-prev')?.click(); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { document.getElementById(panel + '-next')?.click(); e.preventDefault(); }
+    else if (e.key === '+' || e.key === '=') { document.getElementById(panel + '-zoom-in')?.click(); e.preventDefault(); }
+    else if (e.key === '-')         { document.getElementById(panel + '-zoom-out')?.click(); e.preventDefault(); }
+    else if (e.key === '0')         { document.getElementById(panel + '-zoom-reset')?.click(); e.preventDefault(); }
+  });
 
   // Hover-Handler im Felder-Body: delegated, weil .felder-row dynamisch ist.
   document.getElementById('felder-body').addEventListener('mouseover', (e) => {
