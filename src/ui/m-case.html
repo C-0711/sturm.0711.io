@@ -167,6 +167,22 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Jahr-Spalte in Belege-Tabelle */
+    .jahr-cell {
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+    .jahr-cell.jahr-mismatch {
+      background: #fff8e6;
+      color: #8a6500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+      border: 1px solid var(--color-amber);
+      cursor: help;
+    }
+
     /* Belege-Tabelle: Round-1 Indikation unter dem Dateinamen */
     .row-indikation {
       margin-top: 4px;
@@ -551,6 +567,7 @@
             <tr>
               <th>Dateiname</th>
               <th>Kategorie</th>
+              <th>Jahr</th>
               <th>Status</th>
               <th>Hochgeladen</th>
               <th></th>
@@ -858,7 +875,15 @@
 
     empty.classList.add('hidden');
     table.classList.remove('hidden');
-    tbody.innerHTML = docs.map((d) => {
+    // Sortierung: Jahr (desc, null nach hinten), dann Upload-Zeit (desc).
+    // Liefert ein konsistentes Gesamtbild auch bei Multi-Jahr-Belegen.
+    const docsSorted = [...docs].sort((a, b) => {
+      const ja = (a.indikation && typeof a.indikation.steuerjahr === 'number') ? a.indikation.steuerjahr : 0;
+      const jb = (b.indikation && typeof b.indikation.steuerjahr === 'number') ? b.indikation.steuerjahr : 0;
+      if (jb !== ja) return jb - ja; // jüngeres Jahr zuerst
+      return (b.uploadedAt || '').localeCompare(a.uploadedAt || '');
+    });
+    tbody.innerHTML = docsSorted.map((d) => {
       const filename = d.filename || '(unbekannte Datei)';
       const kategorie = docKategorie(d);
       const state = d.state || (typeof d.fieldsExtracted === 'number' && d.fieldsExtracted > 0 ? 'ok' : 'unknown');
@@ -892,9 +917,25 @@
       const retryBtn = isFailed
         ? '<button class="row-action retry" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Wiederholen</button> '
         : '';
+      // Steuerjahr aus Indikation + Mismatch-Warnung gegen case.veranlagungsjahr.
+      // Bei Stammdaten (steuerjahr=null) keine Warnung — die gelten jahresübergreifend.
+      const caseJahr = (CASE_DATA && CASE_DATA.veranlagungsjahr) || null;
+      const docJahr = (d.indikation && typeof d.indikation.steuerjahr === 'number')
+        ? d.indikation.steuerjahr : null;
+      let jahrCell;
+      if (docJahr == null) {
+        jahrCell = '<span class="jahr-cell">—</span>';
+      } else if (caseJahr && docJahr !== caseJahr) {
+        jahrCell = '<span class="jahr-cell jahr-mismatch" title="Veranlagungsjahr des Cases ist '
+          + caseJahr + ', dieser Beleg ist von ' + docJahr + '. Stammdaten und Pauschalen sind '
+          + 'jahresübergreifend; jahresgebundene Werte (Brutto, KapErtr) müssen passen.">⚠ ' + docJahr + '</span>';
+      } else {
+        jahrCell = '<span class="jahr-cell">' + docJahr + '</span>';
+      }
       return '<tr>'
         + '<td>' + nameCell + '</td>'
         + '<td>' + escapeHtml(kategorie) + '</td>'
+        + '<td>' + jahrCell + '</td>'
         + '<td>' + stateChip(state) + '</td>'
         + '<td>' + escapeHtml(uploaded) + '</td>'
         + '<td>' + retryBtn + '<button class="row-action delete" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Löschen</button></td>'

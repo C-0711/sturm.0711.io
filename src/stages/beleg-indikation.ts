@@ -49,6 +49,10 @@ export interface BelegIndikationOutput {
   belegtyp: string | null;
   /** Wichtige Werte aus dem gesamten Dokument (max 6). */
   wichtige_werte: Array<{ label: string; value: string }>;
+  /** Steuerjahr des Belegs (z.B. 2024) — aus OCR-Text extrahiert.
+   *  null wenn nicht eindeutig ableitbar. Multi-Doc-PDFs mit gemischten
+   *  Jahren liefern das DOMINIERENDE Jahr. */
+  steuerjahr: number | null;
   /** Anzahl gerenderter/analysierter Seiten. */
   seiten_analysiert: number;
   ms: number;
@@ -86,6 +90,7 @@ const PROMPT = (pageCount) => [
   '  "belegtyp": "<knapper Belegtyp; bei mehreren Belegen aggregiert, z.B.',
   '                \'Lohnsteuerbescheinigung\' oder \'2× Mitteilung Kapitalerträge + Religionsbescheinigung\'>",',
   '  "anlagen": ["<CODE>", ...],',
+  '  "steuerjahr": <YYYY oder null>,',
   '  "wichtige_werte": [',
   '    {"label": "Empfänger", "value": "..."},',
   '    {"label": "Aussteller", "value": "..."},',
@@ -112,6 +117,13 @@ const PROMPT = (pageCount) => [
   '  Anlage Land- und Forstwirtschaft                    → "L"',
   '  Spendenquittung / KV-Beitragsbescheinigung          → "SA" / "VOR"',
   '  ELSTER-Hauptvordruck Einkommensteuererklärung       → "ESt1A"',
+  '',
+  'Steuerjahr-Erkennung:',
+  '  - Lohnsteuerbescheinigung "für 2024" → 2024',
+  '  - Mitteilung Kapitalerträge "Kalenderjahr 2023" → 2023',
+  '  - ELSTER-Erklärung "Einkommensteuererklärung 2023" → 2023',
+  '  - Stammdaten ohne klares Jahr (Religionsbescheinigung allgemein) → null',
+  '  - Bei Mehrfach-Belegen mit gemischten Jahren: das DOMINIERENDE Jahr',
 ].filter(Boolean).join('\n');
 
 /** Rendert bis zu maxPages des PDFs/Bilds und gibt PNG-Buffers + page-count zurück. */
@@ -206,19 +218,29 @@ export async function runBelegIndikation(
     }
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const raw = data.choices?.[0]?.message?.content ?? '{}';
-    let parsed: { belegtyp?: string; anlagen?: string[]; wichtige_werte?: Array<{ label?: string; value?: string }> } = {};
+    let parsed: {
+      belegtyp?: string; anlagen?: string[];
+      steuerjahr?: number | string | null;
+      wichtige_werte?: Array<{ label?: string; value?: string }>;
+    } = {};
     try { parsed = JSON.parse(raw); } catch { /* keep empty */ }
     const anlagen = [...new Set(
       (parsed.anlagen ?? []).map((a) => String(a).trim()).filter((a) => allowed.has(a))
     )];
     const belegtyp = typeof parsed.belegtyp === 'string' ? parsed.belegtyp.trim() : null;
+    // steuerjahr: number, oder string-Number wie "2024", oder null. Range-check.
+    let steuerjahr: number | null = null;
+    if (parsed.steuerjahr != null) {
+      const n = Number(parsed.steuerjahr);
+      if (Number.isFinite(n) && n >= 2000 && n <= 2100) steuerjahr = Math.floor(n);
+    }
     const wichtige_werte = (parsed.wichtige_werte ?? [])
       .filter((e) => e && typeof e === 'object')
       .map((e) => ({ label: String(e.label ?? '').trim(), value: String(e.value ?? '').trim() }))
       .filter((e) => e.label && e.value)
       .slice(0, 6);
     return {
-      anlagen, belegtyp, wichtige_werte,
+      anlagen, belegtyp, wichtige_werte, steuerjahr,
       seiten_analysiert: pageCount,
       ms: Date.now() - t0,
     };

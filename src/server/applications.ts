@@ -48,6 +48,10 @@ export interface CaseDocument {
     anlagen: string[];
     belegtyp: string | null;
     wichtige_werte: Array<{ label: string; value: string }>;
+    /** Steuerjahr des Belegs (z.B. 2024). null für Stammdaten / Belege
+     *  ohne klares Jahr. Vom UI für Mismatch-Warnung gegen case.veranlagungsjahr
+     *  genutzt; vom geplanten cross-doc-reasoner für die finale Zuordnung. */
+    steuerjahr?: number | null;
     ms: number;
     at: string;
   };
