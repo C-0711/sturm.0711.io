@@ -515,6 +515,21 @@ app.post(
           fieldsExtracted: layer ? Object.keys(layer).length : 0,
           trustBreakdown: computeTrustBreakdown(layer),
         });
+        // P2: refresh the case-level master.json (single source of truth
+        // consumed by abrechnung.html, source-viewer, ELSTER export, etc.).
+        try {
+          const fresh = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+          if (fresh && extractionId) {
+            const { writeCaseMaster } = await import('./server/case-master.ts');
+            await writeCaseMaster(fresh, {
+              runsDir: RUNS_DIR,
+              extractionWorkflowId: extractionId,
+              workspaceBase: ROOT,
+            });
+          }
+        } catch (e) {
+          console.error('[upload] master.json refresh failed:', (e as Error).message);
+        }
       }
     } catch { /* errors emitted as events */ }
     finally { unsub(); res.end(); }
@@ -617,6 +632,21 @@ app.post(
             fieldsExtracted: layer ? Object.keys(layer).length : 0,
             trustBreakdown: computeTrustBreakdown(layer),
           });
+          // P2: refresh master.json after each doc completes (case state
+          // accretes incrementally, UI sees fresh data immediately).
+          try {
+            const fresh = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+            if (fresh && extractionId) {
+              const { writeCaseMaster } = await import('./server/case-master.ts');
+              await writeCaseMaster(fresh, {
+                runsDir: RUNS_DIR,
+                extractionWorkflowId: extractionId,
+                workspaceBase: ROOT,
+              });
+            }
+          } catch (e) {
+            console.error('[bulk] master.json refresh failed:', (e as Error).message);
+          }
           res.write(formatSseEvent({
             name: 'doc_done',
             runId: run.runId,
@@ -855,6 +885,48 @@ app.post(
 app.get('/api/_deploycheck', (_req, res) => {
   res.json({ deployedAt: '__V5_DEPLOY_CHECK__', ts: new Date().toISOString() });
 });
+
+// ── GET /api/applications/:appId/instances/:caseId/master ─────────────
+// Persisted case-level state (P2). Returns the latest master.json from
+// disk; query ?refresh=1 forces a fresh compute + rewrite. UI consumers
+// (abrechnung.html, source-viewer, landing page) should prefer this over
+// /aggregate because it's read-from-disk and contains the full citation
+// chain ({page, snippet} per source).
+app.get(
+  '/api/applications/:appId/instances/:caseId/master',
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+
+    const { readCaseMaster, writeCaseMaster } = await import('./server/case-master.ts');
+    const refresh = req.query.refresh === '1';
+    if (!refresh) {
+      const existing = await readCaseMaster(inst, ROOT);
+      if (existing) return res.json(existing);
+    }
+    try {
+      const { master } = await writeCaseMaster(inst, {
+        runsDir: RUNS_DIR,
+        extractionWorkflowId: extractionId,
+        workspaceBase: ROOT,
+      });
+      res.json(master);
+    } catch (e) {
+      const err = e as Error & { cause?: unknown };
+      console.error('[master] write failed:', err.message, 'cause:', err.cause);
+      res.status(500).json({
+        error: 'master-write-failed',
+        message: err.message,
+        cause: err.cause instanceof Error ? err.cause.message : (err.cause ?? null),
+      });
+    }
+  },
+);
 
 // ── GET /api/applications/:appId/instances/:caseId/aggregate ──────────
 // Case-Level-Layer-Aggregation über alle hochgeladenen Belege des Falls.
