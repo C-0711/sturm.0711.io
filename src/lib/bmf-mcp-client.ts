@@ -175,11 +175,26 @@ export function canonicalLayerToElsterFelder(
     // ist gesicherter OCR-Text-Match. Strict no-fallback: nur LLM_*
     // suspicious-Treffer raus, REGEX_* + BMF_RECHNER bleiben drin.
     if (cv.trust === 'suspicious' && cv.origin && /^LLM/i.test(cv.origin)) continue;
-    // BMF MCP versucht jeden elster_felder-Wert in float() zu parsen — String-
-    // Felder wie "Bezeichnung" oder ": Kontoführungsgebühren" crashen den Call.
-    // Daher: NUR currency + date Felder an BMF (numerische Steuerwirkung).
-    // String/Stammdaten-Felder gehören ins eric_xml, nicht in den Rechner.
-    if (cv.datentyp !== 'currency' && cv.datentyp !== 'date') continue;
+    // BMF MCP versucht numerische eCode-Werte in float() zu parsen, würde
+    // dabei aber an "Schrott-Strings" (": Kontoführungsgebühren", lange
+    // Labels) crashen. ABER: bestimmte string-eCodes triggern Tarif-Logik —
+    // ESSENTIELL z.B.:
+    //   • E0101201 "Zusammenveranlagung" → Splittingtarif aktivieren
+    //   • E0100402 Religion → Kirchensteuer-Berechnung
+    //   • E0100081/82 IDNr → Personen-Identifikation
+    // Ohne diese fällt BMF auf Grundtarif zurück → Stricker rechnet 11.876 €
+    // ESt statt korrekt 6.958 € (Erstattung wird zu Nachzahlung 4.854 €).
+    // Heuristik: sauberer String-Wert (alphanumeric-start, <=80 chars,
+    // kein führender Doppelpunkt) → durchlassen. Schrott bleibt draußen.
+    if (cv.datentyp !== 'currency' && cv.datentyp !== 'date') {
+      const s = String(cv.value ?? '').trim();
+      if (!s) continue;
+      if (s.length > 80) continue;
+      if (/^[:,;.\-]/.test(s)) continue; // führendes Schrott-Zeichen
+      if (!/^[A-Za-z0-9ÄÖÜäöüß]/.test(s)) continue; // muss mit Wort/Zahl starten
+      out[eCode] = s;
+      continue;
+    }
     if (cv.datentyp === 'currency') {
       // Bevorzugt normalizedNumber (single source of arithmetic truth) →
       // keine zweite Locale-Parsing-Runde nötig.
