@@ -315,6 +315,51 @@
       font-size: 14px;
       margin-bottom: 4px;
     }
+
+    /* Onboarding-Choice — 3 Karten im Belege-Empty-State */
+    .onboarding-choice {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+      text-align: left;
+    }
+    .choice-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 16px 18px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .choice-card:hover {
+      border-color: var(--color-accent);
+      background: var(--color-bg-hover);
+    }
+    .choice-card .choice-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--color-text-primary);
+    }
+    .choice-card .choice-sub {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      line-height: 1.4;
+    }
+    .choice-card input[type="file"] { display: none; }
+    .choice-status {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      margin-top: 12px;
+      min-height: 16px;
+    }
+    .choice-status.error { color: #8c3a3a; }
     .error-block {
       padding: 18px 20px;
       border: 1px solid var(--color-danger);
@@ -599,8 +644,24 @@
 
       <div id="belege-area">
         <div class="empty" id="belege-empty">
-          <div class="empty-headline">Noch keine Belege hochgeladen.</div>
-          <div>Ziehe deine Steuerunterlagen in die Fläche oben oder klicke zum Auswählen.</div>
+          <div class="empty-headline">Wie möchtest du starten?</div>
+          <div>Damit wir die richtigen Anlagen vorbereiten, brauchen wir einen kurzen Kontext.</div>
+          <div class="onboarding-choice" id="onboarding-choice">
+            <label class="choice-card" id="choice-vorjahr">
+              <span class="choice-title">Vorjahres-Erklärung hochladen</span>
+              <span class="choice-sub">PDF deiner letzten ESt-Erklärung. Wir lesen Anlagen, Pendlerpauschale und Daueranschnitte raus.</span>
+              <input type="file" id="vorjahr-file-input" accept="application/pdf" />
+            </label>
+            <a class="choice-card" id="choice-onboarding" href="#">
+              <span class="choice-title">5-Fragen-Onboarding starten</span>
+              <span class="choice-sub">Keine Vorjahres-Erklärung? Beantworte 5 Fragen — wir leiten Anlagen und Belege daraus ab.</span>
+            </a>
+            <button type="button" class="choice-card" id="choice-direct">
+              <span class="choice-title">Direkt mit Belegen starten</span>
+              <span class="choice-sub">Du weißt schon was du hochladen willst. Belege direkt ablegen — wir klassifizieren live.</span>
+            </button>
+          </div>
+          <div class="choice-status" id="choice-status"></div>
         </div>
         <table class="belege hidden" id="belege-table">
           <thead>
@@ -917,10 +978,30 @@
     const tbody = document.querySelector('#belege-table tbody');
     const table = document.getElementById('belege-table');
     const empty = document.getElementById('belege-empty');
+    const choice = document.getElementById('onboarding-choice');
+    const emptyHeadline = empty.querySelector('.empty-headline');
+    const emptyText = empty.querySelector('.empty-headline + div');
 
     if (docs.length === 0) {
       table.classList.add('hidden');
       empty.classList.remove('hidden');
+      // Kontext schon gesetzt? → keine 3-Button-Auswahl, nur Hinweis.
+      const hasCtx = inst.context && (
+        inst.context.source === 'vorjahr' ||
+        inst.context.source === 'onboarding' ||
+        inst.context.source === 'progressive'
+      );
+      if (hasCtx) {
+        choice.style.display = 'none';
+        if (emptyHeadline) emptyHeadline.textContent = 'Noch keine Belege hochgeladen.';
+        if (emptyText) {
+          emptyText.textContent = 'Ziehe deine Steuerunterlagen in die Fläche oben oder klicke zum Auswählen.';
+        }
+      } else {
+        choice.style.display = '';
+        if (emptyHeadline) emptyHeadline.textContent = 'Wie möchtest du starten?';
+        if (emptyText) emptyText.textContent = 'Damit wir die richtigen Anlagen vorbereiten, brauchen wir einen kurzen Kontext.';
+      }
       return;
     }
 
@@ -1117,6 +1198,89 @@
     if (files.length) startUpload(files);
     fileInput.value = '';
   });
+
+  // ── Onboarding-Choice (Empty-State, 3 Buttons) ─────────────────────
+  // 1) Vorjahres-Erklärung hochladen — POST an /vorjahres-upload
+  //    (Endpoint kommt von Agent A; UI verdrahtet hier nur File-Input).
+  // 2) 5-Fragen-Onboarding — Redirect zum Wizard.
+  // 3) Direkt mit Belegen — Choice ausblenden, normalen Upload zeigen.
+  (function bindOnboardingChoice() {
+    const choiceStatus = document.getElementById('choice-status');
+    function setChoiceStatus(msg, kind) {
+      if (!choiceStatus) return;
+      choiceStatus.textContent = msg || '';
+      choiceStatus.classList.remove('error');
+      if (kind === 'error') choiceStatus.classList.add('error');
+    }
+
+    // 1) Vorjahres-Upload
+    const vorjahrInput = document.getElementById('vorjahr-file-input');
+    if (vorjahrInput) {
+      vorjahrInput.addEventListener('change', async () => {
+        const file = vorjahrInput.files && vorjahrInput.files[0];
+        vorjahrInput.value = '';
+        if (!file) return;
+        setChoiceStatus('Vorjahres-Erklärung wird verarbeitet…');
+        try {
+          const fd = new FormData();
+          fd.append('file', file, file.name);
+          const r = await fetch(API_BASE + '/vorjahres-upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: fd,
+          });
+          if (r.status === 404) {
+            // Agent A hat den Endpoint noch nicht gemerged.
+            setChoiceStatus('Vorjahres-Upload ist noch nicht aktiviert. Nutze stattdessen das 5-Fragen-Onboarding.', 'error');
+            return;
+          }
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            setChoiceStatus('Fehler: ' + (err.error || r.status), 'error');
+            return;
+          }
+          setChoiceStatus('Vorjahres-Kontext gespeichert. Lade neu…');
+          await loadCase();
+        } catch (e) {
+          setChoiceStatus('Netzwerkfehler: ' + (e && e.message ? e.message : e), 'error');
+        }
+      });
+    }
+
+    // 2) Onboarding-Wizard
+    const onboardLink = document.getElementById('choice-onboarding');
+    if (onboardLink) {
+      onboardLink.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        // Bearer-Token (falls vorhanden) als Query mitgeben — Cookie-Session
+        // funktioniert automatisch.
+        let q = '?case=' + encodeURIComponent(CASE_ID);
+        try {
+          const tok = localStorage.getItem('sturm-token');
+          if (tok) q += '&token=' + encodeURIComponent(tok);
+        } catch { /* ignore */ }
+        window.location.href = '/onboarding-wizard.html' + q;
+      });
+    }
+
+    // 3) Direkt mit Belegen — Choice schließen, Fokus auf Dropzone-Browse.
+    const directBtn = document.getElementById('choice-direct');
+    if (directBtn) {
+      directBtn.addEventListener('click', () => {
+        const choice = document.getElementById('onboarding-choice');
+        if (choice) choice.style.display = 'none';
+        const empty = document.getElementById('belege-empty');
+        if (empty) {
+          const headline = empty.querySelector('.empty-headline');
+          const text = empty.querySelector('.empty-headline + div');
+          if (headline) headline.textContent = 'Noch keine Belege hochgeladen.';
+          if (text) text.textContent = 'Ziehe deine Steuerunterlagen in die Fläche oben oder klicke zum Auswählen.';
+        }
+        // Optional: file-input direkt öffnen
+        try { fileInput.click(); } catch { /* ignore */ }
+      });
+    }
+  })();
 
   function setStatusRow(idx, filename, state) {
     let row = statusList.querySelector('[data-idx="' + idx + '"]');

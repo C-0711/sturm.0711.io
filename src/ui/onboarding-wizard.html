@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Onboarding · 5 Fragen zum Steuerfall</title>
+  <link rel="stylesheet" href="/design-system/colors_and_type.css" />
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg" />
+  <style>
+    body {
+      margin: 0;
+      font-family: var(--font-inter, -apple-system, sans-serif);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 36px 24px 96px; }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin-bottom: 28px;
+    }
+    .topbar a { color: var(--color-text-secondary); text-decoration: none; }
+    .topbar a:hover { color: var(--color-text-primary); text-decoration: underline; }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+    }
+    .lede {
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin: 0 0 32px;
+    }
+
+    fieldset.section {
+      border: none;
+      border-top: 1px solid var(--color-border);
+      padding: 24px 0 8px;
+      margin: 0;
+    }
+    fieldset.section:first-of-type { border-top: none; padding-top: 0; }
+    legend {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      padding: 0;
+      margin-bottom: 4px;
+    }
+    .legend-sub {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin: 0 0 14px;
+    }
+
+    /* Radio/Checkbox lists */
+    .opt-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .opt-list.column {
+      flex-direction: column;
+      gap: 6px;
+    }
+    .opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      font-size: 13px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: var(--color-bg-secondary);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .opt:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+    .opt input { margin: 0; accent-color: var(--color-accent); }
+    .opt input:checked + span,
+    .opt:has(input:checked) {
+      color: var(--color-text-primary);
+      border-color: var(--color-accent);
+      background: var(--color-accent-light);
+      font-weight: 500;
+    }
+
+    .num-input,
+    .text-input {
+      padding: 9px 13px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: inherit;
+      width: 120px;
+    }
+    .num-input:focus, .text-input:focus { outline: none; border-color: var(--color-accent); }
+
+    .conditional { display: none; margin-top: 14px; }
+    .conditional.active { display: block; }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .field-row label.lbl {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      min-width: 130px;
+    }
+    .hint {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+    }
+
+    /* Submit */
+    .actions {
+      margin-top: 36px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      padding: 11px 22px;
+      font-size: 14px;
+      font-weight: 500;
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: var(--color-accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      padding: 11px 22px;
+      font-size: 14px;
+      background: none;
+      color: var(--color-text-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .btn-secondary:hover { color: var(--color-text-primary); border-color: var(--color-accent); }
+
+    .status-line {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      min-height: 18px;
+    }
+    .status-line.error { color: #8c3a3a; }
+    .status-line.success { color: #3a6b3a; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a href="/m/dashboard" id="back-link">&larr; Zurück zum Dashboard</a>
+      <span id="case-label"></span>
+    </div>
+
+    <h1>Onboarding — 5 Fragen zu deinem Steuerfall</h1>
+    <p class="lede">
+      Wenn du keine Vorjahres-Erklärung hochladen willst, beantworte kurz diese Fragen.
+      Wir nutzen die Angaben um die richtigen Anlagen vorzubereiten und passende
+      Belege bei dir anzufordern.
+    </p>
+
+    <form id="wizard-form" autocomplete="off">
+
+      <!-- 1) Familienstand -->
+      <fieldset class="section">
+        <legend>1. Familienstand</legend>
+        <p class="legend-sub">Bestimmt Veranlagungsart und Splittingtarif.</p>
+        <div class="opt-list" role="radiogroup">
+          <label class="opt"><input type="radio" name="familienstand" value="ledig" required /><span>Ledig</span></label>
+          <label class="opt"><input type="radio" name="familienstand" value="verheiratet" /><span>Verheiratet</span></label>
+          <label class="opt"><input type="radio" name="familienstand" value="geschieden" /><span>Geschieden</span></label>
+          <label class="opt"><input type="radio" name="familienstand" value="verwitwet" /><span>Verwitwet</span></label>
+        </div>
+        <div class="conditional" id="cond-veranlagung">
+          <div class="field-row">
+            <label class="lbl">Veranlagung:</label>
+            <label class="opt"><input type="radio" name="veranlagung" value="zusammen" /><span>Zusammenveranlagung</span></label>
+            <label class="opt"><input type="radio" name="veranlagung" value="einzeln" /><span>Einzelveranlagung</span></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- 2) Kinder -->
+      <fieldset class="section">
+        <legend>2. Anzahl Kinder im Haushalt</legend>
+        <p class="legend-sub">Aktiviert Anlage Kind und Kinderfreibetrag.</p>
+        <div class="field-row">
+          <input type="number" class="num-input" id="kinder" name="kinder" min="0" max="20" value="0" required />
+          <span class="hint">0 = keine Kinder</span>
+        </div>
+      </fieldset>
+
+      <!-- 3) Einkunftsart -->
+      <fieldset class="section">
+        <legend>3. Hauptsächliche Einkunftsart</legend>
+        <p class="legend-sub">Welche Anlage(n) sind primär relevant — N, S, R …?</p>
+        <div class="opt-list" role="radiogroup">
+          <label class="opt"><input type="radio" name="einkunftsart" value="angestellt" required /><span>Angestellt</span></label>
+          <label class="opt"><input type="radio" name="einkunftsart" value="beamter" /><span>Beamtin / Beamter</span></label>
+          <label class="opt"><input type="radio" name="einkunftsart" value="selbstaendig" /><span>Selbständig</span></label>
+          <label class="opt"><input type="radio" name="einkunftsart" value="rentner" /><span>Rentner:in</span></label>
+          <label class="opt"><input type="radio" name="einkunftsart" value="arbeitslos" /><span>Arbeitslos</span></label>
+        </div>
+        <div class="conditional" id="cond-pendler">
+          <div class="field-row">
+            <label class="lbl" for="pendler_km">Entfernung Wohnung→Arbeit:</label>
+            <input type="number" class="num-input" id="pendler_km" name="pendler_km_einfach" min="0" max="500" step="0.1" placeholder="km" />
+            <span class="hint">einfache Strecke in km (optional)</span>
+          </div>
+          <div class="field-row">
+            <label class="lbl" for="pendler_tage">Arbeitstage / Jahr:</label>
+            <input type="number" class="num-input" id="pendler_tage" name="pendler_tage_jahr" min="1" max="365" value="220" />
+            <span class="hint">Vorbelegt mit 220 Tagen</span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- 4) Konten mit Erträgen -->
+      <fieldset class="section">
+        <legend>4. Konten mit Kapitalerträgen</legend>
+        <p class="legend-sub">Brauchst du Anlage KAP?</p>
+        <div class="opt-list" role="radiogroup">
+          <label class="opt"><input type="radio" name="konten_mit_ertraegen" value="keine" required /><span>Keine</span></label>
+          <label class="opt"><input type="radio" name="konten_mit_ertraegen" value="tagesgeld" /><span>Tagesgeld</span></label>
+          <label class="opt"><input type="radio" name="konten_mit_ertraegen" value="depot" /><span>Depot</span></label>
+          <label class="opt"><input type="radio" name="konten_mit_ertraegen" value="mehrere" /><span>Mehrere Banken</span></label>
+        </div>
+      </fieldset>
+
+      <!-- 5) Sonstiges -->
+      <fieldset class="section">
+        <legend>5. Sonstiges (Mehrfachauswahl)</legend>
+        <p class="legend-sub">Was trifft sonst noch zu? Aktiviert die jeweiligen Anlagen.</p>
+        <div class="opt-list column">
+          <label class="opt"><input type="checkbox" name="sonstiges" value="vermietung" /><span>Vermietung von Immobilien (Anlage V)</span></label>
+          <label class="opt"><input type="checkbox" name="sonstiges" value="spenden" /><span>Spenden / Kirchensteuer (Anlage SA)</span></label>
+          <label class="opt"><input type="checkbox" name="sonstiges" value="krankheitskosten" /><span>Größere Krankheitskosten (Anlage AgB)</span></label>
+          <label class="opt"><input type="checkbox" name="sonstiges" value="handwerker" /><span>Handwerker / Haushaltsnahe Dienstleistungen (§35a)</span></label>
+          <label class="opt"><input type="checkbox" name="sonstiges" value="riester" /><span>Riester-Vertrag (Anlage AV)</span></label>
+          <label class="opt"><input type="checkbox" name="sonstiges" value="pendlerwohnung" /><span>Zweitwohnung am Arbeitsort</span></label>
+        </div>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="submit-btn">Speichern &amp; Belege hochladen</button>
+        <a href="#" class="btn-secondary" id="cancel-link">Abbrechen</a>
+        <span class="status-line" id="status"></span>
+      </div>
+    </form>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── URL/Auth ────────────────────────────────────────────────────────
+  // Wir holen caseId aus ?case=… und (optional) ein Bearer-Token aus
+  // ?token=…. Token gilt für eine Session (localStorage), damit Reloads
+  // ihn nicht verlieren. Cookie-Auth (Mandanten-Surface) funktioniert
+  // automatisch via credentials:'include' — Bearer wird nur als Override
+  // mitgeschickt wenn vorhanden.
+  const params = new URLSearchParams(window.location.search);
+  const CASE_ID = params.get('case') || '';
+  const APP_ID = 'steuerfall-est';
+
+  // ?token=… einmalig in localStorage spiegeln (Pattern wie pipeline.html).
+  try {
+    const tok = params.get('token');
+    if (tok && tok.length > 0) {
+      localStorage.setItem('sturm-token', tok);
+      params.delete('token');
+      const q = params.toString();
+      const newUrl = window.location.pathname + (q ? '?' + q : '') + window.location.hash;
+      window.history.replaceState(null, '', newUrl);
+    }
+  } catch (e) { /* ignore */ }
+
+  function authHeaders() {
+    const tok = (function () { try { return localStorage.getItem('sturm-token'); } catch { return null; } })();
+    return tok ? { 'Authorization': 'Bearer ' + tok } : {};
+  }
+
+  // Case-Label rechts oben
+  if (CASE_ID) {
+    document.getElementById('case-label').textContent = 'Fall: ' + CASE_ID;
+    document.getElementById('cancel-link').href = '/m/case/' + encodeURIComponent(CASE_ID);
+  } else {
+    document.getElementById('cancel-link').href = '/m/dashboard';
+  }
+
+  // ── Conditional fields ──────────────────────────────────────────────
+  function bindConditional(name, predicate, panelId) {
+    const radios = document.querySelectorAll('input[name="' + name + '"]');
+    const panel = document.getElementById(panelId);
+    function update() {
+      const checked = document.querySelector('input[name="' + name + '"]:checked');
+      const val = checked ? checked.value : '';
+      panel.classList.toggle('active', predicate(val));
+    }
+    radios.forEach(r => r.addEventListener('change', update));
+    update();
+  }
+
+  bindConditional('familienstand', (v) => v === 'verheiratet', 'cond-veranlagung');
+  bindConditional('einkunftsart',
+    (v) => v === 'angestellt' || v === 'beamter',
+    'cond-pendler');
+
+  // ── Submit ──────────────────────────────────────────────────────────
+  const form = document.getElementById('wizard-form');
+  const status = document.getElementById('status');
+  const submitBtn = document.getElementById('submit-btn');
+
+  function setStatus(msg, kind) {
+    status.textContent = msg || '';
+    status.classList.remove('error', 'success');
+    if (kind) status.classList.add(kind);
+  }
+
+  function collectAnswers() {
+    const fd = new FormData(form);
+    const familienstand = fd.get('familienstand');
+    const veranlagung = fd.get('veranlagung') || undefined;
+    const kinder = Number(fd.get('kinder') || 0);
+    const einkunftsart = fd.get('einkunftsart');
+    const kmRaw = fd.get('pendler_km_einfach');
+    const tageRaw = fd.get('pendler_tage_jahr');
+    const konten = fd.get('konten_mit_ertraegen');
+    const sonstiges = fd.getAll('sonstiges').filter(Boolean);
+
+    const answers = {
+      familienstand: familienstand,
+      kinder: Number.isFinite(kinder) ? kinder : 0,
+      einkunftsart: einkunftsart,
+      konten_mit_ertraegen: konten,
+      sonstiges: sonstiges,
+    };
+    if (familienstand === 'verheiratet' && veranlagung) answers.veranlagung = veranlagung;
+    const km = Number(kmRaw);
+    if (Number.isFinite(km) && km > 0) answers.pendler_km_einfach = km;
+    const tage = Number(tageRaw);
+    if (Number.isFinite(tage) && tage > 0) answers.pendler_tage_jahr = tage;
+    return answers;
+  }
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!CASE_ID) {
+      setStatus('Kein Fall in der URL angegeben (?case=…)', 'error');
+      return;
+    }
+
+    // HTML5-Validation
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    const answers = collectAnswers();
+
+    // Defensive UI-Validation für veranlagung wenn verheiratet
+    if (answers.familienstand === 'verheiratet' && !answers.veranlagung) {
+      setStatus('Bitte Veranlagungsart wählen (Zusammen- oder Einzelveranlagung).', 'error');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    setStatus('Speichere…');
+
+    try {
+      const url = '/api/applications/' + encodeURIComponent(APP_ID)
+        + '/instances/' + encodeURIComponent(CASE_ID) + '/onboarding';
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, authHeaders());
+      const r = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: headers,
+        body: JSON.stringify(answers),
+      });
+      if (r.status === 401 || r.status === 403) {
+        setStatus('Nicht angemeldet. Bitte über /m/login einloggen.', 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        setStatus('Fehler: ' + (err.error || r.status), 'error');
+        submitBtn.disabled = false;
+        return;
+      }
+      setStatus('Gespeichert. Weiterleitung…', 'success');
+      // Bevorzugt Mandanten-Pfad (/m/case/:id), fallback auf m-case.html
+      window.location.href = '/m/case/' + encodeURIComponent(CASE_ID);
+    } catch (e) {
+      setStatus('Netzwerkfehler: ' + (e && e.message ? e.message : e), 'error');
+      submitBtn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

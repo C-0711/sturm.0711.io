@@ -83,6 +83,54 @@ export interface ApplicationInstance {
   sealCommitSha?: string;
   exportedAt?: string;
   einreichungsId?: string;
+  /** Vorjahres- oder Onboarding-Kontext für engführende Extraktion. */
+  context?: CaseContext;
+}
+
+/**
+ * Per-Case Kontext aus Vorjahres-Erklärung ODER 5-Fragen-Onboarding-Wizard.
+ * Engführt die Pipeline:
+ *   • felderNarrow + phase3LlmFill: nur expected_ecodes_by_anlage
+ *   • phase6BmfRechner: nutzt veranlagungsart für Splittingtarif
+ *   • UI: schlägt daueranschnitte zur Übernahme vor
+ *
+ * Quelle ist entweder ein dediziertes Vorjahres-Upload (source='vorjahr',
+ * Output von vorjahres-kontext-extract-Workflow) oder das Onboarding-Wizard-
+ * Formular (source='onboarding'). Beide Pfade liefern dieselbe Shape, damit
+ * downstream-Code identisch funktioniert.
+ */
+export interface CaseContext {
+  source: 'vorjahr' | 'onboarding' | 'progressive';
+  /** ISO-Timestamp wann gesetzt. */
+  setAt: string;
+  /** Jahr aus dem die Vorjahres-Erkl stammt (nur source='vorjahr'). */
+  vorjahr?: number;
+  /** Anlagen die in 2024 erwartet werden. felderNarrow + Klassifizierung
+   *  begrenzen sich darauf. */
+  expected_anlagen: string[];
+  /** Pro Anlage die eCodes die im Vorjahr belegt waren bzw. via Onboarding
+   *  abgeleitet sind. phase3LlmFill engführt sein Schema darauf. */
+  expected_ecodes_by_anlage?: Record<string, string[]>;
+  /** Veranlagungsart — direkt an BMF-Rechner für Tarif-Wahl. */
+  veranlagungsart?: 'zusammenveranlagung' | 'einzelveranlagung' | 'ledig';
+  /** Anzahl Kinder (für Kinderfreibetrag-Aktivierung). */
+  anzahl_kinder?: number;
+  /** Vorschlagswerte aus Vorjahr/Onboarding die der User in 2024 bestätigen
+   *  kann (Pendlerpauschale, Werbungskosten, etc.). Werden im UI als
+   *  „Übernahme?"-Karten gerendert. */
+  daueranschnitte?: Array<{
+    eCode: string;
+    label: string;
+    wert: number | string;
+    einheit?: string;
+    quelle: string;
+    /** Status — vom User in der UI gesetzt. */
+    status?: 'vorgeschlagen' | 'uebernommen' | 'geaendert' | 'verworfen';
+  }>;
+  /** Belege die für 2024 erwartet werden aber noch nicht da sind. */
+  missing_belege_erwartet?: string[];
+  /** Falls source='vorjahr': Pfad zur extrahierten Vorjahres-JSON im Case-Workspace. */
+  vorjahresKontextPfad?: string;
 }
 
 export interface CreateInstanceBody {

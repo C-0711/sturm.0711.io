@@ -36,6 +36,7 @@ import {
   loadInstanceFile,
   saveInstanceFile,
 } from './server/applications.ts';
+import { registerOnboardingEndpoint } from './server/onboarding-handler.ts';
 // Stubs für noch nicht implementierte workspace→gitchain-Funktionen.
 // Werden in der Seal-Handler-Pipeline aufgerufen aber sind in der aktuellen
 // Codebase nicht fertig — return noop. Volle Impl folgt mit Lane-5-Anbindung.
@@ -302,6 +303,10 @@ app.use(
 
 // Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
 app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
+
+// Onboarding-Wizard (5-Fragen) — alternative zum Vorjahres-Upload für Neukunden.
+// Schreibt einen `CaseContext` mit source='onboarding' in die Instance.
+registerOnboardingEndpoint(app, { applicationsDir: APPLICATIONS_DIR });
 
 // ── Orchestrator: Gemma-4 Steuerassistent ──────────────────────────────
 // SSE-Stream-Surface unter /api/orchestrator + Vanilla-Chat-UI unter
@@ -2206,6 +2211,7 @@ app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/m/login', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-login.html')));
 app.get('/m/dashboard', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-dashboard.html')));
 app.get('/m/case/:caseId', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-case.html')));
+app.get('/onboarding-wizard.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'onboarding-wizard.html')));
 
 // ── Dev-Surface (Sturm-internal) ──────────────────────────────────────
 // Diese Seiten sind Dev-Tools und sollten in Produktion hinter Bearer
