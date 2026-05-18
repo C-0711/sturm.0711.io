@@ -166,6 +166,28 @@ function trustOf(origin?: string): number {
   return TRUST_ORDER[origin ?? 'unknown'] ?? 0;
 }
 
+// eCode-Präfixe für jahresgebundene Werte. Wenn der einzige Beleg ein anderes
+// Jahr trägt als das Case-Jahr (z.B. nur 2023-Erklärung, aber Case ist 2024),
+// wird der Wert auf trust='suspicious' herabgestuft → BMF nimmt ihn nicht.
+// Stammdaten + Pauschalen (Name, IdNr, Adresse, Pauschbeträge) sind NICHT hier
+// — die gelten jahresübergreifend.
+const JAHRESGEBUNDEN_PREFIXES = [
+  'E0200',  // Anlage N: Bruttoarbeitslohn, Lohnsteuer, Soli, KiSt-AN
+  'E0201',  // Anlage N: weitere Lohnsteuer-Werte (Z.19 etc.)
+  'E0801',  // Anlage KAP: Kapitalerträge
+  'E0810',  // Anlage KAP: Kapitalertragsteuer
+  'E1900',  // Anlage KAP_BET: Steuerbescheinigung-Werte
+  'E1904',  // Anlage KAP_BET: KapErtragsteuer/Soli/KiSt zur KapErtr
+  'E2000',  // Anlage VOR: RV-Beiträge
+  'E2001',  // Anlage VOR: KV/PV-Beiträge
+  'E2004',  // Anlage VOR: Arbeitslosenversicherung
+  'E0500',  // Vorauszahlungen
+  'E0501',  // Vorauszahlungen-Details
+];
+function isJahresgebunden(eCode: string): boolean {
+  return JAHRESGEBUNDEN_PREFIXES.some((p) => eCode.startsWith(p));
+}
+
 function normalizeForCompare(s: string | null | undefined): string {
   if (s == null) return '';
   return String(s).trim().toLowerCase().replace(/\s+/g, ' ');
@@ -282,10 +304,40 @@ export async function aggregateCase(
   const merged_layer: Record<string, MergedField> = {};
   const conflicts: ConflictEntry[] = [];
 
+  // Vorab: case-Jahr + docYear-Index (einmal aufbauen, nicht pro eCode).
+  const caseJahr = inst.veranlagungsjahr ?? null;
+  const docYearByName = new Map<string, number | null>();
+  for (const d of inst.documents ?? []) {
+    const y = (d.indikation?.steuerjahr ?? null);
+    if (d.filename) docYearByName.set(d.filename, y);
+  }
+  function yearScore(c: { sources: Array<{ filename: string }> }): number {
+    if (!caseJahr) return 0;
+    for (const s of c.sources) {
+      const y = docYearByName.get(s.filename);
+      if (y === caseJahr) return 2;
+    }
+    const allYears = c.sources.map((s) => docYearByName.get(s.filename)).filter((y) => typeof y === 'number');
+    if (allYears.length > 0 && !allYears.includes(caseJahr)) return -1;
+    return 0;
+  }
+  function sourceYearMismatch(c: { sources: Array<{ filename: string }> }): boolean {
+    if (!caseJahr) return false;
+    const years = c.sources.map((s) => docYearByName.get(s.filename)).filter((y) => typeof y === 'number') as number[];
+    if (years.length === 0) return false;
+    return !years.includes(caseJahr);
+  }
+
   for (const [eCode, bucket] of perCode) {
     const candidates = Array.from(bucket.values());
+    const jahresgebunden = isJahresgebunden(eCode);
     if (candidates.length === 1) {
       const c = candidates[0];
+      // Jahresgebundener eCode, einziger Kandidat aus FALSCHEM Jahr → suspicious.
+      // Verhindert dass ein 2023-Bruttoarbeitslohn ohne 2024-Konkurrent in die
+      // BMF-Berechnung wandert. canonicalLayerToElsterFelder dropt suspicious.
+      const rawTrust = (c.raw as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust;
+      const trustFinal = (jahresgebunden && sourceYearMismatch(c)) ? 'suspicious' : rawTrust;
       merged_layer[eCode] = {
         eCode,
         value: String(c.raw.value ?? ''),
@@ -298,30 +350,13 @@ export async function aggregateCase(
         datentyp: String(c.raw.datentyp ?? ''),
         confirmed_by: c.sources,
         confidence_count: c.sources.length,
-        trust: (c.raw as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust,
+        trust: trustFinal,
       };
       continue;
     }
     // Mehrere Kandidaten: Jahr-Match → Trust → Source-Count.
-    // Jahr-Match ist PRIMÄR weil bei Konflikten (z.B. Bruttoarbeitslohn von
-    // 2023-ELSTER-Form + 2024-LStB) der jahresaktuelle Wert gewinnen muss.
-    const caseJahr = inst.veranlagungsjahr ?? null;
-    const docYearByName = new Map<string, number | null>();
-    for (const d of inst.documents ?? []) {
-      const y = (d.indikation?.steuerjahr ?? null);
-      if (d.filename) docYearByName.set(d.filename, y);
-    }
-    function yearScore(c: { sources: Array<{ filename: string }> }): number {
-      if (!caseJahr) return 0; // kein case-jahr → kein bias
-      for (const s of c.sources) {
-        const y = docYearByName.get(s.filename);
-        if (y === caseJahr) return 2; // exakter Match
-      }
-      // Penalty wenn ALLE sources ein anderes konkretes Jahr haben
-      const allYears = c.sources.map((s) => docYearByName.get(s.filename)).filter((y) => typeof y === 'number');
-      if (allYears.length > 0 && !allYears.includes(caseJahr)) return -1;
-      return 0;
-    }
+    // Bei Konflikten (z.B. Bruttoarbeitslohn von 2023-ELSTER-Form + 2024-LStB)
+    // muss der jahresaktuelle Wert gewinnen.
     candidates.sort((a, b) => {
       const ya = yearScore(a);
       const yb = yearScore(b);
@@ -332,6 +367,10 @@ export async function aggregateCase(
       return b.sources.length - a.sources.length;
     });
     const winner = candidates[0];
+    const rawTrust = (winner.raw as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust;
+    // Falls auch der Gewinner aus falschem Jahr stammt (alle Kandidaten ≠ caseJahr)
+    // und der eCode jahresgebunden ist → suspicious. Sonst rawTrust.
+    const trustFinal = (jahresgebunden && sourceYearMismatch(winner)) ? 'suspicious' : rawTrust;
     merged_layer[eCode] = {
       eCode,
       value: String(winner.raw.value ?? ''),
@@ -344,7 +383,7 @@ export async function aggregateCase(
       datentyp: String(winner.raw.datentyp ?? ''),
       confirmed_by: winner.sources,
       confidence_count: winner.sources.length,
-      trust: (winner.raw as { trust?: 'high' | 'medium' | 'low' | 'suspicious' }).trust,
+      trust: trustFinal,
     };
     conflicts.push({
       eCode,
