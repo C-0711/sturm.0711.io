@@ -326,8 +326,8 @@ export const klassifizierungStage = defineStage<
     ];
     // ECHTE Belegtypen — wenn einer matched, ist es NIE ein Meta-Doc auch
     // wenn z.B. "Transferticket" im Footer steht. Behebt false-positives
-    // wo Hildburg-Lohnsteuerbescheinigungen ein Transfer-Ticket Nummer im
-    // Footer haben.
+    // wo Lohnsteuerbescheinigungen ein Transfer-Ticket-Nummer im Footer
+    // haben (Druckvorlagen-Boilerplate).
     const REAL_BELEG_PATTERNS = [
       /\bLohnsteuer[- ]?bescheinigung\b/i,
       /\bKapitalertrag[s]?(steuer)?[- ]?bescheinigung\b/i,
@@ -342,8 +342,8 @@ export const klassifizierungStage = defineStage<
     ];
     const realBelegHits = REAL_BELEG_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
     const metaHits = META_DOC_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
-    // Currency-Heuristik: erweitert um Formate ohne € (z.B. "63.559,90" oder
-    // "63 559,90 EUR" wie sie Mistral OCR oft liefert).
+    // Currency-Heuristik: erweitert um Formate ohne € (z.B. "12.345,67" oder
+    // "12 345,67 EUR" wie Mistral OCR oft liefert).
     const hasCurrency =
       /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) ||
       /\d+,\d{2}\s*€/.test(input.text) ||

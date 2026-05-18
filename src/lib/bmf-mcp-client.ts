@@ -182,8 +182,9 @@ export function canonicalLayerToElsterFelder(
     //   • E0101201 "Zusammenveranlagung" → Splittingtarif aktivieren
     //   • E0100402 Religion → Kirchensteuer-Berechnung
     //   • E0100081/82 IDNr → Personen-Identifikation
-    // Ohne diese fällt BMF auf Grundtarif zurück → Stricker rechnet 11.876 €
-    // ESt statt korrekt 6.958 € (Erstattung wird zu Nachzahlung 4.854 €).
+    // Ohne diese fällt BMF auf Grundtarif zurück, auch wenn der Fall eine
+    // Zusammenveranlagung ist → falsche ESt (Grundtarif statt Splitting),
+    // Bilanz kippt von Erstattung zu Nachzahlung.
     // Heuristik: sauberer String-Wert (alphanumeric-start, <=80 chars,
     // kein führender Doppelpunkt) → durchlassen. Schrott bleibt draußen.
     if (cv.datentyp !== 'currency' && cv.datentyp !== 'date') {

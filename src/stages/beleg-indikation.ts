@@ -5,10 +5,10 @@
  * und fragt nach (a) den relevanten ELSTER-Anlagen und (b) den wichtigsten
  * im Dokument sichtbaren Werten (Beträge, Namen, Datum, Belegtyp).
  *
- * Ziel: Das UI hat innerhalb von ~1-3 s eine Indikation
- *   "KAP, VOR · Sparkasse Westerwald-Sieg · 5,06 € Kapitalerträge"
+ * Ziel: Das UI hat innerhalb von ~1-3 s eine Indikation in der Form
+ *   "<Anlagen> · <Belegtyp> · <Empfänger> · <Schlüsselwerte>"
  * während Gemma-4 OCR noch ~25 s am Volltext arbeitet. Im UI taucht NIE
- * der Modellname auf — nur Anlagen + Werte.
+ * der Modellname auf — nur Anlagen + Werte aus dem konkreten Beleg.
  *
  * STRICT: kein Fallback. Fehler bubbeln (das Round-1-Signal entfällt, der
  * Rest der Pipeline läuft unverändert weiter — Indikation ist nicht
