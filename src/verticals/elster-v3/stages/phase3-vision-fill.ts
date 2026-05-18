@@ -38,6 +38,11 @@ import {
 } from '../../../lib/vllm-vision.ts';
 import { buildFieldMap } from '../../../lib/field-map-builder.ts';
 import {
+  splitOcrByPages,
+  detectAnlagenPerPage,
+  pagesForAnlage,
+} from '../../../lib/page-anlage-detect.ts';
+import {
   phase3LlmFillStage,
   type Phase3LlmFillInput,
   type Phase3LlmFillOutput,
@@ -268,56 +273,179 @@ export const phase3VisionFillStage = defineStage<
       renderMs,
     });
 
-    // ── 2. Build field map for STILL-MISSING + SUSPICIOUS fields ───────
-    // phase1Regex already filled ~30-50% of the catalog deterministically.
-    // Asking vision about clean hits wastes prompt budget — they'd be
-    // skipped at the cross-validation step anyway (regex wins in phase5).
-    // BUT phase1Regex also produces SUSPICIOUS hits: WISO-placeholder
-    // values (repeat_suspicious=true) or fallback hits without zeile-anchor
-    // (zeile_anchored=false). Those poison canonical_layer (e.g. VOR shows
-    // "456 / 456" instead of "4.703 / 1.243"). We re-ask vision about
-    // those so it can correct or NULL them.
-    const missingFelderMap: typeof felderMap = {};
-    let suspiciousReAskCount = 0;
-    for (const anlage of anlagen) {
-      const result = phase1[anlage];
-      if (!result) continue;
-      const askSet = new Set<string>(result.missing_ecodes ?? []);
-      for (const [eCode, hit] of Object.entries(result.regex_hits ?? {})) {
-        const isSuspicious =
-          hit.repeat_suspicious === true || hit.zeile_anchored === false;
-        if (isSuspicious) {
-          askSet.add(eCode);
-          suspiciousReAskCount++;
-        }
-      }
-      const fullList = felderMap[anlage];
-      if (!fullList) continue;
-      missingFelderMap[anlage] = {
-        anlage: fullList.anlage,
-        felder: fullList.felder.filter((f) => askSet.has(f.eCode)),
-      };
-    }
-    ctx.emit('vision_field_set', {
-      missingFromPhase1: Object.values(phase1).reduce(
-        (s, r) => s + (r.missing_ecodes?.length ?? 0),
-        0,
+    // ── 2. Per-anlage focused vision calls (v6 spike pattern) ──────────
+    // The v6 spike that hit 42/44 on Stricker used 2 hand-curated vision
+    // calls (~22 fields each) targeting specific pages. We replicate that
+    // by detecting which pages contain which anlage and making one focused
+    // call per anlage: just THAT anlage's missing+suspect fields + just
+    // the pages where it appears. Clean regex hits are skipped (phase5-
+    // merge keeps them anyway); suspicious phase1 hits are re-asked so
+    // vision can correct WISO placeholders.
+    const fullOcrText = typeof input.text === 'string' ? input.text : '';
+    const ocrPages = splitOcrByPages(fullOcrText);
+    const pageAnlagen = detectAnlagenPerPage(ocrPages);
+    ctx.emit('vision_page_anlagen', {
+      pageCount: pngPaths.length,
+      ocrPageCount: ocrPages.length,
+      detected: Object.fromEntries(
+        Object.entries(pageAnlagen).map(([a, ps]) => [a, ps.length]),
       ),
-      suspiciousReAsked: suspiciousReAskCount,
-    });
-    const fieldMap = buildFieldMap({
-      perAnlage: missingFelderMap,
-      schemaName,
-      maxFields: maxFieldsPerCall,
     });
 
-    if (fieldMap.fields.length === 0) {
-      ctx.emit('phase3_vision_done', {
-        reason: 'no-fields',
-        anlagen: anlagen.length,
+    const instructionsPrefix = [
+      'Du extrahierst ELSTER-Felder aus PDF-Seiten einer Steuererklaerung.',
+      'Du siehst die Seiten als Bilder. Zusaetzlich folgt der OCR-Text',
+      'derselben Seiten als Cross-Reference fuer schwer lesbare Zahlen.',
+      '',
+      'Regeln:',
+      '- Werte EXAKT wie auf dem Bild (deutsches Format z.B. "63.559,90",',
+      '  Datum DD.MM.YYYY, Text wortgenau).',
+      '- Wenn ein Feld auf den gezeigten Seiten nicht erkennbar ist: NULL.',
+      '- WISO-Test-Platzhalter (Bezeichnung+Betrag beide "456" wiederholt)',
+      '  → NULL setzen.',
+      '- Person B (Ehefrau) hat eigene Anlagen — Werte stehen NICHT in',
+      "  Person A's Anlage.",
+    ].join('\n');
+
+    interface BatchOutcome {
+      idx: number;
+      anlage: string;
+      parsed: Record<string, string | null>;
+      error: Error | null;
+      wallclockMs: number;
+      promptTokens: number;
+      completionTokens: number;
+    }
+    const outcomes: BatchOutcome[] = [];
+    let totalAsked = 0;
+    let totalAnswered = 0;
+    let anyAnlageHadFields = false;
+
+    for (const anlage of anlagen) {
+      const phase1Anl = phase1[anlage];
+      const fullList = felderMap[anlage];
+      if (!phase1Anl || !fullList) continue;
+
+      // Build ask-set: missing eCodes + suspect regex hits.
+      const askSet = new Set<string>(phase1Anl.missing_ecodes ?? []);
+      for (const [eCode, hit] of Object.entries(phase1Anl.regex_hits ?? {})) {
+        if (hit.repeat_suspicious === true || hit.zeile_anchored === false) {
+          askSet.add(eCode);
+        }
+      }
+      const focusedFelder = fullList.felder.filter((f) => askSet.has(f.eCode));
+      if (focusedFelder.length === 0) continue;
+      anyAnlageHadFields = true;
+
+      // Pages: only those detected as containing this anlage; fall back
+      // to all pages if anlage wasn't detected (rare — usually a marker
+      // typo or anlage names that don't match our regex set).
+      const pageIdxs = pagesForAnlage(anlage, pageAnlagen, pngPaths.length, 'all-pages');
+      const cappedPages = pageIdxs.slice(0, pagesPerCall);
+      if (cappedPages.length === 0) continue;
+      const anlagePngs = cappedPages.map((i) => pngPaths[i]);
+      const anlageOcr = cappedPages
+        .map((i) => ocrPages[i] ?? '')
+        .join('\n--- Seitenwechsel ---\n');
+
+      const anlageMap = buildFieldMap({
+        perAnlage: { [anlage]: { anlage, felder: focusedFelder } },
+        schemaName: `${schemaName}_${anlage}`,
+        maxFields: maxFieldsPerCall,
       });
-      // No fields to extract — return empty per_anlage so downstream
-      // stages still see the expected shape.
+
+      const focusedInstructions = [
+        instructionsPrefix,
+        '',
+        `Aufgabe: extrahiere Felder fuer Anlage ${anlage} aus den`,
+        `${cappedPages.length} gezeigten Seite${cappedPages.length === 1 ? '' : 'n'}` +
+        ` (Seite ${cappedPages.map((i) => i + 1).join(', ')}).`,
+        '',
+        '=== OCR-TEXT der gezeigten Seiten ===',
+        anlageOcr,
+        '=== ENDE OCR-TEXT ===',
+        '',
+        anlageMap.mapText,
+        '',
+        'Antworte mit JSON-Objekt nach Schema — keine Erklaerung.',
+        `Fuelle so viele der ${anlageMap.fields.length} Felder wie moeglich;` +
+          ' NULL nur bei echter Unsicherheit.',
+      ].join('\n');
+
+      const idx = outcomes.length;
+      totalAsked += anlageMap.fields.length;
+      try {
+        const r = await visionCaller({
+          vllmUrl,
+          model: modelName,
+          imagePaths: anlagePngs,
+          textInstructions: focusedInstructions,
+          jsonSchema: anlageMap.jsonSchema,
+          maxTokens: maxTokensPerCall,
+          timeoutMs: perCallTimeoutMs,
+          signal: ctx.signal,
+        });
+        const parsed = (r.parsed ?? {}) as Record<string, string | null>;
+        const fieldsFound = Object.entries(parsed).filter(
+          ([, v]) => v !== null && v !== undefined && String(v).trim() !== '',
+        ).length;
+        totalAnswered += fieldsFound;
+        ctx.emit('vision_anlage_done', {
+          idx, anlage,
+          pages: cappedPages.map((i) => i + 1),
+          ms: r.wallclockMs,
+          prompt_tokens: r.promptTokens,
+          completion_tokens: r.completionTokens,
+          fieldsAsked: anlageMap.fields.length,
+          fieldsFound,
+        });
+        await ctx.artifacts.write(
+          `phase3_vision_raw/anlage-${anlage}.json`,
+          {
+            idx, anlage,
+            pages: cappedPages,
+            promptTokens: r.promptTokens,
+            completionTokens: r.completionTokens,
+            wallclockMs: r.wallclockMs,
+            fieldsAskedFor: anlageMap.fields.length,
+            fieldsAnswered: fieldsFound,
+            parsed,
+          },
+        );
+        outcomes.push({
+          idx, anlage, parsed, error: null,
+          wallclockMs: r.wallclockMs,
+          promptTokens: r.promptTokens,
+          completionTokens: r.completionTokens,
+        });
+      } catch (err) {
+        const e = err as Error;
+        const stageErr = err instanceof VllmVisionError ? err.stage : undefined;
+        ctx.emit('vision_anlage_failed', {
+          idx, anlage, error: e.message, stage: stageErr,
+        });
+        await ctx.artifacts.write(
+          `phase3_vision_raw/anlage-${anlage}-FAILED.json`,
+          {
+            idx, anlage, pages: cappedPages,
+            errorMessage: e.message,
+            errorStage: stageErr,
+            errorStack: e.stack,
+            vllmHttpStatus: err instanceof VllmVisionError ? err.httpStatus : undefined,
+            vllmBodyOrContent: err instanceof VllmVisionError ? err.body : undefined,
+          },
+        );
+        outcomes.push({
+          idx, anlage, parsed: {}, error: e,
+          wallclockMs: 0, promptTokens: 0, completionTokens: 0,
+        });
+      }
+    }
+    // Avoid unused-var lints when downstream still references them.
+    void callConcurrency; void pMapBounded; void chunkArray;
+
+    if (!anyAnlageHadFields) {
+      ctx.emit('phase3_vision_done', { reason: 'no-fields', anlagen: anlagen.length });
       const per_anlage: Record<string, Phase3AnlageResult> = {};
       for (const anlage of anlagen) {
         per_anlage[anlage] = {
@@ -332,166 +460,16 @@ export const phase3VisionFillStage = defineStage<
       return { per_anlage, totalFilled: 0, ms: Date.now() - tStart };
     }
 
-    // ── 3. Build text instruction PREFIX (OCR-text snippet built per batch
-    //       below so the prompt only contains the OCR for the pages the
-    //       batch is actually seeing). ─────────────────────────────────────
-    const fullOcrText = typeof input.text === 'string' ? input.text : '';
-    const instructionsPrefix = [
-      'Du extrahierst ELSTER-Felder aus PDF-Seiten einer Steuererklaerung.',
-      'Du siehst die Seiten als Bilder. Zusaetzlich folgt der OCR-Text',
-      'der GENAU DIESER Seiten als Cross-Reference fuer schwer lesbare Zahlen.',
-      '',
-      'Regeln:',
-      '- Werte EXAKT wie auf dem Bild (deutsches Format z.B. "63.559,90",',
-      '  Datum DD.MM.YYYY, Text wortgenau).',
-      '- Wenn ein Feld auf den gezeigten Seiten nicht erkennbar ist: NULL.',
-      '- WISO-Test-Platzhalter (Bezeichnung+Betrag beide "456" wiederholt)',
-      '  → NULL setzen.',
-      '- Person B (Ehefrau) hat eigene Anlagen — Werte stehen NICHT in',
-      "  Person A's Anlage.",
-      '- VERSUCHE moeglichst viele Felder zu fuellen, nicht nur die',
-      '  offensichtlichen — verlasse dich auf BILD + OCR-TEXT zusammen.',
-    ].join('\n');
-    const instructionsSuffix = [
-      fieldMap.mapText,
-      '',
-      'Antworte mit JSON-Objekt nach Schema — keine Erklaerung.',
-      'Fuelle so viele eCodes wie moeglich; NULL nur bei echter Unsicherheit.',
-    ].join('\n');
-
-    // Slice the full OCR text into one chunk per PDF page by character offset.
-    // We don't have true page boundaries from OCR, so we approximate by
-    // equal slicing across pngPaths.length pages. Each batch then concats
-    // only the slices for its own pages.
-    const pageCount = pngPaths.length || 1;
-    const pageOcrChunks: string[] = [];
-    if (fullOcrText.length > 0) {
-      const sliceLen = Math.ceil(fullOcrText.length / pageCount);
-      for (let i = 0; i < pageCount; i++) {
-        pageOcrChunks.push(fullOcrText.slice(i * sliceLen, (i + 1) * sliceLen));
-      }
-    }
-
-    // ── 4. Batch pages and call vision ─────────────────────────────────
-    const batches = chunkArray(pngPaths, pagesPerCall);
-    ctx.emit('vision_batches', { count: batches.length, pagesPerCall });
-
-    interface BatchOutcome {
-      idx: number;
-      parsed: Record<string, string | null>;
-      error: Error | null;
-      wallclockMs: number;
-      promptTokens: number;
-      completionTokens: number;
-    }
-
-    const outcomes: BatchOutcome[] = await pMapBounded(
-      batches,
-      callConcurrency,
-      async (pngs, idx) => {
-        // Build per-batch OCR slice: take the OCR chunks that correspond
-        // to the page indices in THIS batch (idx*pagesPerCall .. +pngs.length).
-        const startPage = idx * pagesPerCall;
-        const batchOcr = pageOcrChunks
-          .slice(startPage, startPage + pngs.length)
-          .join('\n--- Seitenwechsel ---\n');
-        const batchInstructions = [
-          instructionsPrefix,
-          '',
-          '=== OCR-TEXT NUR der Seiten in diesem Batch ===',
-          batchOcr,
-          '=== ENDE OCR-TEXT ===',
-          '',
-          instructionsSuffix,
-        ].join('\n');
-        try {
-          const r = await visionCaller({
-            vllmUrl,
-            model: modelName,
-            imagePaths: pngs,
-            textInstructions: batchInstructions,
-            jsonSchema: fieldMap.jsonSchema,
-            maxTokens: maxTokensPerCall,
-            timeoutMs: perCallTimeoutMs,
-            signal: ctx.signal,
-          });
-          const parsed = (r.parsed ?? {}) as Record<string, string | null>;
-          const fieldsFound = Object.entries(parsed).filter(
-            ([, v]) => v !== null && v !== undefined && String(v).trim() !== '',
-          ).length;
-          ctx.emit('vision_batch_done', {
-            idx,
-            pages: pngs.length,
-            ms: r.wallclockMs,
-            prompt_tokens: r.promptTokens,
-            completion_tokens: r.completionTokens,
-            fieldsFound,
-            fieldMapSize: fieldMap.fields.length,
-          });
-          // Persist raw vision response per batch for offline diagnosis.
-          // Without this we can't tell whether the model wrote 5 fields and
-          // stopped, wrote 500 fields all-NULL, or hit a token cap.
-          await ctx.artifacts.write(
-            `phase3_vision_raw/batch-${idx}.json`,
-            {
-              idx,
-              pages: pngs.length,
-              promptTokens: r.promptTokens,
-              completionTokens: r.completionTokens,
-              wallclockMs: r.wallclockMs,
-              fieldsAskedFor: fieldMap.fields.length,
-              fieldsAnswered: fieldsFound,
-              parsed,
-            },
-          );
-          return {
-            idx,
-            parsed,
-            error: null,
-            wallclockMs: r.wallclockMs,
-            promptTokens: r.promptTokens,
-            completionTokens: r.completionTokens,
-          } satisfies BatchOutcome;
-        } catch (err) {
-          const e = err as Error;
-          const stage = err instanceof VllmVisionError ? err.stage : undefined;
-          ctx.emit('vision_batch_failed', {
-            idx,
-            error: e.message,
-            stage,
-          });
-          // Persist failure detail so we can see WHY two of three batches
-          // silently fail when vLLM logs 3x 200 OK.
-          const httpStatus = err instanceof VllmVisionError ? err.httpStatus : undefined;
-          const body = err instanceof VllmVisionError ? err.body : undefined;
-          await ctx.artifacts.write(
-            `phase3_vision_raw/batch-${idx}-FAILED.json`,
-            {
-              idx,
-              pages: pngs.length,
-              errorMessage: e.message,
-              errorStage: stage,
-              errorStack: e.stack,
-              vllmHttpStatus: httpStatus,
-              vllmBodyOrContent: body,
-            },
-          );
-          return {
-            idx,
-            parsed: {},
-            error: e,
-            wallclockMs: 0,
-            promptTokens: 0,
-            completionTokens: 0,
-          } satisfies BatchOutcome;
-        }
-      },
-    );
+    ctx.emit('phase3_vision_done', {
+      anlageCalls: outcomes.length,
+      totalAsked,
+      totalAnswered,
+    });
 
     const failures = outcomes.filter((o) => o.error !== null);
 
-    // ── 5. Fallback if ALL batches failed ──────────────────────────────
-    if (failures.length === batches.length) {
+    // ── 5. Fallback if ALL anlage calls failed ─────────────────────────
+    if (failures.length === outcomes.length && outcomes.length > 0) {
       if (fallbackToV5) {
         ctx.emit('vision_fallback_triggered', {
           reason: 'all-batches-failed',
@@ -501,7 +479,7 @@ export const phase3VisionFillStage = defineStage<
         return phase3LlmFillStage.run(input, fallbackCtx);
       }
       throw new Error(
-        `phase3VisionFill: all ${batches.length} batches failed — ` +
+        `phase3VisionFill: all ${outcomes.length} batches failed — ` +
           (failures[0]?.error?.message ?? 'unknown error'),
       );
     }
@@ -708,7 +686,7 @@ export const phase3VisionFillStage = defineStage<
     ctx.emit('phase3_vision_done', {
       anlagen: anlagen.length,
       totalFilled,
-      visionBatches: batches.length,
+      visionBatches: outcomes.length,
       visionFailures: failures.length,
       renderMs,
       ms: Date.now() - tStart,
