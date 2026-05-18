@@ -399,6 +399,29 @@ export async function aggregateCase(
     });
   }
 
+  // ── Cluster-Geschwister-Filter case-weit ────────────────────────
+  // Wenn ein Run (z.B. VAST 2024 via Layer-1) E0200501 mit origin=LAYER1_NESTED
+  // geliefert hat, dürfen die Geschwister E0200502/503/504 (gleicher Drucktext,
+  // andere LStB-Form-Varianten) aus ANDEREN Runs nicht mehr im merged_layer
+  // stehen. Phase5-merge macht das schon per-Doc; hier nochmal case-weit.
+  const LAYER1_CLUSTER_SIBLINGS: Record<string, string[]> = {
+    'E0200201': ['E0200202', 'E0200203', 'E0200204'],
+    'E0200301': ['E0200302', 'E0200303', 'E0200304'],
+    'E0200401': ['E0200402', 'E0200403', 'E0200404'],
+    'E0200501': ['E0200502', 'E0200503', 'E0200504'],
+    'E0200601': ['E0200602', 'E0200603', 'E0200604'],
+    'E0201201': ['E0201202', 'E0201203', 'E0201204'],
+    'E0201301': ['E0201302', 'E0201303', 'E0201304'],
+    'E0201801': ['E0201802', 'E0201803', 'E0201804'],
+    'E0201901': ['E0201902', 'E0201903', 'E0201904'],
+  };
+  for (const [winner, siblings] of Object.entries(LAYER1_CLUSTER_SIBLINGS)) {
+    if (merged_layer[winner]?.origin !== 'LAYER1_NESTED') continue;
+    for (const sib of siblings) {
+      if (merged_layer[sib]) delete merged_layer[sib];
+    }
+  }
+
   // ── Pflicht-Coverage ─────────────────────────────────────────────
   const loadPflicht = opts.loadPflichtFelder
     ?? (async (anlage: string) => {
