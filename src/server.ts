@@ -903,24 +903,11 @@ app.get(
         });
         (agg as { bmf?: unknown }).bmf = bmfResult;
       } catch (e) {
-        const err = e as Error & { cause?: unknown };
-        const causeErr = err.cause instanceof Error ? err.cause : null;
-        const cause = causeErr
-          ? {
-              message: causeErr.message,
-              name: causeErr.name,
-              code: (causeErr as { code?: string }).code,
-              stack: causeErr.stack?.split('\n').slice(0, 8).join(' | '),
-            }
-          : (err.cause ?? null);
         (agg as { bmf?: unknown }).bmf = {
           erfolg: false,
           reason: 'mcp-error',
-          message: err.message,
-          errorName: err.name,
-          stack: err.stack?.split('\n').slice(0, 8).join(' | '),
-          cause,
-          debug: 'aggregate-handler-catch-v3',
+          message: (e as Error).message,
+          xMarker: 'CATCH_V4',
         };
       }
     }
