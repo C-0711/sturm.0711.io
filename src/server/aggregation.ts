@@ -404,6 +404,7 @@ export async function aggregateCase(
   // geliefert hat, dürfen die Geschwister E0200502/503/504 (gleicher Drucktext,
   // andere LStB-Form-Varianten) aus ANDEREN Runs nicht mehr im merged_layer
   // stehen. Phase5-merge macht das schon per-Doc; hier nochmal case-weit.
+  // (1) Form-Varianten-Cluster: Z.5-9 Hauptzeile pro LStB-Form-Variante
   const LAYER1_CLUSTER_SIBLINGS: Record<string, string[]> = {
     'E0200201': ['E0200202', 'E0200203', 'E0200204'],
     'E0200301': ['E0200302', 'E0200303', 'E0200304'],
@@ -419,6 +420,28 @@ export async function aggregateCase(
     if (merged_layer[winner]?.origin !== 'LAYER1_NESTED') continue;
     for (const sib of siblings) {
       if (merged_layer[sib]) delete merged_layer[sib];
+    }
+  }
+
+  // (2) Cross-Zeilen-Duplikat-Cluster: LStB Z.6 (E0200301) vs Z.19-Summe
+  // (E0201201/801) und alle ihre Form-Varianten sind SEMANTISCH dieselbe
+  // Lohnsteuer. Wenn LAYER1 E0200301 mit Z.6-Original-Wert geliefert hat,
+  // sind alle Z.19-Felder redundant — BMF würde sie sonst zur Vorauszahlung
+  // aufaddieren. Gleiches für KiSt Z.8 → Z.20.
+  const LAYER1_DUPLICATE_TARGETS: Record<string, string[]> = {
+    // LAYER1-eCode → komplette Liste der semantisch duplikativen eCodes
+    'E0200301': ['E0201201', 'E0201202', 'E0201203', 'E0201204',
+                 'E0201801', 'E0201802', 'E0201803', 'E0201804'], // Lohnsteuer Z.19-Summen
+    'E0200401': ['E0201202', 'E0201803'],   // Soli Z.19
+    'E0200501': ['E0201301', 'E0201302', 'E0201303', 'E0201304',
+                 'E0201901', 'E0201902', 'E0201903', 'E0201904'], // KiSt Z.20-Spalten
+  };
+  for (const [winner, dupes] of Object.entries(LAYER1_DUPLICATE_TARGETS)) {
+    if (merged_layer[winner]?.origin !== 'LAYER1_NESTED') continue;
+    for (const d of dupes) {
+      if (merged_layer[d] && merged_layer[d].origin !== 'LAYER1_NESTED') {
+        delete merged_layer[d];
+      }
     }
   }
 
