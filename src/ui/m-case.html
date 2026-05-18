@@ -1337,13 +1337,21 @@
           const quelle = quellen.length ? Array.from(new Set(quellen)).join(', ') : '';
           const zeile = f.vordruckzeile ? ('Zeile ' + escapeHtml(f.vordruckzeile)) : '';
           const conflict = conflicts.has(eCode) ? '<span class="conflict-marker">abweichende Quellen</span>' : '';
-          // data-* Attribute fürs Source-Viewer-Hover. Erste Source mit
-          // sha256+page wird übernommen.
-          const first = sources.find(s => s && s.sha256 && typeof s.page === 'number') || sources[0] || {};
+          // data-* Attribute fürs Source-Viewer-Hover. confirmed_by[] hat
+          // typischerweise nur filename + snippet — der sha256 muss aus
+          // CASE_DATA.documents[] per filename aufgelöst werden. Page-Default 1.
+          const first = sources[0] || {};
+          let sha = first.sha256 || null;
+          if (!sha && first.filename) {
+            const docMeta = (CASE_DATA && CASE_DATA.documents || [])
+              .find(d => d.filename === first.filename);
+            if (docMeta && /^[0-9a-f]{64}$/i.test(docMeta.sha256 || '')) sha = docMeta.sha256;
+          }
+          const pageOneBased = (typeof first.page === 'number' && first.page >= 0) ? (first.page + 1) : 1;
           const dataAttrs = [
             'data-ecode="' + escapeHtml(eCode) + '"',
-            first.sha256 ? ('data-sha256="' + escapeHtml(first.sha256) + '"') : '',
-            (typeof first.page === 'number') ? ('data-page="' + (first.page + 1) + '"') : '',
+            sha ? ('data-sha256="' + escapeHtml(sha) + '"') : '',
+            sha ? ('data-page="' + pageOneBased + '"') : '',
             first.filename ? ('data-filename="' + escapeHtml(first.filename) + '"') : '',
             first.snippet ? ('data-snippet="' + escapeHtml(first.snippet) + '"') : '',
           ].filter(Boolean).join(' ');
