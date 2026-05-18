@@ -50,6 +50,7 @@ function parseArgs(argv) {
     expected: '',
     workflow: '',
     caseName: '',
+    jahr: 2024,
     out: '',
     chrome: process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -66,6 +67,7 @@ function parseArgs(argv) {
     else if (a === '--expected') out.expected = path.resolve(argv[++i]);
     else if (a === '--workflow') out.workflow = argv[++i];
     else if (a === '--case-name') out.caseName = argv[++i];
+    else if (a === '--jahr') out.jahr = Number(argv[++i]);
     else if (a === '--out') out.out = path.resolve(argv[++i]);
     else if (a === '--chrome') out.chrome = argv[++i];
     else if (a === '--headed') out.headless = false;
@@ -274,17 +276,17 @@ async function main() {
   // ── 2. Case anlegen (POST via page's session, robuster als waitForResponse) ─
   log('Step 2: create case');
   const caseName = args.caseName || `E2E ${new Date().toISOString().slice(0, 19)}`;
-  const caseData = await page.evaluate(async (name) => {
+  const caseData = await page.evaluate(async ({ name, jahr }) => {
     const r = await fetch('/api/m/cases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ displayName: name, veranlagungsjahr: 2024 }),
+      body: JSON.stringify({ displayName: name, veranlagungsjahr: jahr }),
     });
     const ct = r.headers.get('content-type') || '';
     const body = ct.includes('json') ? await r.json() : await r.text();
     return { status: r.status, body };
-  }, caseName);
+  }, { name: caseName, jahr: args.jahr });
   if (caseData.status !== 200 && caseData.status !== 201) {
     throw new Error(`case create HTTP ${caseData.status}: ${JSON.stringify(caseData.body).slice(0, 200)}`);
   }
@@ -378,7 +380,75 @@ async function main() {
     summary: { passed: result.passed, total: result.total, allPass: result.allPass },
   }, null, 2));
 
-  // ── 9. Console-print verdict ─────────────────────────────────────────
+  // ── 9. Steuerrechnung-Audit (Diagnostics) ────────────────────────────
+  // Diese Sektion zeigt die BMF-Rechenschritte + heuristische
+  // Sanity-Checks. KEINE harten Assertions auf Werte (Fall-agnostisch),
+  // aber Flags die häufige Rechenfehler markieren.
+  const audit = {
+    veranlagungsjahr: master?.jahr ?? args.jahr,
+    bmf_erfolg: master?.bmf?.erfolg ?? null,
+    rechenschritte: (master?.bmf?.daten?.berechnungsdetails?.rechenschritte ?? []).map((s) => ({
+      schritt: s.schritt, bezeichnung: s.bezeichnung, wert: s.wert, ecode: s.ecode ?? null,
+    })),
+    steuer: {
+      zve: master?.bmf?.daten?.zve ?? null,
+      einkommensteuer: master?.bmf?.daten?.einkommensteuer ?? null,
+      soli: master?.bmf?.daten?.solidaritaetszuschlag ?? null,
+      gesamtsteuer: master?.bmf?.daten?.gesamtsteuer ?? null,
+      vorauszahlungen: master?.bmf?.daten?.steuervorauszahlungen ?? null,
+      ergebnis: master?.bmf?.daten?.erstattung_oder_nachzahlung ?? null,
+      grenzsteuersatz: master?.bmf?.daten?.grenzsteuersatz ?? null,
+      durchschnittssteuersatz: master?.bmf?.daten?.durchschnittssteuersatz ?? null,
+    },
+    tarif: master?.bmf?.daten?.berechnungsdetails?.steuer_berechnung ?? null,
+    soli_berechnung: master?.bmf?.daten?.berechnungsdetails?.soli_berechnung ?? null,
+    vorauszahlungen_detail: master?.bmf?.daten?.berechnungsdetails?.vorauszahlungen ?? null,
+    eingabewerte: master?.bmf?.daten?.berechnungsdetails?.eingabewerte ?? null,
+    flags: {},
+  };
+  // Heuristische Diagnostik
+  const ev = audit.eingabewerte ?? {};
+  audit.flags.splittingtarif_active = ev.ehegattensplitting === true;
+  audit.flags.berechnungsmethode = audit.tarif?.berechnungsmethode ?? '?';
+  audit.flags.vorsorge_total_gt_zero = (Number(ev.vorsorgeaufwendungen_absetzbar ?? 0) > 0);
+  audit.flags.werbungskosten_gt_zero = (Number(ev.werbungskosten ?? 0) > 0);
+  audit.flags.kapitalertraege_present = (Number(ev.kapitalertraege ?? 0) > 0);
+  audit.flags.kirchensteuer_gezahlt_gt_zero = (Number(ev.kirchensteuer_sa ?? 0) > 0);
+  audit.flags.tax_formula = audit.tarif?.formel_verwendet ?? '?';
+  audit.flags.soli_freigrenze = audit.soli_berechnung?.freigrenze ?? '?';
+  audit.flags.soli_unter_freigrenze = (Number(audit.steuer.soli ?? 0) === 0);
+  // Bilanz-Indikator
+  const ergebnis = Number(audit.steuer.ergebnis ?? 0);
+  audit.flags.bilanz = ergebnis > 0 ? 'Erstattung' : (ergebnis < 0 ? 'Nachzahlung' : 'Null');
+  audit.flags.bilanz_betrag = Math.abs(ergebnis);
+  // Tarif-Sanity: bei Splitting muss formel "* 2 (Ehegattensplitting)" enthalten
+  const formel = String(audit.flags.tax_formula);
+  audit.flags.splitting_in_formula = /splitting|\* 2/i.test(formel);
+
+  await writeFile(path.join(args.out, 'tax-audit.json'), JSON.stringify(audit, null, 2));
+
+  console.log('\n═══════════════════════════════════════════════════════');
+  console.log(`Steuerrechnung-Audit · Veranlagungsjahr ${audit.veranlagungsjahr}`);
+  console.log('═══════════════════════════════════════════════════════');
+  console.log(`  BMF erfolg               : ${audit.bmf_erfolg}`);
+  console.log(`  Berechnungsmethode       : ${audit.flags.berechnungsmethode}`);
+  console.log(`  Splittingtarif aktiv     : ${audit.flags.splittingtarif_active}  (in Formel: ${audit.flags.splitting_in_formula})`);
+  console.log(`  Vorsorge >0              : ${audit.flags.vorsorge_total_gt_zero}`);
+  console.log(`  Werbungskosten >0        : ${audit.flags.werbungskosten_gt_zero}`);
+  console.log(`  Kapitalerträge >0        : ${audit.flags.kapitalertraege_present}`);
+  console.log(`  KirchSt gezahlt >0       : ${audit.flags.kirchensteuer_gezahlt_gt_zero}`);
+  console.log(`  Soli-Freigrenze          : ${audit.flags.soli_freigrenze}`);
+  console.log(`  Soli > Freigrenze        : ${!audit.flags.soli_unter_freigrenze}`);
+  console.log(`\n  Tarif-Formel             :`);
+  console.log(`    ${audit.flags.tax_formula}`);
+  console.log(`\n  Rechenschritte:`);
+  for (const s of audit.rechenschritte) {
+    const w = typeof s.wert === 'number' ? s.wert.toLocaleString('de-DE', { minimumFractionDigits: 2 }) : s.wert;
+    console.log(`    [${s.schritt}] ${(s.bezeichnung ?? '').padEnd(60)} = ${w}`);
+  }
+  console.log(`\n  Bilanz                   : ${audit.flags.bilanz} ${audit.flags.bilanz_betrag.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`);
+
+  // ── 10. Console-print KPI verdict ────────────────────────────────────
   console.log('\n═══════════════════════════════════════════════════════');
   console.log(`KPI Result · ${result.passed}/${result.total} passed · ${wallclockMs}ms wallclock`);
   console.log('═══════════════════════════════════════════════════════');
