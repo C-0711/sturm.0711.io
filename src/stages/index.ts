@@ -16,6 +16,7 @@ import { ocrConsensusMergeStage } from './ocr-consensus-merge.ts';
 import { autoSourceSplitStage } from './auto-source-split.ts';
 import { mistralSmallOcrStage } from './mistral-small-ocr.ts';
 import { gemmaVisionOcrStage } from './gemma-vision-ocr.ts';
+import { belegIndikationStage } from './beleg-indikation.ts';
 import { llmEnsembleVoteStage } from './llm-ensemble-vote.ts';
 
 export function registerAllStages(): void {
@@ -41,6 +42,9 @@ export function registerAllStages(): void {
   registerStage(mistralSmallOcrStage);
   // Gemma-4 vision OCR — drop-in for mistral-ocr in v5.2-rag / v6-vision.
   registerStage(gemmaVisionOcrStage);
+  // Round-1 Vorschau: läuft parallel zur OCR, liefert nach ~1-3s Anlagen +
+  // wichtige Werte direkt vom Bild (vor Gemma-4 OCR fertig ist).
+  registerStage(belegIndikationStage);
   // Generic LLM ensemble vote (N providers in parallel → per-key consensus)
   registerStage(llmEnsembleVoteStage);
 }

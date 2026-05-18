@@ -1070,10 +1070,17 @@ export function buildElsterV52RagWorkflow() {
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
       ocr: {
-        // Gemma-4 vision OCR (vLLM gemma4-mm). Mistral Small fires in parallel
-        // inside klassifizierung as the round-1 indication signal.
+        // Gemma-4 vision OCR (vLLM gemma4-mm). Page-by-page streaming emits
+        // `gemma_vision_ocr_page` with a 200-char preview per Seite.
         uses: 'gemma-vision-ocr',
         config: { dpi: 200, maxTokens: 4096 },
+        inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
+      },
+      // Round-1 Vorschau läuft PARALLEL zur OCR (kein edge → eigene Layer-1).
+      // Liefert nach ~1-3s erkannte Anlagen + wichtige Werte aus dem Bild.
+      indikation: {
+        uses: 'beleg-indikation',
+        config: { dpi: 150, maxTokens: 800, timeoutMs: 15_000 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {
@@ -1290,10 +1297,17 @@ export function buildElsterV6VisionWorkflow() {
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
       ocr: {
-        // Gemma-4 vision OCR (vLLM gemma4-mm). Mistral Small fires in parallel
-        // inside klassifizierung as the round-1 indication signal.
+        // Gemma-4 vision OCR (vLLM gemma4-mm). Page-by-page streaming emits
+        // `gemma_vision_ocr_page` with a 200-char preview per Seite.
         uses: 'gemma-vision-ocr',
         config: { dpi: 200, maxTokens: 4096 },
+        inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
+      },
+      // Round-1 Vorschau läuft PARALLEL zur OCR (kein edge → eigene Layer-1).
+      // Liefert nach ~1-3s erkannte Anlagen + wichtige Werte aus dem Bild.
+      indikation: {
+        uses: 'beleg-indikation',
+        config: { dpi: 150, maxTokens: 800, timeoutMs: 15_000 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {

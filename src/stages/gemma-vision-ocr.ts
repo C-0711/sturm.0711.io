@@ -158,7 +158,15 @@ export const gemmaVisionOcrStage = defineStage<
         });
         const md = parsed?.markdown ?? '';
         pageOutputs.push({ index: i, markdown: md, chars: md.length });
-        ctx.emit('gemma_vision_ocr_page', { index: i, chars: md.length });
+        // Stück für Stück: 200-char Preview pro Seite, damit das UI live
+        // sieht was bisher extrahiert wurde (statt "Wird verarbeitet…").
+        const preview = md.replace(/\s+/g, ' ').slice(0, 200);
+        ctx.emit('gemma_vision_ocr_page', {
+          index: i,
+          totalPages: paths.length,
+          chars: md.length,
+          preview,
+        });
       }
 
       const text = pageOutputs.map((p) => p.markdown).join('\n\n');
