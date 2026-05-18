@@ -19,6 +19,63 @@
  */
 
 // ============================================================================
+// LStB-Zeile → eCode Mapping-Tabelle (BMF-Standard 2024+, jahresübergreifend)
+// ============================================================================
+// Die Lohnsteuerbescheinigung hat eine eigene Zeilen-Nummerierung (1-29) die
+// NICHT mit der Anlage-N/VOR-vordruckzeile-Nummerierung übereinstimmt.
+// Diese Tabelle übersetzt LStB-Quellzeile direkt in den ELSTER-eCode.
+//
+// Quelle: BMF-Vordruck "Lohnsteuerbescheinigung 2024" + ELSTER-Catalog
+// jahresdok-2024:v2 (atoms.json).
+//
+// LStB-Z.22a/22b/23a/23b werden mit 22.0/22.1/23.0/23.1 nicht modeliert,
+// weil das parseOcrLine-Regex die Buchstaben-Suffixe abschneidet
+// (cleanZeile = nur Digits). Stattdessen: "22" → AG-Anteil RV (E2000801),
+// "23" → AN-Anteil RV (E2000401) — beide first-match-wins. Wenn der Beleg
+// beide Sub-Felder (a + b) liefert, gewinnt 22a/23a (gesetzliche RV) weil
+// es zuerst im Beleg steht; berufsständische Versorgung (22b/23b) wird
+// ggf. überschrieben — das ist BMF-konventionell akzeptabel weil der
+// allergrößte Teil der Steuerpflichtigen nur gesetzliche RV hat.
+// Beide Schlüssel-Varianten für Sub-Buchstaben (parseOcrLine emittiert "22 a"
+// wenn LStB-Format "22. a) ..."; sonst nur "22"). "22"/"23" sind Fallbacks
+// für Belege ohne Sub-Buchstabe — first-match-wins greift dann den Wert
+// vom ersten 22.-Eintrag (typischerweise gesetzliche RV = a).
+const LSTB_ZEILE_TO_ECODE: Record<string, string> = {
+  '3': 'E0200201',    // Bruttoarbeitslohn (Anlage N Z.5)
+  '4': 'E0200301',    // Einbehaltene Lohnsteuer (Anlage N Z.6)
+  '5': 'E0200401',    // Solidaritätszuschlag (Anlage N Z.7)
+  '6': 'E0200501',    // Kirchensteuer Arbeitnehmer (Anlage N Z.8)
+  '7': 'E0200601',    // Kirchensteuer Partner / Konfessionsverschiedenheit (Anlage N Z.9)
+  '8': 'E0200801',    // Versorgungsbezug brutto (Anlage N Z.10/11)
+  // Z.9-21 + 28+: Sondervergütungen / Entschädigungen — aktuell nicht
+  // gemapped, Levenshtein-Fallback übernimmt
+  '22 a': 'E2000801', // AG-Anteil zur gesetzlichen RV (Anlage VOR Z.9)
+  '22':   'E2000801', // Fallback ohne Sub-Buchstabe
+  '22 b': 'E2000901', // AG-Anteil berufsständische Versorgung (Anlage VOR Z.10)
+  '23 a': 'E2000401', // AN-Anteil zur gesetzlichen RV (Anlage VOR Z.4)
+  '23':   'E2000401', // Fallback ohne Sub-Buchstabe
+  '23 b': 'E2000501', // AN-Anteil berufsständische Versorgung (Anlage VOR Z.5)
+  '25':   'E2001203', // AN-Beiträge zur gesetzlichen KV (Anlage VOR Z.11)
+  '26':   'E2001505', // AN-Beiträge zur sozialen PV (Anlage VOR Z.13)
+  '27':   'E2004403', // AN-Beiträge zur gesetzlichen Arbeitslosenvers (Anlage VOR Z.43)
+};
+
+// LStB-Stammdaten-Labels (oben im Beleg, ohne zeile-Number-Prefix) → ESt1A
+// eCodes. Match case-insensitive auf chunk.label trim. personSuffix wird
+// am Aufrufer angehängt.
+const LSTB_LABEL_TO_ECODE: Record<string, string> = {
+  'identifikationsnummer': 'E0100081', // → E0100081__A (oder __B für Person B)
+  'steuer-id': 'E0100081',
+  'steuer-identifikationsnummer': 'E0100081',
+  'nachname': 'E0100201',
+  'familienname': 'E0100201',
+  'vorname': 'E0100301',
+  'steuerklasse': 'E0200002',
+  'kirchensteuermerkmal (konfession)': 'E0100402',
+  'kirchensteuermerkmal': 'E0100402',
+};
+
+// ============================================================================
 // CORE MATH: Levenshtein Ratio (0.0 to 1.0)
 // ============================================================================
 export function levenshteinDistance(a: string, b: string): number {
@@ -132,16 +189,20 @@ export class LohnsteuerbescheidMapper {
     }
 
     const isPersonA = idChunk ? idChunk.value.trim() === this.primaryIdNr : true;
+    const personSuffix: 'A' | 'B' = isPersonA ? 'A' : 'B';
 
-    // 2. Route by doc-class
+    // 2. Route by doc-class — tolerant gegen Umlaut/Slug-Varianten:
+    //    'kapitalerträge' (mit Umlaut) UND 'kapitalertraege' (Slug) UND
+    //    'steuerbescheinigung_bank' (Vision-OCR-Block-Typ für Sparkasse/Bank)
     const typeStr = docClass.toLowerCase();
     if (typeStr.includes('religion')) {
       this.mapReligionszugehoerigkeit(chunks, isPersonA);
     } else if (typeStr.includes('lohnsteuerbescheinigung')) {
-      this.mapLStB(chunks);
+      this.mapLStB(chunks, personSuffix);
     } else if (
-      typeStr.includes('kapitalerträge') ||
-      typeStr.includes('freigestellte')
+      typeStr.includes('kapitalertr') ||      // matched kapitalerträge + kapitalertraege
+      typeStr.includes('freigestellte') ||
+      typeStr.includes('steuerbescheinigung_bank')
     ) {
       this.mapKapErt(chunks, isPersonA);
     }
@@ -159,23 +220,56 @@ export class LohnsteuerbescheidMapper {
     }
   }
 
-  private mapLStB(chunks: Chunk[]): void {
+  private mapLStB(chunks: Chunk[], personSuffix: 'A' | 'B' = 'A'): void {
     // Pre-filter container to LStB-relevant anlagen
     const lstbAtoms = this.containerAtoms.filter(
       (a) => a.anlage === 'N' || a.anlage === 'VOR' || a.anlage === 'AV',
     );
 
     for (const chunk of chunks) {
-      let matchedEcode: string | null = null;
+      if (!chunk.value || chunk.value.trim() === '') continue;
 
-      // FAST PATH: O(1) Zeile-Number match
+      // FAST PATH 1: LStB-Quellzeile → eCode via deterministischer Mapping-
+      // tabelle. Die Zeilennummern auf der Lohnsteuerbescheinigung (3, 4, 5,
+      // 6, 7, 22a, 22b, 23a, 23b, 25, 26, 27) entsprechen NICHT direkt den
+      // vordruckzeile-Nummern in Anlage N/VOR — z.B. LStB Z.3 (Brutto) ist
+      // Anlage N Z.5 (E0200201). Diese Tabelle ist Steuerrechts-Standard
+      // (BMF LStB-Vordruck 2024) und bleibt jahresübergreifend stabil.
+      // Lookup-Reihenfolge: erst "22 a"-spezifisch, dann "22"-Fallback.
+      if (chunk.zeile) {
+        const subKey = chunk.zeile.trim();           // z.B. "22 a"
+        const baseKey = subKey.replace(/[^0-9]/g, ''); // z.B. "22"
+        const baseEcode = LSTB_ZEILE_TO_ECODE[subKey] ?? LSTB_ZEILE_TO_ECODE[baseKey];
+        if (baseEcode) {
+          const ecode = `${baseEcode}__${personSuffix}`;
+          this.extractedData[ecode] = chunk.value.includes('€')
+            ? this.normalizeCurrency(chunk.value)
+            : chunk.value.trim();
+          continue;  // LStB-Mapping ist deterministisch — Levenshtein nicht mehr nötig
+        }
+      }
+
+      // FAST PATH 1b: LStB-Stammdaten-Label-Lookup (ohne zeile-Number).
+      // "Nachname Stricker", "Vorname Rainer", "Identifikationsnummer 852...",
+      // "Steuerklasse 3", etc. — deterministisches Label→eCode-Mapping.
+      const labelKey = chunk.label.toLowerCase().trim();
+      const stammEcode = LSTB_LABEL_TO_ECODE[labelKey];
+      if (stammEcode) {
+        const ecode = `${stammEcode}__${personSuffix}`;
+        this.extractedData[ecode] = chunk.value.trim();
+        continue;
+      }
+
+      // FAST PATH 2 (non-LStB-Zeilen wie "Steuerklasse 3", "Nachname Stricker"):
+      // direkter atom.zeile === chunk.zeile Match — nur wenn chunk.zeile gesetzt.
+      let matchedEcode: string | null = null;
       if (chunk.zeile) {
         const cleanZeile = chunk.zeile.replace(/[^0-9]/g, '');
         const exactMatch = lstbAtoms.find((a) => a.zeile === cleanZeile);
         if (exactMatch) matchedEcode = exactMatch.ecode;
       }
 
-      // FALLBACK: Ratio Math against drucktext
+      // FALLBACK: Ratio Math gegen drucktext
       if (!matchedEcode) {
         let bestRatio = 0;
         for (const atom of lstbAtoms) {
@@ -189,9 +283,10 @@ export class LohnsteuerbescheidMapper {
         }
       }
 
-      // Normalize + store
+      // Normalize + store (mit Person-Suffix für konsistentes Person-A/B-Routing)
       if (matchedEcode) {
-        this.extractedData[matchedEcode] = chunk.value.includes('€')
+        const ecode = `${matchedEcode}__${personSuffix}`;
+        this.extractedData[ecode] = chunk.value.includes('€')
           ? this.normalizeCurrency(chunk.value)
           : chunk.value.trim();
       }
