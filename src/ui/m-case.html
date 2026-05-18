@@ -531,17 +531,21 @@
       // Keine PDF-View-Route — Datei als Klar-Text. Sobald P1 sie liefert,
       // kann hier ein Link daraus werden.
       const nameCell = '<span class="file-name disabled" title="Beleg-Vorschau in Vorbereitung">' + escapeHtml(filename) + '</span>';
+      const isFailed = state === 'error' || state === 'unknown';
+      const retryBtn = isFailed
+        ? '<button class="row-action retry" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Wiederholen</button> '
+        : '';
       return '<tr>'
         + '<td>' + nameCell + '</td>'
         + '<td>' + escapeHtml(kategorie) + '</td>'
         + '<td>' + stateChip(state) + '</td>'
         + '<td>' + escapeHtml(uploaded) + '</td>'
-        + '<td><button class="row-action" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Löschen</button></td>'
+        + '<td>' + retryBtn + '<button class="row-action delete" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Löschen</button></td>'
         + '</tr>';
     }).join('');
 
-    // Lösch-Handler (DELETE-Endpoint kann fehlen — dann freundliche Meldung)
-    tbody.querySelectorAll('button.row-action').forEach((btn) => {
+    // Lösch-Handler
+    tbody.querySelectorAll('button.row-action.delete').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const filename = btn.getAttribute('data-filename') || '';
         const runId = btn.getAttribute('data-runid') || '';
@@ -558,6 +562,66 @@
           }
         } catch {
           alert('Löschen ist gerade nicht verfügbar.');
+        }
+      });
+    });
+
+    // Wiederholen-Handler — streamt SSE, zeigt Live-Status in derselben Zeile
+    tbody.querySelectorAll('button.row-action.retry').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.getAttribute('data-filename') || '';
+        const runId = btn.getAttribute('data-runid') || '';
+        if (!runId) return;
+        // Button + Chip auf "Wird verarbeitet..." setzen
+        const row = btn.closest('tr');
+        const chipCell = row?.querySelector('td:nth-child(3)');
+        if (chipCell) chipCell.innerHTML = stateChip('running');
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          const r = await fetch(API_BASE + '/documents/' + encodeURIComponent(runId) + '/retry', {
+            method: 'POST',
+            credentials: 'include',
+          });
+          if (!r.ok || !r.body) {
+            if (chipCell) chipCell.innerHTML = stateChip('error');
+            btn.disabled = false;
+            btn.textContent = 'Wiederholen';
+            alert('Wiederholen ist gerade nicht verfügbar.');
+            return;
+          }
+          // SSE-Stream parsen
+          const reader = r.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const frames = buf.split('\n\n');
+            buf = frames.pop() || '';
+            for (const frame of frames) {
+              const lines = frame.split('\n');
+              const dataLine = lines.find((l) => l.startsWith('data: '));
+              if (!dataLine) continue;
+              try {
+                const env = JSON.parse(dataLine.slice(6));
+                if (env.name === 'doc_done') {
+                  const ok = env.payload?.state === 'ok';
+                  if (chipCell) chipCell.innerHTML = stateChip(ok ? 'ok' : 'error');
+                } else if (env.name === 'doc_error') {
+                  if (chipCell) chipCell.innerHTML = stateChip('error');
+                }
+              } catch { /* ignore */ }
+            }
+          }
+          await loadCase();   // Manifest neu laden
+          await loadFelder(); // Felder-Tab live aktualisieren
+        } catch (e) {
+          if (chipCell) chipCell.innerHTML = stateChip('error');
+          btn.disabled = false;
+          btn.textContent = 'Wiederholen';
+          alert('Wiederholen ist gerade nicht verfügbar.');
         }
       });
     });

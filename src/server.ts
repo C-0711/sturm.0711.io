@@ -732,6 +732,185 @@ app.post(
   },
 );
 
+// ── DELETE /api/applications/:appId/instances/:caseId/documents/:runId ─
+// Löscht einen Beleg aus dem Fall: Manifest-Eintrag, Inbox-Datei,
+// Run-Artefakte. Master.json wird neu geschrieben. 200 wenn erfolgreich,
+// 404 wenn runId unbekannt. Idempotent: bereits gelöschte Dateien sind ok.
+app.delete(
+  '/api/applications/:appId/instances/:caseId/documents/:runId',
+  async (req, res) => {
+    const { appId, caseId, runId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+
+    const { readManifest, writeManifest, inboxDirFor } = await import('./server/inbox.ts');
+    const manifest = await readManifest(ROOT, inst);
+    const docIdx = manifest.documents.findIndex((d) => d.runId === runId);
+    if (docIdx < 0) return res.status(404).json({ error: 'document not found', runId });
+
+    const doc = manifest.documents[docIdx];
+    const inboxAbs = path.join(inboxDirFor(ROOT, inst), path.basename(doc.inboxPath));
+
+    // 1. Inbox-Datei entfernen (best-effort)
+    try { await fs.promises.unlink(inboxAbs); } catch { /* schon weg */ }
+
+    // 2. Run-Artefakte entfernen (best-effort über alle bekannten Workflow-Verzeichnisse)
+    const extractionId = app_.workflows.extraction;
+    if (extractionId) {
+      const runDir = path.join(RUNS_DIR, extractionId, runId);
+      try { await fs.promises.rm(runDir, { recursive: true, force: true }); } catch { /* nix */ }
+    }
+
+    // 3. Manifest-Eintrag entfernen
+    manifest.documents.splice(docIdx, 1);
+    await writeManifest(ROOT, inst, manifest);
+
+    // 4. runs[] in der Instance auch bereinigen
+    inst.runs = inst.runs.filter((r) => r !== runId);
+    inst.documents = manifest.documents;
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+
+    // 5. master.json neu schreiben damit die Abrechnung den gelöschten Beleg vergisst
+    if (extractionId) {
+      try {
+        const { writeCaseMaster } = await import('./server/case-master.ts');
+        await writeCaseMaster(inst, {
+          runsDir: RUNS_DIR,
+          extractionWorkflowId: extractionId,
+          workspaceBase: ROOT,
+        });
+      } catch (e) {
+        console.error('[delete-doc] master.json refresh failed:', (e as Error).message);
+      }
+    }
+
+    res.json({ ok: true, runId, filename: doc.filename, remaining: manifest.documents.length });
+  },
+);
+
+// ── POST /api/applications/:appId/instances/:caseId/documents/:runId/retry
+// Startet einen NEUEN Extraction-Run auf die schon vorhandene Inbox-Datei.
+// Antwortet als SSE (gleiches Schema wie /upload-bulk: doc_start, stage_*, doc_done).
+// Im Manifest wird der runId-Eintrag auf den neuen Run umgehängt; alte
+// Run-Artefakte werden vorher gelöscht.
+app.post(
+  '/api/applications/:appId/instances/:caseId/documents/:runId/retry',
+  async (req, res) => {
+    const { appId, caseId, runId: oldRunId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    const extractionId = app_.workflows.extraction;
+    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
+    const baseDef = getWorkflow(extractionId);
+    if (!baseDef) return res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` });
+
+    const { readManifest, writeManifest, inboxDirFor } = await import('./server/inbox.ts');
+    const manifest = await readManifest(ROOT, inst);
+    const doc = manifest.documents.find((d) => d.runId === oldRunId);
+    if (!doc) return res.status(404).json({ error: 'document not found', runId: oldRunId });
+
+    const inboxAbs = path.join(inboxDirFor(ROOT, inst), path.basename(doc.inboxPath));
+    try { await fs.promises.access(inboxAbs); } catch {
+      return res.status(410).json({ error: 'inbox file gone', inboxPath: doc.inboxPath });
+    }
+
+    // SSE-Stream starten
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    let aborted = false;
+    req.on('close', () => { aborted = true; });
+
+    const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
+
+    const input: Record<string, unknown> = {
+      filePath: inboxAbs,
+      filename: doc.filename,
+      size: doc.size,
+      mime: doc.mimeType,
+      mandant_id: inst.mandantId,
+      case_id: inst.caseId,
+    };
+    const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
+    void persistInputForRun(def.id, run.runId, inboxAbs, doc.filename, doc.size, doc.mimeType);
+
+    // Alte Run-Artefakte entsorgen (best-effort)
+    try {
+      await fs.promises.rm(path.join(RUNS_DIR, def.id, oldRunId), { recursive: true, force: true });
+    } catch { /* egal */ }
+
+    // Doc-Eintrag im Manifest auf neuen Run umhängen + alte runId aus instance.runs entfernen
+    doc.runId = run.runId;
+    delete doc.fieldsExtracted;
+    delete doc.anlagen;
+    delete doc.trustBreakdown;
+    await writeManifest(ROOT, inst, manifest);
+    inst.runs = inst.runs.filter((r) => r !== oldRunId);
+    inst.runs.push(run.runId);
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+
+    res.write(formatSseEvent({
+      name: 'doc_start',
+      runId: run.runId,
+      workflowId: def.id,
+      at: new Date().toISOString(),
+      payload: { runId: run.runId, oldRunId, filename: doc.filename, totalStages: Object.keys(def.stages).length },
+    }));
+
+    const unsub = run.bus.subscribe((env) => {
+      if (aborted) return;
+      const wrapped = { ...env, payload: { ...((env.payload as Record<string, unknown>) ?? {}), runId: run.runId } };
+      res.write(formatSseEvent(wrapped));
+    });
+
+    try {
+      const result = await run.result;
+      if (result.state === 'ok') {
+        const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
+        const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+        const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+        const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
+        await recordDocumentRunCompletion(ROOT, inst, run.runId, {
+          anlagen: klass?.erkannte_anlagen,
+          fieldsExtracted: layer ? Object.keys(layer).length : 0,
+          trustBreakdown: computeTrustBreakdown(layer),
+        });
+        // master.json refresh
+        try {
+          const fresh = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+          if (fresh) {
+            const { writeCaseMaster } = await import('./server/case-master.ts');
+            await writeCaseMaster(fresh, { runsDir: RUNS_DIR, extractionWorkflowId: extractionId, workspaceBase: ROOT });
+          }
+        } catch (e) { console.error('[retry] master refresh failed:', (e as Error).message); }
+        res.write(formatSseEvent({
+          name: 'doc_done', runId: run.runId, workflowId: def.id, at: new Date().toISOString(),
+          payload: { runId: run.runId, state: 'ok', fields: layer ? Object.keys(layer).length : 0, anlagen: klass?.erkannte_anlagen ?? [] },
+        }));
+      } else {
+        res.write(formatSseEvent({
+          name: 'doc_done', runId: run.runId, workflowId: def.id, at: new Date().toISOString(),
+          payload: { runId: run.runId, state: result.state },
+        }));
+      }
+    } catch (err) {
+      res.write(formatSseEvent({
+        name: 'doc_error', runId: run.runId, workflowId: def.id, at: new Date().toISOString(),
+        payload: { runId: run.runId, error: (err as Error).message },
+      }));
+    } finally {
+      unsub();
+      res.end();
+    }
+  },
+);
+
 // ── POST /api/applications/:appId/instances/:caseId/seal ───────────────
 // Triggert den steuerfall-seal Workflow. Liest die Instance + den letzten
 // extraction-Run, baut den master-Snapshot und reicht ihn als Input rein.
