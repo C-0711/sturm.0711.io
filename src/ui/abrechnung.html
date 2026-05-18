@@ -134,6 +134,47 @@
       .bilanz { page-break-inside: avoid; }
     }
     @page { size: A4; margin: 0; }
+
+    /* ── Steuerassistent (Gemma-4 als Orchestrator) ─────────────────── */
+    .assistant {
+      position: fixed; bottom: 16px; right: 16px; z-index: 50;
+      width: 380px; max-width: calc(100vw - 32px);
+      background: white; border: 1px solid var(--rule);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      font-size: 12px; font-family: var(--sans);
+      display: flex; flex-direction: column;
+      max-height: 60vh;
+      transition: transform 200ms ease, opacity 200ms ease;
+    }
+    .assistant.collapsed { transform: translateY(calc(100% - 44px)); }
+    .assistant-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px; cursor: pointer; user-select: none;
+      border-bottom: 1px solid var(--rule);
+    }
+    .assistant-head .title { font-weight: 600; font-family: var(--serif); font-size: 13px; }
+    .assistant-head .toggle { font-size: 16px; color: var(--muted); }
+    .assistant-body { padding: 10px 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .assistant-msg { padding: 8px 12px; border-radius: 8px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
+    .assistant-msg.user { background: var(--pill); align-self: flex-end; max-width: 85%; }
+    .assistant-msg.bot  { background: #f8f6ef; border: 1px solid var(--rule); align-self: flex-start; max-width: 95%; }
+    .assistant-msg.bot.thinking { color: var(--muted); font-style: italic; }
+    .assistant-form { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--rule); }
+    .assistant-form textarea {
+      flex: 1; resize: none; border: 1px solid var(--rule); border-radius: 6px;
+      padding: 6px 8px; font: inherit; min-height: 32px; max-height: 80px;
+    }
+    .assistant-form button {
+      padding: 6px 14px; border: 1px solid var(--ink); background: var(--ink); color: white;
+      border-radius: 6px; font: inherit; font-weight: 500; cursor: pointer;
+    }
+    .assistant-form button:disabled { background: var(--muted); border-color: var(--muted); cursor: wait; }
+    .assistant-empty { color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .assistant-empty .hint { margin-top: 4px; }
+    .assistant-empty .hint code { background: var(--pill); padding: 1px 5px; border-radius: 3px; font-size: 10px; }
+
+    @media print { .assistant { display: none; } }
   </style>
 </head>
 <body>
@@ -149,6 +190,25 @@
 <main class="doc" id="doc">
   <div class="empty" id="loading">Lade Steuerfall…</div>
 </main>
+
+<aside class="assistant collapsed" id="assistant" aria-label="Steuerassistent">
+  <div class="assistant-head" id="assistant-head">
+    <span class="title">💬 Steuerassistent</span>
+    <span class="toggle" id="assistant-toggle">▴</span>
+  </div>
+  <div class="assistant-body" id="assistant-body">
+    <div class="assistant-empty">
+      Frag mich zur Abrechnung dieses Steuerfalls — z.B.
+      <div class="hint"><code>Warum ist die Erstattung niedriger als erwartet?</code></div>
+      <div class="hint"><code>Welche Anlagen wurden erkannt?</code></div>
+      <div class="hint"><code>Was ist mein zvE?</code></div>
+    </div>
+  </div>
+  <form class="assistant-form" id="assistant-form">
+    <textarea id="assistant-input" placeholder="Frage stellen…" rows="1"></textarea>
+    <button type="submit" id="assistant-send">Senden</button>
+  </form>
+</aside>
 
 <script>
 (async function() {
@@ -618,6 +678,102 @@ Quelle: ${escapeHtml(sb.bmf_referenz || '§32a EStG')} · Grenzsatz ${(Number(da
   const doc = document.getElementById('doc');
   doc.innerHTML = html;
 }
+
+// ── Steuerassistent (Gemma-4 als Orchestrator) ─────────────────────
+(function setupAssistant() {
+  const params = new URLSearchParams(location.search);
+  const APP = params.get('app') || 'steuerfall-est';
+  const CASE = params.get('case');
+  if (!CASE) return; // ohne Case kein Chat
+
+  const root = document.getElementById('assistant');
+  const head = document.getElementById('assistant-head');
+  const body = document.getElementById('assistant-body');
+  const form = document.getElementById('assistant-form');
+  const input = document.getElementById('assistant-input');
+  const sendBtn = document.getElementById('assistant-send');
+  const toggle = document.getElementById('assistant-toggle');
+
+  head.addEventListener('click', () => {
+    root.classList.toggle('collapsed');
+    toggle.textContent = root.classList.contains('collapsed') ? '▴' : '▾';
+    if (!root.classList.contains('collapsed')) setTimeout(() => input.focus(), 220);
+  });
+
+  const history = [];
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function clearEmpty() {
+    const e = body.querySelector('.assistant-empty');
+    if (e) e.remove();
+  }
+
+  function appendMsg(role, text) {
+    clearEmpty();
+    const el = document.createElement('div');
+    el.className = 'assistant-msg ' + role;
+    el.textContent = text;
+    body.appendChild(el);
+    body.scrollTop = body.scrollHeight;
+    return el;
+  }
+
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(80, input.scrollHeight) + 'px';
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || sendBtn.disabled) return;
+    appendMsg('user', text);
+    history.push({ role: 'user', content: text });
+    input.value = '';
+    input.style.height = 'auto';
+    sendBtn.disabled = true;
+    const thinking = appendMsg('bot thinking', 'Steuerassistent denkt nach…');
+    try {
+      const res = await fetch('/api/orchestrator/chat-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          appId: APP,
+          caseId: CASE,
+          messages: history,
+        }),
+      });
+      if (!res.ok) {
+        thinking.classList.remove('thinking');
+        thinking.textContent = `Fehler: HTTP ${res.status}`;
+        return;
+      }
+      const data = await res.json();
+      const reply = (data && typeof data.reply === 'string') ? data.reply : '(keine Antwort)';
+      thinking.classList.remove('thinking');
+      thinking.textContent = reply;
+      history.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      thinking.classList.remove('thinking');
+      thinking.textContent = 'Fehler: ' + err.message;
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  });
+})();
 </script>
 
 </body>
