@@ -187,6 +187,39 @@ export async function recordDocumentRunCompletion(
 }
 
 /**
+ * Schreibt die Round-1-Indikation (Mistral Small Vorschau) in den passenden
+ * Doc-Eintrag — gefunden über filename, weil die eager Indikation parallel
+ * zum Workflow läuft und nicht zwingend bereits einen runId-Eintrag im
+ * Manifest hat. Wird vom upload-bulk Handler aufgerufen sobald
+ * runBelegIndikation() für ein File zurückkommt.
+ */
+export async function recordEagerIndikation(
+  rootCwd: string,
+  instance: { workspacePath: string; appId: string; caseId: string },
+  filename: string,
+  indikation: {
+    anlagen: string[];
+    belegtyp: string | null;
+    wichtige_werte: Array<{ label: string; value: string }>;
+    ms: number;
+    at: string;
+  },
+): Promise<void> {
+  const lockKey = `${instance.appId}|${instance.caseId}`;
+  await withCaseLock(lockKey, async () => {
+    const m = await readManifest(rootCwd, instance);
+    // Bevorzugt: doc mit identischem Filename + noch keine indikation gesetzt.
+    // Fallback: erstes doc ohne indikation. So sind parallele Indikationen
+    // gegen denselben Filename (Mehrfach-Upload) idempotent.
+    const doc = m.documents.find((d) => d.filename === filename && !d.indikation)
+      ?? m.documents.find((d) => d.filename === filename);
+    if (!doc) return;
+    doc.indikation = indikation;
+    await writeManifest(rootCwd, instance, m);
+  });
+}
+
+/**
  * Berechnet die Trust-Verteilung (high/medium/suspicious/low) aus einem
  * canonical_layer-Objekt. Felder ohne `trust` werden als `medium`
  * gezählt — das matcht das Default-Verhalten der Stages, die `trust` nur

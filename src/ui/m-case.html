@@ -505,16 +505,54 @@
   const API_BASE = '/api/applications/' + encodeURIComponent(APP_ID) + '/instances/' + encodeURIComponent(CASE_ID);
 
   // Anlage → Kategorie-Mapping (Stammdaten/Einkünfte/Ausgaben)
+  // Belegtyp-Mapping aus der konkreten Anlagen-Kombination ableiten.
+  // Strict: jede Mehrdeutigkeit kriegt eigenen Label statt grobem "Einkünfte"
+  // für ALLES was N/KAP/V/R enthält. Wenn die Indikation einen belegtyp
+  // liefert (siehe Mistral-Vorschau), wird der bevorzugt — siehe docKategorie.
   function anlagenZuKategorie(anlagen) {
     if (!Array.isArray(anlagen) || anlagen.length === 0) return '?';
     const set = new Set(anlagen.map(a => String(a).toUpperCase()));
-    const einkuenfte = ['N', 'KAP', 'G', 'S', 'L', 'R', 'V'];
-    const ausgaben   = ['SA', 'VOR', 'AV', 'AVEUER', 'AUSSERORDENTLICHE'];
-    const stamm      = ['EST1A', 'ESTLA', 'HAUPTVORDRUCK'];
-    if (einkuenfte.some(x => set.has(x))) return 'Einkünfte';
-    if (ausgaben.some(x => set.has(x))) return 'Ausgaben';
-    if (stamm.some(x => set.has(x))) return 'Stammdaten';
-    return '?';
+    const has = (x) => set.has(x.toUpperCase());
+    const size = set.size;
+    // Hauptvordruck / Stammdaten dominant
+    if (has('EST1A') || has('VORSATZ')) {
+      if (size === 1 || (size === 2 && has('VORSATZ'))) return 'Stammdaten';
+      return 'ESt-Formular (mehrteilig)';
+    }
+    // Lohnsteuerbescheinigung-artig: N + VOR (Sozialversicherungsbeiträge)
+    if (has('N') && has('VOR')) return 'Lohnsteuerbescheinigung';
+    // Reine Anlagen
+    if (size === 1) {
+      if (has('N')) return 'Arbeitslohn (Anlage N)';
+      if (has('KAP')) return 'Kapitalerträge (Anlage KAP)';
+      if (has('KAP_I')) return 'Investmentanteile (Anlage KAP-INV)';
+      if (has('VOR')) return 'Vorsorgeaufwendungen (Anlage VOR)';
+      if (has('SA')) return 'Sonderausgaben (Anlage SA)';
+      if (has('AV')) return 'Altersvorsorge (Anlage AV)';
+      if (has('R')) return 'Renten (Anlage R)';
+      if (has('V')) return 'Vermietung (Anlage V)';
+      if (has('G')) return 'Gewerbe (Anlage G)';
+      if (has('S')) return 'Selbständige Arbeit (Anlage S)';
+      if (has('KIND')) return 'Anlage Kind';
+      if (has('AGB')) return 'Außergew. Belastungen (Anlage AgB)';
+      if (has('HA_35A')) return 'Haushaltsnahe Dienstleistungen';
+      return [...set][0];
+    }
+    // Häufige Kombinationen
+    if (has('N') && has('KAP')) return 'Lohn + Kapitalerträge';
+    if (has('SA') && has('VOR')) return 'Sonderausgaben + Vorsorge';
+    // Fallback: Liste der erkannten Anlagen
+    return [...set].sort().join(' + ');
+  }
+
+  // UI-Label pro Doc: bevorzugt indikation.belegtyp (Mistral-Vorschau),
+  // sonst anlagenZuKategorie als Ableitung.
+  function docKategorie(d) {
+    const ind = d && d.indikation;
+    if (ind && typeof ind.belegtyp === 'string' && ind.belegtyp.trim()) {
+      return ind.belegtyp.trim();
+    }
+    return anlagenZuKategorie(d && d.anlagen);
   }
 
   function fmtDate(iso) {
@@ -679,7 +717,7 @@
     table.classList.remove('hidden');
     tbody.innerHTML = docs.map((d) => {
       const filename = d.filename || '(unbekannte Datei)';
-      const kategorie = anlagenZuKategorie(d.anlagen);
+      const kategorie = docKategorie(d);
       const state = d.state || (typeof d.fieldsExtracted === 'number' && d.fieldsExtracted > 0 ? 'ok' : 'unknown');
       const uploaded = fmtDate(d.uploadedAt);
       // Keine PDF-View-Route — Datei als Klar-Text. Sobald P1 sie liefert,

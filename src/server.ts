@@ -753,6 +753,7 @@ app.post(
     // Heavy-Pipeline dran ist (Gemma-OCR cappt bei concurrency=4).
     void (async () => {
       const { runBelegIndikation } = await import('./stages/beleg-indikation.ts');
+      const { recordEagerIndikation } = await import('./server/inbox.ts');
       await Promise.all(files.map(async (file, idx) => {
         if (aborted) return;
         try {
@@ -768,6 +769,11 @@ app.post(
             at: new Date().toISOString(),
             payload: { docIdx: idx, filename: file.originalname, ...result },
           }));
+          // Persist into manifest so UI sees indikation.belegtyp after reload
+          // (docKategorie() falls back to belegtyp wenn vorhanden).
+          await recordEagerIndikation(ROOT, inst, file.originalname, {
+            ...result, at: new Date().toISOString(),
+          });
         } catch (err) {
           console.warn('[bulk] eager indikation failed for', file.originalname, ':', (err as Error).message);
         }
