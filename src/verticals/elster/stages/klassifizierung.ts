@@ -186,34 +186,43 @@ export const klassifizierungStage = defineStage<
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
 
-    const regexHits = runRegex(input.text, allowed);
-    const regexNames = Object.keys(regexHits);
-    ctx.emit('regex_hits', { anlagen: regexNames, counts: regexHits });
+    // Mistral Small classifier ALWAYS runs in parallel with regex (both
+    // workflows). The LLM result is emitted via SSE as `llm_hits` as soon
+    // as it returns — gives the UI a fast first signal ("System erkannt:
+    // Anlage N, KAP, VOR …") while the rest of the pipeline grinds on.
+    // The `llmFallbackWhen` config is retained for legacy callers but
+    // ignored unless explicitly set to 'never'.
+    const mode = ctx.config.llmFallbackWhen ?? 'always';
+    const shouldLlm = mode !== 'never';
 
-    const mode = ctx.config.llmFallbackWhen ?? 'zero-or-one';
-    const shouldLlm =
-      mode === 'always' || (mode === 'zero-or-one' && regexNames.length <= 1);
-
-    let llmNames: string[] = [];
-    let usedLlm = false;
-    if (shouldLlm) {
-      try {
-        llmNames = await llmClassify(
+    const llmPromise: Promise<string[]> = shouldLlm
+      ? llmClassify(
           input.text,
           anlagenNames,
           ctx.config.model ?? 'mistral-small-latest',
           ctx.config.temperature ?? 0,
           ctx.signal,
-        );
-        usedLlm = true;
-        ctx.emit('llm_hits', { anlagen: llmNames });
-      } catch (err) {
-        ctx.logger.warn('LLM fallback failed, keeping regex-only result', {
-          error: (err as Error).message,
-        });
-      }
-    }
+        )
+          .then((names) => {
+            ctx.emit('llm_hits', { anlagen: names, model: ctx.config.model ?? 'mistral-small-latest' });
+            return names;
+          })
+          .catch((err) => {
+            ctx.logger.warn('LLM classifier failed, keeping regex-only result', {
+              error: (err as Error).message,
+            });
+            return [];
+          })
+      : Promise.resolve([]);
 
+    // Regex synchronously — emits second (regex is fast, LLM usually wins
+    // the streamed "first signal" race anyway).
+    const regexHits = runRegex(input.text, allowed);
+    const regexNames = Object.keys(regexHits);
+    ctx.emit('regex_hits', { anlagen: regexNames, counts: regexHits });
+
+    const llmNames = await llmPromise;
+    const usedLlm = shouldLlm && llmNames.length > 0;
     const union = Array.from(new Set([...regexNames, ...llmNames])).sort();
     await ctx.artifacts.write('erkannte_anlagen.json', {
       erkannte_anlagen: union,
