@@ -20,6 +20,19 @@ export interface KlassifizierungInput {
    * dass anlagen_hint gegeben ist; sonst Fallback auf normale Klassifizierung.
    */
   skip?: boolean;
+  /**
+   * v5_4 Hybrid-Routing: strukturierte Block-Liste von gemma-vision-ocr-zoning.
+   * Wenn vorhanden: doc_type wird direkt aus den Block-Typen abgeleitet
+   * (Hauptvordruck_ESt1A → 'einkommensteuererklaerung'; nur VAST-typen →
+   * 'vast_bundle'; sonst 'einzelbeleg'). Regex-Heuristik wird nur als
+   * Fallback bei leerem/fehlendem Input verwendet. erkannte_anlagen wird
+   * zusätzlich aus den Block-Typen abgeleitet (Anlage_N → 'N' etc.).
+   */
+  erkannte_dokumente?: Array<{
+    dokumenten_typ: string;
+    gehoert_zu_person?: string;
+    ocr_zeilen?: Array<{ zeilen_nr: number; text: string }>;
+  }>;
 }
 
 export interface KlassifizierungOutput {
@@ -49,6 +62,68 @@ function detectDocType(text: string): KlassifizierungOutput['doc_type'] {
     : hasHauptvordruck
       ? 'einkommensteuererklaerung'
       : 'einzelbeleg';
+}
+
+/**
+ * v5_4 Hybrid-Routing: leitet doc_type DETERMINISTISCH aus den von
+ * gemma-vision-ocr-zoning gelieferten Block-Typen ab. Bevorzugt vor der
+ * Regex-Heuristik, weil das Vision-Modell Person + Layout-Zonen bereits
+ * unverrückbar bestimmt hat.
+ *
+ * Regeln (in dieser Reihenfolge):
+ *   - irgendein Block 'Hauptvordruck_ESt1A' → 'einkommensteuererklaerung'
+ *   - alle Blocks sind VAST-Typen (Bescheinigung, Lohnsteuerbescheinigung,
+ *     Religionszugehoerigkeit, Mitteilung_Kapitalertraege, Steuerbescheinigung_Bank,
+ *     VAST_Bescheinigung) → 'vast_bundle'
+ *   - sonst → 'einzelbeleg'
+ */
+const VAST_BLOCK_TYPES = new Set<string>([
+  'Lohnsteuerbescheinigung',
+  'Religionszugehoerigkeit',
+  'Mitteilung_Kapitalertraege',
+  'Steuerbescheinigung_Bank',
+  'VAST_Bescheinigung',
+]);
+function detectDocTypeFromBlocks(
+  blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
+): KlassifizierungOutput['doc_type'] | null {
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const types = blocks.map((b) => b?.dokumenten_typ).filter(Boolean);
+  if (types.length === 0) return null;
+  if (types.includes('Hauptvordruck_ESt1A')) return 'einkommensteuererklaerung';
+  if (types.every((t) => VAST_BLOCK_TYPES.has(t))) return 'vast_bundle';
+  return 'einzelbeleg';
+}
+
+/**
+ * v5_4: leitet Anlagen-Liste aus Block-Typen ab. Direktes Mapping
+ * Anlage_N → 'N', Anlage_KAP → 'KAP', Anlage_Vorsorgeaufwand → 'VOR' etc.
+ * Lohnsteuerbescheinigung impliziert 'N' + 'VOR' (Sozialvers-Beiträge sind
+ * dort enthalten). Religionszugehoerigkeit impliziert 'ESt1A'.
+ */
+const BLOCK_TYPE_TO_ANLAGEN: Record<string, string[]> = {
+  Hauptvordruck_ESt1A: ['ESt1A'],
+  Anlage_N: ['N'],
+  Anlage_KAP: ['KAP'],
+  Anlage_Vorsorgeaufwand: ['VOR'],
+  Anlage_Sonderausgaben: ['SA'],
+  Lohnsteuerbescheinigung: ['N', 'VOR'],
+  Steuerbescheinigung_Bank: ['KAP'],
+  Mitteilung_Kapitalertraege: ['KAP'],
+  Religionszugehoerigkeit: ['ESt1A'],
+  VAST_Bescheinigung: [],
+  Spendenquittung: ['SA'],
+  Rentenbezugsmitteilung: ['R'],
+};
+function detectAnlagenFromBlocks(
+  blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
+): string[] {
+  const set = new Set<string>();
+  for (const b of blocks) {
+    const mapped = BLOCK_TYPE_TO_ANLAGEN[b?.dokumenten_typ ?? ''] ?? [];
+    for (const a of mapped) set.add(a);
+  }
+  return Array.from(set).sort();
 }
 
 /**
@@ -275,10 +350,22 @@ export const klassifizierungStage = defineStage<
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
 
-    // v5_4 Hybrid-Routing: doc_type IMMER, steuerjahr falls extrahierbar.
-    // Reine Regex-Heuristik, additive Erweiterung — bestehende Logik unverändert.
-    const doc_type = detectDocType(input.text);
+    // v5_4 Hybrid-Routing: bevorzugt strukturierte Block-Liste von
+    // gemma-vision-ocr-zoning (Vision-Modell hat Layout-Zonen bereits
+    // unverrückbar bestimmt). Fallback: Regex-Heuristik auf input.text.
+    const blocksDocType = detectDocTypeFromBlocks(input.erkannte_dokumente ?? []);
+    const doc_type = blocksDocType ?? detectDocType(input.text);
+    const blocksAnlagen = (input.erkannte_dokumente?.length ?? 0) > 0
+      ? detectAnlagenFromBlocks(input.erkannte_dokumente!)
+      : null;
     const steuerjahr = detectSteuerjahr(input.text);
+    if (blocksDocType) {
+      ctx.emit('klassifizierung_block_routing', {
+        doc_type: blocksDocType,
+        anlagen_from_blocks: blocksAnlagen,
+        block_count: input.erkannte_dokumente?.length ?? 0,
+      });
+    }
 
     // ─── I1.4 Meta-Dokument-Heuristik ──────────────────────────────────────
     // ELSTER produziert eine Reihe von Meta-Dokumenten (Transferticket,
@@ -400,12 +487,20 @@ export const klassifizierungStage = defineStage<
       }
     }
 
-    const union = Array.from(new Set([...regexNames, ...llmNames])).sort();
+    // v5_4: wenn erkannte_dokumente (von gemma-vision-ocr-zoning) Blocks
+    // geliefert hat, deren abgeleitete Anlagen mit der Regex/LLM-Union
+    // vereinigen — Vision-Modell ist deterministisch besser als Drucktext-
+    // Regex bei Multi-Doc-Bundles (z.B. VAST mit 5 Sub-Belegen).
+    const baseUnion = Array.from(new Set([...regexNames, ...llmNames])).sort();
+    const union = blocksAnlagen
+      ? Array.from(new Set([...baseUnion, ...blocksAnlagen])).sort()
+      : baseUnion;
     await ctx.artifacts.write('erkannte_anlagen.json', {
       erkannte_anlagen: union,
       regex_hits: regexHits,
       llm_hits: llmNames,
       llm_rejected: llmRejected,
+      anlagen_from_blocks: blocksAnlagen,
     });
 
     return {
