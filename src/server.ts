@@ -796,6 +796,11 @@ app.post(
       const manifest = await readManifest(ROOT, freshInst);
       freshInst.documents = manifest.documents;
       freshInst.status = 'in_bearbeitung';
+      // Persist actually-used workflow so /aggregate + /master ohne ?workflow
+      // den richtigen runs/<workflowId>/ Pfad scannen.
+      if (extractionId && freshInst.extractionWorkflow !== extractionId) {
+        freshInst.extractionWorkflow = extractionId;
+      }
       await saveInstanceFile(APPLICATIONS_DIR, freshInst);
     }
 
