@@ -1,0 +1,18 @@
+# PII — real tax return data, never committed
+out/
+cascade/
+
+# Upload data lives one level up (also PII)
+../Upload/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.python-version
+
+# OS
+.DS_Store
+*.swp
