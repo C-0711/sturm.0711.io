@@ -182,6 +182,9 @@ function computeTrust(canonical: Record<string, CanonicalValue>): void {
     ) {
       trust = 'suspicious';
       reasons.push(`Wert entspricht Zeilennummer ${v.vordruckzeile} — Zeilennummer als Wert misinterpretiert`);
+    } else if (v.origin === 'LAYER1_NESTED') {
+      trust = 'high';
+      reasons.push('Layer-1 Belegtyp-spezifisches strict json_schema (Gemma-4)');
     } else if (v.origin === 'BMF_RECHNER') {
       trust = 'high';
       reasons.push('BMF Lane-1 deterministisch berechnet');
@@ -447,6 +450,36 @@ export const phase5MergeStage = defineStage<Phase5MergeInput, Phase5MergeOutput,
         byAnlage[h.anlage] = (byAnlage[h.anlage] ?? 0) + 1;
         byDatentyp[h.datentyp] = (byDatentyp[h.datentyp] ?? 0) + 1;
       }
+    }
+
+    // Cluster-Geschwister-Filter: wenn LAYER1_NESTED einen eCode aus einem
+    // bekannten Cluster gewählt hat (z.B. E0200501 KiSt-AN), entferne die
+    // anderen Cluster-Mitglieder (E0200502/503/504), die phase1Regex
+    // typischerweise fälschlich auch befüllt (gleicher Drucktext, andere
+    // LStB-Form-Varianten — nur EINE darf gewinnen pro Beleg).
+    const LAYER1_CLUSTER_SIBLINGS: Record<string, string[]> = {
+      'E0200201': ['E0200202', 'E0200203', 'E0200204'],   // Bruttoarbeitslohn Z.5 (LStB-Form-Varianten)
+      'E0200301': ['E0200302', 'E0200303', 'E0200304'],   // Lohnsteuer Z.6
+      'E0200401': ['E0200402', 'E0200403', 'E0200404'],   // Solidaritätszuschlag Z.7
+      'E0200501': ['E0200502', 'E0200503', 'E0200504'],   // Kirchensteuer AN Z.8
+      'E0200601': ['E0200602', 'E0200603', 'E0200604'],   // Kirchensteuer Ehegatte Z.9
+      'E0201201': ['E0201202', 'E0201203', 'E0201204'],   // Lohnsteuer Z.19 (Summe)
+      'E0201301': ['E0201302', 'E0201303', 'E0201304'],   // KiSt Z.20
+      'E0201801': ['E0201802', 'E0201803', 'E0201804'],   // Z.18
+      'E0201901': ['E0201902', 'E0201903', 'E0201904'],   // Z.20 (zweite Variante)
+    };
+    let siblingsRemoved = 0;
+    for (const [winner, siblings] of Object.entries(LAYER1_CLUSTER_SIBLINGS)) {
+      if (canonical[winner]?.origin !== 'LAYER1_NESTED') continue;
+      for (const sib of siblings) {
+        if (canonical[sib]) {
+          delete canonical[sib];
+          siblingsRemoved++;
+        }
+      }
+    }
+    if (siblingsRemoved > 0) {
+      ctx.emit('phase5_cluster_filtered', { siblingsRemoved });
     }
 
     // Numerische Werte vorparsen → normalizedNumber. Eine einzige Stelle,
