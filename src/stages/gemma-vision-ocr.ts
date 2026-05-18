@@ -38,6 +38,9 @@ export interface GemmaVisionOcrConfig {
   timeoutMs?: number;
   /** Hard cap on rendered pages (safety). Default 32. */
   maxPages?: number;
+  /** Parallele vLLM-Calls. Default 4 — H200v + vLLM continuous-batching
+   *  packt das mühelos und schneidet die wallclock-Zeit linear runter. */
+  pageConcurrency?: number;
 }
 
 export interface GemmaVisionOcrOutput {
@@ -162,6 +165,7 @@ export const gemmaVisionOcrStage = defineStage<
     const maxTokens = ctx.config?.maxTokens ?? 4096;
     const timeoutMs = ctx.config?.timeoutMs ?? 120_000;
     const maxPages = ctx.config?.maxPages ?? 32;
+    const pageConcurrency = Math.max(1, Math.min(16, ctx.config?.pageConcurrency ?? 4));
 
     const { paths, cleanup } = await pagePathsForInput(
       input.filePath,
@@ -177,20 +181,28 @@ export const gemmaVisionOcrStage = defineStage<
         dpi,
       });
 
-      const pageOutputs: Array<{ index: number; markdown: string; chars: number }> = [];
-      for (let i = 0; i < paths.length; i++) {
-        const md = await ocrPagePlain(paths[i], vllmUrl, model, maxTokens, timeoutMs, ctx.signal);
-        pageOutputs.push({ index: i, markdown: md, chars: md.length });
-        // Stück für Stück: 200-char Preview pro Seite, damit das UI live
-        // sieht was bisher extrahiert wurde (statt "Wird verarbeitet…").
-        const preview = md.replace(/\s+/g, ' ').slice(0, 200);
-        ctx.emit('gemma_vision_ocr_page', {
-          index: i,
-          totalPages: paths.length,
-          chars: md.length,
-          preview,
-        });
+      // Pages in einem worker-pool — vLLM continuous-batching schluckt das.
+      const pageOutputs: Array<{ index: number; markdown: string; chars: number }> = new Array(paths.length);
+      let nextPage = 0;
+      async function pageWorker() {
+        while (true) {
+          const i = nextPage++;
+          if (i >= paths.length) return;
+          const md = await ocrPagePlain(paths[i], vllmUrl, model, maxTokens, timeoutMs, ctx.signal);
+          pageOutputs[i] = { index: i, markdown: md, chars: md.length };
+          // Stück für Stück: pro fertige Seite ein Event mit 200-char Preview.
+          const preview = md.replace(/\s+/g, ' ').slice(0, 200);
+          ctx.emit('gemma_vision_ocr_page', {
+            index: i,
+            totalPages: paths.length,
+            chars: md.length,
+            preview,
+          });
+        }
       }
+      await Promise.all(
+        Array.from({ length: Math.min(pageConcurrency, paths.length) }, () => pageWorker()),
+      );
 
       const text = pageOutputs.map((p) => p.markdown).join('\n\n');
       const ms = Date.now() - t0;
