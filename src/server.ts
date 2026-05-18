@@ -466,6 +466,13 @@ app.get(
     // Instanz-Datei spiegelt Manifest — Documents im Instance-JSON
     // ebenfalls aktualisieren, damit der nächste GET die Counts sieht.
     inst.documents = manifest.documents;
+    // Persist the workflow that processed this upload so a later
+    // /master?refresh=1 (without ?workflow=) aggregates from the SAME
+    // workflow's run dir. Without this, refresh falls back to the app
+    // default and finds 0 runs for cases that used a per-request override.
+    if (extractionId && inst.extractionWorkflow !== extractionId) {
+      inst.extractionWorkflow = extractionId;
+    }
     await saveInstanceFile(APPLICATIONS_DIR, inst);
     res.json({
       caseId,
@@ -534,6 +541,12 @@ app.post(
     inst.documents = inst.documents ?? [];
     inst.documents.push(doc);
     inst.status = 'in_bearbeitung';
+    // Persist Workflow-Wahl für spätere master-Refresh (sonst fällt der
+    // pickExtractionWorkflow ohne Query auf den App-Default zurück und
+    // findet keine Runs im richtigen workflow-Verzeichnis).
+    if (extractionId && inst.extractionWorkflow !== extractionId) {
+      inst.extractionWorkflow = extractionId;
+    }
     await saveInstanceFile(APPLICATIONS_DIR, inst);
 
     const unsub = run.bus.subscribe((env) => res.write(formatSseEvent(env)));

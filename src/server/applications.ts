@@ -64,6 +64,13 @@ export interface ApplicationInstance {
   updatedAt: string;
   /** Run-IDs des extraction-Workflows, jüngste zuletzt. */
   runs: string[];
+  /** Per-Case Override des Extraction-Workflows (z.B. 'elster-v6-vision').
+   *  Wird beim ersten Upload persistiert (siehe upload-bulk Handler) damit
+   *  spätere master-Refreshes denselben Workflow-runs/-Pfad aggregieren.
+   *  Ohne diesen Wert würde der refresh-Handler auf den App-Default
+   *  zurückfallen (typisch elster-v5_2-rag) und Artefakte aus dem v6-
+   *  Verzeichnis nicht finden → 0 Felder aggregiert. */
+  extractionWorkflow?: string;
   /** Per-Dokument-Metadaten — befüllt von /upload + /upload-bulk. */
   documents?: CaseDocument[];
   /** Pfad zum Workspace-Verzeichnis (uploads, artifacts). Relativ zum Server-Cwd. */
