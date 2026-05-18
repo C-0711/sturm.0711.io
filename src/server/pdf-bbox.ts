@@ -96,7 +96,9 @@ function findBestMatch(words: Word[], snippetTokens: string[]): { start: number;
         if (skipsSinceLast > SKIP_LIMIT) break;
       }
     }
-    if (matched < 2) continue; // require at least 2 word matches
+    // Schwellwert dynamisch: 1 Token → 1 Match reicht, 2+ → 2 Matches
+    const minMatch = snippetTokens.length === 1 ? 1 : 2;
+    if (matched < minMatch) continue;
     const score = matched / snippetTokens.length;
     if (!best || score > best.score) {
       best = { start: i, end: last, score };
