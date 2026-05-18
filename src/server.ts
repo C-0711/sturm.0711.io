@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request } from 'express';
 import multer from 'multer';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -1723,18 +1723,61 @@ app.use('/design-system', express.static(path.join(UI_DIR, 'design-system')));
 // jeder UI-Console.
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
 app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
-app.get('/pipeline.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
-app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));
+
+// ── Mandanten-Surface (/m/*) ──────────────────────────────────────────
+// HTML-Routen für die Mandanten-Surface. Auth-Logik (Session-Cookie) wird
+// in den jeweiligen API-Endpoints geprüft, die /m-*.html-Files selbst sind
+// statisch und führen den eigenen Auth-Probe-Call (/api/m/me) durch.
+// Siehe docs/MANDANTEN_WORKSPACE.md.
+app.get('/m/login', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-login.html')));
+app.get('/m/dashboard', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-dashboard.html')));
+app.get('/m/case/:caseId', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-case.html')));
+
+// ── Dev-Surface (Sturm-internal) ──────────────────────────────────────
+// Diese Seiten sind Dev-Tools und sollten in Produktion hinter Bearer
+// liegen. `requireBearerToken` ist no-op solange STURM_BEARER_TOKEN unset.
+app.get('/pipeline.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
+app.get('/designer.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
-app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
-app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
-app.get('/orchestrator', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
-app.get('/orchestrator.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
+app.get('/anwendungen.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
+app.get('/steuerfall.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
+app.get('/orchestrator', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
+app.get('/orchestrator.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
 app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
 app.get('/ctx-demo.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-demo.html')));
-app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
-app.get('/fleet', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
-app.get('/api/fleet/data', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
+app.get('/studio-ocr.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
+app.get('/workspaces.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'workspaces.html')));
+app.get('/fleet', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
+app.get('/api/fleet/data', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
+
+// Block dev HTML files via the static catch-all when a session cookie is
+// present (Mandanten-Modus). Bearer-Aufrufe und sessionlose Public-Calls
+// (ctx-demo.html, abrechnung.html, m-*.html) gehen durch.
+const DEV_ONLY_HTML = new Set([
+  'anwendungen.html', 'pipeline.html', 'designer.html', 'studio-ocr.html',
+  'workspaces.html', 'steuerfall.html', 'orchestrator.html', '0711-fleet.html',
+  'document.html',
+]);
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const file = req.path.replace(/^\//, '');
+  if (!DEV_ONLY_HTML.has(file)) return next();
+  const hasBearer = (req.headers['authorization'] ?? '').toString().toLowerCase().startsWith('bearer ');
+  if (hasBearer) return next();
+  const session = (req as Request & { sturmSession?: unknown }).sturmSession;
+  if (session) {
+    // Mandant — explizit blockieren
+    return res.status(403).type('text/html').send(
+      '<!doctype html><html><body style="font-family:system-ui;max-width:480px;margin:80px auto;padding:0 20px">'
+      + '<h1 style="font-size:20px">403 — kein Zugriff</h1>'
+      + '<p>Diese Seite ist nicht für Mandanten zugänglich.</p>'
+      + '<p><a href="/m/dashboard">Zurück zum Dashboard</a></p>'
+      + '</body></html>',
+    );
+  }
+  return next();
+});
+
 app.use(express.static(UI_DIR));
 
 // Docs: /docs/WORKFLOW_TEMPLATE.md direkt ausliefern (plain text)

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steuerfall · Fall-Detail</title>
+  <link rel="stylesheet" href="/design-system/colors_and_type.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: var(--font-inter, -apple-system, sans-serif);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 96px; }
+    h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+    .sub { color: var(--color-text-secondary); font-size: 14px; margin: 0 0 36px; }
+    .tabs { display: flex; gap: 8px; margin: 24px 0; border-bottom: 1px solid var(--color-border); }
+    .tab {
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+    }
+    .tab.active { color: var(--color-text-primary); border-color: var(--color-accent); font-weight: 500; }
+    .stub {
+      padding: 16px;
+      border: 1px dashed var(--color-border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-tertiary);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Fall-Detail</h1>
+    <p class="sub">Belege, Felder und Abrechnung für diesen Fall.</p>
+    <div class="tabs">
+      <div class="tab active">Belege</div>
+      <div class="tab">Erkannte Felder</div>
+      <div class="tab">Abrechnung</div>
+    </div>
+    <div class="stub">
+      Fall-Detail wird gerade gebaut. Hier erscheinen Drop-Zone für Belege, Tabelle erkannter Felder und die finale Abrechnung.
+    </div>
+  </div>
+</body>
+</html>
