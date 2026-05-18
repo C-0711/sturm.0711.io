@@ -2,6 +2,7 @@ import { defineStage } from '../../../core/stage.ts';
 import { loadKatalog } from '../lib/anlagen-katalog.ts';
 import type { LlmHandle } from '../../../core/tools/handles.ts';
 import type { ToolContainerView } from '../../../core/tools/types.ts';
+import { chatJson } from '../../../lib/llm-chat.ts';
 
 export interface KlassifizierungInput {
   text: string;
@@ -149,6 +150,68 @@ function pickKlassifizierungHandle(tools: ToolContainerView): LlmHandle {
   // Falls claude-haiku nicht gebunden ist, fällt der Lookup auf classify-primary
   // zurück — NullToolContainer wirft, wenn auch das fehlt.
   return tools.getByRole<LlmHandle>('classify-primary');
+}
+
+/** Like pickKlassifizierungHandle but returns null when no roster is bound
+ *  (standalone runs via /api/workflows/.../run). Round-1 indication should
+ *  still work in that case via direct chatJson fallback. */
+function safePickHandle(tools: ToolContainerView): LlmHandle | null {
+  try {
+    return pickKlassifizierungHandle(tools);
+  } catch {
+    return null;
+  }
+}
+
+/** Tool-bound when available, direct Mistral Small chatJson otherwise. Same
+ *  prompt + evidence filter as llmClassify. */
+async function llmClassifyAny(
+  text: string,
+  anlagenNames: string[],
+  temperature: number,
+  signal: AbortSignal | undefined,
+  handle: LlmHandle | null,
+): Promise<{ names: string[]; rejected: Array<{ name: string; reason: string; evidence?: string }> }> {
+  if (handle) {
+    return llmClassify(text, anlagenNames, temperature, signal, handle);
+  }
+  const prompt = [
+    'Du bekommst den Text eines Steuerdokuments (OCR).',
+    'Für JEDE Anlage die TATSÄCHLICH im Dokument vorkommt, zitiere genau EINE',
+    'wörtliche Textstelle (10-200 Zeichen) die ihre Präsenz beweist.',
+    'WICHTIG: NUR Anlagen aufnehmen für die du eine echte Textstelle zitieren kannst.',
+    '',
+    'Antworte als JSON: {"anlagen": [{"name": "<CODE>", "evidence": "<exakte OCR-Zeile>"}, ...]}.',
+    'Erlaubte Anlagen-Codes:',
+    anlagenNames.join(', '),
+    '',
+    '--- OCR-Volltext ---',
+    text.slice(0, 30_000),
+  ].join('\n');
+  const { parsed } = await chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(prompt, {
+    provider: 'mistral',
+    model: 'mistral-small-latest',
+    temperature,
+    signal,
+  });
+  const allowed = new Set(anlagenNames);
+  const lowerText = text.toLowerCase();
+  const names: string[] = [];
+  const rejected: Array<{ name: string; reason: string; evidence?: string }> = [];
+  for (const entry of parsed.anlagen ?? []) {
+    if (!entry || typeof entry !== 'object') continue;
+    const name = String(entry.name ?? '').trim();
+    const evidence = typeof entry.evidence === 'string' ? entry.evidence.trim() : '';
+    if (!allowed.has(name)) { rejected.push({ name, reason: 'name_not_in_catalog', evidence }); continue; }
+    if (!evidence || evidence.length < 10) { rejected.push({ name, reason: 'evidence_too_short', evidence }); continue; }
+    const probe = evidence.toLowerCase().slice(0, 30).replace(/\s+/g, ' ').trim();
+    if (!(probe.length >= 6 && lowerText.includes(probe))) {
+      rejected.push({ name, reason: 'evidence_not_in_ocr', evidence });
+      continue;
+    }
+    names.push(name);
+  }
+  return { names, rejected };
 }
 
 async function llmClassify(
@@ -311,51 +374,51 @@ export const klassifizierungStage = defineStage<
       };
     }
 
-    const regexHits = runRegex(input.text, allowed);
-    const regexNames = Object.keys(regexHits);
-    ctx.emit('regex_hits', { anlagen: regexNames, counts: regexHits });
+    // Round-1 indication: Mistral Small ALWAYS fires in parallel with regex,
+    // so the UI can stream a fast first hit ("Erkannt: …") while the rest of
+    // the pipeline runs. Bound-tool handle is preferred (gives roster-aware
+    // provider routing); otherwise we fall back to a direct Mistral chatJson
+    // call via env MISTRAL_API_KEY. `llmFallbackWhen: 'never'` still disables.
+    const mode = ctx.config.llmFallbackWhen ?? 'always';
+    const shouldLlm = mode !== 'never';
 
-    // Default verschärft: 'zero' statt 'zero-or-one' — LLM-Fallback NUR
-    // wenn der Regex GAR NICHTS findet. Bei 1+ Regex-Hits trauen wir der
-    // deterministischen Erkennung und vermeiden Phantom-Anlagen.
-    const mode = ctx.config.llmFallbackWhen ?? 'zero';
-    const shouldLlm =
-      mode === 'always' ||
-      (mode === 'zero-or-one' && regexNames.length <= 1) ||
-      (mode === 'zero' && regexNames.length === 0);
-
-    let llmNames: string[] = [];
-    let llmRejected: Array<{ name: string; reason: string; evidence?: string }> = [];
-    let usedLlm = false;
-    if (shouldLlm) {
-      const handle = pickKlassifizierungHandle(ctx.tools);
-      ctx.logger.debug('klassifizierung: using bound LLM handle', {
-        tool: handle.name,
-        provider: handle.meta.provider,
-        model: handle.meta.model,
-      });
-      try {
-        const r = await llmClassify(
+    const handle = shouldLlm ? safePickHandle(ctx.tools) : null;
+    const llmPromise: Promise<{
+      names: string[];
+      rejected: Array<{ name: string; reason: string; evidence?: string }>;
+      used: boolean;
+    }> = shouldLlm
+      ? llmClassifyAny(
           input.text,
           anlagenNames,
           ctx.config.temperature ?? 0,
           ctx.signal,
           handle,
-        );
-        llmNames = r.names;
-        llmRejected = r.rejected;
-        usedLlm = true;
-        ctx.emit('llm_hits', { anlagen: llmNames, rejected: llmRejected.length });
-        if (llmRejected.length > 0) {
-          ctx.logger.info('LLM-Klassifizierung: rejected phantom anlagen', {
-            rejected: llmRejected,
-          });
-        }
-      } catch (err) {
-        ctx.logger.warn('LLM fallback failed, keeping regex-only result', {
-          error: (err as Error).message,
-        });
-      }
+        )
+          .then((r) => {
+            ctx.emit('llm_hits', { anlagen: r.names, rejected: r.rejected.length });
+            return { names: r.names, rejected: r.rejected, used: true };
+          })
+          .catch((err) => {
+            ctx.logger.warn('LLM classifier failed, keeping regex-only result', {
+              error: (err as Error).message,
+            });
+            return { names: [], rejected: [], used: false };
+          })
+      : Promise.resolve({ names: [], rejected: [], used: false });
+
+    const regexHits = runRegex(input.text, allowed);
+    const regexNames = Object.keys(regexHits);
+    ctx.emit('regex_hits', { anlagen: regexNames, counts: regexHits });
+
+    const llmRes = await llmPromise;
+    const llmNames = llmRes.names;
+    const llmRejected = llmRes.rejected;
+    const usedLlm = llmRes.used;
+    if (llmRejected.length > 0) {
+      ctx.logger.info('LLM-Klassifizierung: rejected phantom anlagen', {
+        rejected: llmRejected,
+      });
     }
 
     const union = Array.from(new Set([...regexNames, ...llmNames])).sort();
