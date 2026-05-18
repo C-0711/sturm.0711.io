@@ -26,8 +26,10 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 
 # git is needed at runtime: simple-git invokes the binary for bare-repo ops.
-# poppler-utils provides pdftoppm, used by src/lib/pdf-render.ts (v6 vision).
-RUN apk add --no-cache git tini poppler-utils \
+# poppler-utils provides pdftoppm + pdftotext (bbox extraction für source-viewer).
+# tesseract-ocr (+ deu/eng language packs) wird als Fallback genutzt wenn das
+# PDF keinen Text-Layer hat (z.B. WISO-Steuer-Export raster-only).
+RUN apk add --no-cache git tini poppler-utils tesseract-ocr tesseract-ocr-data-deu \
  && addgroup -S sturm \
  && adduser  -S -G sturm sturm
 

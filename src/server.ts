@@ -1226,9 +1226,11 @@ app.get(
       }
     } catch { /* dir missing */ }
     if (!pdfPath) return res.status(404).json({ error: 'pdf not found for sha' });
+    // Tesseract Fallback nutzt das gecachte PNG (gleicher render-cache wie /source-page)
+    const pngPath = path.join(RUNS_DIR, '_pdf_render', sha, `page-${page}.png`);
     try {
       const { findSnippetBboxes } = await import('./server/pdf-bbox.ts');
-      const matches = await findSnippetBboxes(pdfPath, page, snippet);
+      const matches = await findSnippetBboxes(pdfPath, page, snippet, pngPath);
       res.json({ matches });
     } catch (err) {
       res.status(500).json({ error: 'bbox-extract failed', message: (err as Error).message });

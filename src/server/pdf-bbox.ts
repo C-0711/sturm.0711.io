@@ -132,28 +132,65 @@ function groupIntoLines(words: Word[]): Array<{ xMin: number; yMin: number; xMax
   return lines;
 }
 
+/** Tesseract HOCR auf gecachtem PNG. Bbox-Koords sind in Pixel relativ
+ *  zum PNG — wir konvertieren zu % der Image-Dim. */
+async function tesseractWordsFromPng(
+  pngPath: string,
+): Promise<{ words: Word[]; pageW: number; pageH: number }> {
+  let hocr = '';
+  try {
+    const { stdout } = await execFileP('tesseract', [pngPath, '-', '-l', 'deu', 'hocr'],
+      { maxBuffer: 16 * 1024 * 1024 });
+    hocr = stdout;
+  } catch {
+    return { words: [], pageW: 0, pageH: 0 };
+  }
+  // Page bbox: <div class='ocr_page' ... title='image "..."; bbox 0 0 W H; ppageno 0'>
+  const pageMatch = hocr.match(/class=['"]ocr_page['"][^>]*title=['"][^'"]*?bbox\s+0\s+0\s+(\d+)\s+(\d+)/);
+  const pageW = pageMatch ? Number(pageMatch[1]) : 1654;
+  const pageH = pageMatch ? Number(pageMatch[2]) : 2339;
+  // Word: <span class='ocrx_word' ... title='bbox 100 200 300 250; x_wconf 89'>text</span>
+  const words: Word[] = [];
+  const re = /<span\s+class=['"]ocrx_word['"][^>]*title=['"]bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)[^'"]*['"][^>]*>([^<]*)<\/span>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(hocr)) !== null) {
+    const text = m[5]
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    if (!text.trim()) continue;
+    words.push({ text, xMin: Number(m[1]), yMin: Number(m[2]), xMax: Number(m[3]), yMax: Number(m[4]) });
+  }
+  return { words, pageW, pageH };
+}
+
 export async function findSnippetBboxes(
   pdfPath: string,
   page: number,
   snippet: string,
+  pngPath?: string,
 ): Promise<BboxMatch[]> {
   // Tokenize snippet — drop empty / short tokens
   const tokens = snippet
     .split(/\s+/).map(normTok).filter((t) => t.length >= 2);
   if (tokens.length === 0) return [];
 
-  let html: string;
+  // 1. pdftotext (born-digital, schnell)
+  let words: Word[] = [];
+  let pageW = 0, pageH = 0;
   try {
     const { stdout } = await execFileP('pdftotext', [
       '-bbox-layout', '-f', String(page), '-l', String(page),
       pdfPath, '-',
     ], { maxBuffer: 8 * 1024 * 1024 });
-    html = stdout;
-  } catch {
-    return [];
-  }
+    const parsed = parseBboxHtml(stdout);
+    words = parsed.words; pageW = parsed.pageW; pageH = parsed.pageH;
+  } catch { /* fall through */ }
 
-  const { words, pageW, pageH } = parseBboxHtml(html);
+  // 2. Tesseract Fallback wenn kein Text-Layer (Scan / WISO-Raster-Export)
+  if (words.length === 0 && pngPath) {
+    const parsed = await tesseractWordsFromPng(pngPath);
+    words = parsed.words; pageW = parsed.pageW; pageH = parsed.pageH;
+  }
   if (words.length === 0) return [];
 
   const match = findBestMatch(words, tokens);
