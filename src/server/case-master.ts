@@ -58,6 +58,16 @@ export async function writeCaseMaster(
   inst: ApplicationInstance,
   opts: CaseMasterOptions,
 ): Promise<CaseMasterResult> {
+  // Sync inst.documents ← inbox _manifest.json BEVOR aggregiert wird.
+  // recordEagerIndikation + recordDocumentRunCompletion schreiben in das
+  // Manifest, nicht direkt in inst. Ohne dieser Sync sieht aggregateCase
+  // veraltete indikation (steuerjahr=null obwohl backfill ran).
+  try {
+    const { readManifest } = await import('./inbox.ts');
+    const manifest = await readManifest(opts.workspaceBase, inst);
+    if (manifest?.documents) inst.documents = manifest.documents;
+  } catch { /* tolerant: kein manifest → inst bleibt wie es ist */ }
+
   const { aggregateCase } = await import('./aggregation.ts');
   let agg = await aggregateCase(inst, {
     runsDir: opts.runsDir,
