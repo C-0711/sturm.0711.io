@@ -15,6 +15,7 @@ import { containerFieldMapperStage } from './quality/container-field-mapper.ts';
 import { ocrConsensusMergeStage } from './ocr-consensus-merge.ts';
 import { autoSourceSplitStage } from './auto-source-split.ts';
 import { mistralSmallOcrStage } from './mistral-small-ocr.ts';
+import { gemmaVisionOcrStage } from './gemma-vision-ocr.ts';
 import { llmEnsembleVoteStage } from './llm-ensemble-vote.ts';
 
 export function registerAllStages(): void {
@@ -38,6 +39,8 @@ export function registerAllStages(): void {
   // Auto-source-split — adaptive page-fanout based on dynamic prompt budget
   registerStage(autoSourceSplitStage);
   registerStage(mistralSmallOcrStage);
+  // Gemma-4 vision OCR — drop-in for mistral-ocr in v5.2-rag / v6-vision.
+  registerStage(gemmaVisionOcrStage);
   // Generic LLM ensemble vote (N providers in parallel → per-key consensus)
   registerStage(llmEnsembleVoteStage);
 }
