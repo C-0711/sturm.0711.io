@@ -32,16 +32,25 @@ export interface BelegIndikationConfig {
   baseUrl?: string;
   model?: string;
   maxTokens?: number;
-  /** PDF render dpi für erste Seite. Default 150 (schneller als OCR's 200). */
+  /** PDF render dpi. Default 150 (schneller als OCR's 200). */
   dpi?: number;
-  /** Timeout pro Call. Default 30s (Mistral kann bei großen Bildern langsam sein). */
+  /** Timeout pro Call. Default 30s + 5s pro zusätzlicher Seite. */
   timeoutMs?: number;
+  /** Maximale Seiten die an Mistral geschickt werden (eine Multi-Page-Call).
+   *  Default 32 — Mistral Small Vision verträgt das problemlos. */
+  maxPages?: number;
 }
 
 export interface BelegIndikationOutput {
+  /** Union aller anlagen über alle erkannten Belege. */
   anlagen: string[];
+  /** Belegtyp — aggregiert wenn Multi-Doc-PDF (z.B. "2× Kapitalerträge +
+   *  Religionsbescheinigung"), sonst einzelner Belegtyp. null wenn nichts. */
   belegtyp: string | null;
+  /** Wichtige Werte aus dem gesamten Dokument (max 6). */
   wichtige_werte: Array<{ label: string; value: string }>;
+  /** Anzahl gerenderter/analysierter Seiten. */
+  seiten_analysiert: number;
   ms: number;
 }
 
@@ -58,13 +67,24 @@ const ALLOWED_ANLAGEN = [
   'Zins', 'Corona', 'Sonst',
 ];
 
-const PROMPT = [
-  'Du bekommst ein Foto / Scan eines Steuer-Belegs. Liefere SCHNELL eine',
-  'Voranzeige für den Nutzer, während die richtige OCR-Pipeline noch läuft.',
+// EIN Prompt für single + multi page. Mistral sieht alle Bilder gleichzeitig
+// und liefert EIN aggregiertes Ergebnis: Belegtyp-Beschreibung (bei multi
+// als "2× X + Y" formuliert), Union der Anlagen, wichtige Werte.
+const PROMPT = (pageCount) => [
+  pageCount > 1
+    ? `Du bekommst die ${pageCount} Seiten eines Steuer-Belegs-PDFs in Reihenfolge.`
+    : 'Du bekommst ein Foto / Scan eines Steuer-Belegs.',
+  pageCount > 1
+    ? 'WICHTIG: das PDF kann mehrere unabhängige Belege enthalten (z.B. VAST-Bundle'
+      + ' mit Religionsbescheinigung + Kapitalertrag-Mitteilungen + Lohnsteuer-'
+      + 'bescheinigung gemischt).'
+    : '',
+  'Liefere eine kompakte Voranzeige für den Nutzer.',
   '',
   'Antworte mit STRICT JSON:',
   '{',
-  '  "belegtyp": "<knapp, z.B. Lohnsteuerbescheinigung, Steuerbescheinigung Bank, Rentenbezugsmitteilung, Quittung, Rechnung, Stammdaten>",',
+  '  "belegtyp": "<knapper Belegtyp; bei mehreren Belegen aggregiert, z.B.',
+  '                \'Lohnsteuerbescheinigung\' oder \'2× Mitteilung Kapitalerträge + Religionsbescheinigung\'>",',
   '  "anlagen": ["<CODE>", ...],',
   '  "wichtige_werte": [',
   '    {"label": "Empfänger", "value": "..."},',
@@ -76,35 +96,46 @@ const PROMPT = [
   '',
   'Regeln:',
   '- anlagen NUR aus dieser Liste: ' + ALLOWED_ANLAGEN.join(', '),
-  '- 1-3 Anlagen sind typisch; nie raten, nur was klar belegt ist',
-  '- wichtige_werte: 2-5 Einträge, das was ein Nutzer auf einen Blick erfasst',
+  '- anlagen ist UNION aller Belege im Dokument (z.B. ["KAP","ESt1A"])',
+  '- belegtyp: bei mehreren Belegen Form "N× Typ + Typ" verwenden',
+  '  (Wiederholungen mit N×, gleiche Bezeichnungen zusammenfassen)',
+  '- wichtige_werte: 2-5 Einträge die der Nutzer auf einen Blick erfasst',
   '- Beträge mit Währung (z.B. "5,06 €"), Daten als DD.MM.YYYY',
   '- KEINE Erklärung, KEIN Markdown, NUR das JSON-Objekt',
-].join('\n');
+].filter(Boolean).join('\n');
 
-async function firstPageImage(filePath: string, filename: string, dpi: number): Promise<Buffer> {
+/** Rendert bis zu maxPages des PDFs/Bilds und gibt PNG-Buffers + page-count zurück. */
+async function pagesAsImages(
+  filePath: string, filename: string, dpi: number, maxPages: number,
+): Promise<{ buffers: Buffer[]; totalPages: number }> {
   const ext = extname(filename).toLowerCase();
   if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) {
-    return readFile(filePath);
+    return { buffers: [await readFile(filePath)], totalPages: 1 };
   }
   if (ext !== '.pdf') {
     throw new Error(`beleg-indikation: unsupported extension ${ext}`);
   }
-  // Nur Seite 1 rendern (-f 1 -l 1) — unabhängig von der Gesamtseiten-
-  // anzahl. renderPdfToPng würde alle Seiten rendern und bei großen PDFs
-  // (Einkommensteuererklärung 30+ Seiten) am maxPages-Cap werfen.
+  // Erst pdfinfo um Gesamtseitenzahl zu bestimmen (für Multi-Doc-Erkennung).
+  let totalPages = 1;
+  try {
+    const { stdout } = await execFileP('pdfinfo', [filePath]);
+    const m = stdout.match(/^Pages:\s+(\d+)/m);
+    if (m) totalPages = Number(m[1]);
+  } catch { /* fallback: rendere bis max und zähle */ }
+  const renderPages = Math.min(totalPages, maxPages);
   const dir = await mkdtemp(join(tmpdir(), 'sturm-indikation-'));
   try {
     await execFileP('pdftoppm', [
       '-r', String(dpi),
-      '-f', '1', '-l', '1',
+      '-f', '1', '-l', String(renderPages),
       '-png',
       filePath,
       join(dir, 'p'),
     ]);
     const entries = (await readdir(dir)).filter((f) => f.endsWith('.png')).sort();
     if (entries.length === 0) throw new Error('beleg-indikation: pdftoppm produced no PNG');
-    return readFile(join(dir, entries[0]));
+    const buffers = await Promise.all(entries.map((e) => readFile(join(dir, e))));
+    return { buffers, totalPages };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
@@ -125,13 +156,21 @@ export async function runBelegIndikation(
   const baseUrl = cfg?.baseUrl ?? 'https://api.mistral.ai';
   const model = cfg?.model ?? 'mistral-small-latest';
   const dpi = cfg?.dpi ?? 150;
-  const maxTokens = cfg?.maxTokens ?? 800;
-  const timeoutMs = cfg?.timeoutMs ?? 30_000;
+  const maxPages = cfg?.maxPages ?? 32;
   const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env
   if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
 
-  const img = await firstPageImage(input.filePath, input.filename, dpi);
-  const b64 = img.toString('base64');
+  const { buffers } = await pagesAsImages(input.filePath, input.filename, dpi, maxPages);
+  const pageCount = buffers.length;
+  // Token-budget + Timeout skalieren mit Seitenzahl.
+  const maxTokens = cfg?.maxTokens ?? Math.min(2000, 600 + 60 * pageCount);
+  const timeoutMs = cfg?.timeoutMs ?? Math.min(180_000, 30_000 + 5_000 * pageCount);
+
+  const allowed = new Set(ALLOWED_ANLAGEN);
+  const imageContents = buffers.map((buf) => ({
+    type: 'image_url' as const,
+    image_url: `data:image/png;base64,${buf.toString('base64')}`,
+  }));
 
   const controller = new AbortController();
   const onAbort = () => controller.abort();
@@ -146,8 +185,8 @@ export async function runBelegIndikation(
         model, max_tokens: maxTokens, temperature: 0,
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: [
-          { type: 'text', text: PROMPT },
-          { type: 'image_url', image_url: `data:image/png;base64,${b64}` },
+          { type: 'text', text: PROMPT(pageCount) },
+          ...imageContents,
         ] }],
       }),
     });
@@ -159,7 +198,6 @@ export async function runBelegIndikation(
     const raw = data.choices?.[0]?.message?.content ?? '{}';
     let parsed: { belegtyp?: string; anlagen?: string[]; wichtige_werte?: Array<{ label?: string; value?: string }> } = {};
     try { parsed = JSON.parse(raw); } catch { /* keep empty */ }
-    const allowed = new Set(ALLOWED_ANLAGEN);
     const anlagen = (parsed.anlagen ?? []).map((a) => String(a).trim()).filter((a) => allowed.has(a));
     const belegtyp = typeof parsed.belegtyp === 'string' ? parsed.belegtyp.trim() : null;
     const wichtige_werte = (parsed.wichtige_werte ?? [])
@@ -167,7 +205,11 @@ export async function runBelegIndikation(
       .map((e) => ({ label: String(e.label ?? '').trim(), value: String(e.value ?? '').trim() }))
       .filter((e) => e.label && e.value)
       .slice(0, 6);
-    return { anlagen, belegtyp, wichtige_werte, ms: Date.now() - t0 };
+    return {
+      anlagen, belegtyp, wichtige_werte,
+      seiten_analysiert: pageCount,
+      ms: Date.now() - t0,
+    };
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
@@ -201,72 +243,23 @@ export const belegIndikationStage = defineStage<
   },
 
   async run(input, ctx) {
-    const t0 = Date.now();
-    const baseUrl = ctx.config?.baseUrl ?? 'https://api.mistral.ai';
-    const model = ctx.config?.model ?? 'mistral-small-latest';
-    const dpi = ctx.config?.dpi ?? 150;
-    const maxTokens = ctx.config?.maxTokens ?? 800;
-    const timeoutMs = ctx.config?.timeoutMs ?? 30_000;
-    const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env: round-1 indication uses Mistral API directly
-    if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
-
-    const img = await firstPageImage(input.filePath, input.filename, dpi);
-    const b64 = img.toString('base64');
-
-    const controller = new AbortController();
-    const onAbort = () => controller.abort();
-    ctx.signal?.addEventListener('abort', onAbort, { once: true });
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: PROMPT },
-              { type: 'image_url', image_url: `data:image/png;base64,${b64}` },
-            ],
-          }],
-        }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`beleg-indikation HTTP ${res.status}: ${text.slice(0, 200)}`);
-      }
-      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      const raw = data.choices?.[0]?.message?.content ?? '{}';
-      let parsed: { belegtyp?: string; anlagen?: string[]; wichtige_werte?: Array<{ label?: string; value?: string }> } = {};
-      try { parsed = JSON.parse(raw); } catch { /* keep empty */ }
-      const allowed = new Set(ALLOWED_ANLAGEN);
-      const anlagen = (parsed.anlagen ?? [])
-        .map((a) => String(a).trim())
-        .filter((a) => allowed.has(a));
-      const belegtyp = typeof parsed.belegtyp === 'string' ? parsed.belegtyp.trim() : null;
-      const wichtige_werte = (parsed.wichtige_werte ?? [])
-        .filter((e) => e && typeof e === 'object')
-        .map((e) => ({
-          label: String(e.label ?? '').trim(),
-          value: String(e.value ?? '').trim(),
-        }))
-        .filter((e) => e.label && e.value)
-        .slice(0, 6);
-
-      const ms = Date.now() - t0;
-      const result = { anlagen, belegtyp, wichtige_werte, ms };
-      ctx.emit('beleg_indikation', result);
-      await ctx.artifacts.write('indikation.json', result);
-      return result;
-    } finally {
-      clearTimeout(timer);
-      ctx.signal?.removeEventListener('abort', onAbort);
-    }
+    // Stage-Pfad delegiert an die pure Funktion (gleicher Code-Pfad wie
+    // upload-bulk eager Indikation) — vermeidet Duplikat-Logic für
+    // single- vs. multi-page handling.
+    const result = await runBelegIndikation(
+      input,
+      {
+        baseUrl: ctx.config?.baseUrl,
+        model: ctx.config?.model,
+        dpi: ctx.config?.dpi,
+        maxTokens: ctx.config?.maxTokens,
+        timeoutMs: ctx.config?.timeoutMs,
+        maxPages: ctx.config?.maxPages,
+      },
+      ctx.signal,
+    );
+    ctx.emit('beleg_indikation', result);
+    await ctx.artifacts.write('indikation.json', result);
+    return result;
   },
 });
