@@ -268,45 +268,24 @@ export const phase3VisionFillStage = defineStage<
       renderMs,
     });
 
-    // ── 2. Build field map for STILL-MISSING + SUSPICIOUS fields ───────
-    // phase1Regex already filled ~30-50% of the catalog deterministically.
-    // Asking vision about clean hits wastes prompt budget — they'd be
-    // skipped at the cross-validation step anyway (regex wins in phase5).
-    // BUT phase1Regex also produces SUSPICIOUS hits: WISO-placeholder
-    // values (repeat_suspicious=true) or fallback hits without zeile-anchor
-    // (zeile_anchored=false). Those poison canonical_layer (e.g. VOR shows
-    // "456 / 456" instead of "4.703 / 1.243"). We re-ask vision about
-    // those so it can correct or NULL them.
-    const missingFelderMap: typeof felderMap = {};
-    let suspiciousReAskCount = 0;
-    for (const anlage of anlagen) {
-      const result = phase1[anlage];
-      if (!result) continue;
-      const askSet = new Set<string>(result.missing_ecodes ?? []);
-      for (const [eCode, hit] of Object.entries(result.regex_hits ?? {})) {
-        const isSuspicious =
-          hit.repeat_suspicious === true || hit.zeile_anchored === false;
-        if (isSuspicious) {
-          askSet.add(eCode);
-          suspiciousReAskCount++;
-        }
-      }
-      const fullList = felderMap[anlage];
-      if (!fullList) continue;
-      missingFelderMap[anlage] = {
-        anlage: fullList.anlage,
-        felder: fullList.felder.filter((f) => askSet.has(f.eCode)),
-      };
-    }
+    // ── 2. Build field map — SEND THE FULL CATALOG (spike pattern) ─────
+    // The v6 spike that hit 42/44 fields gave Gemma the entire anlage
+    // catalog (~500 fields). The earlier missing+suspect filter (r9-r16)
+    // saved prompt tokens but cut extraction in half — vision could only
+    // answer fields it was asked about, missing real values that
+    // phase1Regex happened to "find" with a WISO placeholder.
+    // phase5-merge already handles precedence: clean regex wins, vision
+    // overrides suspicious regex (commit 41a2a9d). So asking vision
+    // about everything is safe.
     ctx.emit('vision_field_set', {
-      missingFromPhase1: Object.values(phase1).reduce(
-        (s, r) => s + (r.missing_ecodes?.length ?? 0),
+      totalFelder: Object.values(felderMap).reduce(
+        (s, list) => s + (list?.felder?.length ?? 0),
         0,
       ),
-      suspiciousReAsked: suspiciousReAskCount,
+      mode: 'full-catalog',
     });
     const fieldMap = buildFieldMap({
-      perAnlage: missingFelderMap,
+      perAnlage: felderMap,
       schemaName,
       maxFields: maxFieldsPerCall,
     });
