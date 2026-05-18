@@ -431,6 +431,18 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
       background: white;
     }
+    /* Snippet-Highlight Overlay über dem Img */
+    .viewer-img-wrap { position: relative; display: inline-block; max-width: 100%; }
+    .viewer-img-wrap img { display: block; max-width: 100%; height: auto; }
+    .bbox-hit {
+      position: absolute;
+      background: rgba(255, 230, 0, 0.38);
+      border: 1px solid rgba(217, 161, 0, 0.6);
+      border-radius: 2px;
+      pointer-events: none;
+      transition: opacity 200ms ease;
+      mix-blend-mode: multiply;
+    }
     .viewer-empty {
       padding: 40px 20px;
       text-align: center;
@@ -1415,11 +1427,13 @@
       return;
     }
     const url = '/api/source-page/' + encodeURIComponent(s.sha) + '/' + s.page + '.png';
-    // zoom als width: <pct>% — erlaubt natürliches Scrolling im Container
+    // zoom als width: <pct>% auf dem wrap (Overlay-Divs skalieren mit % automatisch)
     const styleWidth = (s.zoom !== 100) ? (' style="width:' + s.zoom + '%"') : '';
     canvas.innerHTML =
-      '<img src="' + url + '"' + styleWidth + ' alt="Seite ' + s.page + '" '
+      '<div class="viewer-img-wrap"' + styleWidth + '>'
+        + '<img src="' + url + '" alt="Seite ' + s.page + '" '
         + 'onerror="window.__pdfPageError && window.__pdfPageError(\'' + panel + '\')" />'
+      + '</div>'
       + (s.snippet ? '<div class="viewer-snippet">' + escapeHtml(s.snippet) + '</div>' : '');
     if (pageLabel) pageLabel.textContent = (s.filename ? s.filename + ' · ' : '')
       + 'Seite ' + s.page + (s.maxPage ? '/' + s.maxPage : '') + ' · ' + s.zoom + '%';
@@ -1429,6 +1443,42 @@
     // Sync select wenn nötig
     const sel = document.getElementById(panel + '-doc-select');
     if (sel && sel.value !== s.sha) sel.value = s.sha;
+    // Snippet-Bbox-Highlight asynchron nachschießen (Poppler pdftotext).
+    if (s.snippet) loadAndOverlayBbox(panel, s.sha, s.page, s.snippet);
+  }
+
+  // Fetcht word-level bboxes vom Backend + overlayed gelbe Divs übers Bild.
+  // No-op wenn Fetch fehlschlägt oder keine matches (z.B. Scan-PDF ohne Text-Layer).
+  async function loadAndOverlayBbox(panel, sha, page, snippet) {
+    const requestId = sha + ':' + page + ':' + snippet;
+    // Cache pro Panel — vermeidet Re-Fetch bei selber Source.
+    VIEWER_STATE[panel]._lastBboxReq = requestId;
+    try {
+      const r = await fetch('/api/source-bbox/' + encodeURIComponent(sha) + '/' + page
+        + '?q=' + encodeURIComponent(snippet.slice(0, 200)));
+      if (!r.ok) return;
+      const data = await r.json();
+      const matches = Array.isArray(data.matches) ? data.matches : [];
+      if (matches.length === 0) return;
+      // Wenn der State zwischendurch weitergewandert ist → abbrechen.
+      if (VIEWER_STATE[panel]._lastBboxReq !== requestId) return;
+      const wrap = document.querySelector('#' + panel + '-viewer-canvas .viewer-img-wrap');
+      if (!wrap) return;
+      // Remove old overlays first
+      [...wrap.querySelectorAll('.bbox-hit')].forEach(el => el.remove());
+      for (const m of matches) {
+        const div = document.createElement('div');
+        div.className = 'bbox-hit';
+        div.style.left = m.xPct + '%';
+        div.style.top = m.yPct + '%';
+        div.style.width = m.wPct + '%';
+        div.style.height = m.hPct + '%';
+        wrap.appendChild(div);
+      }
+      // Scroll erste Overlay-Box in den sichtbaren Bereich
+      const first = wrap.querySelector('.bbox-hit');
+      if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch (_e) { /* silent */ }
   }
 
   // Wenn die nächste Seite ein 404 liefert, war's die letzte. Im State merken.

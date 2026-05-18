@@ -1185,6 +1185,41 @@ app.get('/api/_deploycheck', (_req, res) => {
   res.json({ deployedAt: '__V5_DEPLOY_CHECK__', ts: new Date().toISOString() });
 });
 
+// ── GET /api/source-bbox/:sha256/:page ─────────────────────────────────
+// Returns word-level bounding boxes (in %) for a given snippet on a PDF
+// page. Used by m-case.html viewer to highlight the source on the rendered
+// PNG via absolute-positioned overlay divs.
+//
+// Query: ?q=<snippet> (URL-encoded text fragment). Server uses pdftotext
+// -bbox-layout (Poppler) to get word positions, fuzzy-matches the snippet
+// against the word sequence, returns matching word boxes as % of page-dim.
+app.get(
+  '/api/source-bbox/:sha256/:page',
+  async (req, res) => {
+    const sha = String(req.params.sha256 ?? '');
+    const page = parseInt(req.params.page ?? '0', 10);
+    const snippet = String(req.query.q ?? '').trim();
+    if (!/^[0-9a-f]{64}$/i.test(sha)) return res.status(400).json({ error: 'invalid sha256' });
+    if (!Number.isFinite(page) || page < 1 || page > 100) return res.status(400).json({ error: 'invalid page' });
+    if (!snippet) return res.json({ matches: [] });
+    // PDF path: uploads are content-addressed (sha256 filename)
+    const pdfPath = path.join(UPLOADS_DIR, sha);
+    try {
+      const st = await fs.promises.stat(pdfPath);
+      if (!st.isFile()) return res.status(404).json({ error: 'pdf not found' });
+    } catch {
+      return res.status(404).json({ error: 'pdf not found' });
+    }
+    try {
+      const { findSnippetBboxes } = await import('./server/pdf-bbox.ts');
+      const matches = await findSnippetBboxes(pdfPath, page, snippet);
+      res.json({ matches });
+    } catch (err) {
+      res.status(500).json({ error: 'bbox-extract failed', message: (err as Error).message });
+    }
+  },
+);
+
 // ── GET /api/source-page/:sha256/:page ─────────────────────────────────
 // Streams a cached PDF-render PNG by content hash (P6 source viewer).
 // Path constrained: sha256 must be hex, page must be 1-based ≤ 50.
