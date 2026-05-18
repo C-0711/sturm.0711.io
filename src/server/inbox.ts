@@ -164,6 +164,13 @@ export async function recordDocumentRunCompletion(
     anlagen?: string[];
     fieldsExtracted?: number;
     trustBreakdown?: { high: number; medium: number; suspicious: number; low: number };
+    indikation?: {
+      anlagen: string[];
+      belegtyp: string | null;
+      wichtige_werte: Array<{ label: string; value: string }>;
+      ms: number;
+      at: string;
+    };
   },
 ): Promise<void> {
   const lockKey = `${instance.appId}|${instance.caseId}`;
@@ -174,6 +181,7 @@ export async function recordDocumentRunCompletion(
     if (details.anlagen) doc.anlagen = details.anlagen;
     if (typeof details.fieldsExtracted === 'number') doc.fieldsExtracted = details.fieldsExtracted;
     if (details.trustBreakdown) doc.trustBreakdown = details.trustBreakdown;
+    if (details.indikation) doc.indikation = details.indikation;
     await writeManifest(rootCwd, instance, m);
   });
 }

@@ -552,11 +552,22 @@ app.post(
         const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
         const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
         const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+        const indikationOut = (result.stages?.indikation?.output as {
+          anlagen?: string[]; belegtyp?: string | null;
+          wichtige_werte?: Array<{ label: string; value: string }>; ms?: number;
+        } | undefined);
         const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
         await recordDocumentRunCompletion(ROOT, inst, run.runId, {
           anlagen: klass?.erkannte_anlagen,
           fieldsExtracted: layer ? Object.keys(layer).length : 0,
           trustBreakdown: computeTrustBreakdown(layer),
+          indikation: indikationOut ? {
+            anlagen: indikationOut.anlagen ?? [],
+            belegtyp: indikationOut.belegtyp ?? null,
+            wichtige_werte: indikationOut.wichtige_werte ?? [],
+            ms: indikationOut.ms ?? 0,
+            at: new Date().toISOString(),
+          } : undefined,
         });
         // P2: refresh the case-level master.json (single source of truth
         // consumed by abrechnung.html, source-viewer, ELSTER export, etc.).
@@ -898,11 +909,22 @@ app.post(
         const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
         const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
         const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
+        const indikationOut = (result.stages?.indikation?.output as {
+          anlagen?: string[]; belegtyp?: string | null;
+          wichtige_werte?: Array<{ label: string; value: string }>; ms?: number;
+        } | undefined);
         const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
         await recordDocumentRunCompletion(ROOT, inst, run.runId, {
           anlagen: klass?.erkannte_anlagen,
           fieldsExtracted: layer ? Object.keys(layer).length : 0,
           trustBreakdown: computeTrustBreakdown(layer),
+          indikation: indikationOut ? {
+            anlagen: indikationOut.anlagen ?? [],
+            belegtyp: indikationOut.belegtyp ?? null,
+            wichtige_werte: indikationOut.wichtige_werte ?? [],
+            ms: indikationOut.ms ?? 0,
+            at: new Date().toISOString(),
+          } : undefined,
         });
         // master.json refresh
         try {

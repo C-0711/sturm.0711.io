@@ -37,6 +37,20 @@ export interface CaseDocument {
    */
   trustBreakdown?: { high: number; medium: number; suspicious: number; low: number };
   mimeType?: string;
+  /**
+   * Round-1 Vorschau (beleg-indikation Stage). Wird ~1-3s nach Upload
+   * geschrieben, parallel zur OCR. Enthält erkannte Anlagen, Belegtyp
+   * und die wichtigsten direkt aus dem Bild gelesenen Werte. Bleibt im
+   * Manifest erhalten, damit die Belege-Tabelle sie auch nach Reload
+   * zeigt.
+   */
+  indikation?: {
+    anlagen: string[];
+    belegtyp: string | null;
+    wichtige_werte: Array<{ label: string; value: string }>;
+    ms: number;
+    at: string;
+  };
 }
 
 export interface ApplicationInstance {

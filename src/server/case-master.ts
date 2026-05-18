@@ -128,6 +128,7 @@ export async function writeCaseMaster(
       anlagen: d.anlagen ?? [],
       fieldsExtracted: d.fieldsExtracted ?? null,
       uploadedAt: d.uploadedAt,
+      indikation: d.indikation ?? null,
     })),
     merged_layer: agg.merged_layer,
     conflicts: agg.conflicts,

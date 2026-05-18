@@ -167,6 +167,32 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Belege-Tabelle: Round-1 Indikation unter dem Dateinamen */
+    .row-indikation {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      align-items: center;
+      line-height: 1.4;
+    }
+    .row-indikation .anlage-chip {
+      display: inline-block;
+      padding: 1px 7px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      border-radius: 999px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+    }
+    .row-indikation .ind-typ { color: var(--color-text-secondary); font-weight: 500; }
+    .row-indikation .ind-wert { white-space: nowrap; }
+    .row-indikation .ind-wert-label { color: var(--color-text-tertiary); }
+    .row-indikation .ind-wert-value { font-family: ui-monospace, monospace; color: var(--color-text-secondary); }
+
     /* Belege-Tabelle */
     table.belege, table.felder {
       width: 100%;
@@ -658,7 +684,29 @@
       const uploaded = fmtDate(d.uploadedAt);
       // Keine PDF-View-Route — Datei als Klar-Text. Sobald P1 sie liefert,
       // kann hier ein Link daraus werden.
-      const nameCell = '<span class="file-name disabled" title="Beleg-Vorschau in Vorbereitung">' + escapeHtml(filename) + '</span>';
+      // Round-1 Indikation aus dem Manifest (Anlagen + Belegtyp + 2-3 Werte).
+      let indikationHtml = '';
+      if (d.indikation) {
+        const ind = d.indikation;
+        const parts = [];
+        if (Array.isArray(ind.anlagen) && ind.anlagen.length > 0) {
+          parts.push(ind.anlagen.map((a) => '<span class="anlage-chip">' + escapeHtml(String(a)) + '</span>').join(' '));
+        }
+        if (ind.belegtyp) {
+          parts.push('<span class="ind-typ">' + escapeHtml(ind.belegtyp) + '</span>');
+        }
+        if (Array.isArray(ind.wichtige_werte) && ind.wichtige_werte.length > 0) {
+          const w = ind.wichtige_werte.slice(0, 3).map((v) =>
+            '<span class="ind-wert"><span class="ind-wert-label">' + escapeHtml(v.label) + ':</span> ' +
+            '<span class="ind-wert-value">' + escapeHtml(v.value) + '</span></span>'
+          ).join(' · ');
+          parts.push(w);
+        }
+        if (parts.length > 0) {
+          indikationHtml = '<div class="row-indikation">' + parts.join(' &middot; ') + '</div>';
+        }
+      }
+      const nameCell = '<span class="file-name disabled" title="Beleg-Vorschau in Vorbereitung">' + escapeHtml(filename) + '</span>' + indikationHtml;
       const isFailed = state === 'error' || state === 'unknown';
       const retryBtn = isFailed
         ? '<button class="row-action retry" data-runid="' + escapeHtml(d.runId || '') + '" data-filename="' + escapeHtml(filename) + '">Wiederholen</button> '
