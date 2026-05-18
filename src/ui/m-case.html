@@ -344,13 +344,41 @@
       display: block;
     }
 
-    /* Split-Screen: linkes Panel (Felder / Abrechnung) + rechts PDF-Viewer */
+    /* Split-Screen: linkes Panel (Felder / Abrechnung) + rechts PDF-Viewer.
+       Viewer ist standardmäßig AUS — der Fall nimmt die volle Breite, bis der
+       User den Viewer-Toggle aktiviert. */
     .split-screen {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 12px;
       height: calc(100vh - 240px);
       min-height: 520px;
+    }
+    .split-screen.viewer-hidden { grid-template-columns: 1fr; }
+    .split-screen.viewer-hidden .split-right { display: none; }
+    .viewer-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      color: var(--color-text-secondary);
+    }
+    .viewer-toggle:hover { background: var(--color-bg-tertiary); }
+    .viewer-toggle.active {
+      background: var(--color-bg-tertiary);
+      border-color: var(--color-text-secondary);
+      color: var(--color-text-primary);
+    }
+    .viewer-toggle-row {
+      display: flex;
+      justify-content: flex-end;
+      padding: 0 0 6px;
     }
     .split-left {
       overflow: auto;
@@ -598,8 +626,11 @@
         </select>
         <input type="search" id="felder-suche" placeholder="Suche Bezeichnung oder eCode&hellip;" />
         <span class="filter-count" id="felder-count"></span>
+        <button type="button" class="viewer-toggle" data-toggle="felder" title="PDF-Quelle bei Hover anzeigen">
+          <span>PDF-Quelle</span>
+        </button>
       </div>
-      <div class="split-screen" id="felder-split">
+      <div class="split-screen viewer-hidden" id="felder-split">
         <div id="felder-body" class="split-left">
           <div class="empty">
             <div class="empty-headline">Noch keine Felder erkannt.</div>
@@ -628,7 +659,12 @@
 
     <!-- Panel: Abrechnung mit Source-Viewer Split-Screen -->
     <section class="panel" id="panel-abrechnung" role="tabpanel">
-      <div class="split-screen" id="abrechnung-split">
+      <div class="viewer-toggle-row">
+        <button type="button" class="viewer-toggle" data-toggle="abrechnung" title="PDF-Quelle bei Hover anzeigen">
+          <span>PDF-Quelle</span>
+        </button>
+      </div>
+      <div class="split-screen viewer-hidden" id="abrechnung-split">
         <div class="split-left frame-wrap">
           <iframe id="abrechnung-frame" title="Abrechnung"></iframe>
         </div>
@@ -1585,10 +1621,33 @@
     else if (e.key === '0')         { document.getElementById(panel + '-zoom-reset')?.click(); e.preventDefault(); }
   });
 
+  // Viewer-Toggle: PDF-Quelle ist standardmäßig aus. User klickt den
+  // "PDF-Quelle"-Button → split-screen klappt in 2-Spalten auf, Hover aktiv.
+  // Zustand pro Tab in localStorage gespeichert.
+  function applyViewerState(name, on) {
+    const split = document.getElementById(name + '-split');
+    const btn = document.querySelector('.viewer-toggle[data-toggle="' + name + '"]');
+    if (split) split.classList.toggle('viewer-hidden', !on);
+    if (btn) btn.classList.toggle('active', on);
+    try { localStorage.setItem('sturm.viewer.' + name, on ? '1' : '0'); } catch {}
+  }
+  function isViewerOn(name) {
+    const split = document.getElementById(name + '-split');
+    return !!split && !split.classList.contains('viewer-hidden');
+  }
+  document.querySelectorAll('.viewer-toggle[data-toggle]').forEach((btn) => {
+    const name = btn.getAttribute('data-toggle');
+    let saved = '0';
+    try { saved = localStorage.getItem('sturm.viewer.' + name) || '0'; } catch {}
+    applyViewerState(name, saved === '1');
+    btn.addEventListener('click', () => applyViewerState(name, !isViewerOn(name)));
+  });
+
   // Hover-Handler: delegated auf body, fängt JEDES Element mit data-sha256+data-page.
   // Funktioniert damit für Felder-Tab (.felder-row), Belege-Tab (.ind-wert),
   // und alles andere was die Attribute trägt. 150ms Debounce verhindert Sprung
   // beim Drüberwischen, lastKey verhindert No-op-Updates.
+  // Guard: feuert nur wenn der Viewer für das aktive Panel sichtbar ist.
   let HOVER_TIMER = null;
   let HOVER_LAST_KEY = '';
   document.body.addEventListener('mouseover', (e) => {
@@ -1606,6 +1665,8 @@
     const ownerPanel = el.closest('#panel-felder, #panel-abrechnung');
     if (!ownerPanel || !ownerPanel.classList.contains('active')) return;
     const panel = ownerPanel.id === 'panel-felder' ? 'felder' : 'abrechnung';
+    // Viewer aus → Hover macht nichts (User hat PDF-Quelle ausgeblendet).
+    if (!isViewerOn(panel)) return;
     if (HOVER_TIMER) clearTimeout(HOVER_TIMER);
     HOVER_TIMER = setTimeout(() => {
       HOVER_LAST_KEY = key;
@@ -1625,6 +1686,7 @@
   window.addEventListener('message', (ev) => {
     const d = ev && ev.data;
     if (!d || d.type !== 'sturm-source-hover') return;
+    if (!isViewerOn('abrechnung')) return; // User hat PDF-Quelle ausgeblendet.
     showSource('abrechnung', d.sha256, d.page, d.snippet || '', d.filename || '');
   });
 
