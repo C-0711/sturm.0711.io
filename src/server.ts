@@ -903,7 +903,18 @@ app.get(
         });
         (agg as { bmf?: unknown }).bmf = bmfResult;
       } catch (e) {
-        (agg as { bmf?: unknown }).bmf = { erfolg: false, reason: 'mcp-error', message: (e as Error).message };
+        const err = e as Error & { cause?: unknown };
+        const cause = err.cause instanceof Error ? err.cause.message : err.cause;
+        // Log the full chain so we can diagnose "fetch failed" without
+        // having to instrument client-side. Node's fetch wraps the real
+        // socket/DNS error in .cause; .message alone is just "fetch failed".
+        console.error('[aggregate] BMF re-compute failed:', err.message, 'cause:', cause, 'stack:', err.stack?.split('\n').slice(0, 4).join(' | '));
+        (agg as { bmf?: unknown }).bmf = {
+          erfolg: false,
+          reason: 'mcp-error',
+          message: err.message,
+          cause: cause ?? null,
+        };
       }
     }
 
