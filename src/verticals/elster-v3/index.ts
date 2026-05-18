@@ -1070,10 +1070,7 @@ export function buildElsterV52RagWorkflow() {
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
       ocr: {
-        // mistral-small chat-vision OCR (per user directive: drop mistral-ocr).
-        // STRICT no fallback — failures bubble up.
-        uses: 'mistral-small-ocr',
-        config: { mode: 'md', dpi: 200, maxTokens: 4096 },
+        uses: 'mistral-ocr',
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {
@@ -1290,10 +1287,7 @@ export function buildElsterV6VisionWorkflow() {
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
       ocr: {
-        // mistral-small chat-vision OCR (per user directive: drop mistral-ocr).
-        // STRICT no fallback — failures bubble up.
-        uses: 'mistral-small-ocr',
-        config: { mode: 'md', dpi: 200, maxTokens: 4096 },
+        uses: 'mistral-ocr',
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {
