@@ -144,12 +144,15 @@ function runRegex(text: string, allowed: Set<string>): Record<string, number> {
  * Anwendung-Kontext.
  */
 function pickKlassifizierungHandle(tools: ToolContainerView): LlmHandle {
-  if (tools.has('claude-haiku')) {
-    return tools.getByRole<LlmHandle>('classify-fallback');
+  // 2026-05-18: Preference invertiert. Vorher war claude-haiku bevorzugt
+  // ('classify-fallback' als critic-grade Gegenleser), das hat Anthropic-
+  // Credits gefressen und bei leerem Konto silent in Regex-only-Fallback
+  // gekippt. Strict no-fallback: nimm IMMER zuerst Mistral Small
+  // (classify-primary). Claude-haiku nur wenn Mistral nicht gebunden ist.
+  if (tools.has('mistral-small')) {
+    return tools.getByRole<LlmHandle>('classify-primary');
   }
-  // Falls claude-haiku nicht gebunden ist, fällt der Lookup auf classify-primary
-  // zurück — NullToolContainer wirft, wenn auch das fehlt.
-  return tools.getByRole<LlmHandle>('classify-primary');
+  return tools.getByRole<LlmHandle>('classify-fallback');
 }
 
 /** Like pickKlassifizierungHandle but returns null when no roster is bound
