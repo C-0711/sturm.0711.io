@@ -70,7 +70,10 @@ export class VllmVisionError extends Error {
   }
 }
 
-const MAX_IMAGES_GEMMA4 = 4;
+// vLLM `--limit-mm-per-prompt image=10` (Bombas/CB raised 2026-05-18 von 4
+// auf 10 für Multi-Doc-Bundles wie VAST). Falls deine vLLM-Instanz nur 4
+// erlaubt → caller muss explizit splitten (siehe gemma-vision-ocr-zoning).
+const MAX_IMAGES_GEMMA4 = 10;
 const DEFAULT_MAX_TOKENS = 2500;
 const DEFAULT_TEMPERATURE = 0;
 const DEFAULT_TIMEOUT_MS = 60_000;
