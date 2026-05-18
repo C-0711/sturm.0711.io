@@ -30,7 +30,40 @@ export interface KlassifizierungOutput {
   /** Wenn gesetzt: Meta-Dokument (Transferticket etc.) wurde erkannt,
    *  Downstream-Stages sollten zu No-ops werden. */
   kpi_warning?: 'meta-doc';
+  /** v5_4 Hybrid-Routing: grobe Dokumentklasse (immer gesetzt). */
+  doc_type: 'vast_bundle' | 'einkommensteuererklaerung' | 'einzelbeleg';
+  /** v5_4 Hybrid-Routing: Veranlagungszeitraum aus OCR (optional). */
+  steuerjahr?: number;
   ms: number;
+}
+
+/**
+ * v5_4 Hybrid-Routing: bestimmt doc_type rein heuristisch aus OCR-Text.
+ * Keine LLM-Calls, keine zusätzlichen Allokationen.
+ */
+function detectDocType(text: string): KlassifizierungOutput['doc_type'] {
+  const hasTransferticket = /Transferticket:\s*Steuer-Abruf/i.test(text);
+  const hasHauptvordruck = /Hauptvordruck\s+ESt\s*1\s*A|Einkommensteuererklärung\s+\d{4}/i.test(text);
+  return hasTransferticket
+    ? 'vast_bundle'
+    : hasHauptvordruck
+      ? 'einkommensteuererklaerung'
+      : 'einzelbeleg';
+}
+
+/**
+ * v5_4 Hybrid-Routing: extrahiert Veranlagungszeitraum (Jahr) aus OCR.
+ * Bevorzugt explizite Marker ("Veranlagungszeitraum 2024"), fällt sonst
+ * auf die erste 20XX-Zahl im Text zurück. Range-Check 2010–2099.
+ */
+function detectSteuerjahr(text: string): number | undefined {
+  const yrMatch =
+    text.match(/(?:Veranlagungszeitraum|Steuerjahr|VZ|Erklärung|ESt)\s*[:.\s]*(\d{4})/i) ||
+    text.match(/\b(20[0-9]{2})\b/);
+  if (!yrMatch) return undefined;
+  const y = Number(yrMatch[1]);
+  if (y >= 2010 && y <= 2099) return y;
+  return undefined;
 }
 
 export interface KlassifizierungConfig {
@@ -242,6 +275,11 @@ export const klassifizierungStage = defineStage<
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
 
+    // v5_4 Hybrid-Routing: doc_type IMMER, steuerjahr falls extrahierbar.
+    // Reine Regex-Heuristik, additive Erweiterung — bestehende Logik unverändert.
+    const doc_type = detectDocType(input.text);
+    const steuerjahr = detectSteuerjahr(input.text);
+
     // ─── I1.4 Meta-Dokument-Heuristik ──────────────────────────────────────
     // ELSTER produziert eine Reihe von Meta-Dokumenten (Transferticket,
     // Steuer-Abruf-Quittung, Empfangsbestätigung), die für die Extraktion
@@ -283,6 +321,8 @@ export const klassifizierungStage = defineStage<
         llm_hits: [],
         used_llm: false,
         kpi_warning: 'meta-doc',
+        doc_type,
+        steuerjahr,
         ms: Date.now() - t0,
       };
     }
@@ -307,6 +347,8 @@ export const klassifizierungStage = defineStage<
         regex_hits: {},
         llm_hits: [],
         used_llm: false,
+        doc_type,
+        steuerjahr,
         ms: Date.now() - t0,
       };
     }
@@ -371,6 +413,8 @@ export const klassifizierungStage = defineStage<
       regex_hits: regexHits,
       llm_hits: llmNames,
       used_llm: usedLlm,
+      doc_type,
+      steuerjahr,
       ms: Date.now() - t0,
     };
   },
