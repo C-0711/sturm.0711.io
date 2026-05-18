@@ -302,8 +302,30 @@ export async function aggregateCase(
       };
       continue;
     }
-    // Mehrere Kandidaten: nach Trust + Source-Count ranken
+    // Mehrere Kandidaten: Jahr-Match → Trust → Source-Count.
+    // Jahr-Match ist PRIMÄR weil bei Konflikten (z.B. Bruttoarbeitslohn von
+    // 2023-ELSTER-Form + 2024-LStB) der jahresaktuelle Wert gewinnen muss.
+    const caseJahr = inst.veranlagungsjahr ?? null;
+    const docYearByName = new Map<string, number | null>();
+    for (const d of inst.documents ?? []) {
+      const y = (d.indikation?.steuerjahr ?? null);
+      if (d.filename) docYearByName.set(d.filename, y);
+    }
+    function yearScore(c: { sources: Array<{ filename: string }> }): number {
+      if (!caseJahr) return 0; // kein case-jahr → kein bias
+      for (const s of c.sources) {
+        const y = docYearByName.get(s.filename);
+        if (y === caseJahr) return 2; // exakter Match
+      }
+      // Penalty wenn ALLE sources ein anderes konkretes Jahr haben
+      const allYears = c.sources.map((s) => docYearByName.get(s.filename)).filter((y) => typeof y === 'number');
+      if (allYears.length > 0 && !allYears.includes(caseJahr)) return -1;
+      return 0;
+    }
     candidates.sort((a, b) => {
+      const ya = yearScore(a);
+      const yb = yearScore(b);
+      if (ya !== yb) return yb - ya;
       const ta = trustOf(String(a.raw.origin ?? 'unknown'));
       const tb = trustOf(String(b.raw.origin ?? 'unknown'));
       if (ta !== tb) return tb - ta;
