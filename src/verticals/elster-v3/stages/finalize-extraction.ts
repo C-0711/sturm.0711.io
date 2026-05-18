@@ -23,6 +23,7 @@ import { loadCatalog, requiredFieldsFor } from '../../../lib/elster-catalog.ts';
 import { computeFingerprint, type FingerprintComponents } from '../../../lib/fingerprint.ts';
 
 import type { AcceptedField, RejectedField } from './llm-disambig.ts';
+import type { Phase3AnlageResult } from './phase3-llm-fill.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = resolve(HERE, '../data');
@@ -60,8 +61,9 @@ export interface PflichtCompletenessReport {
 }
 
 export interface FinalizeExtractionInput {
-  accepted: AcceptedField[];
-  rejected: RejectedField[];
+  /** Legacy-Pfad: Output von llm-disambig. Optional seit v5_4 (Multi-Source-Routing). */
+  accepted?: AcceptedField[];
+  rejected?: RejectedField[];
   disambig_errors?: Array<{ belegIdx: number; chunkIdx: number; label: string; error: string }>;
   /** Optional: Anlagen-Whitelist aus Klassifizierung — treibt Pflicht-Check. */
   anlagen?: string[];
@@ -79,6 +81,15 @@ export interface FinalizeExtractionInput {
     max_tokens?: number;
     schema_sha256?: string;
   };
+  // ── Multi-Source-Inputs (v5_4) ──────────────────────────────────────────
+  // Pro Run ist genau einer der drei Pfade befüllt — die anderen werden
+  // upstream via `skipWhen` übersprungen und liefern `undefined`.
+  /** v5_4 Pfad A: VaSt-Bundle Lohnsteuerbescheid-Mapper (flach eCode → Wert). */
+  ecodes_lstb?: Record<string, string | number>;
+  /** v5_4 Pfad B: ESE-Mapper (Einkommensteuererklärung, flach eCode → Wert). */
+  ecodes_ese?: Record<string, string | number>;
+  /** v5_4 Pfad C: Einzelbeleg via phase3-llm-fill (per-Anlage-Shape). */
+  ecodes_einzel?: Record<string, Phase3AnlageResult>;
 }
 
 export interface FinalizeExtractionConfig {
@@ -159,12 +170,41 @@ export const finalizeExtractionStage = defineStage<
     const t0 = Date.now();
     const dataDir = ctx.config?.dataDir ?? DEFAULT_DATA_DIR;
 
+    // ── 0. Multi-Source-Auflösung (v5_4) ──────────────────────────────────
+    // Priorität:
+    //   1. `input.accepted` (klassischer Pfad, llm-disambig) — wenn nicht leer
+    //   2. `ecodes_lstb` oder `ecodes_ese` (Direct-Mapper aus v5_4 Pfaden A/B)
+    //   3. `ecodes_einzel` (per-Anlage Phase3 LLM Fill, v5_4 Pfad C)
+    //   4. fallback: leer → canonical_layer mit codes={}
+    // Pro Run ist normalerweise nur EINE Quelle befüllt (andere via skipWhen
+    // übersprungen). Wenn doch mehrere kommen, additiv mergen.
+    const acceptedFromInput = input.accepted ?? [];
+    const acceptedFromMultiSource: AcceptedField[] = [];
+    if (acceptedFromInput.length === 0) {
+      if (input.ecodes_lstb && Object.keys(input.ecodes_lstb).length > 0) {
+        acceptedFromMultiSource.push(
+          ...convertMapToAccepted(input.ecodes_lstb, 'lohnsteuerbescheid-mapper'),
+        );
+      }
+      if (input.ecodes_ese && Object.keys(input.ecodes_ese).length > 0) {
+        acceptedFromMultiSource.push(
+          ...convertMapToAccepted(input.ecodes_ese, 'einkommensteuererklaerung-mapper'),
+        );
+      }
+      if (input.ecodes_einzel && Object.keys(input.ecodes_einzel).length > 0) {
+        acceptedFromMultiSource.push(...convertEinzelToAccepted(input.ecodes_einzel));
+      }
+    }
+    const effectiveAccepted: AcceptedField[] =
+      acceptedFromInput.length > 0 ? acceptedFromInput : acceptedFromMultiSource;
+    const effectiveRejected: RejectedField[] = input.rejected ?? [];
+
     // ── 1. canonical_layer: flach (codes) + nested per Anlage ─────────────
     const codes: Record<string, string> = {};
     const nested: Record<string, Record<string, string>> = {};
     const provenance: CanonicalLayer['provenance'] = [];
 
-    for (const a of input.accepted) {
+    for (const a of effectiveAccepted) {
       // Konflikt-Auflösung: wenn derselbe eCode mehrfach kommt, höhere
       // confidence gewinnt (passiert z.B. wenn IDNr in mehreren Belegen
       // referenziert ist — wir wollen die mit höchster Konfidenz).
@@ -199,7 +239,7 @@ export const finalizeExtractionStage = defineStage<
     const pflicht_report: PflichtCompletenessReport[] = [];
     if (input.anlagen && input.anlagen.length > 0) {
       const catalog = await loadCatalog(join(dataDir, 'atoms.json'));
-      const acceptedSet = new Set(input.accepted.map((a) => a.ecode));
+      const acceptedSet = new Set(effectiveAccepted.map((a) => a.ecode));
       for (const anlage of input.anlagen) {
         const pflichtAtoms = requiredFieldsFor(catalog, anlage);
         if (pflichtAtoms.length === 0) continue;
@@ -292,16 +332,16 @@ export const finalizeExtractionStage = defineStage<
     const fp = computeFingerprint(components);
 
     // ── 4. Stats + emit ───────────────────────────────────────────────────
-    const cascadeDirect = input.accepted.filter((a) => a.method === 'cascade-direct').length;
-    const llmDisambig = input.accepted.filter((a) => a.method === 'llm-disambig').length;
+    const cascadeDirect = effectiveAccepted.filter((a) => a.method === 'cascade-direct').length;
+    const llmDisambig = effectiveAccepted.filter((a) => a.method === 'llm-disambig').length;
     const pflichtComplete = pflicht_report.filter((p) => p.missing_ecodes.length === 0).length;
     const pflichtMissing = pflicht_report.reduce((s, p) => s + p.missing_ecodes.length, 0);
 
     const stats = {
-      accepted: input.accepted.length,
+      accepted: effectiveAccepted.length,
       cascadeDirect,
       llmDisambig,
-      rejected: input.rejected.length,
+      rejected: effectiveRejected.length,
       errors: input.disambig_errors?.length ?? 0,
       pflichtComplete,
       pflichtMissing,
@@ -325,3 +365,82 @@ export const finalizeExtractionStage = defineStage<
 
 // Helper used for type assertions; avoids "unused" warnings.
 void createHash;
+
+// ─── Multi-Source Helper (v5_4) ──────────────────────────────────────────
+
+type DirectMapperSource = 'lohnsteuerbescheid-mapper' | 'einkommensteuererklaerung-mapper';
+
+/**
+ * Konvertiert einen flachen eCode → Wert Mapper-Output in AcceptedField[]
+ * für die Direct-Mapper-Pfade (v5_4 Pfad A: LStB, Pfad B: ESE).
+ *
+ * Mapper sind deterministische 1:1-Mappings aus strukturierten Quellen —
+ * confidence=1.0, cosine=1.0, kein Chunk-Index.
+ */
+function convertMapToAccepted(
+  map: Record<string, string | number>,
+  source: DirectMapperSource,
+): AcceptedField[] {
+  const out: AcceptedField[] = [];
+  for (const [ecode, rawValue] of Object.entries(map)) {
+    if (rawValue === null || rawValue === undefined) continue;
+    const valStr = String(rawValue);
+    out.push({
+      ecode,
+      drucktext: '',          // Direct-Mapper kennt drucktext nicht — wird optional in canonical_layer.nested per anlage='' bucketed
+      anlage: '',
+      vordruckzeile: '',
+      datentyp: '',
+      pflicht: false,
+      rawValue: valStr,
+      normalizedValue: valStr,
+      method: 'cascade-direct',
+      cosine: 1.0,
+      confidence: 1.0,
+      source: {
+        belegIdx: 0,
+        chunkIdx: 0,
+        lineIndex: 0,
+        label: source,
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * Walk through phase3-llm-fill's `per_anlage` shape (v5_4 Pfad C) und
+ * flattend zu AcceptedField[]. Phase3-LLM-Hits sind FSM-gegroundete vLLM
+ * Picks → method='llm-disambig', confidence=1.0 (FSM-strict, kein Drift).
+ */
+function convertEinzelToAccepted(
+  einzel: Record<string, Phase3AnlageResult>,
+): AcceptedField[] {
+  const out: AcceptedField[] = [];
+  for (const [anlage, result] of Object.entries(einzel)) {
+    if (!result?.llm_hits) continue;
+    for (const [ecode, hit] of Object.entries(result.llm_hits)) {
+      const valStr = String(hit.value);
+      out.push({
+        ecode,
+        drucktext: hit.drucktext ?? '',
+        anlage: hit.anlage ?? anlage,
+        vordruckzeile: hit.vordruckzeile ?? '',
+        datentyp: hit.datentyp ?? '',
+        pflicht: false,
+        rawValue: valStr,
+        normalizedValue: valStr,
+        method: 'llm-disambig',
+        cosine: 1.0,
+        confidence: 1.0,
+        source: {
+          belegIdx: 0,
+          chunkIdx: hit.page ?? 0,
+          lineIndex: 0,
+          label: 'phase3-llm-fill',
+        },
+      });
+    }
+  }
+  return out;
+}
