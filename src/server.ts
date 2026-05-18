@@ -904,29 +904,23 @@ app.get(
         (agg as { bmf?: unknown }).bmf = bmfResult;
       } catch (e) {
         const err = e as Error & { cause?: unknown };
-        const cause = err.cause instanceof Error
-          ? { message: err.cause.message, code: (err.cause as { code?: string }).code, stack: err.cause.stack?.split('\n').slice(0, 6) }
-          : err.cause;
-        // Persist to disk for forensic debugging — console.error inside the
-        // express handler doesn't reach docker logs in this setup.
-        try {
-          const dump = {
-            at: new Date().toISOString(),
-            caseId,
-            errorMessage: err.message,
-            errorStack: err.stack?.split('\n').slice(0, 10),
-            cause,
-          };
-          await fs.promises.writeFile(
-            `/tmp/sturm-aggregate-bmf-error-${Date.now()}.json`,
-            JSON.stringify(dump, null, 2),
-          );
-        } catch {}
+        const causeErr = err.cause instanceof Error ? err.cause : null;
+        const cause = causeErr
+          ? {
+              message: causeErr.message,
+              name: causeErr.name,
+              code: (causeErr as { code?: string }).code,
+              stack: causeErr.stack?.split('\n').slice(0, 8).join(' | '),
+            }
+          : (err.cause ?? null);
         (agg as { bmf?: unknown }).bmf = {
           erfolg: false,
           reason: 'mcp-error',
           message: err.message,
-          cause: cause ?? null,
+          errorName: err.name,
+          stack: err.stack?.split('\n').slice(0, 8).join(' | '),
+          cause,
+          debug: 'aggregate-handler-catch-v3',
         };
       }
     }
