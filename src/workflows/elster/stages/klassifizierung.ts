@@ -324,11 +324,36 @@ export const klassifizierungStage = defineStage<
       /\bquittung\s+über\s+den\s+abruf\b/i,
       /\babruf[- ]?bescheinigung\b/i,
     ];
+    // ECHTE Belegtypen — wenn einer matched, ist es NIE ein Meta-Doc auch
+    // wenn z.B. "Transferticket" im Footer steht. Behebt false-positives
+    // wo Hildburg-Lohnsteuerbescheinigungen ein Transfer-Ticket Nummer im
+    // Footer haben.
+    const REAL_BELEG_PATTERNS = [
+      /\bLohnsteuer[- ]?bescheinigung\b/i,
+      /\bKapitalertrag[s]?(steuer)?[- ]?bescheinigung\b/i,
+      /\bSteuer[- ]?bescheinigung\b/i,
+      /\bZins[- ]?bescheinigung\b/i,
+      /\bRenten[- ]?bezugs[- ]?mitteilung\b/i,
+      /\bBeitragsbescheinigung\b/i,
+      /\bSpenden[- ]?(quittung|bescheinigung)\b/i,
+      /\bJahressteuer[- ]?bescheinigung\b/i,
+      /\bBruttoarbeitslohn\b/i,
+      /\bKapitalerträge\b/i,
+    ];
+    const realBelegHits = REAL_BELEG_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
     const metaHits = META_DOC_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
-    // Zusätzlich: sehr kurze Dokumente OHNE typische Wertspalten (€-Zeichen,
-    // Beträge mit Komma+Cent) sind selten Belege.
-    const hasCurrency = /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) || /\d+,\d{2}\s*€/.test(input.text);
-    const isMetaDoc = metaHits.length > 0 && (!hasCurrency || input.text.length < 1200);
+    // Currency-Heuristik: erweitert um Formate ohne € (z.B. "63.559,90" oder
+    // "63 559,90 EUR" wie sie Mistral OCR oft liefert).
+    const hasCurrency =
+      /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) ||
+      /\d+,\d{2}\s*€/.test(input.text) ||
+      /\d{1,3}(?:\.\d{3})*,\d{2}\s*EUR/i.test(input.text) ||
+      /\b\d{1,3}(?:[.\s]\d{3})+,\d{2}\b/.test(input.text);
+    // Strict: nur skippen wenn Meta-Pattern matched UND KEIN echter Beleg-
+    // pattern matched UND (kein Geld-Format ODER sehr kurzer Text).
+    const isMetaDoc = metaHits.length > 0
+      && realBelegHits.length === 0
+      && (!hasCurrency || input.text.length < 1200);
     if (isMetaDoc) {
       ctx.emit('meta_doc_detected', { patterns: metaHits, hasCurrency, textLen: input.text.length });
       ctx.logger.info('Meta-Dokument erkannt — keine Beleg-Extraktion', {
