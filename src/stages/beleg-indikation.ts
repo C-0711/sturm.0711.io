@@ -14,10 +14,14 @@
  * Rest der Pipeline läuft unverändert weiter — Indikation ist nicht
  * blockierend für die Extraktion).
  */
-import { readFile } from 'node:fs/promises';
-import { extname } from 'node:path';
+import { readFile, mkdtemp, rm, readdir } from 'node:fs/promises';
+import { extname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { defineStage } from '../core/stage.ts';
-import { renderPdfToPng } from '../lib/pdf-render.ts';
+
+const execFileP = promisify(execFile);
 
 export interface BelegIndikationInput {
   filePath: string;
@@ -86,9 +90,24 @@ async function firstPageImage(filePath: string, filename: string, dpi: number): 
   if (ext !== '.pdf') {
     throw new Error(`beleg-indikation: unsupported extension ${ext}`);
   }
-  const rendered = await renderPdfToPng(filePath, { dpi, maxPages: 1 });
-  if (rendered.pngPaths.length === 0) throw new Error('beleg-indikation: no pages rendered');
-  return readFile(rendered.pngPaths[0]);
+  // Nur Seite 1 rendern (-f 1 -l 1) — unabhängig von der Gesamtseiten-
+  // anzahl. renderPdfToPng würde alle Seiten rendern und bei großen PDFs
+  // (Einkommensteuererklärung 30+ Seiten) am maxPages-Cap werfen.
+  const dir = await mkdtemp(join(tmpdir(), 'sturm-indikation-'));
+  try {
+    await execFileP('pdftoppm', [
+      '-r', String(dpi),
+      '-f', '1', '-l', '1',
+      '-png',
+      filePath,
+      join(dir, 'p'),
+    ]);
+    const entries = (await readdir(dir)).filter((f) => f.endsWith('.png')).sort();
+    if (entries.length === 0) throw new Error('beleg-indikation: pdftoppm produced no PNG');
+    return readFile(join(dir, entries[0]));
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 export const belegIndikationStage = defineStage<
