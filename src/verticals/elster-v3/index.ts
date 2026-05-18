@@ -44,6 +44,10 @@ import { formatRegexValidateStage } from './stages/format-regex-validate.ts';
 import { confidenceGateStage } from './stages/confidence-gate.ts';
 import { llmDisambigStage } from './stages/llm-disambig.ts';
 import { finalizeExtractionStage } from './stages/finalize-extraction.ts';
+// elster-v6: VaSt-Belege (LStB) + komplette Einkommensteuererklärung als
+// deterministische Constraint-Propagation
+import { lohnsteuerbescheidMapperStage } from './stages/lohnsteuerbescheid-mapper-stage.ts';
+import { einkommensteuererklaerungMapperStage } from './stages/einkommensteuererklaerung-mapper-stage.ts';
 
 export const ELSTER_V3_VERTICAL_META = {
   standardId: 'elster-v3',
@@ -96,6 +100,14 @@ export function registerElsterV3Stages(): void {
   registerStage(confidenceGateStage); // legacy, bleibt für ältere Workflows
   registerStage(llmDisambigStage);
   registerStage(finalizeExtractionStage);
+  // elster-v6: VaSt-Beleg Mapping (Lohnsteuerbescheinigung + Religionszugehörigkeit
+  // + Mitteilung freigestellte Kapitalerträge) — deterministisch via Levenshtein-Ratio
+  // gegen atoms.json + Zeile-Nr-Fast-Path. Person-A/B-Disambig per IdNr.
+  registerStage(lohnsteuerbescheidMapperStage);
+  // elster-v6: Komplette Einkommensteuererklärung (5-Welle Constraint-Propagation:
+  // Ratio Math + Spatial Zoning + Label-Adjacency + embeddinggemma-Cascade +
+  // Lane 1 §32a-Verifier). Backend: tools/elster-inverse-solver/inverse_solver.py.
+  registerStage(einkommensteuererklaerungMapperStage);
 }
 
 /**
