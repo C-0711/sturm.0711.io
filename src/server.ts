@@ -912,6 +912,8 @@ app.get(
       }
     }
 
+    // route-end marker to verify which handler version is running
+    (agg as { _routeVersion?: string })._routeVersion = 'server.ts:aggregate:CATCH_V4';
     res.json(agg);
   },
 );
