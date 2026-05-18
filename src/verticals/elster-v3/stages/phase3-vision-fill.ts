@@ -41,6 +41,7 @@ import {
   splitOcrByPages,
   detectAnlagenPerPage,
   pagesForAnlage,
+  detectZeilenOnPage,
 } from '../../../lib/page-anlage-detect.ts';
 import {
   phase3LlmFillStage,
@@ -273,14 +274,20 @@ export const phase3VisionFillStage = defineStage<
       renderMs,
     });
 
-    // ── 2. Per-anlage focused vision calls (v6 spike pattern) ──────────
-    // The v6 spike that hit 42/44 on Stricker used 2 hand-curated vision
-    // calls (~22 fields each) targeting specific pages. We replicate that
-    // by detecting which pages contain which anlage and making one focused
-    // call per anlage: just THAT anlage's missing+suspect fields + just
-    // the pages where it appears. Clean regex hits are skipped (phase5-
-    // merge keeps them anyway); suspicious phase1 hits are re-asked so
-    // vision can correct WISO placeholders.
+    // ── 2. Page-chunk vision calls (v6 spike shape) ────────────────────
+    // The v6 spike that hit 42/44 on Stricker used 2 vision calls, each
+    // spanning 3-4 adjacent pages and asking about ALL anlagen visible
+    // on those pages (~22 fields per call). We replicate that here:
+    //   1. Split OCR into pages, detect which anlagen are on each page.
+    //   2. Group pages into chunks of up to `pagesPerCall` (vLLM limit 4).
+    //   3. Per chunk: collect all eCodes from anlagen detected on the
+    //      chunk's pages, intersected with phase1's missing+suspect set,
+    //      AND filtered to fields whose vordruckzeile actually appears
+    //      in the chunk's OCR text (strict — no fallback).
+    //   4. One vision call per chunk with that focused field map.
+    // Clean regex hits are skipped (phase5-merge keeps them anyway);
+    // suspicious phase1 hits are re-asked so vision can correct WISO
+    // placeholders.
     const fullOcrText = typeof input.text === 'string' ? input.text : '';
     const ocrPages = splitOcrByPages(fullOcrText);
     const pageAnlagen = detectAnlagenPerPage(ocrPages);
@@ -291,6 +298,30 @@ export const phase3VisionFillStage = defineStage<
         Object.entries(pageAnlagen).map(([a, ps]) => [a, ps.length]),
       ),
     });
+
+    // Build a fast lookup: pageIndex → Set<anlage> visible on that page.
+    const anlagenPerPageIdx: Set<string>[] = pngPaths.map(() => new Set<string>());
+    for (const [anlage, pages] of Object.entries(pageAnlagen)) {
+      for (const p of pages) {
+        if (p >= 0 && p < anlagenPerPageIdx.length) {
+          anlagenPerPageIdx[p].add(anlage);
+        }
+      }
+    }
+
+    // Build phase1 ask-set per anlage (missing + suspect regex hits).
+    const askSetByAnlage = new Map<string, Set<string>>();
+    for (const anlage of anlagen) {
+      const phase1Anl = phase1[anlage];
+      if (!phase1Anl) continue;
+      const askSet = new Set<string>(phase1Anl.missing_ecodes ?? []);
+      for (const [eCode, hit] of Object.entries(phase1Anl.regex_hits ?? {})) {
+        if (hit.repeat_suspicious === true || hit.zeile_anchored === false) {
+          askSet.add(eCode);
+        }
+      }
+      askSetByAnlage.set(anlage, askSet);
+    }
 
     const instructionsPrefix = [
       'Du extrahierst ELSTER-Felder aus PDF-Seiten einer Steuererklaerung.',
@@ -307,9 +338,24 @@ export const phase3VisionFillStage = defineStage<
       "  Person A's Anlage.",
     ].join('\n');
 
+    // Sequential page chunks of size `pagesPerCall` (≤ vLLM image limit).
+    interface PageChunk { startPage: number; pageIdxs: number[]; }
+    const chunks: PageChunk[] = [];
+    for (let i = 0; i < pngPaths.length; i += pagesPerCall) {
+      chunks.push({
+        startPage: i,
+        pageIdxs: Array.from(
+          { length: Math.min(pagesPerCall, pngPaths.length - i) },
+          (_, k) => i + k,
+        ),
+      });
+    }
+    ctx.emit('vision_chunks', { chunkCount: chunks.length, pagesPerCall });
+
     interface BatchOutcome {
       idx: number;
-      anlage: string;
+      label: string;            // human-readable chunk id, e.g. "pages-1-4"
+      anlagen: string[];        // anlagen targeted in this chunk
       parsed: Record<string, string | null>;
       error: Error | null;
       wallclockMs: number;
@@ -319,68 +365,98 @@ export const phase3VisionFillStage = defineStage<
     const outcomes: BatchOutcome[] = [];
     let totalAsked = 0;
     let totalAnswered = 0;
-    let anyAnlageHadFields = false;
+    let anyChunkHadFields = false;
 
-    for (const anlage of anlagen) {
-      const phase1Anl = phase1[anlage];
-      const fullList = felderMap[anlage];
-      if (!phase1Anl || !fullList) continue;
-
-      // Build ask-set: missing eCodes + suspect regex hits.
-      const askSet = new Set<string>(phase1Anl.missing_ecodes ?? []);
-      for (const [eCode, hit] of Object.entries(phase1Anl.regex_hits ?? {})) {
-        if (hit.repeat_suspicious === true || hit.zeile_anchored === false) {
-          askSet.add(eCode);
-        }
-      }
-      const focusedFelder = fullList.felder.filter((f) => askSet.has(f.eCode));
-      if (focusedFelder.length === 0) continue;
-      anyAnlageHadFields = true;
-
-      // Pages: only those detected as containing this anlage; fall back
-      // to all pages if anlage wasn't detected (rare — usually a marker
-      // typo or anlage names that don't match our regex set).
-      const pageIdxs = pagesForAnlage(anlage, pageAnlagen, pngPaths.length, 'all-pages');
-      const cappedPages = pageIdxs.slice(0, pagesPerCall);
-      if (cappedPages.length === 0) continue;
-      const anlagePngs = cappedPages.map((i) => pngPaths[i]);
-      const anlageOcr = cappedPages
+    for (const chunk of chunks) {
+      const chunkLabel = `pages-${chunk.pageIdxs[0] + 1}-${chunk.pageIdxs[chunk.pageIdxs.length - 1] + 1}`;
+      const chunkPngs = chunk.pageIdxs.map((i) => pngPaths[i]);
+      const chunkOcr = chunk.pageIdxs
         .map((i) => ocrPages[i] ?? '')
         .join('\n--- Seitenwechsel ---\n');
 
-      const anlageMap = buildFieldMap({
-        perAnlage: { [anlage]: { anlage, felder: focusedFelder } },
-        schemaName: `${schemaName}_${anlage}`,
+      // Anlagen visible on any page of this chunk.
+      const chunkAnlagen = new Set<string>();
+      for (const p of chunk.pageIdxs) {
+        for (const a of anlagenPerPageIdx[p]) chunkAnlagen.add(a);
+      }
+      if (chunkAnlagen.size === 0) {
+        ctx.emit('vision_chunk_skipped', {
+          label: chunkLabel, reason: 'no-anlagen-detected-on-pages',
+        });
+        continue;
+      }
+
+      // Spike invariant: only ask about fields whose vordruckzeile is
+      // actually visible on the chunk's pages. Strict — no fallback.
+      const zeilenOnPages = detectZeilenOnPage(chunkOcr);
+
+      // Collect candidate fields across all chunk-visible anlagen:
+      //   field's anlage ∈ chunkAnlagen
+      //   field's eCode ∈ phase1's missing+suspect set for that anlage
+      //   field's vordruckzeile ∈ zeilenOnPages
+      const candidates: Array<{ anlage: string; felder: typeof felderMap[string]['felder'] }> = [];
+      const targetAnlagen: string[] = [];
+      for (const anlage of chunkAnlagen) {
+        const fullList = felderMap[anlage];
+        const askSet = askSetByAnlage.get(anlage);
+        if (!fullList || !askSet || askSet.size === 0) continue;
+        const filtered = fullList.felder.filter((f) => {
+          if (!askSet.has(f.eCode)) return false;
+          const z = String(f.vordruckzeile ?? '').trim();
+          return z.length > 0 && zeilenOnPages.has(z);
+        });
+        if (filtered.length === 0) continue;
+        candidates.push({ anlage, felder: filtered });
+        targetAnlagen.push(anlage);
+      }
+      if (candidates.length === 0) {
+        ctx.emit('vision_chunk_skipped', {
+          label: chunkLabel,
+          reason: 'no-zeile-anchored-fields',
+          chunkAnlagen: [...chunkAnlagen],
+          zeilenOnPagesCount: zeilenOnPages.size,
+        });
+        continue;
+      }
+      anyChunkHadFields = true;
+
+      // Multi-anlage field map: one buildFieldMap call covers all anlagen
+      // in this chunk. Spike used one merged schema per call.
+      const perAnlageForMap: Record<string, { anlage: string; felder: typeof felderMap[string]['felder'] }> = {};
+      for (const c of candidates) perAnlageForMap[c.anlage] = { anlage: c.anlage, felder: c.felder };
+      const chunkMap = buildFieldMap({
+        perAnlage: perAnlageForMap,
+        schemaName: `${schemaName}_${chunkLabel}`,
         maxFields: maxFieldsPerCall,
       });
 
       const focusedInstructions = [
         instructionsPrefix,
         '',
-        `Aufgabe: extrahiere Felder fuer Anlage ${anlage} aus den`,
-        `${cappedPages.length} gezeigten Seite${cappedPages.length === 1 ? '' : 'n'}` +
-        ` (Seite ${cappedPages.map((i) => i + 1).join(', ')}).`,
+        `Aufgabe: extrahiere Felder aus den ${chunk.pageIdxs.length} gezeigten Seiten` +
+        ` (Seite ${chunk.pageIdxs.map((i) => i + 1).join(', ')}).`,
+        `Auf diesen Seiten erkannte Anlagen: ${targetAnlagen.join(', ')}.`,
         '',
         '=== OCR-TEXT der gezeigten Seiten ===',
-        anlageOcr,
+        chunkOcr,
         '=== ENDE OCR-TEXT ===',
         '',
-        anlageMap.mapText,
+        chunkMap.mapText,
         '',
         'Antworte mit JSON-Objekt nach Schema — keine Erklaerung.',
-        `Fuelle so viele der ${anlageMap.fields.length} Felder wie moeglich;` +
+        `Fuelle so viele der ${chunkMap.fields.length} Felder wie moeglich;` +
           ' NULL nur bei echter Unsicherheit.',
       ].join('\n');
 
       const idx = outcomes.length;
-      totalAsked += anlageMap.fields.length;
+      totalAsked += chunkMap.fields.length;
       try {
         const r = await visionCaller({
           vllmUrl,
           model: modelName,
-          imagePaths: anlagePngs,
+          imagePaths: chunkPngs,
           textInstructions: focusedInstructions,
-          jsonSchema: anlageMap.jsonSchema,
+          jsonSchema: chunkMap.jsonSchema,
           maxTokens: maxTokensPerCall,
           timeoutMs: perCallTimeoutMs,
           signal: ctx.signal,
@@ -390,30 +466,33 @@ export const phase3VisionFillStage = defineStage<
           ([, v]) => v !== null && v !== undefined && String(v).trim() !== '',
         ).length;
         totalAnswered += fieldsFound;
-        ctx.emit('vision_anlage_done', {
-          idx, anlage,
-          pages: cappedPages.map((i) => i + 1),
+        ctx.emit('vision_chunk_done', {
+          idx, label: chunkLabel,
+          pages: chunk.pageIdxs.map((i) => i + 1),
+          anlagen: targetAnlagen,
           ms: r.wallclockMs,
           prompt_tokens: r.promptTokens,
           completion_tokens: r.completionTokens,
-          fieldsAsked: anlageMap.fields.length,
+          fieldsAsked: chunkMap.fields.length,
           fieldsFound,
         });
         await ctx.artifacts.write(
-          `phase3_vision_raw/anlage-${anlage}.json`,
+          `phase3_vision_raw/${chunkLabel}.json`,
           {
-            idx, anlage,
-            pages: cappedPages,
+            idx, label: chunkLabel,
+            pages: chunk.pageIdxs,
+            anlagen: targetAnlagen,
             promptTokens: r.promptTokens,
             completionTokens: r.completionTokens,
             wallclockMs: r.wallclockMs,
-            fieldsAskedFor: anlageMap.fields.length,
+            fieldsAskedFor: chunkMap.fields.length,
             fieldsAnswered: fieldsFound,
             parsed,
           },
         );
         outcomes.push({
-          idx, anlage, parsed, error: null,
+          idx, label: chunkLabel, anlagen: targetAnlagen,
+          parsed, error: null,
           wallclockMs: r.wallclockMs,
           promptTokens: r.promptTokens,
           completionTokens: r.completionTokens,
@@ -421,13 +500,13 @@ export const phase3VisionFillStage = defineStage<
       } catch (err) {
         const e = err as Error;
         const stageErr = err instanceof VllmVisionError ? err.stage : undefined;
-        ctx.emit('vision_anlage_failed', {
-          idx, anlage, error: e.message, stage: stageErr,
+        ctx.emit('vision_chunk_failed', {
+          idx, label: chunkLabel, error: e.message, stage: stageErr,
         });
         await ctx.artifacts.write(
-          `phase3_vision_raw/anlage-${anlage}-FAILED.json`,
+          `phase3_vision_raw/${chunkLabel}-FAILED.json`,
           {
-            idx, anlage, pages: cappedPages,
+            idx, label: chunkLabel, pages: chunk.pageIdxs, anlagen: targetAnlagen,
             errorMessage: e.message,
             errorStage: stageErr,
             errorStack: e.stack,
@@ -436,15 +515,16 @@ export const phase3VisionFillStage = defineStage<
           },
         );
         outcomes.push({
-          idx, anlage, parsed: {}, error: e,
+          idx, label: chunkLabel, anlagen: targetAnlagen,
+          parsed: {}, error: e,
           wallclockMs: 0, promptTokens: 0, completionTokens: 0,
         });
       }
     }
-    // Avoid unused-var lints when downstream still references them.
+    // Avoid unused-var lints (legacy helpers still imported).
     void callConcurrency; void pMapBounded; void chunkArray;
 
-    if (!anyAnlageHadFields) {
+    if (!anyChunkHadFields) {
       ctx.emit('phase3_vision_done', { reason: 'no-fields', anlagen: anlagen.length });
       const per_anlage: Record<string, Phase3AnlageResult> = {};
       for (const anlage of anlagen) {
@@ -461,14 +541,14 @@ export const phase3VisionFillStage = defineStage<
     }
 
     ctx.emit('phase3_vision_done', {
-      anlageCalls: outcomes.length,
+      chunkCalls: outcomes.length,
       totalAsked,
       totalAnswered,
     });
 
     const failures = outcomes.filter((o) => o.error !== null);
 
-    // ── 5. Fallback if ALL anlage calls failed ─────────────────────────
+    // ── 5. Fallback if ALL chunk calls failed ──────────────────────────
     if (failures.length === outcomes.length && outcomes.length > 0) {
       if (fallbackToV5) {
         ctx.emit('vision_fallback_triggered', {

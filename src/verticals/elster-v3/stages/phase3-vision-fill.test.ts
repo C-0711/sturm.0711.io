@@ -165,6 +165,28 @@ function pdftoppmAvailable(): boolean {
   }
 }
 
+/** Synthesize a minimal page-Zeile-anchored OCR string from the test's
+ *  own field list. NOT production mock OCR — purpose-built scaffolding so
+ *  the strict page-Zeile filter (which requires every asked field's
+ *  vordruckzeile to appear on the page) can see something concrete.
+ *  Format mirrors what Mistral Small actually emits on real ELSTER pages:
+ *  "Seite 1 von 1", "Anlage N", "5 Bruttoarbeitslohn 0,00", … */
+function ocrForFelder(
+  anlageMap: Record<string, AnlagenFelderListe>,
+): string {
+  const lines: string[] = ['Seite 1 von 1', ''];
+  for (const [anlageKey, liste] of Object.entries(anlageMap)) {
+    lines.push(`Anlage ${anlageKey}`, '');
+    for (const f of liste.felder) {
+      const z = String(f.vordruckzeile ?? '').trim();
+      if (!z) continue;
+      lines.push(`${z} ${f.drucktext} 0,00`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 // Build a vision-caller stub that returns a fixed mapping per call.
 function visionStub(
   responses: Array<Record<string, string | null> | Error>,
@@ -237,7 +259,7 @@ async function test_happyPath_twoAnlagen(): Promise<void> {
     );
 
     const out = await phase3VisionFillStage.run(
-      { filePath: pdfPath, text: '', phase1_per_anlage: phase1, felder_per_anlage: felderMap },
+      { filePath: pdfPath, text: ocrForFelder(felderMap), phase1_per_anlage: phase1, felder_per_anlage: felderMap },
       ctx as never,
     );
 
@@ -290,7 +312,7 @@ async function test_emptyPageResult(): Promise<void> {
     );
 
     const out = await phase3VisionFillStage.run(
-      { filePath: pdfPath, text: '', phase1_per_anlage: phase1, felder_per_anlage: felderMap },
+      { filePath: pdfPath, text: ocrForFelder(felderMap), phase1_per_anlage: phase1, felder_per_anlage: felderMap },
       ctx as never,
     );
     assert('per_anlage.N exists', !!out.per_anlage.N);
@@ -363,7 +385,7 @@ async function test_regexSkip(): Promise<void> {
       tools,
     );
     const out = await phase3VisionFillStage.run(
-      { filePath: pdfPath, text: '', phase1_per_anlage: phase1, felder_per_anlage: felderMap },
+      { filePath: pdfPath, text: ocrForFelder(felderMap), phase1_per_anlage: phase1, felder_per_anlage: felderMap },
       ctx as never,
     );
     assert(
@@ -418,7 +440,7 @@ async function test_wisoRejection(): Promise<void> {
       tools,
     );
     const out = await phase3VisionFillStage.run(
-      { filePath: pdfPath, text: '', phase1_per_anlage: phase1, felder_per_anlage: felderMap },
+      { filePath: pdfPath, text: ocrForFelder(felderMap), phase1_per_anlage: phase1, felder_per_anlage: felderMap },
       ctx as never,
     );
     assert(
@@ -478,7 +500,7 @@ async function test_allBatchesFail_fallback(): Promise<void> {
       tools,
     );
     const out = await phase3VisionFillStage.run(
-      { filePath: pdfPath, text: 'Bruttoarbeitslohn 11.111,11', phase1_per_anlage: phase1, felder_per_anlage: felderMap },
+      { filePath: pdfPath, text: ocrForFelder(felderMap), phase1_per_anlage: phase1, felder_per_anlage: felderMap },
       ctx as never,
     );
     assert(
@@ -531,7 +553,7 @@ async function test_partialFailure_continues(): Promise<void> {
       tools,
     );
     const out = await phase3VisionFillStage.run(
-      { filePath: pdfPath, text: '', phase1_per_anlage: phase1, felder_per_anlage: felderMap },
+      { filePath: pdfPath, text: ocrForFelder(felderMap), phase1_per_anlage: phase1, felder_per_anlage: felderMap },
       ctx as never,
     );
     assert('vision called at least once', calls.length >= 1);
