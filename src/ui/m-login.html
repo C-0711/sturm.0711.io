@@ -13,25 +13,192 @@
       background: var(--color-bg);
       color: var(--color-text-primary);
       line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
-    .wrap { max-width: 360px; margin: 96px auto 0; padding: 0 24px; }
-    h1 { font-size: 22px; font-weight: 600; margin: 0 0 24px; letter-spacing: -0.01em; }
-    .stub {
-      padding: 16px;
-      border: 1px dashed var(--color-border);
-      border-radius: 6px;
+
+    .brand {
+      max-width: 980px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 24px 0;
+      box-sizing: border-box;
       font-size: 13px;
       color: var(--color-text-secondary);
-      background: var(--color-bg-tertiary);
+      letter-spacing: 0.02em;
     }
+
+    .wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 360px;
+    }
+
+    h1 {
+      font-family: var(--font-inter);
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+      color: var(--color-text-primary);
+    }
+    .sub {
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin: 0 0 28px;
+    }
+
+    form { display: flex; flex-direction: column; gap: 14px; }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: var(--font-inter);
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
+    }
+    input[type="email"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: var(--shadow-focus-accent);
+    }
+    input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: var(--font-inter);
+      cursor: pointer;
+      border: 1px solid var(--color-text-primary);
+      background: var(--color-text-primary);
+      color: var(--color-bg);
+      transition: background var(--duration-fast) var(--ease-default);
+    }
+    .btn:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .err {
+      font-size: 13px;
+      color: var(--color-danger);
+      margin: 0;
+      min-height: 18px;
+    }
+
+    .actions { margin-top: 6px; }
   </style>
 </head>
 <body>
+  <div class="brand">Steuerfall</div>
+
   <div class="wrap">
-    <h1>Anmelden</h1>
-    <div class="stub">
-      Diese Seite wird gerade gebaut. Login-Formular folgt.
+    <div class="card">
+      <h1>Anmelden</h1>
+      <p class="sub">Melde dich mit deiner E-Mail und dem Passwort an, das du erhalten hast.</p>
+
+      <form id="loginForm" autocomplete="on" novalidate>
+        <label>
+          E-Mail
+          <input type="email" id="email" name="email" autocomplete="email" required spellcheck="false" />
+        </label>
+        <label>
+          Passwort
+          <input type="password" id="password" name="password" autocomplete="current-password" required />
+        </label>
+
+        <p class="err" id="err" role="alert" aria-live="polite"></p>
+
+        <div class="actions">
+          <button type="submit" class="btn" id="submitBtn">Anmelden</button>
+        </div>
+      </form>
     </div>
   </div>
+
+<script>
+(() => {
+  const form = document.getElementById('loginForm');
+  const emailEl = document.getElementById('email');
+  const passwordEl = document.getElementById('password');
+  const errEl = document.getElementById('err');
+  const btn = document.getElementById('submitBtn');
+
+  function setError(msg) { errEl.textContent = msg || ''; }
+
+  function setBusy(busy) {
+    btn.disabled = busy;
+    emailEl.disabled = busy;
+    passwordEl.disabled = busy;
+    btn.textContent = busy ? 'Lädt…' : 'Anmelden';
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setError('');
+    const email = emailEl.value.trim();
+    const password = passwordEl.value;
+    if (!email || !password) {
+      setError('Bitte E-Mail und Passwort ausfüllen.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/m/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) {
+        window.location.href = '/m/dashboard';
+        return;
+      }
+      if (res.status === 401) {
+        setError('E-Mail oder Passwort falsch.');
+      } else if (res.status === 429) {
+        setError('Zu viele Versuche. Bitte später erneut versuchen.');
+      } else {
+        setError('Anmeldung fehlgeschlagen, später erneut versuchen.');
+      }
+    } catch (_err) {
+      setError('Anmeldung fehlgeschlagen, später erneut versuchen.');
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  // Fokus auf E-Mail, sobald die Seite bereit ist
+  emailEl.focus();
+})();
+</script>
 </body>
 </html>

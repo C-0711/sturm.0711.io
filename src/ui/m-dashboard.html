@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Steuerfall · Meine Fälle</title>
   <link rel="stylesheet" href="/design-system/colors_and_type.css" />
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg" />
   <style>
     body {
       margin: 0;
@@ -13,26 +14,659 @@
       color: var(--color-text-primary);
       line-height: 1.5;
     }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 96px; }
-    h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
-    .sub { color: var(--color-text-secondary); font-size: 14px; margin: 0 0 36px; }
-    .stub {
-      padding: 16px;
-      border: 1px dashed var(--color-border);
-      border-radius: 6px;
+
+    .topbar {
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .topbar-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
       font-size: 13px;
       color: var(--color-text-secondary);
+      letter-spacing: 0.02em;
+    }
+    .user-block {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+    .user-email {
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--color-text-primary);
+    }
+
+    .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 96px; }
+
+    .head-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-family: var(--font-inter);
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+      color: var(--color-text-primary);
+    }
+    .sub { color: var(--color-text-secondary); font-size: 14px; margin: 0; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font-inter);
+      cursor: pointer;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      transition: background var(--duration-fast) var(--ease-default);
+      text-decoration: none;
+    }
+    .btn:hover:not(:disabled) { background: var(--color-bg-hover); }
+    .btn-primary {
+      background: var(--color-text-primary);
+      color: var(--color-bg);
+      border-color: var(--color-text-primary);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--color-accent-hover);
+      border-color: var(--color-accent-hover);
+    }
+    .btn-link {
+      background: transparent;
+      border: none;
+      padding: 4px 6px;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-link:hover { color: var(--color-text-primary); text-decoration: underline; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .case-list { display: flex; flex-direction: column; gap: 10px; }
+    .case-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      padding: 18px 20px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg);
+      cursor: pointer;
+      transition: background var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default);
+      text-decoration: none;
+      color: inherit;
+    }
+    .case-card:hover { background: var(--color-bg-hover); border-color: var(--color-accent); }
+    .case-card:focus-visible {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: var(--shadow-focus-accent);
+    }
+    .case-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .case-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+    .case-display {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .case-meta {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      margin-top: 4px;
+    }
+
+    .case-side {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-end;
+      font-variant-numeric: tabular-nums;
+    }
+    .case-amount {
+      font-size: 15px;
+      font-weight: 600;
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+    }
+    .case-amount.positive { color: var(--color-success); }
+    .case-amount.negative { color: var(--color-danger); }
+    .case-amount.neutral { color: var(--color-text-secondary); font-weight: 500; font-family: var(--font-inter); font-size: 13px; }
+    .case-amount-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-tertiary);
+    }
+    .case-zve {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+    }
+
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 72px 24px;
+      border: 1px dashed var(--color-border);
+      border-radius: 10px;
       background: var(--color-bg-tertiary);
+      text-align: center;
+    }
+    .empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+    .empty-sub {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      margin: 0;
+      max-width: 420px;
+    }
+    .empty .btn-primary {
+      padding: 10px 18px;
+      font-size: 14px;
+    }
+
+    .loading,
+    .load-error {
+      padding: 28px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      border: 1px dashed var(--color-border);
+      border-radius: 8px;
+      background: var(--color-bg-tertiary);
+    }
+    .load-error .btn { margin-top: 12px; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 17, 17, 0.32);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: var(--z-modal);
+    }
+    .modal-backdrop[hidden] { display: none; }
+    .modal {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: var(--shadow-lg);
+    }
+    .modal h2 {
+      font-family: var(--font-inter);
+      font-weight: 600;
+      font-size: 17px;
+      margin: 0 0 18px;
+      color: var(--color-text-primary);
+      letter-spacing: -0.01em;
+    }
+    .modal label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .modal input[type="text"],
+    .modal select {
+      padding: 9px 12px;
+      font-size: 14px;
+      font-family: var(--font-inter);
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+    }
+    .modal input:focus,
+    .modal select:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: var(--shadow-focus-accent);
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .modal-err {
+      font-size: 13px;
+      color: var(--color-danger);
+      margin: 0 0 10px;
+      min-height: 18px;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Meine Fälle</h1>
-    <p class="sub">Übersicht aller Einkommensteuer-Fälle.</p>
-    <div class="stub">
-      Dashboard wird gerade gebaut. Hier erscheint die Liste deiner Fälle mit Status und Erstattungsbetrag.
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Steuerfall</div>
+    <div class="user-block" id="userBlock" hidden>
+      <span class="user-email" id="userEmail"></span>
+      <button class="btn-link" id="logoutBtn" type="button">Abmelden</button>
     </div>
   </div>
+</div>
+
+<div class="wrap">
+
+  <div class="head-row">
+    <div>
+      <h1>Meine Fälle</h1>
+      <p class="sub">Übersicht aller Einkommensteuer-Fälle.</p>
+    </div>
+    <div>
+      <button class="btn btn-primary" id="newCaseBtn" type="button" hidden>Neuer Fall</button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">Lädt…</div>
+
+  <div id="loadError" class="load-error" hidden>
+    <div>Fälle konnten nicht geladen werden.</div>
+    <button class="btn" id="retryBtn" type="button">Erneut versuchen</button>
+  </div>
+
+  <div id="caseList" class="case-list" hidden></div>
+
+  <div id="empty" class="empty" hidden>
+    <div class="empty-title">Noch keine Fälle</div>
+    <p class="empty-sub">Lege deinen ersten Steuerfall an, um Belege hochzuladen und die Abrechnung zu erzeugen.</p>
+    <button class="btn btn-primary" id="emptyNewBtn" type="button">Neuer Fall</button>
+  </div>
+
+</div>
+
+<!-- Modal: Neuer Fall -->
+<div class="modal-backdrop" id="modalBackdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle">Neuer Fall</h2>
+    <form id="newCaseForm" novalidate>
+      <label>
+        Bezeichnung
+        <input type="text" id="displayName" name="displayName" placeholder="z. B. ESt 2023" maxlength="80" required />
+      </label>
+      <label>
+        Veranlagungsjahr
+        <select id="veranlagungsjahr" name="veranlagungsjahr" required></select>
+      </label>
+      <p class="modal-err" id="modalErr" role="alert" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="modalCancel">Abbrechen</button>
+        <button type="submit" class="btn btn-primary" id="modalSubmit">Anlegen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  const els = {
+    userBlock: document.getElementById('userBlock'),
+    userEmail: document.getElementById('userEmail'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    newCaseBtn: document.getElementById('newCaseBtn'),
+    emptyNewBtn: document.getElementById('emptyNewBtn'),
+    loading: document.getElementById('loading'),
+    loadError: document.getElementById('loadError'),
+    retryBtn: document.getElementById('retryBtn'),
+    caseList: document.getElementById('caseList'),
+    empty: document.getElementById('empty'),
+
+    backdrop: document.getElementById('modalBackdrop'),
+    form: document.getElementById('newCaseForm'),
+    displayName: document.getElementById('displayName'),
+    veranlagungsjahr: document.getElementById('veranlagungsjahr'),
+    modalErr: document.getElementById('modalErr'),
+    modalCancel: document.getElementById('modalCancel'),
+    modalSubmit: document.getElementById('modalSubmit'),
+  };
+
+  // ─── Hilfsfunktionen ────────────────────────────────────────────
+  const eurFormatter = new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const zveFormatter = new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
+  function formatErstattung(v) {
+    if (typeof v !== 'number' || !isFinite(v)) return null;
+    const abs = Math.abs(v);
+    const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+    return `${sign}${eurFormatter.format(abs).replace(/^-/, '')}`;
+  }
+
+  function formatZvE(v) {
+    if (typeof v !== 'number' || !isFinite(v)) return null;
+    return `zvE ${zveFormatter.format(Math.round(v))} €`;
+  }
+
+  function formatRelativeTime(iso) {
+    if (!iso) return null;
+    const then = new Date(iso).getTime();
+    if (!isFinite(then)) return null;
+    const diff = Date.now() - then;
+    if (diff < 0) return 'gerade eben';
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return 'gerade eben';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `zuletzt vor ${m} Min`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `zuletzt vor ${h} Std`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `zuletzt vor ${d} Tg`;
+    const w = Math.floor(d / 7);
+    if (w < 5) return `zuletzt vor ${w} Wo`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `zuletzt vor ${mo} Mon`;
+    const y = Math.floor(d / 365);
+    return `zuletzt vor ${y} J`;
+  }
+
+  function belegeLabel(n) {
+    if (typeof n !== 'number' || !isFinite(n)) n = 0;
+    if (n === 0) return 'noch keine Belege';
+    if (n === 1) return '1 Beleg';
+    return `${n} Belege`;
+  }
+
+  // ─── Auth-Check ─────────────────────────────────────────────────
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/m/me', {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (res.status === 401 || res.status === 404) {
+        redirectToLogin();
+        return null;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return data;
+    } catch (_err) {
+      // Netzwerkfehler -> auf Login fallen, aber nur einmal
+      redirectToLogin();
+      return null;
+    }
+  }
+
+  function redirectToLogin() {
+    window.location.href = '/m/login';
+  }
+
+  function setUser(me) {
+    els.userEmail.textContent = me?.email || '';
+    els.userBlock.hidden = false;
+  }
+
+  // ─── Cases laden ───────────────────────────────────────────────
+  async function loadCases() {
+    els.loading.hidden = false;
+    els.loadError.hidden = true;
+    els.caseList.hidden = true;
+    els.empty.hidden = true;
+    els.newCaseBtn.hidden = true;
+    try {
+      const res = await fetch('/api/m/cases', {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const cases = Array.isArray(data?.cases) ? data.cases : [];
+      els.loading.hidden = true;
+      renderCases(cases);
+    } catch (_err) {
+      els.loading.hidden = true;
+      els.loadError.hidden = false;
+    }
+  }
+
+  function renderCases(cases) {
+    if (cases.length === 0) {
+      els.empty.hidden = false;
+      els.newCaseBtn.hidden = true;
+      return;
+    }
+    els.newCaseBtn.hidden = false;
+    els.caseList.innerHTML = '';
+    for (const c of cases) {
+      const card = document.createElement('a');
+      card.className = 'case-card';
+      card.href = `/m/case/${encodeURIComponent(c.caseId)}`;
+
+      const main = document.createElement('div');
+      main.className = 'case-main';
+
+      const title = document.createElement('div');
+      title.className = 'case-title';
+      title.textContent = c.displayName || `ESt ${c.veranlagungsjahr ?? ''}`.trim();
+      main.appendChild(title);
+
+      // Untertitel: Veranlagungsjahr nur, wenn nicht schon im Titel sichtbar
+      if (c.veranlagungsjahr && !String(title.textContent).includes(String(c.veranlagungsjahr))) {
+        const display = document.createElement('div');
+        display.className = 'case-display';
+        display.textContent = `Veranlagungsjahr ${c.veranlagungsjahr}`;
+        main.appendChild(display);
+      }
+
+      const metaParts = [];
+      metaParts.push(belegeLabel(c.documentCount));
+      const rel = formatRelativeTime(c.lastRunAt);
+      if (rel) metaParts.push(rel);
+      const meta = document.createElement('div');
+      meta.className = 'case-meta';
+      meta.textContent = metaParts.join(' · ');
+      main.appendChild(meta);
+
+      card.appendChild(main);
+
+      const side = document.createElement('div');
+      side.className = 'case-side';
+
+      const sum = c.abrechnungSummary;
+      if (sum && typeof sum.erstattung === 'number') {
+        const amount = document.createElement('div');
+        const positive = sum.erstattung > 0;
+        const negative = sum.erstattung < 0;
+        amount.className = 'case-amount ' + (positive ? 'positive' : negative ? 'negative' : 'neutral');
+        const formatted = formatErstattung(sum.erstattung);
+        amount.textContent = formatted ?? '—';
+        side.appendChild(amount);
+
+        const label = document.createElement('div');
+        label.className = 'case-amount-label';
+        label.textContent = positive ? 'Erstattung' : negative ? 'Nachzahlung' : 'kein Saldo';
+        side.appendChild(label);
+
+        if (typeof sum.zvE === 'number') {
+          const zve = document.createElement('div');
+          zve.className = 'case-zve';
+          zve.textContent = formatZvE(sum.zvE) ?? '';
+          side.appendChild(zve);
+        }
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'case-amount neutral';
+        placeholder.textContent = 'noch keine Abrechnung';
+        side.appendChild(placeholder);
+      }
+
+      card.appendChild(side);
+      els.caseList.appendChild(card);
+    }
+    els.caseList.hidden = false;
+  }
+
+  // ─── Modal: Neuer Fall ─────────────────────────────────────────
+  function fillYearOptions() {
+    const currentYear = new Date().getFullYear();
+    const defaultYear = currentYear - 1;
+    const years = [];
+    for (let y = 2024; y >= 2020; y--) years.push(y);
+    els.veranlagungsjahr.innerHTML = '';
+    for (const y of years) {
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      if (y === defaultYear) opt.selected = true;
+      els.veranlagungsjahr.appendChild(opt);
+    }
+    // Falls defaultYear nicht in der Liste (z. B. 2025), wähle den ersten Eintrag
+    if (!els.veranlagungsjahr.value) els.veranlagungsjahr.selectedIndex = 0;
+  }
+
+  function openModal() {
+    els.modalErr.textContent = '';
+    const currentYear = new Date().getFullYear();
+    const defaultYear = String(currentYear - 1);
+    els.veranlagungsjahr.value = els.veranlagungsjahr.querySelector(`option[value="${defaultYear}"]`)
+      ? defaultYear
+      : els.veranlagungsjahr.options[0].value;
+    els.displayName.value = `ESt ${els.veranlagungsjahr.value}`;
+    els.backdrop.hidden = false;
+    setTimeout(() => els.displayName.focus(), 0);
+  }
+
+  function closeModal() {
+    els.backdrop.hidden = true;
+    els.modalErr.textContent = '';
+  }
+
+  els.veranlagungsjahr?.addEventListener('change', () => {
+    // Nur Default-Bezeichnung mitziehen, wenn sie noch dem Default-Schema entspricht
+    if (/^ESt \d{4}$/.test(els.displayName.value)) {
+      els.displayName.value = `ESt ${els.veranlagungsjahr.value}`;
+    }
+  });
+
+  els.form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    els.modalErr.textContent = '';
+    const displayName = els.displayName.value.trim();
+    const veranlagungsjahr = Number(els.veranlagungsjahr.value);
+    if (!displayName || !veranlagungsjahr) {
+      els.modalErr.textContent = 'Bitte Bezeichnung und Jahr angeben.';
+      return;
+    }
+    els.modalSubmit.disabled = true;
+    els.modalCancel.disabled = true;
+    els.modalSubmit.textContent = 'Lädt…';
+    try {
+      const res = await fetch('/api/m/cases', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName, veranlagungsjahr }),
+      });
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data?.caseId) throw new Error('no_case_id');
+      window.location.href = `/m/case/${encodeURIComponent(data.caseId)}`;
+    } catch (_err) {
+      els.modalErr.textContent = 'Fall konnte nicht angelegt werden. Bitte später erneut versuchen.';
+      els.modalSubmit.disabled = false;
+      els.modalCancel.disabled = false;
+      els.modalSubmit.textContent = 'Anlegen';
+    }
+  });
+
+  els.modalCancel.addEventListener('click', closeModal);
+  els.backdrop.addEventListener('click', (e) => {
+    if (e.target === els.backdrop) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !els.backdrop.hidden) closeModal();
+  });
+
+  els.newCaseBtn.addEventListener('click', openModal);
+  els.emptyNewBtn.addEventListener('click', openModal);
+
+  // ─── Logout ─────────────────────────────────────────────────────
+  els.logoutBtn.addEventListener('click', async () => {
+    els.logoutBtn.disabled = true;
+    try {
+      await fetch('/api/m/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+    } catch (_err) {
+      // Egal — wir leiten trotzdem auf Login um
+    } finally {
+      redirectToLogin();
+    }
+  });
+
+  els.retryBtn.addEventListener('click', () => { loadCases(); });
+
+  // ─── Boot ───────────────────────────────────────────────────────
+  (async () => {
+    fillYearOptions();
+    const me = await checkAuth();
+    if (!me) return;
+    setUser(me);
+    await loadCases();
+  })();
+})();
+</script>
 </body>
 </html>
