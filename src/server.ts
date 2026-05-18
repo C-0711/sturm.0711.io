@@ -904,11 +904,24 @@ app.get(
         (agg as { bmf?: unknown }).bmf = bmfResult;
       } catch (e) {
         const err = e as Error & { cause?: unknown };
-        const cause = err.cause instanceof Error ? err.cause.message : err.cause;
-        // Log the full chain so we can diagnose "fetch failed" without
-        // having to instrument client-side. Node's fetch wraps the real
-        // socket/DNS error in .cause; .message alone is just "fetch failed".
-        console.error('[aggregate] BMF re-compute failed:', err.message, 'cause:', cause, 'stack:', err.stack?.split('\n').slice(0, 4).join(' | '));
+        const cause = err.cause instanceof Error
+          ? { message: err.cause.message, code: (err.cause as { code?: string }).code, stack: err.cause.stack?.split('\n').slice(0, 6) }
+          : err.cause;
+        // Persist to disk for forensic debugging — console.error inside the
+        // express handler doesn't reach docker logs in this setup.
+        try {
+          const dump = {
+            at: new Date().toISOString(),
+            caseId,
+            errorMessage: err.message,
+            errorStack: err.stack?.split('\n').slice(0, 10),
+            cause,
+          };
+          await fs.promises.writeFile(
+            `/tmp/sturm-aggregate-bmf-error-${Date.now()}.json`,
+            JSON.stringify(dump, null, 2),
+          );
+        } catch {}
         (agg as { bmf?: unknown }).bmf = {
           erfolg: false,
           reason: 'mcp-error',
