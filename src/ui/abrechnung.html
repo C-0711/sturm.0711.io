@@ -69,6 +69,20 @@
     }
     .pill-doc { background: #e5e8ef; color: #2a3650; }
 
+    /* P6 citation chip — clickable link to source-viewer.html with the
+     * rendered PDF page + snippet highlight. */
+    .ev-link {
+      color: #2a5fbf;
+      text-decoration: none;
+      border-bottom: 1px dotted #2a5fbf;
+      cursor: pointer;
+    }
+    .ev-link:hover {
+      background: #fdd663;
+      color: #1a1d23;
+      border-bottom-color: transparent;
+    }
+
     .formula {
       font-family: var(--mono); font-size: 10.5px; color: var(--ink-soft);
       background: var(--hilite); border-left: 3px solid var(--rule);
@@ -146,9 +160,9 @@
     return;
   }
   document.getElementById('back-link').href = `/steuerfall.html?app=${encodeURIComponent(APP)}&case=${encodeURIComponent(CASE)}`;
-  document.getElementById('json-link').href = `/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/aggregate`;
+  document.getElementById('json-link').href = `/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/master`;
 
-  const r = await fetch(`/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/aggregate`);
+  const r = await fetch(`/api/applications/${encodeURIComponent(APP)}/instances/${encodeURIComponent(CASE)}/master`);
   if (!r.ok) { document.getElementById('loading').textContent = `HTTP ${r.status} beim Laden des Falls`; return; }
   const data = await r.json();
   render(data);
@@ -292,14 +306,62 @@ function vNum(ml, ecode) {
   return germanDecimalToNumber(e.value);
 }
 
-function evidence(entry, ml) {
+// P6: evidence() returns HTML. If the master entry's first confirmed_by
+// source has {page, snippet, filename + sha256} we can resolve, we wrap the
+// doc-part in a link to /source-viewer.html so the user can jump to the
+// rendered PDF page with the snippet highlighted.
+//   "Anlage N · Z.5 · stricker.pdf ↗"  ←  clickable
+//   "Anlage N · Z.5 · stricker.pdf"    ←  fallback (no page info)
+function evidence(entry, ml, masterDocs) {
   if (!entry) return '';
-  const docs = (entry.confirmed_by || []).map(c => c.filename).filter(Boolean);
   const z = entry.vordruckzeile ? `Z.${entry.vordruckzeile}` : '';
   const a = entry.anlage ? `Anlage ${entry.anlage}` : '';
-  const parts = [a, z].filter(Boolean).join(' · ');
-  const docPart = docs.length > 0 ? ` · ${docs[0]}${docs.length>1 ? ` +${docs.length-1}` : ''}` : '';
-  return `${parts}${docPart}`;
+  const prefix = [a, z].filter(Boolean).join(' · ');
+
+  const sources = entry.confirmed_by || [];
+  if (sources.length === 0) return prefix;
+
+  const first = sources[0];
+  const filename = first.filename || '';
+  if (!filename) return prefix;
+
+  // Resolve sha256 by matching filename against the case documents.
+  let sha = null;
+  if (Array.isArray(masterDocs)) {
+    const docMeta = masterDocs.find((d) => d.filename === filename);
+    if (docMeta && typeof docMeta.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(docMeta.sha256)) {
+      sha = docMeta.sha256;
+    }
+  }
+  const moreSuffix = sources.length > 1 ? ` +${sources.length - 1}` : '';
+  const docPart = `${escapeHtml(filename)}${moreSuffix}`;
+
+  // Build clickable chip when we have sha+page (1-based for the viewer URL).
+  if (sha && typeof first.page === 'number' && first.page >= 0) {
+    const pageOneBased = first.page + 1;
+    const snippet = first.snippet ? first.snippet : '';
+    const href =
+      `/source-viewer.html?file=${encodeURIComponent(sha)}` +
+      `&page=${pageOneBased}` +
+      `&filename=${encodeURIComponent(filename)}` +
+      `&snippet=${encodeURIComponent(snippet)}`;
+    const titleAttr = snippet
+      ? ` title="${escapeAttr(snippet)}"`
+      : '';
+    const link = `<a class="ev-link" href="${href}" target="_blank" rel="noopener"${titleAttr}>${docPart} · Seite&nbsp;${pageOneBased} ↗</a>`;
+    return [prefix, link].filter(Boolean).join(' · ');
+  }
+  // Fallback: no page info — render as plain text.
+  return [prefix, docPart].filter(Boolean).join(' · ');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function escapeAttr(s) {
+  return escapeHtml(s);
 }
 
 function render(data) {
@@ -405,7 +467,7 @@ function render(data) {
     <h2><span class="num">1.</span>Einkünfte aus nichtselbständiger Arbeit <span class="pill">§19 EStG · Anlage N</span></h2>
     <table class="ledger">
       <tr><td class="lbl">Bruttoarbeitslohn (Lohnsteuerbescheinigung 2023)</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
-      <tr><td class="cite" colspan="2">[E0200201 · Anlage N Z.5 · ${escapeHtml(evidence(ml.E0200201, ml))}]</td></tr>
+      <tr><td class="cite" colspan="2">[E0200201 · ${evidence(ml.E0200201, ml, data.documents)}]</td></tr>
       <tr class="subtotal"><td class="lbl">Summe der Einnahmen</td><td class="amt">${fmtEur(bruttoLohn)}</td></tr>
       <tr><td class="lbl">− Werbungskosten <span class="pill">§9 EStG</span></td><td class="amt deduct">${fmtEur(Number(ev.werbungskosten || 0))}</td></tr>
       <tr><td class="cite" colspan="2">[BMF-Eingabe werbungskosten · Anlage N Z.57+]</td></tr>
