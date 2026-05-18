@@ -119,12 +119,13 @@ function compactMaster(master: MasterShape): unknown {
 }
 
 /**
- * Calls Mistral Small chat-completions with the master-summary + prompt.
+ * Calls Gemma-4 vLLM chat-completions with the master-summary + prompt.
  * Liefert parsed JSON oder ein leeres Audit mit reason bei Fehler.
  *
- * 2026-05-18: vorher Gemma-4 vLLM (11s). Mistral Small ist 4× schneller
- * (~2-4s) und liefert genauso gute Cross-Doc-Reasoning für die compact-
- * master Eingabe. Spart die teure GPU für andere Workflows.
+ * 2026-05-18: cleanup — alles auf Gemma-4 vLLM (lokal) vereinheitlicht.
+ * Cross-Doc-Audit läuft NACH der Extraktion, d.h. kein GPU-Konflikt mit
+ * laufenden Vision-Calls. Spart Mistral-Cloud-Kosten + behält Inferenz
+ * lokal (Daten verlassen das Haus nicht).
  */
 export async function runCrossDocAudit(
   master: MasterShape,
@@ -139,11 +140,10 @@ export async function runCrossDocAudit(
   if (!master.merged_layer || Object.keys(master.merged_layer).length === 0) {
     return { ...empty, reason: 'no merged_layer fields', ms: Date.now() - t0 };
   }
-  const baseUrl = opts.baseUrl ?? 'https://api.mistral.ai';
-  const model = opts.model ?? 'mistral-small-latest';
-  const timeoutMs = opts.timeoutMs ?? 30_000;
-  const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env: cross-doc-audit uses Mistral API
-  if (!apiKey) return { ...empty, reason: 'MISTRAL_API_KEY env nicht gesetzt', ms: Date.now() - t0 };
+  // Default: Gemma-4 vLLM on H200v. VLLM_URL aus env (Container-Setup).
+  const baseUrl = opts.baseUrl ?? process.env['VLLM_URL'] ?? 'http://host.docker.internal:11435'; // lint-no-env: cross-doc-audit
+  const model = opts.model ?? 'gemma4-mm';
+  const timeoutMs = opts.timeoutMs ?? 60_000;
   const compact = compactMaster(master);
   const userText = PROMPT(master.jahr ?? null) + '\n\n--- master.json ---\n' + JSON.stringify(compact, null, 2);
 
@@ -155,7 +155,7 @@ export async function runCrossDocAudit(
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model, max_tokens: 2500, temperature: 0, stream: false,
         response_format: { type: 'json_object' },
@@ -163,12 +163,10 @@ export async function runCrossDocAudit(
       }),
     });
     if (!res.ok) {
-      return { ...empty, reason: `mistral ${res.status}`, ms: Date.now() - t0, llm_used: model };
+      return { ...empty, reason: `vllm ${res.status}`, ms: Date.now() - t0, llm_used: model };
     }
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const raw = data.choices?.[0]?.message?.content ?? '{}';
-    // Tolerant JSON parse: Mistral hält sich mit response_format json_object
-    // streng dran, aber Sicherheit zuerst.
     const match = raw.match(/\{[\s\S]*\}/);
     const json = match ? match[0] : raw;
     let parsed: Partial<CrossDocAuditResult> = {};

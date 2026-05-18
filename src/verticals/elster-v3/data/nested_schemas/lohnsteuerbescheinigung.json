@@ -1,7 +1,7 @@
 {
   "name": "lohnsteuerbescheinigung_extraction",
   "doc_class": "lohnsteuerbescheinigung",
-  "description": "Layer-1 strict json_schema für deutsche Lohnsteuerbescheinigung — deckt aktive Beschäftigung UND Versorgungsbezug (Pension/Beamtenversorgung) ab. Versorgungsbezug-spezifische Felder (Bemessungsgrundlage, Versorgungsbeginn, einmalige Zahlungen) sind first-class, damit die Rules-Engine in die korrekten eCodes routen kann.",
+  "description": "Layer-1 strict json_schema für deutsche Lohnsteuerbescheinigung — deckt aktive Beschäftigung UND Versorgungsbezug (Pension/Beamtenversorgung) ab. Aggressive required[]-Liste: jedes Feld das in einer Standard-LStB IMMER da ist (auch wenn der Wert 0,00 € sein kann), wird required. Verhindert dass Gemma-4 / Mistral optionale Felder weglässt. Versorgungsbezug-spezifische Felder bleiben optional weil sie nur bei Pension-/Beamtenversorgungs-Belegen vorkommen.",
   "anlage": "N",
   "schema": {
     "type": "object",
@@ -11,7 +11,6 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "name": { "type": "string", "description": "Voller Name (Vorname + Nachname zusammen)." },
           "vorname": { "type": "string", "description": "Vorname allein — geht in ESt1A E0100301." },
           "familienname": { "type": "string", "description": "Familienname/Nachname allein — geht in ESt1A E0100201." },
           "steuer_id": { "type": "string", "description": "Steuer-Identifikationsnummer (11-stellig); ESt1A E0100081." },
@@ -20,9 +19,14 @@
             "enum": ["ev", "rk", "ak", "is", "fr", "fb", "lt", "rf", "vd", "--", ""],
             "description": "Konfession-Schlüssel: ev=Evangelisch, rk=römisch-katholisch, ak=altkatholisch, is=israelitisch, fr=Freireligiös, fb=Freie Religionsgemeinschaft, lt=lutherisch, rf=reformiert, vd=verschiedene, '--'=keine."
           },
-          "steuerklasse": { "type": "string", "enum": ["1","2","3","4","5","6"] }
+          "konfession_ehegatte": {
+            "type": "string",
+            "enum": ["ev", "rk", "ak", "is", "fr", "fb", "lt", "rf", "vd", "--", ""],
+            "description": "Konfession des Ehegatten (LStB-Header 'Kirchensteuermerkmal Ehegatte') — relevant bei Konfessionsverschiedenheit."
+          },
+          "steuerklasse": { "type": "string", "enum": ["1", "2", "3", "4", "5", "6"] }
         },
-        "required": ["name"]
+        "required": ["vorname", "familienname", "steuer_id", "steuerklasse"]
       },
       "arbeitgeber": {
         "type": "object",
@@ -32,7 +36,7 @@
           "art": {
             "type": "string",
             "enum": ["arbeitgeber", "versorgungstraeger", "rentenversicherer", "unbekannt"],
-            "description": "arbeitgeber = aktive Beschäftigung; versorgungstraeger = Beamtenversorgung/Witwenpension/Betriebsrente (LBV, Pensionskasse usw.); rentenversicherer = gesetzliche/private Rentenkasse"
+            "description": "arbeitgeber = aktive Beschäftigung (Bruttoarbeitslohn > 0, Sozialvers-Beiträge > 0); versorgungstraeger = Beamtenversorgung/Witwenpension/Betriebsrente; rentenversicherer = gesetzliche/private Rentenkasse"
           }
         },
         "required": ["name", "art"]
@@ -49,56 +53,78 @@
       "lohn": {
         "type": "object",
         "additionalProperties": false,
+        "description": "LStB-Hauptzeilen 3-7. ALLE Felder PFLICHT, auch wenn der Wert 0,00 € ist.",
         "properties": {
           "bruttoarbeitslohn": {
             "type": "number",
-            "description": "Bruttoarbeitslohn (Lohnsteuerbescheinigung Nr. 3); inkl. Versorgungsbezüge falls anwendbar."
+            "description": "Bruttoarbeitslohn (LStB Nr. 3); inkl. Versorgungsbezüge falls anwendbar. → Anlage N E0200201."
           },
-          "lohnsteuer_einbehalten": { "type": "number", "description": "Einbehaltene Lohnsteuer (Nr. 4)." },
-          "solidaritaetszuschlag_einbehalten": { "type": "number" },
-          "kirchensteuer_arbeitnehmer_einbehalten": { "type": "number" },
-          "kirchensteuer_ehegatte_einbehalten": { "type": "number" }
-        }
+          "lohnsteuer_einbehalten": { "type": "number", "description": "Einbehaltene Lohnsteuer (LStB Nr. 4). → Anlage N E0200301 (Z.6) oder E0201201 (Z.19 Summe)." },
+          "solidaritaetszuschlag_einbehalten": { "type": "number", "description": "Einbehaltener Solidaritätszuschlag (LStB Nr. 5). → E0200401." },
+          "kirchensteuer_arbeitnehmer_einbehalten": { "type": "number", "description": "Kirchensteuer des Arbeitnehmers (LStB Nr. 6). → E0200501." },
+          "kirchensteuer_ehegatte_einbehalten": { "type": "number", "description": "Kirchensteuer des Partners (LStB Nr. 7) — nur bei Konfessionsverschiedenheit; sonst 0. → E0200601." }
+        },
+        "required": [
+          "bruttoarbeitslohn",
+          "lohnsteuer_einbehalten",
+          "solidaritaetszuschlag_einbehalten",
+          "kirchensteuer_arbeitnehmer_einbehalten",
+          "kirchensteuer_ehegatte_einbehalten"
+        ]
       },
       "versorgungsbezug": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Versorgungsbezug-Block. Wenn der Beleg Versorgungsbezüge (Beamtenversorgung, Witwenpension, Pensionskasse) erwähnt, MÜSSEN alle drei Hauptfelder (versorgungsbezug_brutto, bemessungsgrundlage_freibetrag, versorgungsbeginn_jahr) befüllt werden. Sonst Block ganz weglassen.",
+        "description": "Versorgungsbezug-Block. NUR bei Pension/Beamtenversorgung/Witwenrente befüllen. Bei aktiver Beschäftigung Block weglassen — die required-Felder hier sind optional auf Block-Ebene.",
         "properties": {
           "versorgungsbezug_brutto": {
             "type": "number",
-            "description": "Steuerbegünstigte Versorgungsbezüge (im Bruttoarbeitslohn enthalten); LStB Nr. 8 / Anlage N E0200801."
+            "description": "Steuerbegünstigte Versorgungsbezüge (im Bruttoarbeitslohn enthalten); LStB Nr. 8. → Anlage N E0200801."
           },
           "bemessungsgrundlage_freibetrag": {
             "type": "number",
-            "description": "Bemessungsgrundlage für den Versorgungsfreibetrag (LStB Nr. 29); Anlage N E0200902. PFLICHT bei Versorgungsbezug — bestimmt zusammen mit Versorgungsbeginn die Höhe des Freibetrags."
+            "description": "Bemessungsgrundlage für den Versorgungsfreibetrag (LStB Nr. 29). → Anlage N E0200902."
           },
           "versorgungsbeginn_jahr": {
             "type": "integer",
-            "description": "Maßgebendes Kalenderjahr des Versorgungsbeginns (LStB Nr. 30); Anlage N E0201307."
+            "description": "Maßgebendes Kalenderjahr des Versorgungsbeginns (LStB Nr. 30). → Anlage N E0201307."
           },
           "einmalige_versorgungsbezuege": {
             "type": "number",
-            "description": "Sterbegeld / Kapitalauszahlung / Abfindung — getrennt ausgewiesen, oft 0."
+            "description": "Sterbegeld / Kapitalauszahlung / Abfindung — meist 0."
           }
-        },
-        "required": ["versorgungsbezug_brutto", "bemessungsgrundlage_freibetrag", "versorgungsbeginn_jahr"]
+        }
       },
       "sozialversicherung": {
         "type": "object",
         "additionalProperties": false,
+        "description": "Sozialvers-Beiträge LStB Z.22-27. ALLE Felder PFLICHT bei aktiver Beschäftigung (auch wenn 0,00 €). Bei Pension/Versorgungsbezug oft 0,00 € — Felder dann mit 0 befüllen, NICHT weglassen.",
         "properties": {
-          "kv_arbeitnehmer": { "type": "number" },
-          "pv_arbeitnehmer": { "type": "number" },
-          "rv_arbeitnehmer": { "type": "number" },
-          "av_arbeitnehmer": { "type": "number" },
+          "rv_arbeitnehmer": { "type": "number", "description": "LStB Z.23a — Arbeitnehmeranteil zur gesetzlichen Rentenversicherung. → Anlage VOR E2000401." },
+          "rv_arbeitgeber": { "type": "number", "description": "LStB Z.22a — Arbeitgeberanteil/-zuschuss zur gesetzlichen Rentenversicherung. → Anlage VOR E2000801." },
+          "berufsstaendisch_arbeitnehmer": { "type": "number", "description": "LStB Z.23b — Arbeitnehmeranteil zu berufsständischen Versorgungseinrichtungen. → Anlage VOR E2000501." },
+          "berufsstaendisch_arbeitgeber": { "type": "number", "description": "LStB Z.22b — Arbeitgeberanteil zu berufsständischen Versorgungseinrichtungen." },
+          "kv_arbeitnehmer": { "type": "number", "description": "LStB Z.25 — Arbeitnehmerbeiträge zur gesetzlichen Krankenversicherung. → Anlage VOR E2001203." },
+          "pv_arbeitnehmer": { "type": "number", "description": "LStB Z.26 — Arbeitnehmerbeiträge zur sozialen Pflegeversicherung. → Anlage VOR E2001505." },
+          "av_arbeitnehmer": { "type": "number", "description": "LStB Z.27 — Arbeitnehmerbeiträge zur gesetzlichen Arbeitslosenversicherung. → Anlage VOR E2004403." },
           "private_kv_pv_nachgewiesen": {
             "type": "number",
-            "description": "Bei Versorgungsempfängern oft als 'nachgewiesene Beiträge zur privaten KV/PV' ausgewiesen."
+            "description": "Bei Versorgungsempfängern oft als 'nachgewiesene Beiträge zur privaten KV/PV' ausgewiesen — optional."
+          },
+          "zusatzversorgung_steuerpflichtig": {
+            "type": "number",
+            "description": "Steuerpflichtiger Beitrag zur Zusatzversorgung (am Ende der Z.22-27-Sektion) — optional."
           }
-        }
+        },
+        "required": [
+          "rv_arbeitnehmer",
+          "rv_arbeitgeber",
+          "kv_arbeitnehmer",
+          "pv_arbeitnehmer",
+          "av_arbeitnehmer"
+        ]
       }
     },
-    "required": ["arbeitnehmer", "arbeitgeber", "lohn"]
+    "required": ["arbeitnehmer", "arbeitgeber", "lohn", "sozialversicherung"]
   }
 }

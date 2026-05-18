@@ -1,14 +1,18 @@
 /**
  * beleg-indikation — fast first-look stage. Runs IN PARALLEL with OCR.
  *
- * Schickt direkt das Bild (oder erste PDF-Seite) an Mistral Small Vision
+ * Schickt direkt das Bild (oder PDF-Seiten) an Gemma-4 vLLM Vision
  * und fragt nach (a) den relevanten ELSTER-Anlagen und (b) den wichtigsten
  * im Dokument sichtbaren Werten (Beträge, Namen, Datum, Belegtyp).
  *
- * Ziel: Das UI hat innerhalb von ~1-3 s eine Indikation in der Form
+ * Ziel: Das UI hat innerhalb von ~3-6 s eine Indikation in der Form
  *   "<Anlagen> · <Belegtyp> · <Empfänger> · <Schlüsselwerte>"
- * während Gemma-4 OCR noch ~25 s am Volltext arbeitet. Im UI taucht NIE
+ * während die Voll-Extraktion noch läuft. Im UI taucht NIE
  * der Modellname auf — nur Anlagen + Werte aus dem konkreten Beleg.
+ *
+ * 2026-05-18: alles auf Gemma-4 vLLM (lokal) vereinheitlicht.
+ * vLLM continuous-batching + max-num-seqs=16 + image-limit=10 verträgt
+ * parallele Upload-Indikationen ohne Queue-Stau.
  *
  * STRICT: kein Fallback. Fehler bubbeln (das Round-1-Signal entfällt, der
  * Rest der Pipeline läuft unverändert weiter — Indikation ist nicht
@@ -74,7 +78,7 @@ const ALLOWED_ANLAGEN = [
 // EIN Prompt für single + multi page. Mistral sieht alle Bilder gleichzeitig
 // und liefert EIN aggregiertes Ergebnis: Belegtyp-Beschreibung (bei multi
 // als "2× X + Y" formuliert), Union der Anlagen, wichtige Werte.
-const PROMPT = (pageCount) => [
+const PROMPT = (pageCount: number) => [
   pageCount > 1
     ? `Du bekommst die ${pageCount} Seiten eines Steuer-Belegs-PDFs in Reihenfolge.`
     : 'Du bekommst ein Foto / Scan eines Steuer-Belegs.',
@@ -175,12 +179,12 @@ export async function runBelegIndikation(
   signal?: AbortSignal,
 ): Promise<BelegIndikationOutput> {
   const t0 = Date.now();
-  const baseUrl = cfg?.baseUrl ?? 'https://api.mistral.ai';
-  const model = cfg?.model ?? 'mistral-small-latest';
+  // Default: Gemma-4 vLLM lokal. VLLM_URL aus env (Container-Setup).
+  // vLLM-Image-Limit aktuell 10 → maxPages 10 (war Mistral 32).
+  const baseUrl = cfg?.baseUrl ?? process.env['VLLM_URL'] ?? 'http://host.docker.internal:11435'; // lint-no-env: beleg-indikation
+  const model = cfg?.model ?? 'gemma4-mm';
   const dpi = cfg?.dpi ?? 150;
-  const maxPages = cfg?.maxPages ?? 32;
-  const apiKey = process.env['MISTRAL_API_KEY']; // lint-no-env
-  if (!apiKey) throw new Error('beleg-indikation: MISTRAL_API_KEY env nicht gesetzt');
+  const maxPages = cfg?.maxPages ?? 10;
 
   const { buffers } = await pagesAsImages(input.filePath, input.filename, dpi, maxPages);
   const pageCount = buffers.length;
@@ -191,7 +195,7 @@ export async function runBelegIndikation(
   const allowed = new Set(ALLOWED_ANLAGEN);
   const imageContents = buffers.map((buf) => ({
     type: 'image_url' as const,
-    image_url: `data:image/png;base64,${buf.toString('base64')}`,
+    image_url: { url: `data:image/png;base64,${buf.toString('base64')}` },
   }));
 
   const controller = new AbortController();
@@ -199,10 +203,10 @@ export async function runBelegIndikation(
   signal?.addEventListener('abort', onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model, max_tokens: maxTokens, temperature: 0,
         response_format: { type: 'json_object' },
