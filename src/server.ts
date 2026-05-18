@@ -608,7 +608,10 @@ app.post(
     if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     if (files.length === 0) { res.status(400).json({ error: 'mindestens eine Datei erforderlich (multipart field "files")' }); return; }
-    const concurrency = Math.max(1, Math.min(5, Number(req.query.concurrency) || 4));
+    // Default 16, Cap 32 — H200v hat 248GB GPU, Gemma-4 31B braucht ~60GB,
+    // vLLM continuous-batching nimmt locker 16-32 parallele Requests.
+    // Override per ?concurrency=N.
+    const concurrency = Math.max(1, Math.min(32, Number(req.query.concurrency) || 16));
 
     const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
 
