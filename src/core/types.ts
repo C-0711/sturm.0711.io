@@ -32,6 +32,22 @@ export interface StageDef<TConfig = unknown> {
   name?: string;
   /** Ein-Satz-Beschreibung für UI-Hovertexts etc. */
   description?: string;
+  /**
+   * Optional: condition-Expression. Wenn evaluiert-truthy, wird die Stage
+   * übersprungen (state='skipped' mit skipReason='condition'). Downstream-
+   * Stages bekommen `undefined` wenn sie das Output dieser Stage referenzieren.
+   *
+   * Grammatik (regex-basiert, kein vollwertiger Parser):
+   *   - `${path.to.value}`                  → truthy-check des Pfad-Werts
+   *   - `${path.to.value} == "literal"`     → string-equality
+   *   - `${path.to.value} != "literal"`     → string-inequality
+   *   - `${a.x} == ${b.y}`                  → cross-stage equality
+   *   - Sub-Bedingungen mit `&&` / `||`     → boolean-combine
+   *
+   * Beispiel: `'${klassifizierung.doc_type} != "vast_bundle"'` → Stage wird
+   * übersprungen wenn doc_type NICHT 'vast_bundle' ist.
+   */
+  skipWhen?: string;
 }
 
 export interface WorkflowDef {

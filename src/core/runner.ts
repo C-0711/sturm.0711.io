@@ -67,6 +67,88 @@ function resolveExpr(expr: string, stageOutputs: Record<string, unknown>, input:
   return cur;
 }
 
+/**
+ * Evaluates a `skipWhen` condition expression. Returns true → Stage wird skipped.
+ *
+ * Unterstützte Grammatik:
+ *   - `${path}`                       → truthy-Check
+ *   - `${path} == "literal"`          → string-equality
+ *   - `${path} != "literal"`          → string-inequality
+ *   - `${a.x} == ${b.y}`              → cross-stage equality
+ *   - `<sub> && <sub>` / `<sub> || <sub>` → boolean-combine (left-to-right, no precedence)
+ *
+ * Strict: bei Syntax-Fehler wird `false` zurückgegeben + ein log-warn emittiert
+ * (Caller bekommt nicht-skipped → Stage läuft → liefert ggf. Stage-Error, was
+ * besser ist als silentlich auf der falschen Pipeline-Seite zu hängen).
+ */
+export function evaluateCondition(
+  expr: string,
+  stageOutputs: Record<string, unknown>,
+  input: unknown,
+  onWarn?: (msg: string) => void,
+): boolean {
+  if (!expr || typeof expr !== 'string') return false;
+  const trimmed = expr.trim();
+  // Boolean-combine: && / || — left-to-right ohne Klammern
+  // Wir splitten an && / || top-level (keine Verschachtelung mit Klammern unterstützt)
+  for (const op of ['&&', '||'] as const) {
+    const parts = splitTopLevel(trimmed, op);
+    if (parts.length > 1) {
+      const evals = parts.map((p) => evaluateCondition(p, stageOutputs, input, onWarn));
+      return op === '&&' ? evals.every(Boolean) : evals.some(Boolean);
+    }
+  }
+  // Comparison: == / !=
+  const eqMatch = trimmed.match(/^(.+?)\s*(==|!=)\s*(.+)$/);
+  if (eqMatch) {
+    const lhs = parseTerm(eqMatch[1].trim(), stageOutputs, input);
+    const op = eqMatch[2];
+    const rhs = parseTerm(eqMatch[3].trim(), stageOutputs, input);
+    return op === '==' ? lhs === rhs : lhs !== rhs;
+  }
+  // Plain truthy-Check
+  const v = parseTerm(trimmed, stageOutputs, input);
+  return !!v;
+}
+
+/** Split an expression at the top-level occurrence of `op`. Keeps ${...} groups
+ * intact (we don't have parens, but we want to not split inside a `${...}`). */
+function splitTopLevel(s: string, op: '&&' | '||'): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '$' && s[i + 1] === '{') { depth++; i++; continue; }
+    if (s[i] === '}' && depth > 0) { depth--; continue; }
+    if (depth === 0 && s.slice(i, i + 2) === op) {
+      out.push(s.slice(start, i));
+      start = i + 2;
+      i++;
+    }
+  }
+  out.push(s.slice(start));
+  return out.length > 1 ? out.map((p) => p.trim()) : [s];
+}
+
+/** Parse a term: either ${path} (resolved against outputs/input), or a string-literal
+ *  in double-quotes, or a bare number/boolean. */
+function parseTerm(term: string, stageOutputs: Record<string, unknown>, input: unknown): unknown {
+  const t = term.trim();
+  if (t.startsWith('${') && t.endsWith('}')) {
+    return resolveExpr(t, stageOutputs, input);
+  }
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    return t.slice(1, -1);
+  }
+  if (t === 'true') return true;
+  if (t === 'false') return false;
+  if (t === 'null' || t === 'undefined') return undefined;
+  // Numeric literal
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  // Fallback: bareword as string (rare)
+  return t;
+}
+
 export interface RunOptions {
   runsDir: string; // z.B. /home/.../0711-STURM/runs
   input: unknown;
@@ -179,6 +261,16 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           stageResults[stageId] = { stageId, state: 'error', error: { message: err.message } };
           bus.emit('stage_error', { message: err.message }, stageId);
           return;
+        }
+        // skipWhen-Check: wenn condition truthy → Stage übersprungen, output bleibt undefined
+        if (stageDef.skipWhen) {
+          const onWarn = (msg: string) => bus.emit('log_warn', { msg: `skipWhen[${stageId}]: ${msg}` }, stageId);
+          const shouldSkip = evaluateCondition(stageDef.skipWhen, stageOutputs, opts.input, onWarn);
+          if (shouldSkip) {
+            stageResults[stageId] = { stageId, state: 'skipped' };
+            bus.emit('stage_skipped', { reason: 'condition', skipWhen: stageDef.skipWhen }, stageId);
+            return;
+          }
         }
         const resolved = resolveInputs(stageDef.inputs, stageOutputs, opts.input);
         const t0 = Date.now();
