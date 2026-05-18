@@ -167,6 +167,38 @@
       color: var(--color-text-tertiary);
       font-family: ui-monospace, "JetBrains Mono", monospace;
     }
+    .case-owner {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      margin-top: 2px;
+    }
+    .case-delete {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      border: none;
+      background: transparent;
+      color: var(--color-text-tertiary);
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+    }
+    .case-card { position: relative; }
+    .case-card:hover .case-delete,
+    .case-card:focus-within .case-delete { opacity: 1; }
+    .case-delete:hover {
+      background: var(--color-danger, #c0392b);
+      color: white;
+    }
+    .case-delete:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
 
     .empty {
       display: flex;
@@ -514,7 +546,27 @@
       meta.textContent = metaParts.join(' · ');
       main.appendChild(meta);
 
+      if (c.ownerEmail) {
+        const owner = document.createElement('div');
+        owner.className = 'case-owner';
+        owner.textContent = `Angelegt von ${c.ownerEmail}`;
+        main.appendChild(owner);
+      }
+
       card.appendChild(main);
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'case-delete';
+      del.title = 'Fall löschen';
+      del.setAttribute('aria-label', `Fall ${c.displayName || c.caseId} löschen`);
+      del.textContent = '✕';
+      del.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        deleteCase(c);
+      });
+      card.appendChild(del);
 
       const side = document.createElement('div');
       side.className = 'case-side';
@@ -551,6 +603,28 @@
       els.caseList.appendChild(card);
     }
     els.caseList.hidden = false;
+  }
+
+  async function deleteCase(c) {
+    const label = c.displayName || c.caseId;
+    const sure = window.confirm(
+      `Fall "${label}" wirklich löschen?\n\nAlle Belege und Auswertungen werden entfernt. Das kann nicht rückgängig gemacht werden.`,
+    );
+    if (!sure) return;
+    try {
+      const res = await fetch(`/api/m/cases/${encodeURIComponent(c.caseId)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        window.alert(`Löschen fehlgeschlagen: ${body.message || res.status}`);
+        return;
+      }
+      await loadCases();
+    } catch (err) {
+      window.alert(`Löschen fehlgeschlagen: ${err.message}`);
+    }
   }
 
   // ─── Modal: Neuer Fall ─────────────────────────────────────────

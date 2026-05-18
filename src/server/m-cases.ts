@@ -27,6 +27,7 @@ import {
 } from './applications.ts';
 import { getApplication } from '../core/registry.ts';
 import { requireMandantenSession } from './m-auth.ts';
+import { getUserById } from '../lib/m-users.ts';
 
 const APP_ID = 'steuerfall-est';
 
@@ -153,6 +154,19 @@ export function createMandantenCasesRouter(opts: MandantenCasesRouterOptions): R
     try {
       const userId = (req as Request & MandantenRequestFields).mandantenUserId!;
       const instances = await listOwnedInstances(opts.applicationsDir, userId);
+      const emailCache = new Map<string, string | null>();
+      async function ownerEmail(uid?: string): Promise<string | null> {
+        if (!uid) return null;
+        if (emailCache.has(uid)) return emailCache.get(uid)!;
+        try {
+          const u = await getUserById(opts.usersDir, uid);
+          emailCache.set(uid, u?.email ?? null);
+          return u?.email ?? null;
+        } catch {
+          emailCache.set(uid, null);
+          return null;
+        }
+      }
       const cases = await Promise.all(instances.map(async (inst) => ({
         caseId: inst.caseId,
         displayName: inst.displayName,
@@ -162,6 +176,7 @@ export function createMandantenCasesRouter(opts: MandantenCasesRouterOptions): R
         lastRunAt: await readLastRunAt(opts.runsDir, inst),
         abrechnungSummary: await readAbrechnungSummary(opts.runsDir, inst),
         extractionWorkflow: (inst as { extractionWorkflow?: string }).extractionWorkflow ?? null,
+        ownerEmail: await ownerEmail(inst.ownerUserId),
       })));
       res.json({ cases });
     } catch (e) {
