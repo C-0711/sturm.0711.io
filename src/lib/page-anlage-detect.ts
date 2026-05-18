@@ -83,6 +83,27 @@ export function detectAnlagenPerPage(pageTexts: string[]): Record<string, number
   return out;
 }
 
+/** Extract ELSTER-Zeile numbers visible on a page.
+ *
+ *  Used by phase3-vision-fill's strict page-Zeile filter (no fallback):
+ *  every field asked of vision must have its vordruckzeile detected as
+ *  a row leader on the actual page text. Mirrors the spike invariant.
+ *
+ *  Matches:
+ *    - explicit "Zeile 5", "Zeile 30" mentions
+ *    - row leader "43 Arbeitnehmerbeiträge ..." (digit then label)
+ *    - table cell  "| 48 Bezeichnung |" (markdown table)
+ */
+export function detectZeilenOnPage(pageText: string): Set<string> {
+  const zeilen = new Set<string>();
+  if (typeof pageText !== 'string' || pageText.length === 0) return zeilen;
+  for (const m of pageText.matchAll(/Zeile\s+(\d{1,3})\b/gi)) zeilen.add(m[1]);
+  for (const m of pageText.matchAll(/(?:^|\n|\|)\s*(\d{1,3})\s+[A-ZÄÖÜa-zäöü]/g)) {
+    zeilen.add(m[1]);
+  }
+  return zeilen;
+}
+
 /** For one anlage, return the pages where it appears.
  *  Fallback strategy when no pages matched: return the first page only
  *  (anlage probably on the cover or an unrecognised header). The caller
