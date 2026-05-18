@@ -161,6 +161,7 @@ export function createMandantenCasesRouter(opts: MandantenCasesRouterOptions): R
         documentCount: inst.documents?.length ?? 0,
         lastRunAt: await readLastRunAt(opts.runsDir, inst),
         abrechnungSummary: await readAbrechnungSummary(opts.runsDir, inst),
+        extractionWorkflow: (inst as { extractionWorkflow?: string }).extractionWorkflow ?? null,
       })));
       res.json({ cases });
     } catch (e) {
@@ -211,6 +212,48 @@ export function createMandantenCasesRouter(opts: MandantenCasesRouterOptions): R
       });
     } catch (e) {
       res.status(500).json({ error: 'case_create_failed', message: (e as Error).message });
+    }
+  });
+
+  // ── PATCH /cases/:caseId ──────────────────────────────────────────────
+  // Updates mutable per-case settings. Currently only `extractionWorkflow`
+  // (the workflow used for NEW uploads — existing runs are unchanged).
+  //
+  // Body: { "extractionWorkflow": "elster-v6-vision" | "elster-v5_2-rag" | null }
+  // null/empty → clears override → falls back to app default.
+  // Allowed IDs are validated against the registry.
+  router.patch('/cases/:caseId', async (req, res) => {
+    try {
+      const userId = (req as Request & MandantenRequestFields).mandantenUserId!;
+      const { caseId } = req.params;
+      const inst = (await loadInstanceFile(opts.applicationsDir, APP_ID, caseId)) as
+        (ApplicationInstanceWithOwner & { extractionWorkflow?: string }) | null;
+      if (!inst) return res.status(404).json({ error: 'case_not_found' });
+      if (inst.ownerUserId !== userId) return res.status(404).json({ error: 'case_not_found' });
+
+      const body = req.body as { extractionWorkflow?: string | null } | undefined;
+      if (body && 'extractionWorkflow' in body) {
+        const wf = body.extractionWorkflow;
+        if (wf == null || wf === '') {
+          delete (inst as { extractionWorkflow?: string }).extractionWorkflow;
+        } else if (typeof wf !== 'string' || !/^[A-Za-z0-9._-]+$/.test(wf)) {
+          return res.status(400).json({ error: 'invalid_workflow_id' });
+        } else {
+          const { getWorkflow } = await import('../core/registry.ts');
+          if (!getWorkflow(wf)) {
+            return res.status(400).json({ error: 'workflow_not_registered', wf });
+          }
+          (inst as { extractionWorkflow?: string }).extractionWorkflow = wf;
+        }
+        inst.updatedAt = new Date().toISOString();
+        await saveInstanceFile(opts.applicationsDir, inst);
+      }
+      res.json({
+        caseId: inst.caseId,
+        extractionWorkflow: (inst as { extractionWorkflow?: string }).extractionWorkflow ?? null,
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'case_patch_failed', message: (e as Error).message });
     }
   });
 

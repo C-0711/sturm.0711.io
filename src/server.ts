@@ -196,6 +196,26 @@ const schemaGenerateLimiter = rateLimit({
 
 // ============ Workflow-Metadaten ============
 
+/** Pick the extraction workflow ID for a case upload. Priority:
+ *   1. URL query `?workflow=elster-v6-vision` (per-request override, useful
+ *      for one-off tests via UI toggle)
+ *   2. inst.extractionWorkflow (per-case override, PATCH-set, persisted)
+ *   3. app_.workflows.extraction (Anwendung default; env-overridable via
+ *      STURM_EXTRACTION_WORKFLOW)
+ * Returns undefined if none configured.
+ */
+function pickExtractionWorkflow(
+  req: import('express').Request,
+  inst: { extractionWorkflow?: string } | null,
+  app_: { workflows: { extraction?: string } },
+): string | undefined {
+  const fromQuery = typeof req.query?.workflow === 'string' ? req.query.workflow.trim() : '';
+  if (fromQuery && /^[A-Za-z0-9._-]+$/.test(fromQuery)) return fromQuery;
+  const fromInst = inst?.extractionWorkflow;
+  if (typeof fromInst === 'string' && fromInst.length > 0) return fromInst;
+  return app_.workflows.extraction;
+}
+
 function summarizeWorkflow(def: WorkflowDef) {
   return {
     id: def.id,
@@ -472,7 +492,10 @@ app.post(
     if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
-    const extractionId = app_.workflows.extraction;
+    // Per-case workflow override (set via PATCH /api/m/cases/:caseId or
+    // upload-time query ?workflow=…). Falls back to the application's
+    // default extraction workflow.
+    const extractionId = pickExtractionWorkflow(req, inst, app_);
     if (!extractionId) { res.status(409).json({ error: `application ${appId} has no extraction workflow configured` }); return; }
     const baseDef = getWorkflow(extractionId);
     if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
@@ -568,7 +591,7 @@ app.post(
     if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
-    const extractionId = app_.workflows.extraction;
+    const extractionId = pickExtractionWorkflow(req, inst, app_);
     if (!extractionId) { res.status(409).json({ error: `application ${appId} has no extraction workflow configured` }); return; }
     const baseDef = getWorkflow(extractionId);
     if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }

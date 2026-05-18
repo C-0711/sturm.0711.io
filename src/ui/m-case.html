@@ -288,6 +288,44 @@
     .full-error a:hover { text-decoration: underline; }
 
     .hidden { display: none !important; }
+
+    /* Pipeline-Toggle: 2-Segment-Switch, betrifft nur neue Uploads */
+    .pipeline-switch {
+      display: inline-flex;
+      align-items: stretch;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 12px;
+      background: var(--color-bg);
+    }
+    .pipeline-switch button {
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+    }
+    .pipeline-switch button:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+    .pipeline-switch button.active {
+      background: var(--color-accent);
+      color: white;
+    }
+    .pipeline-switch button:disabled { opacity: 0.5; cursor: wait; }
+    .pipeline-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+    }
+    .pipeline-row .label { font-weight: 500; color: var(--color-text-secondary); }
+    .pipeline-row .note { font-style: italic; }
   </style>
 </head>
 <body>
@@ -307,6 +345,22 @@
       <h1 id="case-title">&hellip;</h1>
       <p class="sub" id="case-sub"></p>
       <div class="case-meta" id="case-meta"></div>
+
+      <!-- Pipeline-Toggle: betrifft nur NEUE Uploads -->
+      <div class="pipeline-row hidden" id="pipeline-row">
+        <span class="label">Pipeline:</span>
+        <div class="pipeline-switch" role="radiogroup" aria-label="Extraction-Workflow">
+          <button type="button" role="radio" data-wf="elster-v5_2-rag"
+                  id="wf-rag"     title="4-LLM-Ensemble + TurboQuant-RAG (Standard, höchste Feldzahl)">
+            v5.2 RAG-Ensemble
+          </button>
+          <button type="button" role="radio" data-wf="elster-v6-vision"
+                  id="wf-vision"  title="Gemma-4 Vision direkt über Seitenbilder (schneller, weniger Halluzination)">
+            v6 Gemma-4 Vision
+          </button>
+        </div>
+        <span class="note">betrifft nur neue Uploads</span>
+      </div>
     </header>
 
     <!-- Tabs -->
@@ -483,7 +537,47 @@
     const data = await r.json();
     CASE_DATA = data;
     renderCaseHeader(data);
+    renderPipelineToggle(data);
     renderBelegeTable(data);
+  }
+
+  // ── Pipeline-Toggle ────────────────────────────────────────────────
+  // Liest aktuelles override aus der case-instance (extractionWorkflow),
+  // setzt aktiven Button. Klick → PATCH /api/m/cases/:caseId.
+  // Default-Workflow (kein override) wird als "v5.2 RAG-Ensemble" markiert.
+  function renderPipelineToggle(inst) {
+    const row = document.getElementById('pipeline-row');
+    row.classList.remove('hidden');
+    const current = inst.extractionWorkflow || 'elster-v5_2-rag';
+    document.querySelectorAll('.pipeline-switch button').forEach((b) => {
+      const wf = b.getAttribute('data-wf');
+      b.classList.toggle('active', wf === current);
+      b.onclick = async () => {
+        if (b.classList.contains('active')) return;
+        // Disable both during save
+        document.querySelectorAll('.pipeline-switch button').forEach((x) => x.disabled = true);
+        try {
+          const r = await fetch('/api/m/cases/' + encodeURIComponent(CASE_ID), {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extractionWorkflow: wf }),
+          });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            alert('Pipeline-Wechsel fehlgeschlagen: ' + (err.error || r.status));
+          } else {
+            // Reflect immediately + reload case so any cached state is fresh
+            document.querySelectorAll('.pipeline-switch button').forEach((x) => {
+              x.classList.toggle('active', x.getAttribute('data-wf') === wf);
+            });
+            CASE_DATA.extractionWorkflow = wf;
+          }
+        } finally {
+          document.querySelectorAll('.pipeline-switch button').forEach((x) => x.disabled = false);
+        }
+      };
+    });
   }
 
   function renderFullError() {
