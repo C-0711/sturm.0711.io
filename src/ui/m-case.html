@@ -328,6 +328,95 @@
       display: block;
     }
 
+    /* Split-Screen: linkes Panel (Felder / Abrechnung) + rechts PDF-Viewer */
+    .split-screen {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      height: calc(100vh - 240px);
+      min-height: 520px;
+    }
+    .split-left {
+      overflow: auto;
+      min-width: 0;
+    }
+    .split-right {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: var(--color-bg-secondary);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .viewer-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg);
+      flex-shrink: 0;
+    }
+    .viewer-toolbar select {
+      flex: 1;
+      min-width: 0;
+      padding: 5px 8px;
+      font: inherit;
+      font-size: 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: white;
+      max-width: 100%;
+    }
+    .viewer-page-label {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .viewer-canvas {
+      flex: 1;
+      overflow: auto;
+      padding: 8px;
+      background: var(--color-bg-secondary);
+      position: relative;
+    }
+    .viewer-canvas img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      background: white;
+    }
+    .viewer-empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--color-text-tertiary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .viewer-snippet {
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      max-height: 80px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+    /* Row highlight bei Hover */
+    .felder-row:hover { background: rgba(0,0,0,0.03); cursor: pointer; }
+    .felder-row.viewer-active { background: rgba(60,120,200,0.08); }
+    @media (max-width: 1100px) {
+      .split-screen { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+    }
+
     /* Fall-nicht-gefunden Zustand */
     .full-error {
       max-width: 520px;
@@ -447,7 +536,7 @@
       </div>
     </section>
 
-    <!-- Panel: Erkannte Felder -->
+    <!-- Panel: Erkannte Felder mit Source-Viewer Split-Screen -->
     <section class="panel" id="panel-felder" role="tabpanel">
       <div class="filter-row">
         <select id="felder-anlage">
@@ -456,18 +545,44 @@
         <input type="search" id="felder-suche" placeholder="Suche Bezeichnung oder eCode&hellip;" />
         <span class="filter-count" id="felder-count"></span>
       </div>
-      <div id="felder-body">
-        <div class="empty">
-          <div class="empty-headline">Noch keine Felder erkannt.</div>
-          <div>Lade Belege im Tab &bdquo;Belege&rdquo; hoch.</div>
+      <div class="split-screen" id="felder-split">
+        <div id="felder-body" class="split-left">
+          <div class="empty">
+            <div class="empty-headline">Noch keine Felder erkannt.</div>
+            <div>Lade Belege im Tab &bdquo;Belege&rdquo; hoch.</div>
+          </div>
         </div>
+        <aside class="split-right" id="felder-viewer-pane">
+          <div class="viewer-toolbar">
+            <select id="felder-doc-select" title="Dokument wählen">
+              <option value="">Beleg auswählen…</option>
+            </select>
+            <span class="viewer-page-label" id="felder-page-label"></span>
+          </div>
+          <div class="viewer-canvas" id="felder-viewer-canvas">
+            <div class="viewer-empty">Bewege die Maus über ein Feld in der Tabelle, um die Quelle anzuzeigen.</div>
+          </div>
+        </aside>
       </div>
     </section>
 
-    <!-- Panel: Abrechnung -->
+    <!-- Panel: Abrechnung mit Source-Viewer Split-Screen -->
     <section class="panel" id="panel-abrechnung" role="tabpanel">
-      <div class="frame-wrap">
-        <iframe id="abrechnung-frame" title="Abrechnung"></iframe>
+      <div class="split-screen" id="abrechnung-split">
+        <div class="split-left frame-wrap">
+          <iframe id="abrechnung-frame" title="Abrechnung"></iframe>
+        </div>
+        <aside class="split-right" id="abrechnung-viewer-pane">
+          <div class="viewer-toolbar">
+            <select id="abrechnung-doc-select" title="Dokument wählen">
+              <option value="">Beleg auswählen…</option>
+            </select>
+            <span class="viewer-page-label" id="abrechnung-page-label"></span>
+          </div>
+          <div class="viewer-canvas" id="abrechnung-viewer-canvas">
+            <div class="viewer-empty">Bewege die Maus über einen Wert in der Abrechnung, um die Quelle anzuzeigen.</div>
+          </div>
+        </aside>
       </div>
     </section>
 
@@ -624,6 +739,10 @@
     renderCaseHeader(data);
     // renderPipelineToggle(data); // entfernt 2026-05-18: v6-vision fix-default
     renderBelegeTable(data);
+    // Source-Viewer Dropdowns mit den verfügbaren Belegen befüllen.
+    const docs = (data && data.documents) || [];
+    populateDocSelect(document.getElementById('felder-doc-select'), docs);
+    populateDocSelect(document.getElementById('abrechnung-doc-select'), docs);
   }
 
   // ── Pipeline-Toggle ────────────────────────────────────────────────
@@ -1135,11 +1254,22 @@
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([eCode, f]) => {
           const wert = f.normalized || f.value || '';
-          const quellen = (f.confirmed_by || []).map(s => s.filename).filter(Boolean);
+          const sources = f.confirmed_by || [];
+          const quellen = sources.map(s => s.filename).filter(Boolean);
           const quelle = quellen.length ? Array.from(new Set(quellen)).join(', ') : '';
           const zeile = f.vordruckzeile ? ('Zeile ' + escapeHtml(f.vordruckzeile)) : '';
           const conflict = conflicts.has(eCode) ? '<span class="conflict-marker">abweichende Quellen</span>' : '';
-          return '<tr>'
+          // data-* Attribute fürs Source-Viewer-Hover. Erste Source mit
+          // sha256+page wird übernommen.
+          const first = sources.find(s => s && s.sha256 && typeof s.page === 'number') || sources[0] || {};
+          const dataAttrs = [
+            'data-ecode="' + escapeHtml(eCode) + '"',
+            first.sha256 ? ('data-sha256="' + escapeHtml(first.sha256) + '"') : '',
+            (typeof first.page === 'number') ? ('data-page="' + (first.page + 1) + '"') : '',
+            first.filename ? ('data-filename="' + escapeHtml(first.filename) + '"') : '',
+            first.snippet ? ('data-snippet="' + escapeHtml(first.snippet) + '"') : '',
+          ].filter(Boolean).join(' ');
+          return '<tr class="felder-row" ' + dataAttrs + '>'
             + '<td class="ecode">' + escapeHtml(eCode) + '</td>'
             + '<td class="drucktext">' + escapeHtml(f.drucktext || '') + '<div class="quelle">' + zeile + (zeile && conflict ? ' · ' : '') + conflict + '</div></td>'
             + '<td class="wert">' + escapeHtml(wert) + '</td>'
@@ -1160,6 +1290,79 @@
 
   document.getElementById('felder-anlage').addEventListener('change', renderFelder);
   document.getElementById('felder-suche').addEventListener('input', renderFelder);
+
+  // ── Source-Viewer (split-screen rechts in Felder + Abrechnung) ────────
+  // Hover über eine Feld-Row → fetcht die PDF-Seite des Belegs als PNG via
+  // /api/source-page/<sha256>/<page> + zeigt den OCR-Snippet darunter.
+  // Funktioniert pro Tab unabhängig (felder / abrechnung), aber gleiche
+  // Doc-Liste aus CASE_DATA.documents.
+  function populateDocSelect(selectEl, docs) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '<option value="">Beleg auswählen…</option>'
+      + (docs || []).map((d) => {
+        const sha = d.sha256 || '';
+        const name = d.filename || d.inboxPath || '?';
+        return '<option value="' + escapeHtml(sha) + '" data-name="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
+      }).join('');
+  }
+  function showSource(panel, sha256, page, snippet, filename) {
+    const canvas = document.getElementById(panel + '-viewer-canvas');
+    const pageLabel = document.getElementById(panel + '-page-label');
+    if (!canvas) return;
+    if (!sha256) {
+      canvas.innerHTML = '<div class="viewer-empty">Für diesen Wert ist keine Quelle hinterlegt.</div>';
+      if (pageLabel) pageLabel.textContent = '';
+      return;
+    }
+    const pageOneBased = (typeof page === 'number' && page > 0) ? page : 1;
+    const url = '/api/source-page/' + encodeURIComponent(sha256) + '/' + pageOneBased + '.png';
+    canvas.innerHTML = '<img src="' + url + '" alt="' + escapeHtml(filename || sha256) + ' Seite ' + pageOneBased + '" />'
+      + (snippet ? '<div class="viewer-snippet">' + escapeHtml(snippet) + '</div>' : '');
+    if (pageLabel) pageLabel.textContent = (filename ? filename + ' · ' : '') + 'Seite ' + pageOneBased;
+    // Auch das doc-select syncen
+    const sel = document.getElementById(panel + '-doc-select');
+    if (sel && sel.value !== sha256) sel.value = sha256;
+  }
+  // Doc-Select manuell: zeigt Seite 1 des gewählten Belegs
+  function bindDocSelect(panel) {
+    const sel = document.getElementById(panel + '-doc-select');
+    if (!sel) return;
+    sel.addEventListener('change', () => {
+      const sha = sel.value;
+      const name = sel.options[sel.selectedIndex]?.dataset?.name;
+      if (!sha) {
+        document.getElementById(panel + '-viewer-canvas').innerHTML = '<div class="viewer-empty">Beleg auswählen…</div>';
+        document.getElementById(panel + '-page-label').textContent = '';
+        return;
+      }
+      showSource(panel, sha, 1, '', name);
+    });
+  }
+  bindDocSelect('felder');
+  bindDocSelect('abrechnung');
+
+  // Hover-Handler im Felder-Body: delegated, weil .felder-row dynamisch ist.
+  document.getElementById('felder-body').addEventListener('mouseover', (e) => {
+    const row = e.target.closest('.felder-row');
+    if (!row) return;
+    const sha = row.getAttribute('data-sha256');
+    const page = Number(row.getAttribute('data-page') || '1');
+    const snippet = row.getAttribute('data-snippet') || '';
+    const filename = row.getAttribute('data-filename') || '';
+    // Highlight active row
+    document.querySelectorAll('.felder-row.viewer-active').forEach(r => r.classList.remove('viewer-active'));
+    row.classList.add('viewer-active');
+    showSource('felder', sha, page, snippet, filename);
+  });
+
+  // Cross-frame: die Abrechnung-iframe schickt postMessage{type:'src',sha256,page,snippet,filename}
+  // bei Hover über einen ev-link-Chip. Wir nehmen das an und aktualisieren
+  // den Abrechnung-Viewer.
+  window.addEventListener('message', (ev) => {
+    const d = ev && ev.data;
+    if (!d || d.type !== 'sturm-source-hover') return;
+    showSource('abrechnung', d.sha256, d.page, d.snippet || '', d.filename || '');
+  });
 
   // ── Tabs & URL-Hash ─────────────────────────────────────────────────
   function setActiveTab(name) {

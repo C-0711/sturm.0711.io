@@ -410,7 +410,14 @@ function evidence(entry, ml, masterDocs) {
     const titleAttr = snippet
       ? ` title="${escapeAttr(snippet)}"`
       : '';
-    const link = `<a class="ev-link" href="${href}" target="_blank" rel="noopener"${titleAttr}>${docPart} · Seite&nbsp;${pageOneBased} ↗</a>`;
+    // data-* Attribute fürs Parent-Frame Hover-Routing (m-case.html
+    // listened auf postMessage und aktualisiert den rechten Viewer).
+    const dataAttrs =
+      ` data-sha256="${escapeAttr(sha)}"` +
+      ` data-page="${pageOneBased}"` +
+      ` data-filename="${escapeAttr(filename)}"` +
+      (snippet ? ` data-snippet="${escapeAttr(snippet)}"` : '');
+    const link = `<a class="ev-link" href="${href}" target="_blank" rel="noopener"${titleAttr}${dataAttrs}>${docPart} · Seite&nbsp;${pageOneBased} ↗</a>`;
     return [prefix, link].filter(Boolean).join(' · ');
   }
   // Fallback: no page info — render as plain text.
@@ -776,6 +783,21 @@ Quelle: ${escapeHtml(sb.bmf_referenz || '§32a EStG')} · Grenzsatz ${(Number(da
     }
   });
 })();
+
+// ── Cross-Frame: Hover über ev-link Chips → postMessage an Parent
+// (m-case.html). Parent zeigt die PDF-Seite im rechten Viewer-Pane.
+document.body.addEventListener('mouseover', (e) => {
+  const a = e.target.closest('a.ev-link[data-sha256]');
+  if (!a) return;
+  const msg = {
+    type: 'sturm-source-hover',
+    sha256: a.getAttribute('data-sha256'),
+    page: Number(a.getAttribute('data-page') || '1'),
+    filename: a.getAttribute('data-filename') || '',
+    snippet: a.getAttribute('data-snippet') || '',
+  };
+  try { parent.postMessage(msg, '*'); } catch (_) { /* same-origin only */ }
+});
 </script>
 
 </body>
