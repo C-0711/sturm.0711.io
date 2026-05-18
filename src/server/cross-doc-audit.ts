@@ -127,23 +127,21 @@ function compactMaster(master: MasterShape): unknown {
     } : null,
   }));
   const ml = master.merged_layer ?? {};
-  // Nur ein Sample: pro Anlage die ersten 20 eCodes mit Wert + Quelle.
-  // Reduziert Token-Volumen drastisch.
+  // Sehr kompakt: pro Anlage max 5 eCodes mit Wert + 1 Quell-Filename.
+  // Cross-Doc-Reasoning braucht keine vollständige Feldliste — nur das
+  // Bild "welche Anlagen sind aus welchen Dokumenten gefüllt".
   const byAnlage = new Map<string, Array<{
-    ecode: string; value: string; anlage: string; zeile?: string; origin?: string;
-    quellen: string[];
+    ecode: string; value: string; drucktext: string; src: string;
   }>>();
   for (const [eCode, v] of Object.entries(ml)) {
     const a = v.anlage ?? '?';
     if (!byAnlage.has(a)) byAnlage.set(a, []);
-    if (byAnlage.get(a)!.length >= 20) continue;
+    if (byAnlage.get(a)!.length >= 5) continue;
     byAnlage.get(a)!.push({
       ecode: eCode,
-      value: v.normalized ?? v.value ?? '',
-      anlage: a,
-      zeile: v.vordruckzeile,
-      origin: v.origin,
-      quellen: (v.confirmed_by ?? []).map((c) => c.filename ?? '').filter(Boolean),
+      value: (v.normalized ?? v.value ?? '').toString().slice(0, 50),
+      drucktext: (v.drucktext ?? '').slice(0, 40),
+      src: (v.confirmed_by ?? [])[0]?.filename?.slice(0, 40) ?? '',
     });
   }
   const bmf = master.bmf?.daten ?? null;
