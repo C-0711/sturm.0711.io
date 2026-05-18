@@ -44,16 +44,37 @@ export interface CaseMasterResult {
   master: Record<string, unknown>;
 }
 
-/** Compute the aggregated state for a case and persist as master.json. */
+/** Compute the aggregated state for a case and persist as master.json.
+ *
+ *  Self-healing race fix: when the upload handler calls writeCaseMaster
+ *  immediately after `await run.result`, the runner's stage outputs
+ *  (phase6BmfRechner/output.json, phase5Merge/output.json) may still be
+ *  flushing to disk. The first aggregateCase pass then reads empty files
+ *  and returns merged_layer={}. We detect that — at least one inst.run is
+ *  state=ok but no layers loaded — and retry after a short delay.
+ *  Eliminates the "0 fields" master we observed on the v6 production run.
+ */
 export async function writeCaseMaster(
   inst: ApplicationInstance,
   opts: CaseMasterOptions,
 ): Promise<CaseMasterResult> {
   const { aggregateCase } = await import('./aggregation.ts');
-  const agg = await aggregateCase(inst, {
+  let agg = await aggregateCase(inst, {
     runsDir: opts.runsDir,
     extractionWorkflowId: opts.extractionWorkflowId,
   });
+  // Retry guard: empty merged_layer but ≥1 ok-state run → likely the
+  // stage-output flush race. Wait + recompute once.
+  if (Object.keys(agg.merged_layer).length === 0 && (inst.runs?.length ?? 0) > 0) {
+    const anyOk = agg.documents?.some((d) => d.state === 'ok' || d.state === 'partial');
+    if (anyOk) {
+      await new Promise((r) => setTimeout(r, 500));
+      agg = await aggregateCase(inst, {
+        runsDir: opts.runsDir,
+        extractionWorkflowId: opts.extractionWorkflowId,
+      });
+    }
+  }
 
   // Optional BMF re-compute over the merged layer.
   let bmf: unknown = null;
