@@ -1,0 +1,100 @@
+{
+  "_meta": {
+    "version": 1,
+    "format": "polar-turbo-gemma/v1",
+    "lastUpdated": "2026-05-20T16:03:09.298196Z"
+  },
+  "schemas": {
+    "einkommensteuererklaerung_vorjahr": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "3f62666470961769",
+      "file": "einkommensteuererklaerung_vorjahr.json",
+      "anlage": "ESt1A+",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    },
+    "lohnsteuerbescheinigung": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "fbb2d6800a94faf4",
+      "file": "lohnsteuerbescheinigung.json",
+      "anlage": "N",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    },
+    "mitteilung_kapitalertraege": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "f5ee9e175352ec39",
+      "file": "mitteilung_kapitalertraege.json",
+      "anlage": "KAP",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    },
+    "personaldaten_hauptvordruck": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "2b0167ff418edca2",
+      "file": "personaldaten_hauptvordruck.json",
+      "anlage": "ESt1A",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    },
+    "religionszugehoerigkeit": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "fa8360a86073bb42",
+      "file": "religionszugehoerigkeit.json",
+      "anlage": "ESt1A",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    },
+    "spendenquittung": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "9077a824d0f7b522",
+      "file": "spendenquittung.json",
+      "anlage": "SA",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    },
+    "steuerbescheinigung_kapitalertraege": {
+      "status": "approved",
+      "version": "1.0.0",
+      "sha": "666097591c901429",
+      "file": "steuerbescheinigung_kapitalertraege.json",
+      "anlage": "KAP",
+      "generatedAt": "2026-01-01T00:00:00Z",
+      "generatedBy": "manual-bootstrap",
+      "approvedAt": "2026-01-01T00:00:00Z",
+      "approvedBy": "christoph@0711.io",
+      "source": "bootstrap-existing",
+      "coverageStats": null
+    }
+  }
+}

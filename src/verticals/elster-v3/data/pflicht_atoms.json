@@ -1,0 +1,101 @@
+{
+  "_meta": {
+    "version": 1,
+    "format": "polar-turbo-gemma/v1",
+    "description": "Pflicht-eCodes pro Anlage. Jedes neu generierte nested_schema fuer einen Belegtyp, der die jeweilige Anlage adressiert, MUSS diese eCodes enthalten. Wird vom polar-schema-synth-Stage als Constraint in den Set-Cover-Solver gegeben und vom schema-finisher-mistral als Validierungs-Gate genutzt."
+  },
+  "by_anlage": {
+    "ESt1A": {
+      "description": "Hauptvordruck — Stammdaten beider Personen, Adresse, Bankverbindung, Veranlagungsart, Religion.",
+      "pflicht_ecodes": [
+        { "ecode": "E0100201", "bedeutung": "Familienname Person A" },
+        { "ecode": "E0100301", "bedeutung": "Vorname Person A" },
+        { "ecode": "E0100081", "bedeutung": "IdNr Person A" }
+      ],
+      "optional_typisch": [
+        "E0100402", "E0100702", "E0100802", "E0101201", "E0101301", "E0101081", "E0101402", "E0101702"
+      ]
+    },
+    "N": {
+      "description": "Anlage N — nichtselbstaendige Arbeit (Aktivlohn UND Versorgungsbezuege).",
+      "pflicht_ecodes": [
+        { "ecode": "E0200201", "bedeutung": "Bruttoarbeitslohn" },
+        { "ecode": "E0200301", "bedeutung": "einbehaltene Lohnsteuer" }
+      ],
+      "optional_typisch": [
+        "E0200401", "E0200501", "E0200601", "E0203504"
+      ]
+    },
+    "N_Versorgung": {
+      "description": "Anlage N Versorgungsbezuege-Zweig (Z.31+) — Beamtenpension, Witwen-Pension, Pensionskasse.",
+      "pflicht_ecodes": [
+        { "ecode": "E0200201", "bedeutung": "Bruttoarbeitslohn (hier: Versorgungsbezug-Betrag)" },
+        { "ecode": "E0200301", "bedeutung": "einbehaltene Lohnsteuer" }
+      ],
+      "optional_typisch": [
+        "E0202001", "E0202101", "E0202201"
+      ],
+      "hinweis": "Wird vom Klassifizierer NOCH als doc_class=lohnsteuerbescheinigung gelabelt — pflicht_atoms unterscheiden via citation_section."
+    },
+    "Vorsatz": {
+      "description": "Anlage Vorsorgeaufwendungen — Versicherungsbeitraege.",
+      "pflicht_ecodes": [
+        { "ecode": "E2001203", "bedeutung": "KV-AN-Anteil" },
+        { "ecode": "E2001505", "bedeutung": "PV-AN-Anteil" }
+      ],
+      "optional_typisch": [
+        "E2000401", "E2000801", "E2001001", "E2002001"
+      ]
+    },
+    "KAP": {
+      "description": "Anlage KAP — Kapitalvermoegen.",
+      "pflicht_ecodes": [
+        { "ecode": "E1900701", "bedeutung": "Kapitalertraege gesamt" }
+      ],
+      "optional_typisch": [
+        "E1900801", "E1903001", "E1903301", "E1903801"
+      ]
+    },
+    "SA": {
+      "description": "Anlage Sonderausgaben (Spenden, KiSt etc.).",
+      "pflicht_ecodes": [],
+      "optional_typisch": [
+        "E0107601", "E0107701", "E0108001"
+      ]
+    },
+    "AgB": {
+      "description": "Anlage Aussergewoehnliche Belastungen.",
+      "pflicht_ecodes": [],
+      "optional_typisch": [
+        "E0801001", "E0801101"
+      ]
+    },
+    "HA_35a": {
+      "description": "Anlage haushaltsnahe Beschaeftigungen/Dienstleistungen (§35a EStG).",
+      "pflicht_ecodes": [],
+      "optional_typisch": [
+        "E0700601", "E0700701", "E0700801"
+      ]
+    },
+    "R": {
+      "description": "Anlage R — Renten, Versorgungsbezuege aus inlaendischen Rentenversicherungen.",
+      "pflicht_ecodes": [
+        { "ecode": "E0606001", "bedeutung": "Jahresbetrag der Rente" }
+      ],
+      "optional_typisch": [
+        "E0606101", "E0606201", "E0606301"
+      ]
+    },
+    "V": {
+      "description": "Anlage V — Vermietung und Verpachtung.",
+      "pflicht_ecodes": [],
+      "optional_typisch": []
+    },
+    "Bescheid": {
+      "description": "Steuerbescheid — Festsetzung von ESt + SolZ + KiSt (Pseudo-Anlage, kein ELSTER-Ausgang).",
+      "pflicht_ecodes": [],
+      "optional_typisch": [],
+      "hinweis": "Bescheide werden NICHT eingereicht. Schema dient nur dem Vorjahres-Kontext + Anrechnungs-Beleg."
+    }
+  }
+}
