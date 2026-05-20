@@ -19,7 +19,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineStage } from '../../../core/stage.ts';
 import { embedQueries, l2normalize, EMBEDDINGGEMMA_DIM } from '../../../lib/gemma-embed.ts';
-import { ExactFp32Index, QuantumCascade, type CascadeManifest } from '../../../lib/quantum-index.ts';
+import { QuantumCascade, type CascadeManifest } from '../../../lib/quantum-index.ts';
 import { greedySetCover, type ECodeCandidate, type SectionRef } from '../lib/set-cover.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -69,14 +69,14 @@ interface PolarSynthOutput {
     pflicht_satisfied: boolean;
     average_score: number;
   };
-  /** Audit-Trail der Container-Query (offizielle Container-Lib). */
+  /** Audit-Trail der Container-Query (TurboQuant-Cascade). */
   quantum_container_query: {
     container_id: string;
+    container_version: string;
     container_merkle_root: string;
     catalog_id: string;
     catalog_merkle_root: string;
-    retrieval_mode: 'fp32-exact' | 'cascade';
-    retrieval_note: string;
+    cascade_description: string;
     retrieval_ms: number;
     queries_total: number;
   };
@@ -102,17 +102,15 @@ interface LoadedCatalog {
   /** Gefilterte Liste (nur echte eCodes). */
   atoms: Atom[];
   ecodeToIndex: Map<string, number>;
-  /** Offizieller Container-Reader fuer fp32-Vektoren (sealed, L2-normalisiert). */
-  exactIndex: ExactFp32Index;
-  /** Liste aller atomsRaw-Indizes mit gueltigem eCode — fuer rerank-Kandidatenliste. */
-  allEcodeIndices: number[];
+  /** TurboQuant-Cascade (d128 → d256 → d512 → d768 → fp32). Offizielle Container-Lib. */
+  cascade: QuantumCascade;
   /** Audit-Trail Metadaten aus den sealed Containern. */
   containerId: string;
   containerMerkleRoot: string;
+  containerVersion: string;
   catalogId: string;
   catalogMerkleRoot: string;
-  retrievalMode: 'fp32-exact' | 'cascade';
-  retrievalNote: string;
+  cascadeDescription: string;
 }
 
 let _cachedCatalog: LoadedCatalog | null = null;
@@ -124,31 +122,21 @@ async function loadCatalog(): Promise<LoadedCatalog> {
   const atomsRaw = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'atoms.json'), 'utf-8')) as Atom[];
   const atoms: Atom[] = atomsRaw.filter((a) => ECODE_REGEX.test(a.field_name));
 
-  // index-Mapping + Kandidaten-Liste aller atomsRaw-Indizes mit gueltigem eCode.
   const ecodeToIndex = new Map<string, number>();
-  const allEcodeIndices: number[] = [];
   for (let i = 0; i < atomsRaw.length; i++) {
     if (ECODE_REGEX.test(atomsRaw[i].field_name)) {
       ecodeToIndex.set(atomsRaw[i].field_name, i);
-      allEcodeIndices.push(i);
     }
   }
 
-  // Cascade-Manifest fuer Container-ID + Metadaten. Die TQ-Cascade selbst hat
-  // einen offenen Bug (d128-Prefilter findet falsche Neighbors) — solange das
-  // nicht gefixt ist, nutzen wir den fp32-exakten Index direkt. Das ist
-  // immer noch ueber die offizielle Container-Lib (ExactFp32Index.load /
-  // .rerank), nicht ueber eigenes Binary-Parsing.
+  // Quantum-Cascade (d128 prefilter → d256 → d512 → d768 → fp32 rerank).
+  // Container v5.9: TQ-Tiers re-quantized deterministisch aus fp32.bin
+  // (siehe scripts/requantize-from-fp32.ts), Self-Test: stored vectors finden
+  // sich selbst mit cos=1.0 in top-1.
   const cascadeManifest: CascadeManifest = JSON.parse(
     fs.readFileSync(path.join(DATA_DIR, 'embeddings.gemma4.cascade.json'), 'utf-8'),
   );
-  if (!cascadeManifest.exact) {
-    throw new Error('cascade manifest has no exact fp32 tier');
-  }
-  const exactIndex = await ExactFp32Index.load(
-    path.join(DATA_DIR, cascadeManifest.exact.file),
-    cascadeManifest.exact.d,
-  );
+  const cascade = await QuantumCascade.loadFromManifest(DATA_DIR, cascadeManifest, /* finalK */ 100);
 
   // Container- + Catalog-Metadaten fuer Audit-Trail.
   const embeddingContainer = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'container.gemma4.json'), 'utf-8'));
@@ -158,14 +146,13 @@ async function loadCatalog(): Promise<LoadedCatalog> {
     atomsRaw,
     atoms,
     ecodeToIndex,
-    exactIndex,
-    allEcodeIndices,
+    cascade,
     containerId: cascadeManifest.containerId,
     containerMerkleRoot: embeddingContainer.merkle_root ?? '',
+    containerVersion: embeddingContainer.version ?? '',
     catalogId: atomsContainer.id,
     catalogMerkleRoot: atomsContainer.merkle_root ?? '',
-    retrievalMode: 'fp32-exact',
-    retrievalNote: `ExactFp32Index.rerank ueber ${allEcodeIndices.length} eCode-Vektoren (d=${cascadeManifest.exact.d}, n=${cascadeManifest.exact.n}). Cascade-Prefilter (d128/256/512/768 TQ) ueberspring wegen offenem Bug — siehe Issue: cascade liefert 0% Overlap zu fp32-Ground-Truth.`,
+    cascadeDescription: cascade.describe(),
   };
   return _cachedCatalog;
 }
@@ -282,10 +269,11 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     const pflicht = loadPflichtAtoms();
     ctx.emit('polar-synth.container-query', {
       containerId: catalog.containerId,
+      containerVersion: catalog.containerVersion,
       containerMerkleRoot: catalog.containerMerkleRoot.slice(0, 16) + '…',
       catalogId: catalog.catalogId,
       catalogMerkleRoot: catalog.catalogMerkleRoot.slice(0, 16) + '…',
-      retrievalMode: catalog.retrievalMode,
+      cascade: catalog.cascadeDescription,
       atoms: catalog.atoms.length,
     });
 
@@ -310,9 +298,9 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     const tCascadeStart = Date.now();
 
     for (let i = 0; i < sections.length; i++) {
-      // ExactFp32Index.rerank gegen ALLE eCode-Indizes — Cascade-Prefilter
-      // ueberspring (kaputt, siehe retrievalNote). Bei n=2287 unter 10 ms.
-      const top = catalog.exactIndex.rerank(sectionVecsNorm[i], catalog.allEcodeIndices, topKPerSection);
+      // Echte TurboQuant-Cascade durch den sealed Container.
+      // d128 prefilter → d256 → d512 → d768 → fp32 rerank.
+      const top = catalog.cascade.topK(sectionVecsNorm[i], topKPerSection);
       const trace: { ecode: string; score: number }[] = [];
 
       for (const hit of top) {
@@ -333,7 +321,7 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     }
     const retrievalMs = Date.now() - tCascadeStart;
     const candidates = Array.from(candidatesByEcode.values());
-    ctx.emit('polar-synth.candidates', { n: candidates.length, retrievalMs, mode: catalog.retrievalMode });
+    ctx.emit('polar-synth.candidates', { n: candidates.length, retrievalMs, mode: 'cascade' });
 
     // 5. Pflicht-eCodes resolven.
     const { anlagen, pflichtEcodes } = resolvePflichtEcodes(input.docClass, input.classifierAnlagen, pflicht);
@@ -432,11 +420,11 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       },
       quantum_container_query: {
         container_id: catalog.containerId,
+        container_version: catalog.containerVersion,
         container_merkle_root: catalog.containerMerkleRoot,
         catalog_id: catalog.catalogId,
         catalog_merkle_root: catalog.catalogMerkleRoot,
-        retrieval_mode: catalog.retrievalMode,
-        retrieval_note: catalog.retrievalNote,
+        cascade_description: catalog.cascadeDescription,
         retrieval_ms: retrievalMs,
         queries_total: sections.length,
       },

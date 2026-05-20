@@ -24,8 +24,8 @@
       "n": 2287,
       "keepTopK": 500,
       "bytesPerVector": 56,
-      "compressionRatio": 54.857142857142854,
-      "sha256": "2e90ee2df759d332ece4fb04723ff792885a66416d103ba46372992dd52e11c8"
+      "compressionRatio": 9.142857142857142,
+      "sha256": "306109e9398553794538b2f5e30e6af93d65fb98eb2c01673d7dcd5d4c98524a"
     },
     {
       "file": "embeddings.gemma4.tq-d256-b3.bin",
@@ -34,8 +34,8 @@
       "n": 2287,
       "keepTopK": 200,
       "bytesPerVector": 136,
-      "compressionRatio": 22.58823529411765,
-      "sha256": "9ea6036619b3d7febfbba3b99c07083b745efec4c591aec7ab89546a73e0dda4"
+      "compressionRatio": 7.529411764705882,
+      "sha256": "6d8841a2690602e8d7625774a5faf4326be2352b771e5b682b8cd8b8795a8322"
     },
     {
       "file": "embeddings.gemma4.tq-d512-b3.bin",
@@ -44,8 +44,8 @@
       "n": 2287,
       "keepTopK": 100,
       "bytesPerVector": 264,
-      "compressionRatio": 11.636363636363637,
-      "sha256": "880dca96ba71903a57f5db4227dd318e573afc534c798a451a99eca33262a30c"
+      "compressionRatio": 7.757575757575758,
+      "sha256": "b695568bea405b5a6e9a00c3564e3f4db107301427b15967c1ba50c542aff754"
     },
     {
       "file": "embeddings.gemma4.tq-d768-b3.bin",
@@ -55,7 +55,7 @@
       "keepTopK": 50,
       "bytesPerVector": 392,
       "compressionRatio": 7.836734693877551,
-      "sha256": "2ca6275c928fd2eba007284d30d86cf37f63ad3a21aef07de85dd06fd9589d4b"
+      "sha256": "1c2329f221757e3c96ab8923d3caeda3abde6642c42ef937c28988e2997bb32b"
     }
   ],
   "exact": {
@@ -69,7 +69,9 @@
     "kind": "TurboQuant",
     "reference": "arxiv:2504.19874",
     "stage_1": "PolarQuant (Haar rotation + Lloyd-Max @ N(0,1/d))",
-    "stage_2": "QJL (sign(S\u00b7r) random Gaussian projection)",
+    "stage_2": "QJL (sign(S·r) random Gaussian projection)",
     "seed_tag_format": "tq-seed-{seed}-d{d}-b{b}"
-  }
+  },
+  "requantized_at": "2026-05-20T16:50:14.400Z",
+  "requantize_source": "embeddings.gemma4.fp32.bin (sealed, unchanged)"
 }
