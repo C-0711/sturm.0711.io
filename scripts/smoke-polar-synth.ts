@@ -50,9 +50,9 @@ async function main() {
       ocrPages,
       docClass,
       classifierAnlagen: [],
-      minScore: 0.55,
+      minScore: 0.0,
       topKPerSection: 8,
-      maxEcodes: 30,
+      maxEcodes: 100,
       minSectionLength: 50,
     },
     ctx,
@@ -72,11 +72,27 @@ async function main() {
     console.log(`  [${s.id}] ${s.label}`);
     console.log(`         excerpt: ${s.ocr_excerpt.replace(/\n/g, ' ').slice(0, 120)}…`);
   }
-  console.log('\neCode descriptions (selected):');
-  for (const ec of [...result.ecodes_required, ...result.ecodes_optional].slice(0, 15)) {
+  console.log('\nAlle selektierten eCodes mit Score (sortiert):');
+  const allEcodes = [...result.ecodes_required, ...result.ecodes_optional];
+  const ranked = allEcodes
+    .map((ec: string) => ({ ec, score: result.ecode_scores[ec] ?? 0 }))
+    .sort((a, b) => b.score - a.score);
+  for (const { ec, score } of ranked) {
     const d = result.ecode_descriptions[ec];
-    console.log(`  ${ec}  ${d?.value ?? '?'}  [${d?.anlage ?? '?'}]  type=${result.type_hints[ec] ?? '?'}`);
+    const isReq = result.ecodes_required.includes(ec) ? 'REQ' : '   ';
+    console.log(
+      `  ${score.toFixed(3)}  ${isReq}  ${ec}  ${(d?.anlage ?? '?').padEnd(20).slice(0, 20)}  ${(d?.value ?? '?').slice(0, 70).replace(/\n/g, ' ')}`,
+    );
   }
+  // Anlagen-Verteilung
+  const byAnlage = new Map<string, number>();
+  for (const ec of allEcodes) {
+    const a = result.ecode_descriptions[ec]?.anlage ?? '?';
+    byAnlage.set(a, (byAnlage.get(a) ?? 0) + 1);
+  }
+  console.log('\nAnlagen-Verteilung:');
+  [...byAnlage.entries()].sort((a, b) => b[1] - a[1]).forEach(([k, v]) => console.log(`  ${v}x  ${k}`));
+  console.log('\nTotal eCodes:', allEcodes.length, '(', result.ecodes_required.length, 'pflicht +', result.ecodes_optional.length, 'optional )');
 
   console.log('\n=== ASSERTIONS ===');
   const checks = [

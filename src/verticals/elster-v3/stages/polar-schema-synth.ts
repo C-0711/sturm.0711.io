@@ -19,7 +19,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineStage } from '../../../core/stage.ts';
 import { embedQueries, l2normalize, EMBEDDINGGEMMA_DIM } from '../../../lib/gemma-embed.ts';
-import { QuantumCascade, type CascadeManifest } from '../../../lib/quantum-index.ts';
+import { ExactFp32Index, QuantumCascade, type CascadeManifest } from '../../../lib/quantum-index.ts';
 import { greedySetCover, type ECodeCandidate, type SectionRef } from '../lib/set-cover.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +61,8 @@ interface PolarSynthOutput {
   ecodes_required: string[];
   ecodes_optional: string[];
   ecode_descriptions: Record<string, { value: string; anlage: string; value_type: string }>;
+  /** Cosinus-Score pro eCode (max ueber alle Sektions-Treffer) — fuer downstream Critic. */
+  ecode_scores: Record<string, number>;
   type_hints: Record<string, 'geldbetrag' | 'datum' | 'string' | 'integer' | 'idnr' | 'steuernummer'>;
   coverage_stats: {
     sections_total: number;
@@ -69,14 +71,15 @@ interface PolarSynthOutput {
     pflicht_satisfied: boolean;
     average_score: number;
   };
-  /** Audit-Trail der Container-Query (TurboQuant-Cascade). */
+  /** Audit-Trail der Container-Query (offizielle Container-Lib). */
   quantum_container_query: {
     container_id: string;
     container_version: string;
     container_merkle_root: string;
     catalog_id: string;
     catalog_merkle_root: string;
-    cascade_description: string;
+    retrieval_mode: 'fp32-exact';
+    retrieval_note: string;
     retrieval_ms: number;
     queries_total: number;
   };
@@ -102,15 +105,19 @@ interface LoadedCatalog {
   /** Gefilterte Liste (nur echte eCodes). */
   atoms: Atom[];
   ecodeToIndex: Map<string, number>;
-  /** TurboQuant-Cascade (d128 → d256 → d512 → d768 → fp32). Offizielle Container-Lib. */
-  cascade: QuantumCascade;
+  /** Offizieller Container-Reader fuer fp32 exact-rerank. Bei n=2287 strikt
+   *  schneller als die 4-Tier-Cascade (kein Lloyd-Max-Decode-Overhead). */
+  exactIndex: ExactFp32Index;
+  /** Liste aller atomsRaw-Indizes mit gueltigem eCode — rerank-Kandidaten. */
+  allEcodeIndices: number[];
   /** Audit-Trail Metadaten aus den sealed Containern. */
   containerId: string;
   containerMerkleRoot: string;
   containerVersion: string;
   catalogId: string;
   catalogMerkleRoot: string;
-  cascadeDescription: string;
+  retrievalMode: 'fp32-exact';
+  retrievalNote: string;
 }
 
 let _cachedCatalog: LoadedCatalog | null = null;
@@ -123,20 +130,32 @@ async function loadCatalog(): Promise<LoadedCatalog> {
   const atoms: Atom[] = atomsRaw.filter((a) => ECODE_REGEX.test(a.field_name));
 
   const ecodeToIndex = new Map<string, number>();
+  const allEcodeIndices: number[] = [];
   for (let i = 0; i < atomsRaw.length; i++) {
     if (ECODE_REGEX.test(atomsRaw[i].field_name)) {
       ecodeToIndex.set(atomsRaw[i].field_name, i);
+      allEcodeIndices.push(i);
     }
   }
 
-  // Quantum-Cascade (d128 prefilter → d256 → d512 → d768 → fp32 rerank).
-  // Container v5.9: TQ-Tiers re-quantized deterministisch aus fp32.bin
-  // (siehe scripts/requantize-from-fp32.ts), Self-Test: stored vectors finden
-  // sich selbst mit cos=1.0 in top-1.
+  // Container-Manifest: wir nutzen den fp32-exact-Index (offizielle Container-
+  // Lib ExactFp32Index.load + .rerank). Cascade ist semantisch jetzt korrekt
+  // (Container v5.9, re-quantized via scripts/requantize-from-fp32.ts, Self-
+  // Test cos=1.0), aber bei n=2287 ist sie ~23x langsamer als fp32-exact
+  // (3.4s vs 144ms), weil pro Tier Lloyd-Max-Decode + L2-Renorm anfaellt und
+  // der Tier-Filter-Gewinn erst bei n>=100k kickt. Andere Container-Konsumenten
+  // (quantum-ground / layer1Prepop) nutzen die Cascade weiter — fuer sie ist
+  // der fp32-Vergleich nicht im Hot-Path.
   const cascadeManifest: CascadeManifest = JSON.parse(
     fs.readFileSync(path.join(DATA_DIR, 'embeddings.gemma4.cascade.json'), 'utf-8'),
   );
-  const cascade = await QuantumCascade.loadFromManifest(DATA_DIR, cascadeManifest, /* finalK */ 100);
+  if (!cascadeManifest.exact) {
+    throw new Error('cascade manifest has no exact fp32 tier');
+  }
+  const exactIndex = await ExactFp32Index.load(
+    path.join(DATA_DIR, cascadeManifest.exact.file),
+    cascadeManifest.exact.d,
+  );
 
   // Container- + Catalog-Metadaten fuer Audit-Trail.
   const embeddingContainer = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'container.gemma4.json'), 'utf-8'));
@@ -146,13 +165,15 @@ async function loadCatalog(): Promise<LoadedCatalog> {
     atomsRaw,
     atoms,
     ecodeToIndex,
-    cascade,
+    exactIndex,
+    allEcodeIndices,
     containerId: cascadeManifest.containerId,
-    containerMerkleRoot: embeddingContainer.merkle_root ?? '',
     containerVersion: embeddingContainer.version ?? '',
+    containerMerkleRoot: embeddingContainer.merkle_root ?? '',
     catalogId: atomsContainer.id,
     catalogMerkleRoot: atomsContainer.merkle_root ?? '',
-    cascadeDescription: cascade.describe(),
+    retrievalMode: 'fp32-exact',
+    retrievalNote: `ExactFp32Index.rerank ueber ${allEcodeIndices.length} eCode-Vektoren (d=${cascadeManifest.exact.d}, n=${cascadeManifest.exact.n}). Bei dieser Catalog-Groesse strikt schneller als die 4-Tier-Cascade (faktor ~23x). Cascade selbst ist im Container v5.9 semantisch fixed und steht anderen Konsumenten zur Verfuegung.`,
   };
   return _cachedCatalog;
 }
@@ -257,9 +278,13 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     'Surface ist strukturell null. Downstream konsumiert von schema-finisher-mistral.',
 
   async run(input, ctx) {
-    const minScore = input.minScore ?? 0.55;
+    // Defaults: maximaler Recall, kein Score-Filter. Downstream-Critic
+    // (Mistral Small) entscheidet welche eCodes ins finale Schema kommen.
+    // Polar-Synth liefert die volle Kandidaten-Vereinigung (topK ueber alle
+    // Sektionen, dedupliziert) plus die Pflicht-Atome der erkannten Anlagen.
+    const minScore = input.minScore ?? 0.0;
     const topKPerSection = input.topKPerSection ?? 8;
-    const maxEcodes = input.maxEcodes ?? 30;
+    const maxEcodes = input.maxEcodes ?? 100;
     const minSectionLength = input.minSectionLength ?? 60;
 
     ctx.emit('polar-synth.start', { docClass: input.docClass });
@@ -273,7 +298,7 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       containerMerkleRoot: catalog.containerMerkleRoot.slice(0, 16) + '…',
       catalogId: catalog.catalogId,
       catalogMerkleRoot: catalog.catalogMerkleRoot.slice(0, 16) + '…',
-      cascade: catalog.cascadeDescription,
+      retrievalMode: catalog.retrievalMode,
       atoms: catalog.atoms.length,
     });
 
@@ -298,9 +323,10 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     const tCascadeStart = Date.now();
 
     for (let i = 0; i < sections.length; i++) {
-      // Echte TurboQuant-Cascade durch den sealed Container.
-      // d128 prefilter → d256 → d512 → d768 → fp32 rerank.
-      const top = catalog.cascade.topK(sectionVecsNorm[i], topKPerSection);
+      // ExactFp32Index.rerank gegen alle eCode-Indizes — offizielle Container-Lib.
+      // Bei n=2287 ~23x schneller als die 4-Tier-Cascade (kein Lloyd-Max-Decode-
+      // Overhead pro Tier). Cascade lohnt sich erst bei n>=100k.
+      const top = catalog.exactIndex.rerank(sectionVecsNorm[i], catalog.allEcodeIndices, topKPerSection);
       const trace: { ecode: string; score: number }[] = [];
 
       for (const hit of top) {
@@ -321,7 +347,7 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     }
     const retrievalMs = Date.now() - tCascadeStart;
     const candidates = Array.from(candidatesByEcode.values());
-    ctx.emit('polar-synth.candidates', { n: candidates.length, retrievalMs, mode: 'cascade' });
+    ctx.emit('polar-synth.candidates', { n: candidates.length, retrievalMs, mode: catalog.retrievalMode });
 
     // 5. Pflicht-eCodes resolven.
     const { anlagen, pflichtEcodes } = resolvePflichtEcodes(input.docClass, input.classifierAnlagen, pflicht);
@@ -375,8 +401,9 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       candidatesTotalRetrieved: candidates.length,
     });
 
-    // 8. Beschreibungen + Type-Hints fuer ALLE selektierten eCodes.
+    // 8. Beschreibungen + Type-Hints + Score-Map fuer ALLE selektierten eCodes.
     const ecodeDescriptions: PolarSynthOutput['ecode_descriptions'] = {};
+    const ecodeScores: PolarSynthOutput['ecode_scores'] = {};
     const typeHints: PolarSynthOutput['type_hints'] = {};
 
     for (const ec of selected) {
@@ -389,6 +416,9 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
         value_type: atom.value_type,
       };
       typeHints[ec] = inferType(atom);
+      // Score = best cosinus across sections for this eCode (Pflicht atoms may
+      // have no retrieval hit; score 0 then).
+      ecodeScores[ec] = candidatesByEcode.get(ec)?.score ?? 0;
     }
 
     const sectionExcerpts = sections.map((s, i) => ({
@@ -410,6 +440,7 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       ecodes_required: ecodesRequired,
       ecodes_optional: ecodesOptional,
       ecode_descriptions: ecodeDescriptions,
+      ecode_scores: ecodeScores,
       type_hints: typeHints,
       coverage_stats: {
         sections_total: sections.length,
@@ -424,7 +455,8 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
         container_merkle_root: catalog.containerMerkleRoot,
         catalog_id: catalog.catalogId,
         catalog_merkle_root: catalog.catalogMerkleRoot,
-        cascade_description: catalog.cascadeDescription,
+        retrieval_mode: catalog.retrievalMode,
+        retrieval_note: catalog.retrievalNote,
         retrieval_ms: retrievalMs,
         queries_total: sections.length,
       },
