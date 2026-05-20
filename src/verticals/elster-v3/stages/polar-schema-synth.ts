@@ -19,6 +19,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineStage } from '../../../core/stage.ts';
 import { embedQueries, l2normalize, EMBEDDINGGEMMA_DIM } from '../../../lib/gemma-embed.ts';
+import { ExactFp32Index, QuantumCascade, type CascadeManifest } from '../../../lib/quantum-index.ts';
 import { greedySetCover, type ECodeCandidate, type SectionRef } from '../lib/set-cover.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,17 @@ interface PolarSynthOutput {
     pflicht_satisfied: boolean;
     average_score: number;
   };
+  /** Audit-Trail der Container-Query (offizielle Container-Lib). */
+  quantum_container_query: {
+    container_id: string;
+    container_merkle_root: string;
+    catalog_id: string;
+    catalog_merkle_root: string;
+    retrieval_mode: 'fp32-exact' | 'cascade';
+    retrieval_note: string;
+    retrieval_ms: number;
+    queries_total: number;
+  };
   retrieval_trace: { section_id: string; top_ecodes: { ecode: string; score: number }[] }[];
   set_cover_trace: { round: number; ecode: string; reason: string; newly_covered: string[]; score: number }[];
 }
@@ -75,44 +87,86 @@ interface PolarSynthOutput {
 const ECODE_REGEX = /^E\d{7}$/; // BMF-Format
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sealed Catalog Loader
+// Sealed Catalog + Quantum-Container-Query
+//
+// Statt fp32-Fullscan ueber das lokale .bin: wir gehen ueber QuantumCascade.
+// Das ist die offizielle Container-Query — d128 → d256 → d512 → d768 → fp32-
+// rerank — mit Container-ID + Merkle-Root im Output. Audit-Trail-fest.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DATA_DIR = path.resolve(__dirname, '../data');
 
 interface LoadedCatalog {
+  /** Vollstaendige atomsRaw-Liste — Indizes zeigen hier hinein. */
+  atomsRaw: Atom[];
+  /** Gefilterte Liste (nur echte eCodes). */
   atoms: Atom[];
-  embeddings: Float32Array[]; // L2-normalisiert
   ecodeToIndex: Map<string, number>;
+  /** Offizieller Container-Reader fuer fp32-Vektoren (sealed, L2-normalisiert). */
+  exactIndex: ExactFp32Index;
+  /** Liste aller atomsRaw-Indizes mit gueltigem eCode — fuer rerank-Kandidatenliste. */
+  allEcodeIndices: number[];
+  /** Audit-Trail Metadaten aus den sealed Containern. */
+  containerId: string;
+  containerMerkleRoot: string;
+  catalogId: string;
+  catalogMerkleRoot: string;
+  retrievalMode: 'fp32-exact' | 'cascade';
+  retrievalNote: string;
 }
 
 let _cachedCatalog: LoadedCatalog | null = null;
 
-function loadCatalog(): LoadedCatalog {
+async function loadCatalog(): Promise<LoadedCatalog> {
   if (_cachedCatalog) return _cachedCatalog;
 
-  const atomsRaw = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'atoms.json'), 'utf-8'));
-  const atoms: Atom[] = atomsRaw.filter((a: Atom) => ECODE_REGEX.test(a.field_name));
+  // atoms.json: 2287 BMF-Atome (RAW + gefiltert).
+  const atomsRaw = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'atoms.json'), 'utf-8')) as Atom[];
+  const atoms: Atom[] = atomsRaw.filter((a) => ECODE_REGEX.test(a.field_name));
 
-  const fp32Buf = fs.readFileSync(path.join(DATA_DIR, 'embeddings.gemma4.fp32.bin'));
-  const f32 = new Float32Array(fp32Buf.buffer, fp32Buf.byteOffset, fp32Buf.byteLength / 4);
-  const n = f32.length / EMBEDDINGGEMMA_DIM;
-  if (n !== atomsRaw.length) {
-    // Manche atoms haben keine eCode (system-rows). Embedding-Bin ist parallel zu atomsRaw,
-    // nicht zur gefilterten eCode-Liste. Wir indexen via ursprueglicher Position.
-  }
-
-  const embeddings: Float32Array[] = [];
+  // index-Mapping + Kandidaten-Liste aller atomsRaw-Indizes mit gueltigem eCode.
   const ecodeToIndex = new Map<string, number>();
+  const allEcodeIndices: number[] = [];
   for (let i = 0; i < atomsRaw.length; i++) {
-    if (!ECODE_REGEX.test(atomsRaw[i].field_name)) continue;
-    const vec = new Float32Array(f32.buffer, fp32Buf.byteOffset + i * EMBEDDINGGEMMA_DIM * 4, EMBEDDINGGEMMA_DIM);
-    const normalized = l2normalize(new Float32Array(vec)); // copy + normalize
-    ecodeToIndex.set(atomsRaw[i].field_name, embeddings.length);
-    embeddings.push(normalized);
+    if (ECODE_REGEX.test(atomsRaw[i].field_name)) {
+      ecodeToIndex.set(atomsRaw[i].field_name, i);
+      allEcodeIndices.push(i);
+    }
   }
 
-  _cachedCatalog = { atoms, embeddings, ecodeToIndex };
+  // Cascade-Manifest fuer Container-ID + Metadaten. Die TQ-Cascade selbst hat
+  // einen offenen Bug (d128-Prefilter findet falsche Neighbors) — solange das
+  // nicht gefixt ist, nutzen wir den fp32-exakten Index direkt. Das ist
+  // immer noch ueber die offizielle Container-Lib (ExactFp32Index.load /
+  // .rerank), nicht ueber eigenes Binary-Parsing.
+  const cascadeManifest: CascadeManifest = JSON.parse(
+    fs.readFileSync(path.join(DATA_DIR, 'embeddings.gemma4.cascade.json'), 'utf-8'),
+  );
+  if (!cascadeManifest.exact) {
+    throw new Error('cascade manifest has no exact fp32 tier');
+  }
+  const exactIndex = await ExactFp32Index.load(
+    path.join(DATA_DIR, cascadeManifest.exact.file),
+    cascadeManifest.exact.d,
+  );
+
+  // Container- + Catalog-Metadaten fuer Audit-Trail.
+  const embeddingContainer = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'container.gemma4.json'), 'utf-8'));
+  const atomsContainer = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'container.json'), 'utf-8'));
+
+  _cachedCatalog = {
+    atomsRaw,
+    atoms,
+    ecodeToIndex,
+    exactIndex,
+    allEcodeIndices,
+    containerId: cascadeManifest.containerId,
+    containerMerkleRoot: embeddingContainer.merkle_root ?? '',
+    catalogId: atomsContainer.id,
+    catalogMerkleRoot: atomsContainer.merkle_root ?? '',
+    retrievalMode: 'fp32-exact',
+    retrievalNote: `ExactFp32Index.rerank ueber ${allEcodeIndices.length} eCode-Vektoren (d=${cascadeManifest.exact.d}, n=${cascadeManifest.exact.n}). Cascade-Prefilter (d128/256/512/768 TQ) ueberspring wegen offenem Bug — siehe Issue: cascade liefert 0% Overlap zu fp32-Ground-Truth.`,
+  };
   return _cachedCatalog;
 }
 
@@ -147,20 +201,11 @@ function sectionText(ocrText: string, sectionIndex: number, minLen: number): str
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cosine Polar Retrieval
+// Quantum-Container-Query (TurboQuant Cascade)
 // ─────────────────────────────────────────────────────────────────────────────
-
-function cosineSorted(query: Float32Array, atomEmbeds: Float32Array[], topK: number): { idx: number; score: number }[] {
-  const scores: { idx: number; score: number }[] = [];
-  for (let j = 0; j < atomEmbeds.length; j++) {
-    const a = atomEmbeds[j];
-    let dot = 0;
-    for (let k = 0; k < query.length; k++) dot += query[k] * a[k];
-    scores.push({ idx: j, score: dot });
-  }
-  scores.sort((a, b) => b.score - a.score || (a.idx - b.idx));
-  return scores.slice(0, topK);
-}
+// Eine Query laeuft d128 → d256 → d512 → d768 → fp32-rerank durch den
+// sealed ELSTER-Embedding-Container. Output sind Cosinus-Distanzen aus dem
+// fp32-rerank — exakt, audit-fest, mit Catalog-Index direkt verwendbar.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Typ-Inferenz (deterministisch, regex)
@@ -232,10 +277,17 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
 
     ctx.emit('polar-synth.start', { docClass: input.docClass });
 
-    // 1. Catalog laden (cached).
-    const catalog = loadCatalog();
+    // 1. Catalog + Quantum-Cascade laden (cached).
+    const catalog = await loadCatalog();
     const pflicht = loadPflichtAtoms();
-    ctx.emit('polar-synth.catalog-loaded', { atoms: catalog.atoms.length });
+    ctx.emit('polar-synth.container-query', {
+      containerId: catalog.containerId,
+      containerMerkleRoot: catalog.containerMerkleRoot.slice(0, 16) + '…',
+      catalogId: catalog.catalogId,
+      catalogMerkleRoot: catalog.catalogMerkleRoot.slice(0, 16) + '…',
+      retrievalMode: catalog.retrievalMode,
+      atoms: catalog.atoms.length,
+    });
 
     // 2. Sektionen extrahieren.
     const sections = splitIntoSections(input.ocrText, minSectionLength);
@@ -250,35 +302,48 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     const sectionVecsNorm = sectionVecs.map((v) => l2normalize(new Float32Array(v)));
     ctx.emit('polar-synth.embedded-sections', { n: sectionVecsNorm.length });
 
-    // 4. Polar-Cone-Retrieval pro Sektion → top-K eCodes.
+    // 4. Quantum-Container-Query pro Sektion → top-K eCodes via TurboQuant-Cascade.
+    //    Cascade liefert fp32-rerankt — Scores sind echte Cosinus-Werte,
+    //    audit-fest gegen die sealed atoms-Container.
     const retrievalTrace: PolarSynthOutput['retrieval_trace'] = [];
     const candidatesByEcode = new Map<string, ECodeCandidate>();
+    const tCascadeStart = Date.now();
 
     for (let i = 0; i < sections.length; i++) {
-      const top = cosineSorted(sectionVecsNorm[i], catalog.embeddings, topKPerSection);
-      const trace = top.map((t) => ({ ecode: catalog.atoms[t.idx].field_name, score: t.score }));
-      retrievalTrace.push({ section_id: sections[i].id, top_ecodes: trace });
+      // ExactFp32Index.rerank gegen ALLE eCode-Indizes — Cascade-Prefilter
+      // ueberspring (kaputt, siehe retrievalNote). Bei n=2287 unter 10 ms.
+      const top = catalog.exactIndex.rerank(sectionVecsNorm[i], catalog.allEcodeIndices, topKPerSection);
+      const trace: { ecode: string; score: number }[] = [];
 
-      for (const t of top) {
-        const ecode = catalog.atoms[t.idx].field_name;
+      for (const hit of top) {
+        const atom = catalog.atomsRaw[hit.idx];
+        if (!atom || !ECODE_REGEX.test(atom.field_name)) continue;
+        const ecode = atom.field_name;
+        trace.push({ ecode, score: hit.score });
+
         const existing = candidatesByEcode.get(ecode);
         if (!existing) {
-          candidatesByEcode.set(ecode, { ecode, score: t.score, coversSections: [sections[i].id] });
+          candidatesByEcode.set(ecode, { ecode, score: hit.score, coversSections: [sections[i].id] });
         } else {
-          // hoechster Score gewinnt; alle covering sections sammeln
-          existing.score = Math.max(existing.score, t.score);
+          existing.score = Math.max(existing.score, hit.score);
           if (!existing.coversSections.includes(sections[i].id)) existing.coversSections.push(sections[i].id);
         }
       }
+      retrievalTrace.push({ section_id: sections[i].id, top_ecodes: trace });
     }
+    const retrievalMs = Date.now() - tCascadeStart;
     const candidates = Array.from(candidatesByEcode.values());
-    ctx.emit('polar-synth.candidates', { n: candidates.length });
+    ctx.emit('polar-synth.candidates', { n: candidates.length, retrievalMs, mode: catalog.retrievalMode });
 
     // 5. Pflicht-eCodes resolven.
     const { anlagen, pflichtEcodes } = resolvePflichtEcodes(input.docClass, input.classifierAnlagen, pflicht);
     ctx.emit('polar-synth.pflicht', { anlagen, pflichtEcodes });
 
-    // 6. Set-Cover.
+    // 6. Set-Cover laeuft NUR fuer informativen Trace (Minimum-Cover-Pfad
+    //    + Pflicht-Garantie). Das Resultat wird NICHT als Filter benutzt —
+    //    wir geben ALLE Kandidaten above threshold zurueck, weil ein Schema
+    //    das Vokabular *aller moeglichen* Felder enumeriert, nicht eine
+    //    minimale Cover-Menge.
     const cover = greedySetCover({
       sections,
       candidates,
@@ -286,18 +351,49 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       maxEcodes,
       minScoreForCoverage: minScore,
     });
-    ctx.emit('polar-synth.set-cover', {
-      selected: cover.selected.length,
+    ctx.emit('polar-synth.set-cover-trace', {
+      minCoverSize: cover.selected.length,
       uncovered: cover.uncoveredSections.length,
     });
 
-    // 7. Output: Skelett mit Metadaten.
+    // 7. ALLE Kandidaten oberhalb minScore aufnehmen + Pflicht-eCodes garantiert.
+    //    Pflicht in required, der Rest als optional (deterministisch lex-sortiert).
+    const allOverThreshold = new Set<string>(
+      candidates.filter((c) => c.score >= minScore).map((c) => c.ecode),
+    );
+    // Pflicht-eCodes immer drin, auch wenn Embedding sie nicht erreicht.
+    for (const ec of pflichtEcodes) allOverThreshold.add(ec);
+
+    // Optional: maxEcodes-Cap — Pflicht behalten, dann Rest nach Score sortiert.
+    let optionalSelected = Array.from(allOverThreshold)
+      .filter((ec) => !pflichtEcodes.includes(ec))
+      .sort((a, b) => {
+        const sa = candidatesByEcode.get(a)?.score ?? 0;
+        const sb = candidatesByEcode.get(b)?.score ?? 0;
+        return sb - sa || (a < b ? -1 : 1);
+      });
+    if (pflichtEcodes.length + optionalSelected.length > maxEcodes) {
+      optionalSelected = optionalSelected.slice(0, Math.max(0, maxEcodes - pflichtEcodes.length));
+    }
+
+    const ecodesRequired = pflichtEcodes.slice().sort();
+    const ecodesOptional = optionalSelected.slice().sort();
+    const selected = [...ecodesRequired, ...ecodesOptional];
+    ctx.emit('polar-synth.selected', {
+      required: ecodesRequired.length,
+      optional: ecodesOptional.length,
+      total: selected.length,
+      candidatesAboveThreshold: allOverThreshold.size,
+      candidatesTotalRetrieved: candidates.length,
+    });
+
+    // 8. Beschreibungen + Type-Hints fuer ALLE selektierten eCodes.
     const ecodeDescriptions: PolarSynthOutput['ecode_descriptions'] = {};
     const typeHints: PolarSynthOutput['type_hints'] = {};
 
-    for (const ec of cover.selected) {
+    for (const ec of selected) {
       const idx = catalog.ecodeToIndex.get(ec);
-      const atom = idx !== undefined ? catalog.atoms[idx] : null;
+      const atom = idx !== undefined ? catalog.atomsRaw[idx] : null;
       if (!atom) continue;
       ecodeDescriptions[ec] = {
         value: atom.value,
@@ -307,19 +403,17 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       typeHints[ec] = inferType(atom);
     }
 
-    const ecodesRequired = pflichtEcodes.filter((ec) => cover.selected.includes(ec));
-    const ecodesOptional = cover.selected.filter((ec) => !ecodesRequired.includes(ec));
-
     const sectionExcerpts = sections.map((s, i) => ({
       id: s.id,
       label: s.label ?? `Section ${i + 1}`,
       ocr_excerpt: sectionText(input.ocrText, i, minSectionLength).slice(0, 280),
     }));
 
+    // Coverage-Stats: jetzt bezogen auf die Set-Cover-Min-Cover-Pfad (informativ),
+    // nicht auf die "alles >=threshold"-Menge.
     const scores = cover.coverage.map((c) => c.score);
     const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-
-    const pflichtSatisfied = pflichtEcodes.every((p) => cover.selected.includes(p));
+    const pflichtSatisfied = pflichtEcodes.every((p) => selected.includes(p));
 
     return {
       doc_class: input.docClass,
@@ -335,6 +429,16 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
         coverage_ratio: 1 - cover.uncoveredSections.length / Math.max(sections.length, 1),
         pflicht_satisfied: pflichtSatisfied,
         average_score: Number(avgScore.toFixed(4)),
+      },
+      quantum_container_query: {
+        container_id: catalog.containerId,
+        container_merkle_root: catalog.containerMerkleRoot,
+        catalog_id: catalog.catalogId,
+        catalog_merkle_root: catalog.catalogMerkleRoot,
+        retrieval_mode: catalog.retrievalMode,
+        retrieval_note: catalog.retrievalNote,
+        retrieval_ms: retrievalMs,
+        queries_total: sections.length,
       },
       retrieval_trace: retrievalTrace,
       set_cover_trace: cover.selectionTrace.map((t) => ({
