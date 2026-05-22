@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mega-Case · 1-Sekunden-Steuerpipeline</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #131822;
+    --panel-2: #1a2030;
+    --border: #232b3d;
+    --text: #e6e9f0;
+    --muted: #8b94aa;
+    --accent: #4f9eff;
+    --good: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif; height: 100vh; overflow: hidden; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--panel); }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .subline { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  header .controls { display: flex; gap: 8px; align-items: center; }
+  header input { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font-size: 12px; }
+  header button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: white; cursor: pointer; font-size: 12px; font-weight: 600; }
+  header button.secondary { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); height: calc(100vh - 65px); }
+  .col { background: var(--bg); overflow: auto; padding: 20px; }
+  .col h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.15s ease; margin-bottom: 16px; background: var(--panel); }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--panel-2); }
+  .dropzone-icon { font-size: 36px; margin-bottom: 8px; }
+  .dropzone-title { font-weight: 600; margin-bottom: 4px; }
+  .dropzone-hint { color: var(--muted); font-size: 12px; }
+  .beleg { background: var(--panel); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--border); }
+  .beleg.basis { border-left: 4px solid var(--accent); }
+  .beleg .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .beleg .title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .beleg .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; background: var(--panel-2); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .beleg .badge.basis { background: rgba(79, 158, 255, 0.15); color: var(--accent); }
+  .beleg .meta { font-size: 12px; color: var(--muted); }
+  .beleg .delta-pos { color: var(--bad); font-weight: 600; }
+  .beleg .delta-neg { color: var(--good); font-weight: 600; }
+  .beleg .delta-zero { color: var(--muted); }
+  .ergebnis-card { background: linear-gradient(135deg, #1a2030 0%, #131822 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+  .ergebnis-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .ergebnis-row:last-child { border-bottom: none; }
+  .ergebnis-row .label { color: var(--muted); font-size: 13px; }
+  .ergebnis-row .value { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .ergebnis-row.headline .value { font-size: 22px; color: var(--accent); }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  .status-pill { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; background: var(--panel-2); color: var(--muted); margin-top: 4px; }
+  .status-pill.live { background: rgba(34, 197, 94, 0.15); color: var(--good); }
+  pre.json { background: var(--panel-2); padding: 12px; border-radius: 8px; font-size: 11px; overflow: auto; max-height: 200px; color: var(--muted); }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bad); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: none; }
+  .toast.show { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🚀 Mega-Case · Steuer-Pipeline in Echtzeit</h1>
+    <div class="subline">Basis-Beleg + Folge-Belege · ESt-Diff live · echte BMF-Tarif §32a EStG</div>
+  </div>
+  <div class="controls">
+    <span id="profil-status" class="status-pill">kein Profil</span>
+    <button id="reset-btn" class="secondary">Neues Profil</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LINKE SPALTE: Belege -->
+  <div class="col">
+    <h2>📥 Belege</h2>
+    <div id="dropzone" class="dropzone">
+      <div class="dropzone-icon">📄</div>
+      <div class="dropzone-title" id="dz-title">Lohnsteuerbescheinigung oder ESt-Bescheid hier ablegen</div>
+      <div class="dropzone-hint" id="dz-hint">PDF (Textlayer, ~150ms) oder JPG/PNG (Mistral-OCR, ~1.1s)</div>
+      <input type="file" id="fileinput" style="display:none" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+    </div>
+    <div id="belege-liste"></div>
+  </div>
+
+  <!-- RECHTE SPALTE: ESt-Berechnung -->
+  <div class="col">
+    <h2>💶 Einkommensteuer</h2>
+    <div id="ergebnis-pane">
+      <div class="empty">Noch kein Basis-Beleg.<br/>Lade links eine Lohnsteuerbescheinigung oder einen ESt-Bescheid hoch.</div>
+    </div>
+    <h2 style="margin-top:24px">🔍 Raw Profil-JSON (audit)</h2>
+    <pre id="profil-json" class="json">— noch leer —</pre>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const TOKEN_DEFAULT = '63faef6eda1d943f69b85f3f713f46f2b9ec48e1667628f8aff4672a35fd5398';
+  const TOKEN_KEY = 'sturm-megacase-token';
+  localStorage.setItem(TOKEN_KEY, TOKEN_DEFAULT);
+  const PROFIL_KEY = 'sturm-megacase-profil-id';
+
+  let profil_id = localStorage.getItem(PROFIL_KEY) || null;
+
+  function token() { return localStorage.getItem(TOKEN_KEY) || TOKEN_DEFAULT; }
+  function authHdr() { return { 'Authorization': 'Bearer ' + token() }; }
+
+  function fmtEUR(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n);
+  }
+
+  function toast(msg, isError = true) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.style.background = isError ? 'var(--bad)' : 'var(--good)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  function updateDropzoneText() {
+    if (profil_id) {
+      $('dz-title').textContent = 'Weitere Belege hier ablegen (Spendenquittung, Handwerker, ...)';
+    } else {
+      $('dz-title').textContent = 'Lohnsteuerbescheinigung oder ESt-Bescheid hier ablegen';
+    }
+  }
+
+  function updateStatus() {
+    const s = $('profil-status');
+    if (profil_id) {
+      s.textContent = 'Profil ' + profil_id.slice(-6);
+      s.classList.add('live');
+    } else {
+      s.textContent = 'kein Profil';
+      s.classList.remove('live');
+    }
+  }
+
+  async function loadProfil() {
+    if (!profil_id) return;
+    try {
+      const r = await fetch('/api/megacase/' + profil_id, { headers: authHdr() });
+      if (!r.ok) {
+        if (r.status === 404) {
+          profil_id = null;
+          localStorage.removeItem(PROFIL_KEY);
+          updateStatus(); updateDropzoneText();
+          renderEmpty();
+          return;
+        }
+        throw new Error('HTTP ' + r.status);
+      }
+      const d = await r.json();
+      renderProfil(d.profil);
+    } catch (err) {
+      toast('Fehler beim Laden: ' + err.message);
+    }
+  }
+
+  function renderEmpty() {
+    $('belege-liste').innerHTML = '';
+    $('ergebnis-pane').innerHTML = '<div class="empty">Noch kein Basis-Beleg.<br/>Lade links eine Lohnsteuerbescheinigung oder einen ESt-Bescheid hoch.</div>';
+    $('profil-json').textContent = '— noch leer —';
+  }
+
+  function renderProfil(profil) {
+    // Belege-Liste links
+    let liste_html = '';
+    liste_html += '<div class="beleg basis">';
+    liste_html += '<div class="head"><div class="title">📄 ' + escapeHTML(profil.basis_beleg_dateiname) + '</div><span class="badge basis">BASIS</span></div>';
+    liste_html += '<div class="meta">Klasse: ' + profil.basis_beleg_klasse + ' · Felder: ' + Object.keys(profil.kanonische_felder).length + '</div>';
+    liste_html += '</div>';
+    for (const b of profil.belege) {
+      const d = b.differenz || {};
+      const delta = d.gesamtsteuer_delta;
+      let deltaClass = 'delta-zero', deltaText = '±0,00 €';
+      if (delta != null && delta < -0.005) { deltaClass = 'delta-neg'; deltaText = fmtEUR(delta); }
+      else if (delta != null && delta > 0.005) { deltaClass = 'delta-pos'; deltaText = '+' + fmtEUR(delta).replace('+', ''); }
+      liste_html += '<div class="beleg">';
+      liste_html += '<div class="head"><div class="title">📎 ' + escapeHTML(b.dateiname) + '</div><span class="badge">' + b.klasse + '</span></div>';
+      liste_html += '<div class="meta">Pipeline ' + b.millisek.toFixed(0) + 'ms · ' + Object.keys(b.patches).length + ' Patches · ESt-Diff: <span class="' + deltaClass + '">' + deltaText + '</span></div>';
+      if (d.kommentar) liste_html += '<div class="meta" style="margin-top:4px">→ ' + escapeHTML(d.kommentar) + '</div>';
+      liste_html += '</div>';
+    }
+    $('belege-liste').innerHTML = liste_html;
+
+    // ESt-Karte rechts
+    const r = profil.ergebnis_basis || {};
+    let card = '<div class="ergebnis-card">';
+    card += '<div class="ergebnis-row"><span class="label">Zu versteuerndes Einkommen</span><span class="value">' + fmtEUR(r.zve) + '</span></div>';
+    card += '<div class="ergebnis-row headline"><span class="label">Einkommensteuer</span><span class="value">' + fmtEUR(r.einkommensteuer) + '</span></div>';
+    card += '<div class="ergebnis-row"><span class="label">Solidaritätszuschlag</span><span class="value">' + fmtEUR(r.solidaritaetszuschlag) + '</span></div>';
+    card += '<div class="ergebnis-row"><span class="label">Gesamtsteuer</span><span class="value">' + fmtEUR(r.gesamtsteuer) + '</span></div>';
+    if (r.verwendete_rechner && r.verwendete_rechner.length) {
+      card += '<div class="ergebnis-row"><span class="label">Verwendete Rechner</span><span class="value" style="font-size:11px;color:var(--muted)">' + r.verwendete_rechner.join(' + ') + '</span></div>';
+    }
+    card += '</div>';
+    $('ergebnis-pane').innerHTML = card;
+
+    // JSON-Pane
+    $('profil-json').textContent = JSON.stringify(profil, null, 2);
+  }
+
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function uploadFile(file) {
+    const isBasis = !profil_id;
+    const url = isBasis ? '/api/megacase/start?steuerjahr=2024' : '/api/megacase/' + profil_id + '/add';
+    const fd = new FormData();
+    fd.append('file', file);
+
+    const dz = $('dropzone');
+    const original_title = $('dz-title').textContent;
+    $('dz-title').innerHTML = '<span class="spinner"></span> ' + (isBasis ? 'Basis-Beleg wird verarbeitet...' : 'Folge-Beleg wird verarbeitet...');
+    dz.style.opacity = 0.6;
+
+    const t0 = performance.now();
+    try {
+      const r = await fetch(url, { method: 'POST', headers: authHdr(), body: fd });
+      const elapsed = performance.now() - t0;
+      const d = await r.json();
+      if (!r.ok || !d.ok) {
+        toast(d.error || ('HTTP ' + r.status));
+        return;
+      }
+      if (isBasis) {
+        profil_id = d.profil_id;
+        localStorage.setItem(PROFIL_KEY, profil_id);
+        renderProfil(d.profil);
+        toast('Basis-Profil erstellt (' + elapsed.toFixed(0) + 'ms)', false);
+      } else {
+        await loadProfil();
+        const delta = d.beleg?.differenz?.gesamtsteuer_delta;
+        const msg = delta != null
+          ? 'Beleg hinzugefügt: ESt-Diff ' + fmtEUR(delta) + ' (' + elapsed.toFixed(0) + 'ms)'
+          : 'Beleg hinzugefügt (' + elapsed.toFixed(0) + 'ms)';
+        toast(msg, false);
+      }
+      updateStatus(); updateDropzoneText();
+    } catch (err) {
+      toast('Upload-Fehler: ' + err.message);
+    } finally {
+      dz.style.opacity = 1;
+      $('dz-title').textContent = original_title;
+      updateDropzoneText();
+    }
+  }
+
+  // Drag-drop
+  const dz = $('dropzone');
+  dz.addEventListener('click', () => $('fileinput').click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('over');
+    if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+  });
+  $('fileinput').addEventListener('change', e => {
+    if (e.target.files.length) uploadFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  $('reset-btn').addEventListener('click', async () => {
+    if (profil_id) {
+      try { await fetch('/api/megacase/' + profil_id, { method: 'DELETE', headers: authHdr() }); } catch {}
+    }
+    profil_id = null;
+    localStorage.removeItem(PROFIL_KEY);
+    updateStatus(); updateDropzoneText();
+    renderEmpty();
+    toast('Profil zurückgesetzt', false);
+  });
+
+  // Initial
+  updateStatus(); updateDropzoneText();
+  loadProfil();
+</script>
+</body>
+</html>

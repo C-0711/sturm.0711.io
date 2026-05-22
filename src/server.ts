@@ -1,3 +1,4 @@
+import { createMandantenBescheidRouter } from "./server/m-bescheid.ts";
 import express, { type Request } from 'express';
 import multer from 'multer';
 import helmet from 'helmet';
@@ -29,6 +30,7 @@ import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
 import { createMandantenAuthRouter } from './server/m-auth.ts';
 import { createMandantenCasesRouter, createOwnershipGuard } from './server/m-cases.ts';
+import { createCaseStreamRouter } from './server/case-stream.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
 import {
@@ -50,6 +52,7 @@ import {
   recordDocumentRunCompletion,
   computeTrustBreakdown,
   readManifest,
+  recordFastPathAnalysis,
   writeManifest,
 } from './server/inbox.ts';
 import {
@@ -59,6 +62,8 @@ import {
   writeStageOverride,
 } from './core/config-overrides.ts';
 import { startUploadSweep } from './server/upload-sweep.ts';
+import { analyzeFastPdfUpload, materializeFastCaseFacts, runFastAudit } from './server/fast-path.ts';
+import { cold_preprocess_stub_freistehend, einsekunde_pipeline, einsekunde_pipeline_freistehend } from './server/einsekunde.ts';
 import { registerVorjahresUploadEndpoint } from './server/vorjahres-upload-handler.ts';
 import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
 import {
@@ -492,6 +497,164 @@ app.get(
   },
 );
 
+// ── POST /api/applications/:appId/instances/:caseId/upload-fast ────────
+// Fast-Ingest ohne OCR/Workflow: Datei nur in inbox persistieren, nativen
+// PDF-Textlayer extrahieren und als Fast-Path-Artefakt ablegen. Dieser
+// Endpoint ist absichtlich strikt: kein OCR-Fallback, keine LLM-Extraktion.
+app.post(
+  '/api/applications/:appId/instances/:caseId/upload-fast',
+  upload.single('file'),
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
+    if (!req.file) { res.status(400).json({ error: 'file fehlt (multipart field "file")' }); return; }
+    if (!/pdf/i.test(req.file.mimetype || req.file.originalname)) {
+      res.status(415).json({ error: 'upload-fast unterstützt aktuell nur PDF-Dateien' });
+      return;
+    }
+
+    const syntheticRunId = `fast-${Date.now().toString(36)}`;
+    const doc = await persistUploadToInbox(ROOT, inst, {
+      tempPath: req.file.path,
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    }, syntheticRunId, { replaceRunIdOnDuplicate: false });
+
+    inst.documents = inst.documents ?? [];
+    if (!inst.documents.some((d) => d.sha256 === doc.sha256)) inst.documents.push(doc);
+    if (inst.status === 'archiviert') inst.status = 'in_bearbeitung';
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+
+    try {
+      const fastPath = await analyzeFastPdfUpload(ROOT, inst, doc);
+      await recordFastPathAnalysis(ROOT, inst, doc.runId, {
+        kind: fastPath.kind,
+        hasTextLayer: fastPath.hasTextLayer,
+        chars: fastPath.chars,
+        pageCount: fastPath.pageCount,
+        analyzedAt: fastPath.analyzedAt,
+        ms: fastPath.ms,
+        docTypeHints: fastPath.facts.docTypeHints,
+        yearHints: fastPath.facts.yearHints,
+        preview: fastPath.facts.preview,
+        structuredFacts: fastPath.facts.structuredFacts,
+        artifactDir: fastPath.artifactDir,
+        analysisPath: fastPath.analysisPath,
+        textPath: fastPath.textPath,
+        factsPath: fastPath.facts.factsPath,
+      });
+      const refreshedManifest = await readManifest(ROOT, inst);
+      const persistedDoc = refreshedManifest.documents.find((d) => d.sha256 === doc.sha256) ?? doc;
+      const caseFacts = await materializeFastCaseFacts(ROOT, inst);
+      res.json({
+        ok: true,
+        mode: 'upload-fast',
+        appId,
+        caseId,
+        document: persistedDoc,
+        fastPath,
+        caseFacts,
+      });
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        mode: 'upload-fast',
+        appId,
+        caseId,
+        document: doc,
+        error: (err as Error).message,
+      });
+    }
+  },
+);
+
+// ── POST /api/applications/:appId/instances/:caseId/upload-1sek ────────
+// EIN-SEKUNDEN-STEUERPIPELINE: Upload → Textlayer → Einbettung → eCode-Treffer
+// → kanonische Felder → Lane-1 BMF-Calculator → ESt-Ergebnis, alles in EINEM
+// Request. Ziel-Latenz < 1 Sekunde end-to-end. Liefert Timings pro Stufe
+// und Vorschau der extrahierten Kennzahlen mit Treffer-Punktzahlen.
+//
+// Strikt PDF-only, kein OCR-Fallback. Wenn der Textlayer leer ist (gescanntes
+// PDF ohne Text), schlägt die Pipeline mit fehler='keine Kennzahlen ...' fehl
+// statt OCR zu starten — letzteres würde das 1-Sekunden-Budget sprengen.
+app.post(
+  '/api/applications/:appId/instances/:caseId/upload-1sek',
+  upload.single('file'),
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
+    if (!req.file) { res.status(400).json({ error: 'datei fehlt (multipart field "file")' }); return; }
+    if (!/(pdf|jpe?g|png|webp|gif)/i.test(req.file.mimetype || req.file.originalname)) {
+      res.status(415).json({ error: 'upload-1sek unterstützt PDF/JPG/PNG/WEBP/GIF' });
+      return;
+    }
+
+    const syntheticRunId = `einsek-${Date.now().toString(36)}`;
+    const doc = await persistUploadToInbox(ROOT, inst, {
+      tempPath: req.file.path,
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    }, syntheticRunId, { replaceRunIdOnDuplicate: false });
+
+    inst.documents = inst.documents ?? [];
+    if (!inst.documents.some((d) => d.sha256 === doc.sha256)) inst.documents.push(doc);
+    if (inst.status === 'archiviert') inst.status = 'in_bearbeitung';
+    await saveInstanceFile(APPLICATIONS_DIR, inst);
+
+    try {
+      const ergebnis = await einsekunde_pipeline(ROOT, inst, doc);
+      res.json(ergebnis);
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        kind: 'einsekunde-v1',
+        appId,
+        caseId,
+        document: doc,
+        fehler: (err as Error).message,
+      });
+    }
+  },
+);
+
+// ── POST /api/applications/:appId/instances/:caseId/audit-now ───────────
+// Heißpfad: nutzt nur vorhandene Cache-/Meta-Artefakte und ruft danach
+// Lane-1. Default ist fail-on-fresh: liegen frische inbox-PDFs ohne Vorarbeit
+// vor, wird bewusst NICHT stillschweigend OCR ausgelöst.
+app.post(
+  '/api/applications/:appId/instances/:caseId/audit-now',
+  async (req, res) => {
+    const { appId, caseId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
+
+    try {
+      const audit = await runFastAudit(ROOT, inst);
+      res.json(audit);
+    } catch (err) {
+      const message = (err as Error).message || 'fast audit failed';
+      const isFastBlocker = /blocked:|fresh PDFs|--fail-on-fresh|FATAL:/i.test(message);
+      res.status(isFastBlocker ? 409 : 500).json({
+        ok: false,
+        mode: 'audit-now',
+        appId,
+        caseId,
+        error: message,
+      });
+    }
+  },
+);
+
 // ── POST /api/applications/:appId/instances/:caseId/upload ─────────────
 // Multipart file upload triggert den extraction-Workflow der Anwendung
 // (z.B. elster-v5_2-rag). SSE-Stream wie /api/workflows/:id/run. Run-ID
@@ -522,6 +685,7 @@ app.post(
       mime: req.file.mimetype,
       mandant_id: inst.mandantId,
       case_id: inst.caseId,
+      caseContext: inst.context ?? undefined,
     };
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -663,6 +827,7 @@ app.post(
         mime: file.mimetype,
         mandant_id: inst.mandantId,
         case_id: inst.caseId,
+      caseContext: inst.context ?? undefined,
       };
       const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
       void persistInputForRun(def.id, run.runId, file.path, file.originalname, file.size, file.mimetype);
@@ -942,6 +1107,7 @@ app.post(
       mime: doc.mimeType,
       mandant_id: inst.mandantId,
       case_id: inst.caseId,
+      caseContext: inst.context ?? undefined,
     };
     const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
     void persistInputForRun(def.id, run.runId, inboxAbs, doc.filename, doc.size, doc.mimeType);
@@ -1786,6 +1952,166 @@ app.post('/api/upload', requireBearerToken, upload.single('file'), (req, res) =>
   });
 });
 
+
+// ── POST /api/upload-cold-preprocess  (fall- und mandanten-frei) ──────────
+// Erkennt früh, ob ein Beleg den Hot-Path direkt bedienen kann oder erst
+// durch den kalten Vorverarbeitungspfad (z.B. OCR bei scan-only PDFs) muss.
+// Schreibt ein kleines Job-Artefakt unter /tmp/sturm-cold-preprocess/<job>.json.
+app.post(
+  '/api/upload-cold-preprocess',
+  requireBearerToken,
+  upload.single('file'),
+  async (req, res) => {
+    if (!req.file) {
+      res.status(400).json({ error: 'datei fehlt (multipart field "file")' });
+      return;
+    }
+    if (!/(pdf|jpe?g|png|webp|gif)/i.test(req.file.mimetype || req.file.originalname)) {
+      res.status(415).json({ error: 'upload-cold-preprocess unterstuetzt PDF/JPG/PNG/WEBP/GIF' });
+      return;
+    }
+    const jahr_raw = (req.body?.steuerjahr ?? req.query?.steuerjahr) as string | undefined;
+    const steuerjahr = jahr_raw ? Number(jahr_raw) : undefined;
+    try {
+      const ergebnis = await cold_preprocess_stub_freistehend(
+        req.file.path,
+        req.file.originalname,
+        Number.isFinite(steuerjahr as number) ? (steuerjahr as number) : undefined,
+      );
+      res.json(ergebnis);
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        kind: 'cold-preprocess-v1',
+        dateiname: req.file?.originalname,
+        fehler: (err as Error).message,
+      });
+    }
+  },
+);
+
+app.get('/api/cold-preprocess/:jobId', requireBearerToken, async (req, res) => {
+  const jobId = String(req.params.jobId || '');
+  if (!/^[a-z0-9_\-]+$/i.test(jobId)) {
+    res.status(400).json({ error: 'ungueltige jobId' });
+    return;
+  }
+  const artefakt = path.join('/tmp/sturm-cold-preprocess', `${jobId}.json`);
+  try {
+    const raw = await fs.promises.readFile(artefakt, 'utf-8');
+    res.type('application/json').send(raw);
+  } catch {
+    res.status(404).json({ error: 'job-not-found', jobId });
+  }
+});
+
+// ── POST /api/upload-1sek  (fall- und mandanten-frei) ──────────────────
+// Nimmt ein PDF entgegen und fuehrt die EIN-SEKUNDEN-STEUERPIPELINE durch:
+//   Textlayer -> Kennzahlen -> Einbettung -> eCode-Treffer -> kanonisch
+//   -> Lane-1 BMF-Calculator -> ESt-Ergebnis
+// Persistiert NICHTS. Optionales Query- oder Form-Feld `steuerjahr`.
+// Strikt PDF-only, kein OCR-Fallback (sprengt das 1-Sekunden-Budget).
+app.post(
+  '/api/upload-1sek',
+  requireBearerToken,
+  upload.single('file'),
+  async (req, res) => {
+    if (!req.file) {
+      res.status(400).json({ error: 'datei fehlt (multipart field "file")' });
+      return;
+    }
+    if (!/(pdf|jpe?g|png|webp|gif)/i.test(req.file.mimetype || req.file.originalname)) {
+      res.status(415).json({ error: 'upload-1sek unterstuetzt PDF/JPG/PNG/WEBP/GIF' });
+      return;
+    }
+
+    const jahr_raw = (req.body?.steuerjahr ?? req.query?.steuerjahr) as string | undefined;
+    const steuerjahr = jahr_raw ? Number(jahr_raw) : undefined;
+
+    try {
+      const ergebnis = await einsekunde_pipeline_freistehend(
+        req.file.path,
+        req.file.originalname,
+        Number.isFinite(steuerjahr as number) ? (steuerjahr as number) : undefined,
+      );
+      res.json(ergebnis);
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        kind: 'einsekunde-freistehend-v1',
+        dateiname: req.file?.originalname,
+        fehler: (err as Error).message,
+      });
+    }
+  },
+);
+
+
+// ── Mega-Case Profil (case-frei) ───────────────────────────────────
+// Konzept: Basis-Beleg (Lohnsteuerbescheinigung / ESt-Bescheid / Rente)
+// erstellt ein Profil mit ID. Folge-Belege patchen das Profil und zeigen
+// die ESt-Differenz. TTL 1h, in-memory.
+
+import {
+  megacase_profil_erstellen,
+  megacase_beleg_hinzufuegen,
+  megacase_profil_holen,
+  megacase_profil_loeschen,
+  megacase_alle_profile,
+} from './server/einsekunde.ts';
+
+// POST /api/megacase/start  - Basis-Beleg → erstellt Profil
+app.post(
+  '/api/megacase/start',
+  requireBearerToken,
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file) { res.status(400).json({ ok: false, error: 'datei fehlt' }); return; }
+      const steuerjahr = Number(req.query.steuerjahr ?? req.body?.steuerjahr ?? new Date().getFullYear() - 1);
+      const ergebnis = await megacase_profil_erstellen(req.file.path, req.file.originalname, steuerjahr);
+      if (!ergebnis.ok) { res.status(422).json(ergebnis); return; }
+      res.json(ergebnis);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+);
+
+// POST /api/megacase/:profil_id/add  - Folge-Beleg → patches Profil + Diff
+app.post(
+  '/api/megacase/:profil_id/add',
+  requireBearerToken,
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file) { res.status(400).json({ ok: false, error: 'datei fehlt' }); return; }
+      const ergebnis = await megacase_beleg_hinzufuegen(req.params.profil_id, req.file.path, req.file.originalname);
+      if (!ergebnis.ok) { res.status(404).json(ergebnis); return; }
+      res.json(ergebnis);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+);
+
+// GET /api/megacase/:profil_id  - aktuelles Profil + alle Belege
+app.get('/api/megacase/:profil_id', requireBearerToken, (req, res) => {
+  const profil = megacase_profil_holen(req.params.profil_id);
+  if (!profil) { res.status(404).json({ ok: false, error: 'Profil nicht gefunden' }); return; }
+  res.json({ ok: true, profil });
+});
+
+// DELETE /api/megacase/:profil_id
+app.delete('/api/megacase/:profil_id', requireBearerToken, (req, res) => {
+  const geloescht = megacase_profil_loeschen(req.params.profil_id);
+  res.json({ ok: geloescht });
+});
+
+// GET /api/megacase  - alle aktiven Profile
+app.get('/api/megacase', requireBearerToken, (req, res) => {
+  res.json({ ok: true, profile: megacase_alle_profile() });
+});
 // ============ OCR Studio ============
 
 app.use('/api/ocr', requireBearerToken, ocrPreviewLimiter, createOcrPreviewRouter(UPLOADS_DIR));
@@ -1829,12 +2155,25 @@ app.use('/api/m', createMandantenAuthRouter({
   cookieName: sessionsOpts.cookieName,
   secureCookie: sessionsOpts.secureCookie,
 }));
+app.use("/api/m", createMandantenBescheidRouter({
+  usersDir: USERS_DIR,
+  workspacesDir: WORKSPACES_DIR,
+  profilesDir: "/app/profiles",
+  runsDir: RUNS_DIR,
+  uploadsDir: UPLOADS_DIR,
+  appsRoot: ROOT,
+  applicationsDir: APPLICATIONS_DIR,
+}));
+
 app.use('/api/m', createMandantenCasesRouter({
   usersDir: USERS_DIR,
   workspacesDir: WORKSPACES_DIR,
   applicationsDir: APPLICATIONS_DIR,
   runsDir: RUNS_DIR,
 }));
+
+// Live-Stream + Haiku-Narrator: /api/m/cases/:id/stream (SSE)
+app.use('/api/m', createCaseStreamRouter());
 
 app.use('/api/jobs', requireBearerToken, createJobsRouter(jobRunner));
 app.use('/api/pipelines', requireBearerToken, createPipelinesRouter(PIPELINES_DIR));
@@ -2223,6 +2562,7 @@ app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
 app.get('/m/login', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-login.html')));
 app.get('/m/dashboard', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-dashboard.html')));
 app.get('/m/case/:caseId', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-case.html')));
+app.get('/m/bescheid', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-bescheid.html')));
 app.get('/onboarding-wizard.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'onboarding-wizard.html')));
 
 // ── Dev-Surface (Sturm-internal) ──────────────────────────────────────

@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="de" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>STURM · Mega-Case · 1-Sekunden-Steuerpipeline</title>
+<script>
+(function(){try{var t=localStorage.getItem('sturm-theme')||'dark';document.documentElement.setAttribute('data-theme',t);if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Spectral:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/design-system/colors_and_type.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 13px; line-height: 1.5;
+    height: 100vh; overflow: hidden;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .serif { font-family: 'Spectral', ui-serif, Georgia, serif; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { color: var(--accent); }
+  button { font-family: inherit; cursor: pointer; }
+  ::selection { background: color-mix(in oklab, var(--accent) 40%, transparent); color: var(--ink); }
+
+  /* === topbar === */
+  .topbar {
+    height: 56px; padding: 0 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    border-bottom: 1px solid var(--line-2);
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    flex-shrink: 0;
+  }
+  .topbar-l, .topbar-r { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-2); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-tile {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    color: var(--on-accent);
+    display: grid; place-items: center;
+    font-family: 'Geist', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -0.02em;
+    box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+  }
+  .brand-name { font-weight: 600; letter-spacing: 0.16em; font-size: 13px; }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3);
+    padding-left: 12px; margin-left: 4px; border-left: 1px solid var(--line);
+  }
+  .topbar nav { display: flex; gap: 18px; font-size: 13px; }
+  .topbar nav a { color: var(--ink-2); }
+  .topbar nav a:hover, .topbar nav a.active { color: var(--ink); }
+
+  .brand-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500;
+  }
+  .brand-pill.live {
+    background: var(--accent-soft);
+    border-color: color-mix(in oklab, var(--accent) 40%, var(--line));
+    color: var(--accent);
+  }
+
+  .icon-btn {
+    display: inline-grid; place-items: center;
+    width: 34px; height: 34px;
+    background: transparent; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    color: var(--ink-2); transition: all 150ms ease; cursor: pointer;
+  }
+  .icon-btn:hover { color: var(--ink); border-color: var(--ink-3); background: var(--bg-2); }
+
+  .ghost-btn {
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500;
+    transition: all 150ms ease;
+  }
+  .ghost-btn:hover { color: var(--ink); border-color: var(--ink-3); background: var(--bg-2); }
+
+  /* === page-head (compact for dashboard) === */
+  .page-head {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--line-2);
+    background: var(--bg);
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .page-head .icon-ring {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--bg-2); border: 1px solid var(--line);
+    display: grid; place-items: center; color: var(--accent);
+    flex-shrink: 0;
+  }
+  .page-head .icon-ring svg { width: 18px; height: 18px; }
+  .page-head .head-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .page-head h1 {
+    font-family: 'Geist', sans-serif; font-weight: 300;
+    font-size: 22px; letter-spacing: -0.015em; line-height: 1.15;
+    margin: 0; color: var(--ink);
+  }
+  .page-head h1 .accent {
+    color: var(--accent);
+    font-family: 'Spectral', serif; font-style: italic; font-weight: 400;
+  }
+  .page-head p {
+    margin: 0; color: var(--ink-2); font-size: 12.5px; max-width: 70ch;
+  }
+
+  /* === belege strip === */
+  .top-row {
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line-2);
+    padding: 12px 16px;
+    display: flex; gap: 12px;
+    overflow-x: auto;
+    align-items: stretch;
+    flex-shrink: 0;
+    min-height: 110px; max-height: 130px;
+  }
+  .top-row::-webkit-scrollbar { height: 6px; }
+  .top-row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+  .dropzone {
+    flex-shrink: 0;
+    width: 220px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 150ms ease;
+    background: var(--bg-3);
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .dropzone:hover, .dropzone.over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .dropzone-icon {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--accent);
+    display: grid; place-items: center;
+    margin: 0 auto 6px;
+  }
+  .dropzone-icon svg { width: 14px; height: 14px; }
+  .dropzone-title {
+    font-family: 'Geist', sans-serif;
+    font-weight: 400; font-size: 12.5px;
+    color: var(--ink); margin-bottom: 3px; letter-spacing: -0.005em;
+  }
+  .dropzone-hint {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-3); font-size: 10px; letter-spacing: 0.04em;
+  }
+
+  .beleg-tile {
+    flex-shrink: 0;
+    width: 240px;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    position: relative;
+  }
+  .beleg-tile.basis { border-left: 3px solid var(--accent); }
+  .beleg-tile .title {
+    font-family: 'Geist', sans-serif;
+    font-weight: 500; font-size: 12px;
+    color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .beleg-tile .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--ink-3); letter-spacing: 0.03em;
+  }
+  .beleg-tile .badge {
+    display: inline-block;
+    padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; background: var(--bg-2); color: var(--ink-3);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  }
+  .beleg-tile .badge.basis {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .beleg-tile .delta-row {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500; margin-top: 2px;
+  }
+  .delta-pos  { color: var(--err); }
+  .delta-neg  { color: var(--ok); }
+  .delta-zero { color: var(--ink-3); }
+
+  /* === 3-column layout === */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--line-2);
+    flex: 1;
+    overflow: hidden;
+  }
+  .col {
+    background: var(--bg);
+    overflow: auto;
+    padding: 0;
+    min-width: 0;
+  }
+
+  /* column header — STURM-CI section-head pattern */
+  .col h2 {
+    margin: 0;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line-2);
+    background: var(--bg-2);
+    position: sticky; top: 0; z-index: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .col h2 .count {
+    display: inline-block;
+    background: var(--bg-3);
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    color: var(--ink); font-weight: 500;
+    margin-left: 6px; font-size: 10px;
+  }
+  .col h2 .subhead {
+    display: block;
+    margin-top: 6px;
+    font-family: 'Geist', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--ink-3);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .col-body { padding: 16px 20px; }
+
+  /* === Spalte 1: Rohe Kennzahlen === */
+  .quelle-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--ink-4);
+    margin: 4px 2px 8px;
+    letter-spacing: 0.04em;
+  }
+  .kennzahl-row {
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-left: 3px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  .kennzahl-row.hoch    { border-left-color: var(--ok); }
+  .kennzahl-row.mittel  { border-left-color: var(--warn); }
+  .kennzahl-row.niedrig { border-left-color: var(--err); }
+  .kennzahl-row .schluessel {
+    font-family: 'Geist', sans-serif;
+    font-weight: 500; font-size: 12px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .kennzahl-row .wert {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 13.5px; color: var(--accent); font-weight: 500;
+  }
+  .kennzahl-row .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .kennzahl-row .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--ink-3);
+    margin-top: 4px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    letter-spacing: 0.03em;
+  }
+  .kennzahl-row .meta .quelle { font-style: italic; }
+  .stufe-pill {
+    display: inline-block;
+    padding: 1px 6px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; text-transform: uppercase;
+    font-weight: 500; letter-spacing: 0.06em;
+  }
+  .stufe-pill.hoch    { background: color-mix(in oklab, var(--ok) 18%, transparent);   color: var(--ok); }
+  .stufe-pill.mittel  { background: color-mix(in oklab, var(--warn) 18%, transparent); color: var(--warn); }
+  .stufe-pill.niedrig { background: color-mix(in oklab, var(--err) 18%, transparent);  color: var(--err); }
+
+  /* === Spalte 2: ELSTER-Felder === */
+  .feld-row {
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+  .feld-row.unmapped {
+    border-left-color: var(--warn);
+    opacity: 0.75;
+  }
+  .feld-row .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .feld-row .name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500; font-size: 12px; color: var(--ink);
+  }
+  .feld-row .wert {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 13.5px; color: var(--accent); font-weight: 500;
+  }
+  .feld-row .drucktext {
+    font-family: 'Geist', sans-serif;
+    font-size: 11px; color: var(--ink-2);
+    margin-top: 4px; line-height: 1.4;
+  }
+  .feld-row .ecodes {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-3);
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
+  .feld-row .ecodes span {
+    display: inline-block;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    padding: 1px 5px; border-radius: 3px;
+    margin-right: 4px;
+    color: var(--ink-2);
+  }
+
+  /* === Spalte 3: Berechnung === */
+  .ergebnis-card {
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-top: 2px solid var(--accent);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .ergebnis-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line-2);
+  }
+  .ergebnis-row:last-child { border-bottom: none; }
+  .ergebnis-row .label {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-3); font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ergebnis-row .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500; font-size: 14px; color: var(--ink);
+  }
+  .ergebnis-row.headline { padding: 14px 0; }
+  .ergebnis-row.headline .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink-2);
+  }
+  .ergebnis-row.headline .value {
+    font-family: 'Geist', sans-serif;
+    font-weight: 300;
+    font-size: 28px; color: var(--accent);
+    letter-spacing: -0.015em;
+  }
+  .ergebnis-row.small .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--ink-3); font-weight: 400;
+  }
+
+  .rechner-pill {
+    display: inline-block;
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+    color: var(--accent);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.02em;
+    margin: 0 4px 4px 0;
+  }
+
+  .timeline-box {
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .timeline-box h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: var(--ink-3);
+    margin: 0 0 8px;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500;
+  }
+  .tl-step {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 5px 0; font-size: 11px;
+    border-bottom: 1px dashed var(--line-2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .tl-step:last-child { border-bottom: none; }
+  .tl-step .from { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-step .to   { color: var(--ink); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .tl-step .delta { font-weight: 500; }
+
+  .empty {
+    padding: 30px 16px;
+    text-align: center;
+    color: var(--ink-3);
+    font-family: 'Geist', sans-serif;
+    font-size: 12.5px;
+    font-style: italic;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    background: var(--err); color: var(--on-accent);
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 0.02em;
+    box-shadow: 0 6px 18px oklch(0 0 0 / 0.35);
+    display: none;
+    z-index: 100;
+  }
+  .toast.show { display: block; }
+  .toast.success { background: var(--ok); color: var(--bg); }
+
+  .spinner {
+    display: inline-block;
+    width: 11px; height: 11px;
+    border: 2px solid var(--ink-3);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  details.audit { margin-top: 12px; }
+  details.audit summary {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: var(--ink-3);
+    cursor: pointer; padding: 6px 0;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  details.audit summary:hover { color: var(--ink-2); }
+  details.audit pre {
+    background: var(--bg);
+    border: 1px solid var(--line-2);
+    padding: 12px;
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    overflow: auto;
+    max-height: 280px;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-l">
+    <div class="brand">
+      <div class="brand-tile">S</div>
+      <div class="brand-name">STURM</div>
+    </div>
+    <span class="brand-tag">mega-case · steuerpipeline</span>
+  </div>
+  <nav>
+    <a href="https://sturm.0711.io/" target="_blank">Workflow-Engine</a>
+    <a href="/einsek.html">1-Sekunden-Steuer</a>
+    <a href="/megacase.html" class="active">Mega-Case</a>
+    <a href="https://quantum.0711.io/upload/" target="_blank">Quantum</a>
+  </nav>
+  <div class="topbar-r">
+    <span id="profil-status" class="brand-pill">kein Profil</span>
+    <button id="reset-btn" class="ghost-btn">↻ Neues Profil</button>
+    <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M5 5l1.4 1.4M17.6 17.6L19 19M2 12h2M20 12h2M5 19l1.4-1.4M17.6 6.4L19 5"/></svg>
+    </button>
+  </div>
+</header>
+
+<section class="page-head">
+  <div class="icon-ring">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 1 9 9"/><polyline points="3 4 3 12 11 12"/><path d="M12 7v5l3 2"/></svg>
+  </div>
+  <div class="head-text">
+    <h1>Steuer-Pipeline <span class="accent">in Echtzeit.</span></h1>
+    <p>Belege oben ablegen → Extraktion, ELSTER-Mapping, Lane-1 BMF-Berechnung.</p>
+  </div>
+</section>
+
+<div class="top-row" id="top-row">
+  <div id="dropzone" class="dropzone">
+    <div class="dropzone-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <div class="dropzone-title" id="dz-title">Beleg hier ablegen</div>
+    <div class="dropzone-hint" id="dz-hint">PDF · JPG · PNG</div>
+    <input type="file" id="fileinput" style="display:none" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
+  </div>
+  <div id="belege-tiles" style="display:contents"></div>
+</div>
+
+<div class="layout">
+
+  <div class="col" id="col-rohe">
+    <h2>
+      Ausgelesene Werte
+      <span class="count" id="count-rohe">0</span>
+      <span class="subhead">Rohe Kennzahlen aus PDF/OCR · Vertrauen hoch / mittel / niedrig</span>
+    </h2>
+    <div class="col-body" id="rohe-liste">
+      <div class="empty">Noch kein Beleg geladen.</div>
+    </div>
+  </div>
+
+  <div class="col" id="col-felder">
+    <h2>
+      ELSTER-Felder
+      <span class="count" id="count-felder">0</span>
+      <span class="subhead">Kanonische BMF-Namen mit ELSTER-Codes (E…)</span>
+    </h2>
+    <div class="col-body" id="felder-liste">
+      <div class="empty">Noch kein Profil.</div>
+    </div>
+  </div>
+
+  <div class="col" id="col-rechnung">
+    <h2>
+      Steuerberechnung
+      <span class="subhead">Lane-1 BMF-Rechner · §32a EStG · §10 Sonderausgaben</span>
+    </h2>
+    <div class="col-body" id="ergebnis-pane">
+      <div class="empty">Noch keine Berechnung.</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const TOKEN_DEFAULT = '63faef6eda1d943f69b85f3f713f46f2b9ec48e1667628f8aff4672a35fd5398';
+  const TOKEN_KEY = 'sturm-megacase-token';
+  localStorage.setItem(TOKEN_KEY, TOKEN_DEFAULT);
+  const PROFIL_KEY = 'sturm-megacase-profil-id';
+
+  let profil_id = localStorage.getItem(PROFIL_KEY) || null;
+  let last_profil = null;
+
+  function token() { return localStorage.getItem(TOKEN_KEY) || TOKEN_DEFAULT; }
+  function authHdr() { return { 'Authorization': 'Bearer ' + token() }; }
+
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', cur);
+    if (cur === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    try { localStorage.setItem('sturm-theme', cur); } catch (e) {}
+  }
+
+  function fmtEUR(n, opts) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n);
+  }
+  function fmtNum(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    if (typeof n !== 'number') return String(n);
+    return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  }
+  function escapeHTML(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function toast(msg, ok=false) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (ok ? ' success' : '');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  function updateStatus() {
+    const s = $('profil-status');
+    if (profil_id) { s.textContent = '● Profil ' + profil_id.slice(-6); s.classList.add('live'); }
+    else { s.textContent = 'kein Profil'; s.classList.remove('live'); }
+    $('dz-title').textContent = profil_id ? 'Weiterer Beleg' : 'Erstes Dokument';
+  }
+
+  async function loadProfil() {
+    if (!profil_id) { renderEmpty(); return; }
+    try {
+      const r = await fetch('/api/megacase/' + profil_id, { headers: authHdr() });
+      if (!r.ok) {
+        if (r.status === 404) {
+          profil_id = null; localStorage.removeItem(PROFIL_KEY);
+          updateStatus(); renderEmpty();
+          return;
+        }
+        throw new Error('HTTP ' + r.status);
+      }
+      const d = await r.json();
+      renderProfil(d.profil);
+    } catch (err) { toast('Fehler beim Laden: ' + err.message); }
+  }
+
+  function renderEmpty() {
+    $('belege-tiles').innerHTML = '';
+    $('rohe-liste').innerHTML = '<div class="empty">Noch kein Beleg geladen.</div>';
+    $('felder-liste').innerHTML = '<div class="empty">Noch kein Profil.</div>';
+    $('ergebnis-pane').innerHTML = '<div class="empty">Noch keine Berechnung.</div>';
+    $('count-rohe').textContent = '0';
+    $('count-felder').textContent = '0';
+  }
+
+  function renderProfil(profil) {
+    last_profil = profil;
+
+    // ── Top-Row: Belege ──────────────────────────────
+    let tiles = '';
+    tiles += '<div class="beleg-tile basis">';
+    tiles += '<div class="title">📄 ' + escapeHTML(profil.basis_beleg_dateiname) + '</div>';
+    tiles += '<div><span class="badge basis">BASIS</span> <span class="badge">' + escapeHTML(profil.basis_beleg_klasse) + '</span></div>';
+    tiles += '<div class="meta">' + Object.keys(profil.kanonische_felder).length + ' Felder · ' + (profil.rohe_kennzahlen?.length ?? 0) + ' Kennzahlen</div>';
+    tiles += '</div>';
+    for (const b of profil.belege) {
+      const d = b.differenz || {};
+      const delta = d.gesamtsteuer_delta;
+      let cls = 'delta-zero', txt = '±0,00 €';
+      if (delta != null && delta < -0.005) { cls = 'delta-neg'; txt = fmtEUR(delta); }
+      else if (delta != null && delta > 0.005) { cls = 'delta-pos'; txt = '+' + fmtEUR(delta).replace('+', ''); }
+      tiles += '<div class="beleg-tile">';
+      tiles += '<div class="title">📎 ' + escapeHTML(b.dateiname) + '</div>';
+      tiles += '<div><span class="badge">' + escapeHTML(b.klasse) + '</span> <span class="meta">' + b.millisek.toFixed(0) + 'ms</span></div>';
+      tiles += '<div class="meta">' + Object.keys(b.patches).length + ' Patches</div>';
+      tiles += '<div class="delta-row ' + cls + '">ESt-Diff: ' + txt + '</div>';
+      tiles += '</div>';
+    }
+    $('belege-tiles').innerHTML = tiles;
+
+    // ── Spalte 1: Rohe Kennzahlen ────────────────────
+    const rk = profil.rohe_kennzahlen || [];
+    $('count-rohe').textContent = rk.length;
+    if (!rk.length) {
+      $('rohe-liste').innerHTML = '<div class="empty">Keine Kennzahlen extrahiert.</div>';
+    } else {
+      let h = '';
+      // Sortiert nach Beleg-Quelle, dann Punktzahl absteigend
+      const sorted = [...rk].sort((a,b) => {
+        if (a.quelle_beleg !== b.quelle_beleg) return a.quelle_beleg.localeCompare(b.quelle_beleg);
+        return (b.punktzahl ?? 0) - (a.punktzahl ?? 0);
+      });
+      let last_quelle = null;
+      for (const k of sorted) {
+        if (k.quelle_beleg !== last_quelle) {
+          if (last_quelle !== null) h += '<div style="height:8px"></div>';
+          h += '<div class="quelle-tag">📄 ' + escapeHTML(k.quelle_beleg) + '</div>';
+          last_quelle = k.quelle_beleg;
+        }
+        h += '<div class="kennzahl-row ' + (k.stufe ?? 'niedrig') + '">';
+        h += '<div class="row1"><div class="schluessel" title="' + escapeHTML(k.schluessel) + '">' + escapeHTML(k.schluessel) + '</div>';
+        h += '<div class="wert">' + (typeof k.wert === 'number' ? fmtEUR(k.wert) : escapeHTML(k.wert)) + '</div></div>';
+        h += '<div class="meta">';
+        h += '<span class="stufe-pill ' + (k.stufe ?? 'niedrig') + '">' + (k.stufe ?? '?') + ' ' + (k.punktzahl ?? 0).toFixed(2) + '</span>';
+        if (k.bestes_ecode) h += '<span>→ ' + escapeHTML(k.bestes_ecode) + '</span>';
+        if (k.bestes_anlage) h += '<span>(' + escapeHTML(k.bestes_anlage) + ')</span>';
+        h += '</div>';
+        if (k.bestes_drucktext) {
+          h += '<div class="meta" style="margin-top:3px;font-style:italic">' + escapeHTML(k.bestes_drucktext.slice(0, 100)) + (k.bestes_drucktext.length > 100 ? '…' : '') + '</div>';
+        }
+        h += '</div>';
+      }
+      $('rohe-liste').innerHTML = h;
+    }
+
+    // ── Spalte 2: ELSTER-Felder ───────────────────────
+    const detail = profil.kanonische_felder_detail || [];
+    $('count-felder').textContent = detail.length;
+    if (!detail.length) {
+      $('felder-liste').innerHTML = '<div class="empty">Noch keine Felder.</div>';
+    } else {
+      const sorted = [...detail].sort((a,b) => {
+        if (a.ist_bmf_name !== b.ist_bmf_name) return a.ist_bmf_name ? -1 : 1;
+        return a.schluessel.localeCompare(b.schluessel);
+      });
+      let h = '';
+      for (const f of sorted) {
+        const unmapped = !f.ist_bmf_name;
+        h += '<div class="feld-row' + (unmapped ? ' unmapped' : '') + '">';
+        h += '<div class="row1"><div class="name">' + escapeHTML(f.schluessel) + '</div>';
+        h += '<div class="wert">' + (typeof f.wert === 'number' ? fmtEUR(f.wert) : escapeHTML(f.wert)) + '</div></div>';
+        h += '<div class="drucktext">' + escapeHTML(f.drucktext) + '</div>';
+        if (f.ecodes && f.ecodes.length) {
+          h += '<div class="ecodes">';
+          for (const e of f.ecodes.slice(0, 6)) h += '<span>' + escapeHTML(e) + '</span>';
+          if (f.ecodes.length > 6) h += '<span>+' + (f.ecodes.length - 6) + '</span>';
+          h += '</div>';
+        }
+        h += '</div>';
+      }
+      $('felder-liste').innerHTML = h;
+    }
+
+    // ── Spalte 3: Berechnung ─────────────────────────
+    const r = profil.ergebnis_basis || {};
+    let card = '<div class="ergebnis-card">';
+    card += '<div class="ergebnis-row"><span class="label">Zu versteuerndes Einkommen</span><span class="value">' + fmtEUR(r.zve) + '</span></div>';
+    card += '<div class="ergebnis-row headline"><span class="label">Einkommensteuer</span><span class="value">' + fmtEUR(r.einkommensteuer) + '</span></div>';
+    card += '<div class="ergebnis-row"><span class="label">Solidaritätszuschlag</span><span class="value">' + fmtEUR(r.solidaritaetszuschlag) + '</span></div>';
+    card += '<div class="ergebnis-row"><span class="label"><strong>Gesamtsteuer</strong></span><span class="value"><strong>' + fmtEUR(r.gesamtsteuer) + '</strong></span></div>';
+    card += '</div>';
+
+    if (r.verwendete_rechner && r.verwendete_rechner.length) {
+      card += '<div class="timeline-box"><h3>🧮 Verwendete Lane-1-Rechner</h3>';
+      for (const rc of r.verwendete_rechner) {
+        card += '<span class="rechner-pill">' + escapeHTML(rc) + '</span>';
+      }
+      card += '</div>';
+    }
+
+    // Timeline durch alle Belege
+    if (profil.belege && profil.belege.length) {
+      card += '<div class="timeline-box"><h3>📈 ESt-Verlauf</h3>';
+      const start_est = profil.ergebnis_basis?.einkommensteuer ?? 0;
+      let cur = start_est;
+      card += '<div class="tl-step"><span class="from">Basis</span><span class="to">' + fmtEUR(cur) + '</span></div>';
+      for (const b of profil.belege) {
+        const ne = b.ergebnis_neu?.einkommensteuer;
+        const delta = (ne ?? cur) - cur;
+        let cls = 'delta-zero', sign = '±';
+        if (delta < -0.005) { cls = 'delta-neg'; sign = ''; }
+        else if (delta > 0.005) { cls = 'delta-pos'; sign = '+'; }
+        card += '<div class="tl-step">';
+        card += '<span class="from">+ ' + escapeHTML(b.dateiname.slice(0, 36)) + (b.dateiname.length > 36 ? '…' : '') + '</span>';
+        card += '<span class="to"><span class="delta ' + cls + '">' + sign + fmtEUR(delta) + '</span> &nbsp;→ ' + fmtEUR(ne) + '</span>';
+        card += '</div>';
+        if (ne != null) cur = ne;
+      }
+      card += '</div>';
+    }
+
+    // Audit
+    card += '<details class="audit"><summary>Profil-Audit (JSON)</summary><pre>' + escapeHTML(JSON.stringify(profil, null, 2)) + '</pre></details>';
+
+    $('ergebnis-pane').innerHTML = card;
+  }
+
+  async function uploadFile(file) {
+    const isBasis = !profil_id;
+    const url = isBasis ? '/api/megacase/start?steuerjahr=2024' : '/api/megacase/' + profil_id + '/add';
+    const fd = new FormData();
+    fd.append('file', file);
+
+    const dz = $('dropzone');
+    const orig = $('dz-title').textContent;
+    $('dz-title').innerHTML = '<span class="spinner"></span> ' + (isBasis ? 'Basis...' : 'Add...');
+    dz.style.opacity = 0.6;
+
+    const t0 = performance.now();
+    try {
+      const r = await fetch(url, { method: 'POST', headers: authHdr(), body: fd });
+      const elapsed = performance.now() - t0;
+      const d = await r.json();
+      if (!r.ok || !d.ok) { toast(d.error || ('HTTP ' + r.status)); return; }
+      if (isBasis) {
+        profil_id = d.profil_id;
+        localStorage.setItem(PROFIL_KEY, profil_id);
+        renderProfil(d.profil);
+        toast('Basis-Profil erstellt (' + elapsed.toFixed(0) + 'ms)', true);
+      } else {
+        await loadProfil();
+        const delta = d.beleg?.differenz?.gesamtsteuer_delta;
+        toast(delta != null ? 'Beleg + ESt-Diff ' + fmtEUR(delta) + ' (' + elapsed.toFixed(0) + 'ms)' : 'Beleg ergänzt (' + elapsed.toFixed(0) + 'ms)', true);
+      }
+      updateStatus();
+    } catch (err) { toast('Upload-Fehler: ' + err.message); }
+    finally { dz.style.opacity = 1; $('dz-title').textContent = orig; updateStatus(); }
+  }
+
+  // Drag-drop
+  const dz = $('dropzone');
+  dz.addEventListener('click', () => $('fileinput').click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('over');
+    if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+  });
+  $('fileinput').addEventListener('change', e => {
+    if (e.target.files.length) uploadFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  $('reset-btn').addEventListener('click', async () => {
+    if (profil_id) {
+      try { await fetch('/api/megacase/' + profil_id, { method: 'DELETE', headers: authHdr() }); } catch {}
+    }
+    profil_id = null;
+    localStorage.removeItem(PROFIL_KEY);
+    updateStatus(); renderEmpty();
+    toast('Profil zurückgesetzt', true);
+  });
+
+  // Initial
+  updateStatus(); loadProfil();
+</script>
+</body>
+</html>

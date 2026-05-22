@@ -64,8 +64,11 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       VLLM_URL: ${VLLM_URL:-http://host.docker.internal:11435}
       EMBED_MODEL: ${EMBED_MODEL:-embeddinggemma}
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-vllm}
+      EMBED_URL: ${EMBED_URL:-http://host.docker.internal:11436}
       # BMF Lane-1 MCP — gleiches Muster (host-gateway).
       BMF_MCP_URL: ${BMF_MCP_URL:-http://host.docker.internal:12010/mcp}
+      CTAX_DB_URL: ${CTAX_DB_URL:?CTAX_DB_URL required (set in .env)}
     extra_hosts:
       # Docker for Linux: maps host.docker.internal → host-gateway-IP,
       # damit Container outbound auf am Host gebundene Services zugreifen
@@ -75,6 +78,8 @@ services:
       # ── Stateful: bind-mount existing host data so we don't lose live
       #    workspaces / runs / schemas / gitchain repos on cutover.
       - ${STURM_DATA_ROOT:-./.local-state}/workspaces:/app/workspaces
+      - ${STURM_DATA_ROOT:-./.local-state}/profiles:/app/profiles
+      - ${STURM_DATA_ROOT:-./.local-state}/applications-data:/app/applications-data
       - ${STURM_DATA_ROOT:-./.local-state}/runs:/app/runs
       - ${STURM_DATA_ROOT:-./.local-state}/uploads:/app/uploads
       - ${STURM_DATA_ROOT:-./.local-state}/schemas:/app/schemas
@@ -88,6 +93,8 @@ services:
       # Optional — comment out if not yet provisioned.
       - ${STURM_DATA_ROOT:-./.local-state}/.anchor-api-key:/app/.anchor-api-key:ro
       - ${STURM_DATA_ROOT:-./.local-state}/.master-key.json:/app/.master-key.json:ro
+      # 1sek / cold-preprocess matcher atoms from STURM-polar
+      - /home/christoph.bertsch/0711-STURM-polar/src/verticals/elster-v3/data/atoms.json:/tmp/atoms-polar.json:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7800/api/workflows"]
       interval: 30s

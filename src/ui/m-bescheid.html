@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steuerfall · Bescheid-Pipeline</title>
+  <link rel="stylesheet" href="/design-system/colors_and_type.css" />
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg" />
+  <style>
+    body { margin: 0; font-family: var(--font-inter, -apple-system, sans-serif);
+           background: var(--color-bg); color: var(--color-text-primary); line-height: 1.5; }
+    .topbar { border-bottom: 1px solid var(--color-border-light); }
+    .topbar-inner { max-width: 980px; margin: 0 auto; padding: 16px 24px;
+                    display: flex; align-items: center; justify-content: space-between; }
+    .brand { font-weight: 700; font-size: 18px; }
+    .back { color: var(--color-text-secondary); font-size: 14px; text-decoration: none; }
+    .back:hover { color: var(--color-accent); }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 32px 24px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .sub { color: var(--color-text-secondary); margin: 0 0 24px; }
+
+    .pipe-badge { display: inline-block; padding: 3px 10px; border-radius: 999px;
+                  background: rgba(34,197,94,.12); color: #15803d;
+                  font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+
+    .card { background: var(--color-bg-elevated, #fff); border: 1px solid var(--color-border-light);
+            border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+    .toggle-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .toggle-btn { flex: 1; padding: 10px 14px; border: 1px solid var(--color-border-light);
+                  background: transparent; border-radius: 8px; font-size: 14px;
+                  cursor: pointer; transition: all .15s; }
+    .toggle-btn.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+    .toggle-btn:hover:not(.active) { background: var(--color-bg-hover); }
+
+    label { display: block; margin-top: 12px; font-size: 13px;
+            color: var(--color-text-secondary); margin-bottom: 4px; }
+    select, input[type="number"], input[type="text"] {
+      width: 100%; padding: 10px; border: 1px solid var(--color-border-light);
+      border-radius: 8px; font-size: 14px; font-family: inherit;
+      background: var(--color-bg); color: var(--color-text-primary);
+    }
+    .btn { padding: 10px 18px; border: 1px solid var(--color-border-light);
+           background: transparent; border-radius: 8px; font-size: 14px; cursor: pointer;
+           font-family: inherit; }
+    .btn-primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .actions { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+    .status { font-size: 13px; color: var(--color-text-secondary); }
+
+    /* Drop area */
+    .drop-zone {
+      border: 2px dashed var(--color-border-light);
+      border-radius: 12px; padding: 36px 20px;
+      text-align: center; cursor: pointer;
+      transition: all .15s;
+      background: var(--color-bg);
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--color-accent);
+      background: rgba(99,102,241,.04);
+    }
+    .drop-zone .big { font-size: 32px; margin-bottom: 8px; }
+    .drop-zone .hint { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+
+    .file-list { margin-top: 12px; }
+    .file-row {
+      display: flex; gap: 10px; align-items: center;
+      padding: 8px 12px; background: var(--color-bg);
+      border-radius: 6px; margin-bottom: 6px; font-size: 13px;
+      border: 1px solid var(--color-border-light);
+    }
+    .file-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-row .size { color: var(--color-text-secondary); font-size: 11px; }
+    .file-row .state { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+    .state.pending { background: rgba(99,102,241,.1); color: #6366f1; }
+    .state.done { background: rgba(34,197,94,.1); color: #15803d; }
+    .state.err { background: rgba(220,38,38,.1); color: #dc2626; }
+
+    .result { margin-top: 16px; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .stat { background: var(--color-bg); padding: 14px; border-radius: 8px; border: 1px solid var(--color-border-light); }
+    .stat-label { font-size: 11px; color: var(--color-text-secondary);
+                  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .stat-value { font-size: 22px; font-weight: 600; font-family: var(--font-jetbrains, monospace); }
+    .stat-value.erstattung { color: var(--color-success, #15803d); }
+    .stat-value.nachzahlung { color: var(--color-danger, #dc2626); }
+
+    .markdown-pre {
+      max-height: 600px; overflow: auto;
+      background: var(--color-bg); border: 1px solid var(--color-border-light);
+      border-radius: 8px; padding: 16px;
+      font-family: var(--font-jetbrains, ui-monospace, monospace);
+      font-size: 12px; white-space: pre-wrap; line-height: 1.4;
+    }
+    .timing { font-size: 12px; color: var(--color-text-secondary); margin-top: 8px; }
+    .err { color: var(--color-danger, #dc2626); padding: 12px;
+           background: rgba(220,38,38,.06); border-radius: 8px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--color-border-light); }
+    .tab-btn { padding: 10px 16px; border: none; background: transparent;
+               font-size: 14px; cursor: pointer; color: var(--color-text-secondary);
+               border-bottom: 2px solid transparent; transition: all .15s;
+               font-family: inherit; }
+    .tab-btn.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
+    .tab-btn:hover:not(.active) { color: var(--color-text-primary); }
+
+    /* Report-Tab-Tables */
+    .rpane { font-size: 13px; }
+    .rpane h3 { font-size: 14px; margin: 18px 0 8px 0; color: var(--color-text-primary); }
+    .rpane .file-h { background: var(--color-bg); padding: 10px 12px; border-radius: 6px;
+                     margin: 12px 0 6px 0; border-left: 3px solid var(--color-accent);
+                     font-weight: 600; font-size: 13px; }
+    .rpane .meta { font-size: 11px; color: var(--color-text-secondary); margin-left: 6px; font-weight: normal; }
+    .rtbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .rtbl th { text-align: left; padding: 6px 10px; background: var(--color-bg);
+               border-bottom: 1px solid var(--color-border-light); font-weight: 600;
+               color: var(--color-text-secondary); font-size: 11px;
+               text-transform: uppercase; letter-spacing: 0.4px; }
+    .rtbl td { padding: 5px 10px; border-bottom: 1px solid var(--color-border-light);
+               vertical-align: top; }
+    .rtbl tr:hover { background: rgba(99,102,241,.04); }
+    .rtbl .k { color: var(--color-text-secondary); font-size: 11px; }
+    .rtbl .v { font-family: var(--font-jetbrains, monospace); }
+    .rtbl .ecode { font-family: var(--font-jetbrains, monospace); color: var(--color-accent); }
+    .rtbl .score { font-family: var(--font-jetbrains, monospace); font-size: 11px; color: var(--color-text-secondary); }
+    .empty-pane { padding: 24px; text-align: center; color: var(--color-text-secondary); font-size: 13px; }
+
+    .skeleton { background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(0,0,0,.12), rgba(0,0,0,.06));
+                background-size: 200% 100%; animation: shimmer 1.5s infinite;
+                border-radius: 6px; height: 22px; width: 60%; }
+    @keyframes shimmer { 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Steuerfall</div>
+    <a class="back" href="/m/dashboard">&larr; Zurück zum Dashboard</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="pipe-badge">⚡ Bescheid-Pipeline · Single-Arm · Polar + Lane-1</div>
+  <h1>Bescheid-Vorschau</h1>
+  <p class="sub">
+    PDFs hochladen oder Demo-Daten nutzen — du bekommst eine ESt-Vorschau in Sekunden.
+  </p>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabDemo" type="button">🧪 Demo / Realer Fall</button>
+    <button class="tab-btn" id="tabUpload" type="button">📤 PDFs hochladen</button>
+  </div>
+
+  <!-- ─── DEMO/FALL TAB ─────────────────────────────────────────── -->
+  <div id="paneDemo">
+    <div class="card">
+      <h2>Mandant wählen</h2>
+      <div class="toggle-row">
+        <button class="toggle-btn active" id="modeReal" type="button">🗂️ Realer Fall</button>
+        <button class="toggle-btn" id="modeDemo" type="button">🧪 Demo-Mandant</button>
+      </div>
+      <div id="realPicker">
+        <label for="caseSelect">Fall auswählen</label>
+        <select id="caseSelect"><option value="">Lädt…</option></select>
+      </div>
+      <div id="demoPicker" hidden>
+        <label for="demoSelect">Demo-Mandant</label>
+        <select id="demoSelect"><option value="">Lädt…</option></select>
+      </div>
+      <label for="yearInput">Veranlagungsjahr</label>
+      <input type="number" id="yearInput" value="2024" min="2020" max="2030" />
+      <div class="actions">
+        <button class="btn btn-primary" id="runBtn" type="button">Pipeline starten</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── UPLOAD TAB ────────────────────────────────────────────── -->
+  <div id="paneUpload" hidden>
+    <div class="card">
+      <h2>📤 PDFs hochladen</h2>
+      <div class="drop-zone" id="dropZone">
+        <div class="big">📁</div>
+        <div><strong>PDFs hier ablegen</strong> oder Klick zum Auswählen</div>
+        <div class="hint">bis zu 12 Dateien, max. 25 MB pro PDF · Mistral OCR + Klassifizierung läuft parallel</div>
+        <input type="file" id="fileInput" multiple accept=".pdf,application/pdf" style="display:none" />
+      </div>
+      <div class="file-list" id="fileList"></div>
+
+      <label for="profileSelect" style="margin-top: 16px;">Profil-Stammdaten (optional)</label>
+      <select id="profileSelect">
+        <option value="">— kein Profil —</option>
+      </select>
+
+      <label for="yearInput2">Veranlagungsjahr</label>
+      <input type="number" id="yearInput2" value="2024" min="2020" max="2030" />
+
+      <div class="actions">
+        <button class="btn btn-primary" id="uploadRunBtn" type="button" disabled>Hochladen + Pipeline starten</button>
+        <span class="status" id="uploadStatus"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── RESULT ─────────────────────────────────────────────────── -->
+  <div class="result" id="resultArea" hidden>
+    <div class="card">
+      <h2>Ergebnis</h2>
+      <div class="result-grid" id="resultGrid"></div>
+      <div class="timing" id="timing"></div>
+      <details style="margin-top: 16px;">
+        <summary style="cursor: pointer; font-size: 13px; color: var(--color-text-secondary);">
+          Vollständiger Bescheid (Markdown)
+        </summary>
+        <pre class="markdown-pre" id="markdownOut"></pre>
+      </details>
+    </div>
+
+    <!-- ─── Report-Tabs unten ─────────────────────────────────────── -->
+    <div class="card" id="reportCard">
+      <div class="tabs" style="margin-bottom:14px;">
+        <button class="tab-btn active" data-rtab="extr" type="button">📥 Extraction</button>
+        <button class="tab-btn" data-rtab="map" type="button">🏷️ ELSTER-Coding</button>
+        <button class="tab-btn" data-rtab="comp" type="button">🧮 Berechnung</button>
+      </div>
+      <div id="rpane-extr" class="rpane"></div>
+      <div id="rpane-map" class="rpane" hidden></div>
+      <div id="rpane-comp" class="rpane" hidden></div>
+    </div>
+  </div>
+
+  <div id="errBox" class="card err" hidden></div>
+</div>
+
+<script>
+(() => {
+  const els = {
+    tabDemo: document.getElementById('tabDemo'),
+    tabUpload: document.getElementById('tabUpload'),
+    paneDemo: document.getElementById('paneDemo'),
+    paneUpload: document.getElementById('paneUpload'),
+    modeReal: document.getElementById('modeReal'),
+    modeDemo: document.getElementById('modeDemo'),
+    realPicker: document.getElementById('realPicker'),
+    demoPicker: document.getElementById('demoPicker'),
+    caseSelect: document.getElementById('caseSelect'),
+    demoSelect: document.getElementById('demoSelect'),
+    yearInput: document.getElementById('yearInput'),
+    yearInput2: document.getElementById('yearInput2'),
+    runBtn: document.getElementById('runBtn'),
+    status: document.getElementById('status'),
+
+    dropZone: document.getElementById('dropZone'),
+    fileInput: document.getElementById('fileInput'),
+    fileList: document.getElementById('fileList'),
+    profileSelect: document.getElementById('profileSelect'),
+    uploadRunBtn: document.getElementById('uploadRunBtn'),
+    uploadStatus: document.getElementById('uploadStatus'),
+
+    resultArea: document.getElementById('resultArea'),
+    resultGrid: document.getElementById('resultGrid'),
+    timing: document.getElementById('timing'),
+    markdownOut: document.getElementById('markdownOut'),
+    errBox: document.getElementById('errBox'),
+  };
+
+  let mode = 'real';
+  let selectedFiles = [];
+  let demoOptionsCache = [];
+
+  // Tab switching
+  function setTab(t) {
+    els.tabDemo.classList.toggle('active', t === 'demo');
+    els.tabUpload.classList.toggle('active', t === 'upload');
+    els.paneDemo.hidden = t !== 'demo';
+    els.paneUpload.hidden = t !== 'upload';
+  }
+  els.tabDemo.addEventListener('click', () => setTab('demo'));
+  els.tabUpload.addEventListener('click', () => setTab('upload'));
+
+  // Mode toggle (in Demo tab)
+  function setMode(m) {
+    mode = m;
+    els.modeReal.classList.toggle('active', m === 'real');
+    els.modeDemo.classList.toggle('active', m === 'demo');
+    els.realPicker.hidden = m !== 'real';
+    els.demoPicker.hidden = m !== 'demo';
+  }
+  els.modeReal.addEventListener('click', () => setMode('real'));
+  els.modeDemo.addEventListener('click', () => setMode('demo'));
+
+  async function loadOptions() {
+    // audit-now-fähige Fälle (alle steuerfall-est Application-Instanzen)
+    try {
+      const r = await fetch('/api/m/bescheid/cases', { credentials: 'same-origin' });
+      const data = await r.json();
+      const cases = data?.cases ?? [];
+      if (cases.length > 0) {
+        els.caseSelect.innerHTML = cases.map(c =>
+          `<option value="${c.caseId}">${(c.displayName || c.caseId)} · VZ${c.veranlagungsjahr ?? '–'} · ${c.runs_count} runs · ${c.documents_count} docs</option>`
+        ).join('');
+      } else {
+        els.caseSelect.innerHTML = '<option value="">Keine Fälle vorhanden — wechsle auf Demo-Mandant</option>';
+        setMode('demo');
+      }
+      const pre = new URLSearchParams(location.search).get('caseId');
+      if (pre) els.caseSelect.value = pre;
+    } catch { els.caseSelect.innerHTML = '<option value="">Fehler beim Laden</option>'; }
+
+    try {
+      const r = await fetch('/api/m/bescheid/options', { credentials: 'same-origin' });
+      const data = await r.json();
+      demoOptionsCache = data?.demo ?? [];
+      const demoHtml = demoOptionsCache.length
+        ? demoOptionsCache.map(d => `<option value="${d.mandant}" data-year="${d.year}">${d.label} · ${d.year}</option>`).join('')
+        : '<option value="">Keine Demo-Profile</option>';
+      els.demoSelect.innerHTML = demoHtml;
+      els.profileSelect.innerHTML = '<option value="">— kein Profil —</option>' + demoHtml;
+      els.demoSelect.addEventListener('change', () => {
+        const opt = els.demoSelect.options[els.demoSelect.selectedIndex];
+        if (opt?.dataset?.year) els.yearInput.value = opt.dataset.year;
+      });
+
+      // ── AUTO-DEMO on page load (zero-click conversion) ─────────
+      if (demoOptionsCache.length > 0 && new URLSearchParams(location.search).get('autorun') !== '0') {
+        const def = demoOptionsCache[0];
+        els.status.textContent = `Auto-Demo: ${def.label} …`;
+        const t = performance.now();
+        try {
+          const r2 = await fetch('/api/m/bescheid/run', {
+            method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ mode:'demo', mandant: def.mandant, year: def.year }),
+          });
+          const d2 = await r2.json();
+          if (r2.ok && d2.ok) {
+            els.status.textContent = `Auto-Demo · ${(performance.now()-t).toFixed(0)} ms`;
+            renderResult(d2);
+          } else {
+            els.status.textContent = '';
+          }
+        } catch { els.status.textContent = ''; }
+      }
+    } catch { els.demoSelect.innerHTML = '<option value="">Fehler</option>'; }
+  }
+
+  function fmtEur(n) {
+    return Number(n).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+  function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    return (b/1024/1024).toFixed(2) + ' MB';
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderExtraction(extraction) {
+    if (!extraction || !Array.isArray(extraction) || extraction.length === 0) {
+      return '<div class="empty-pane">Keine Extraction-Daten verfügbar (Demo-Cache?).</div>';
+    }
+    return extraction.map(f => {
+      const ms = f.ms ? ` <span class="meta">· OCR ${f.ms.ocr ?? '?'} ms · Classify ${f.ms.classify ?? '?'} ms</span>` : '';
+      const rows = (f.kpis || []).map((k, i) =>
+        `<tr><td class="k">${i+1}</td><td><strong>${esc(k.key)}</strong></td><td class="v">${esc(k.value)}</td></tr>`
+      ).join('');
+      return `
+        <div class="file-h">📄 ${esc(f.filename)} <span class="meta">· ${esc(f.label || 'unknown')} · ${f.kpis_count ?? f.kpis?.length ?? 0} KPIs${ms}</span></div>
+        <table class="rtbl"><thead><tr><th style="width:32px">#</th><th>Schlüssel (was Mistral fand)</th><th>Wert</th></tr></thead><tbody>${rows}</tbody></table>
+      `;
+    }).join('');
+  }
+
+  function renderCoding(coding) {
+    if (!coding || Object.keys(coding).length === 0) {
+      return '<div class="empty-pane">Keine ELSTER-Coding-Daten verfügbar.</div>';
+    }
+    const codes = Object.keys(coding).sort();
+    const rows = codes.map(ec => {
+      const e = coding[ec] || {};
+      const v0 = (e.values || [{}])[0] || {};
+      const key = v0.source_kpi_key || '—';
+      const val = v0.value ?? '';
+      const score = v0.score ?? v0.polar_score ?? 0;
+      const anlage = e.anlage || '?';
+      const drucktext = (e.drucktext || '').slice(0, 80);
+      const zeile = e.vordruckzeile ? `Z.${e.vordruckzeile}` : '';
+      return `<tr>
+        <td class="ecode"><strong>${ec}</strong></td>
+        <td><span style="background:rgba(99,102,241,.08); padding:1px 6px; border-radius:3px;">${anlage}</span> ${zeile}</td>
+        <td>${esc(drucktext)}</td>
+        <td class="k">${esc(key)}</td>
+        <td class="v"><strong>${esc(val)}</strong></td>
+        <td class="score">${Number(score).toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <h3>${codes.length} eCodes via Polar Embedding-Match</h3>
+      <table class="rtbl">
+        <thead><tr><th>eCode</th><th>Anlage</th><th>BMF-Drucktext</th><th>← KPI-Key</th><th>Wert</th><th>cos</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  function renderCompute(data) {
+    const eingabe = data.report_eingabewerte;
+    const schritte = data.report_rechenschritte;
+    const compute = data.report_compute;
+    if (!compute) return '<div class="empty-pane">Keine Berechnung verfügbar (Lane-1 hat nicht geantwortet).</div>';
+
+    let html = '';
+    if (eingabe) {
+      const rows = Object.entries(eingabe).map(([k, v]) =>
+        `<tr><td><strong>${esc(k)}</strong></td><td class="v">${esc(typeof v === 'object' ? JSON.stringify(v) : v)}</td></tr>`
+      ).join('');
+      html += `<h3>Eingabewerte (was Lane-1 als canonical_field bekommen hat)</h3>
+        <table class="rtbl"><thead><tr><th>Feld</th><th>Wert</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    if (Array.isArray(schritte) && schritte.length > 0) {
+      const rows = schritte.map(s => {
+        const wert = Number(s.wert ?? 0);
+        return `<tr>
+          <td class="k"><strong>${s.schritt ?? '?'}</strong></td>
+          <td>${esc(s.bezeichnung || '')}</td>
+          <td class="v" style="text-align:right;"><strong>${wert.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})} €</strong></td>
+          <td class="k">${esc(s.details || '')}</td>
+        </tr>`;
+      }).join('');
+      html += `<h3>Rechenschritte (§-konforme Berechnung)</h3>
+        <table class="rtbl"><thead><tr><th style="width:32px">#</th><th>Schritt</th><th style="text-align:right">Betrag</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    if (compute.steuer_berechnung) {
+      const sb = compute.steuer_berechnung;
+      html += `<h3>§32a-Tarifformel</h3>
+        <pre class="markdown-pre" style="margin:0;">${esc(sb.formel_verwendet || '')}
+zone: ${esc(sb.steuerzone || '')}   |   Grenz: ${(sb.grenzsteuersatz*100).toFixed(2)} %   |   Ø: ${(sb.durchschnittssteuersatz*100).toFixed(2)} %
+ref:  ${esc(sb.bmf_referenz || '')}
+method: ${esc(sb.berechnungsmethode || '')}</pre>`;
+    }
+
+    if (compute.soli_berechnung) {
+      const sb = compute.soli_berechnung;
+      html += `<h3>Solidaritätszuschlag</h3>
+        <pre class="markdown-pre" style="margin:0;">ESt-Basis: ${sb.einkommensteuer} €
+Soli-Freibetrag: ${sb.soli_freibetrag} €
+Rate: ${sb.soli_rate}
+Soli: ${sb.solidaritaetszuschlag} €
+Hinweis: ${esc(sb.berechnungshinweis || '')}</pre>`;
+    }
+
+    if (compute.vorauszahlungen) {
+      const vz = compute.vorauszahlungen;
+      const rows = Object.entries(vz).map(([k, v]) =>
+        `<tr><td><strong>${esc(k)}</strong></td><td class="v" style="text-align:right">${Number(v).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})} €</td></tr>`
+      ).join('');
+      html += `<h3>Vorauszahlungen (anrechenbar §36 EStG)</h3>
+        <table class="rtbl"><thead><tr><th>Quelle</th><th style="text-align:right">Betrag</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    return html;
+  }
+
+  function renderResult(data) {
+    els.errBox.hidden = true;
+    els.resultArea.hidden = false;
+    const z = data.zusammenfassung ?? {};
+    const eo = Number(z.erstattung_oder_nachzahlung ?? 0);
+    const label = eo < 0 ? 'Erstattung' : (eo > 0 ? 'Nachzahlung' : 'Saldo Null');
+    const cls = eo < 0 ? 'erstattung' : (eo > 0 ? 'nachzahlung' : '');
+    els.resultGrid.innerHTML = `
+      <div class="stat"><div class="stat-label">zu versteuern</div><div class="stat-value">${fmtEur(z.zve)}</div></div>
+      <div class="stat"><div class="stat-label">Einkommensteuer §32a</div><div class="stat-value">${fmtEur(z.einkommensteuer)}</div></div>
+      <div class="stat"><div class="stat-label">${label}</div><div class="stat-value ${cls}">${fmtEur(Math.abs(eo))}</div></div>
+      <div class="stat"><div class="stat-label">Grenz · Ø</div><div class="stat-value">${((z.grenzsteuersatz??0)*100).toFixed(1)} % · ${((z.durchschnittssteuersatz??0)*100).toFixed(1)} %</div></div>
+    `;
+    const audit = data.audit ?? {};
+    const filesNote = data.files ? ` · Upload ${data.files.length} Datei(en) ${data.ms_ocr_classify ?? 0} ms` : '';
+    els.timing.innerHTML = `
+      Wall-Clock: <b>${data.ms_total ?? data.ms} ms</b> ·
+      Lane-1: <b>${data.lane1_ms} ms</b> ·
+      eCodes: Polar ${audit.polar_n ?? 0} + Mandanten ${audit.mandanten_n ?? 0} + Profil ${audit.profil_n ?? 0} =
+      Union ${audit.union_n ?? 0} → Lane-1 ${data.ecodes_sent ?? 0}${filesNote} ·
+      Run-ID: <code>${data.runId ?? '–'}</code>
+    `;
+    els.markdownOut.textContent = data.markdown ?? '';
+    // Report-Tabs füllen
+    const rExtr = document.getElementById('rpane-extr');
+    const rMap = document.getElementById('rpane-map');
+    const rComp = document.getElementById('rpane-comp');
+    if (rExtr) rExtr.innerHTML = renderExtraction(data.report_extraction);
+    if (rMap) rMap.innerHTML = renderCoding(data.report_coding);
+    if (rComp) rComp.innerHTML = renderCompute(data);
+
+    els.resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Report-Tab-Switch
+  document.querySelectorAll('[data-rtab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-rtab]').forEach(b => b.classList.toggle('active', b === btn));
+      const target = btn.getAttribute('data-rtab');
+      document.querySelectorAll('.rpane').forEach(p => p.hidden = true);
+      document.getElementById('rpane-' + target).hidden = false;
+    });
+  });
+
+  els.runBtn.addEventListener('click', async () => {
+    els.errBox.hidden = true;
+    els.resultArea.hidden = true;
+    els.runBtn.disabled = true;
+    els.status.textContent = 'Pipeline läuft …';
+    const year = parseInt(els.yearInput.value, 10) || 2024;
+    const body = { mode, year };
+    if (mode === 'real') {
+      const v = els.caseSelect.value;
+      if (!v) { els.status.textContent = 'Bitte Fall wählen'; els.runBtn.disabled = false; return; }
+      body.caseId = v;
+    } else {
+      const v = els.demoSelect.value;
+      if (!v) { els.status.textContent = 'Bitte Demo wählen'; els.runBtn.disabled = false; return; }
+      body.mandant = v;
+    }
+    const t0 = performance.now();
+    try {
+      const r = await fetch('/api/m/bescheid/run', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        els.errBox.hidden = false;
+        els.errBox.textContent = `Fehler (${r.status}): ${JSON.stringify(data?.error ?? data)}`;
+        els.status.textContent = '';
+        return;
+      }
+      els.status.textContent = `✓ fertig in ${(performance.now()-t0).toFixed(0)} ms`;
+      renderResult(data);
+    } catch (e) {
+      els.errBox.hidden = false;
+      els.errBox.textContent = `Network: ${e.message}`;
+    } finally {
+      els.runBtn.disabled = false;
+    }
+  });
+
+  // ─── Upload-Tab logic ─────────────────────────────────────────────
+  function addFiles(filesList) {
+    for (const f of filesList) {
+      if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) continue;
+      if (f.size > 25 * 1024 * 1024) {
+        els.uploadStatus.textContent = `Datei zu groß: ${f.name} (>25 MB)`;
+        continue;
+      }
+      selectedFiles.push(f);
+    }
+    renderFileList();
+    els.uploadRunBtn.disabled = selectedFiles.length === 0;
+  }
+  function renderFileList() {
+    els.fileList.innerHTML = selectedFiles.map((f, i) =>
+      `<div class="file-row" data-i="${i}">
+         <div class="name">📄 ${f.name}</div>
+         <div class="size">${fmtBytes(f.size)}</div>
+         <div class="state pending" id="state-${i}">pending</div>
+         <button class="btn" style="padding:2px 8px; font-size:11px;" onclick="window.removeFile(${i})">×</button>
+       </div>`
+    ).join('');
+  }
+  window.removeFile = (i) => {
+    selectedFiles.splice(i, 1);
+    renderFileList();
+    els.uploadRunBtn.disabled = selectedFiles.length === 0;
+  };
+
+  els.dropZone.addEventListener('click', () => els.fileInput.click());
+  els.fileInput.addEventListener('change', (e) => addFiles(e.target.files));
+  ['dragenter','dragover'].forEach(ev => els.dropZone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    els.dropZone.classList.add('dragover');
+  }));
+  ['dragleave','drop'].forEach(ev => els.dropZone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    els.dropZone.classList.remove('dragover');
+  }));
+  els.dropZone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+
+  els.uploadRunBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return;
+    els.errBox.hidden = true;
+    els.resultArea.hidden = true;
+    els.uploadRunBtn.disabled = true;
+    els.uploadStatus.textContent = `Upload + OCR + Klassifizierung läuft (${selectedFiles.length} Datei) …`;
+
+    const form = new FormData();
+    for (const f of selectedFiles) form.append('files', f, f.name);
+    form.append('year', String(parseInt(els.yearInput2.value, 10) || 2024));
+    if (els.profileSelect.value) form.append('profile', els.profileSelect.value);
+
+    selectedFiles.forEach((_, i) => {
+      const el = document.getElementById(`state-${i}`);
+      if (el) { el.textContent = 'läuft …'; el.className = 'state pending'; }
+    });
+
+    const t0 = performance.now();
+    try {
+      const r = await fetch('/api/m/bescheid/upload', {
+        method: 'POST', credentials: 'same-origin', body: form,
+      });
+      const data = await r.json();
+      const dt = (performance.now() - t0).toFixed(0);
+      if (!r.ok || !data.ok) {
+        els.errBox.hidden = false;
+        els.errBox.textContent = `Fehler (${r.status}): ${JSON.stringify(data?.error ?? data).slice(0,400)}`;
+        els.uploadStatus.textContent = '';
+        return;
+      }
+      // Per-file status
+      (data.files || []).forEach((f, i) => {
+        const el = document.getElementById(`state-${i}`);
+        if (el) {
+          el.textContent = f.error ? '✗' : `${f.label || 'done'} · ${f.kpis ?? 0} KPIs · ${f.ms} ms`;
+          el.className = 'state ' + (f.error ? 'err' : 'done');
+        }
+      });
+      els.uploadStatus.textContent = `✓ ${data.files?.length ?? 0} Datei(en) verarbeitet · ${dt} ms`;
+      renderResult(data);
+    } catch (e) {
+      els.errBox.hidden = false;
+      els.errBox.textContent = `Network: ${e.message}`;
+    } finally {
+      els.uploadRunBtn.disabled = false;
+    }
+  });
+
+  loadOptions();
+})();
+</script>
+</body>
+</html>

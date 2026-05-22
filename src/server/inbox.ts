@@ -237,3 +237,17 @@ export function computeTrustBreakdown(
   }
   return out;
 }
+
+/**
+ * Stub: recordFastPathAnalysis — no-op until fast-path persistence wires through.
+ * Server.ts imports this; if upstream fast-path.ts later persists fastPath
+ * directly into manifest, this stub is overridden by a real implementation.
+ */
+export async function recordFastPathAnalysis(
+  _rootCwd: string,
+  _instance: unknown,
+  _runId: string,
+  _analysis: unknown,
+): Promise<void> {
+  // no-op
+}

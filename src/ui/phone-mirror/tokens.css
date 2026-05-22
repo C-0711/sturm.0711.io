@@ -1,0 +1,222 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   OCULUS Whole-Eye OS — Tokens
+   Platform brand. Editorial-technical: deep medical navy, iris accent,
+   serif display moments, mono for provenance/hashes/code.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Webfonts via Google Fonts.
+   SUBSTITUTION NOTE: No font files were provided. Selections are originals
+   chosen to fit the platform brand (editorial-technical, regulated medtech).
+   If OCULUS has a corporate typeface, replace these imports + --font-* vars.
+   - Display serif: Instrument Serif  (editorial moments, hero, layer titles)
+   - UI sans:       Geist             (interface, body)
+   - Mono:          Geist Mono        (hashes, code, GitChain anchors, agent logs)
+*/
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* ── Color · Ink (neutrals, warm-cool-balanced) ──────────────────────── */
+  --ink-1000: #06101a;   /* deepest, headlines on light, full-bleed bg */
+  --ink-900:  #0b1b2b;   /* primary ink — body on paper */
+  --ink-800:  #15273a;
+  --ink-700:  #243a52;
+  --ink-600:  #3a536e;
+  --ink-500:  #5e7790;   /* mid; secondary text on paper */
+  --ink-400:  #8a9db2;
+  --ink-300:  #b3c0d0;
+  --ink-200:  #d7dee7;   /* hairline borders */
+  --ink-100:  #e8edf2;   /* sunken surface */
+  --ink-50:   #f3f5f8;   /* card on paper */
+  --paper:    #fbfaf7;   /* warm off-white — primary canvas */
+  --paper-2:  #f6f3ec;   /* warmer paper, used for editorial sections */
+  --white:    #ffffff;
+
+  /* ── Color · Iris (the accent — saturated, oculus-y) ─────────────────── */
+  /* The "iris" — limbal-ring teal. Used sparingly: links, active states,
+     primary CTAs, the ring in the logo. */
+  --iris-50:  #e6f4f4;
+  --iris-100: #c4e6e6;
+  --iris-200: #8fcfcf;
+  --iris-300: #4fb3b3;
+  --iris-400: #1f8f8f;
+  --iris-500: #0a7575;   /* default accent */
+  --iris-600: #075f5f;
+  --iris-700: #064c4c;
+  --iris-800: #053838;
+
+  /* ── Color · GitChain (provenance / verified gold) ───────────────────── */
+  /* Used on anchor states, chain-verified badges, timestamp pills. */
+  --chain-50:  #fbf6e8;
+  --chain-100: #f4e7bf;
+  --chain-200: #e8cf80;
+  --chain-300: #d4b04a;
+  --chain-400: #b8902a;   /* default */
+  --chain-500: #92701c;
+  --chain-600: #6d5314;
+
+  /* ── Color · Status (clinical, desaturated) ──────────────────────────── */
+  --ok-50:   #e8f3ec;
+  --ok-300:  #6ab089;
+  --ok-500:  #1f7a48;     /* passing controls, healthy SLO */
+  --ok-700:  #134d2d;
+
+  --warn-50:  #fdf2e1;
+  --warn-300: #e3b465;
+  --warn-500: #b07016;     /* drift, attention */
+  --warn-700: #6e4408;
+
+  --fail-50:  #f7e6e6;
+  --fail-300: #d27a7a;
+  --fail-500: #a32626;     /* failed control, breach */
+  --fail-700: #6b1414;
+
+  /* ── Color · Domain (the eye sub-systems — used for tagging data domains) */
+  /* Maps to the OCULUS device portfolio. Restrained, never decorative. */
+  --domain-cornea:    #4a6fa5;   /* Pentacam, Keratograph (topo) */
+  --domain-retina:    #7a4a8c;   /* BIOM */
+  --domain-glaucoma:  #b07016;   /* Perimetrie */
+  --domain-myopia:    #2f7a5a;   /* Myopia Master */
+  --domain-dryeye:    #c25a3a;   /* Keratograph (TF-Scan) */
+  --domain-refractive:#3a6f8c;   /* IOL planning */
+
+  /* ── Semantic surface ────────────────────────────────────────────────── */
+  --bg:           var(--paper);
+  --bg-sunken:    var(--ink-100);
+  --bg-card:      var(--white);
+  --bg-inverse:   var(--ink-1000);
+  --bg-editorial: var(--paper-2);
+
+  --fg:           var(--ink-900);
+  --fg-muted:     var(--ink-500);
+  --fg-subtle:    var(--ink-400);
+  --fg-inverse:   var(--paper);
+  --fg-link:      var(--iris-600);
+
+  --border:        var(--ink-200);
+  --border-strong: var(--ink-300);
+  --border-inverse:#1c2d3f;
+
+  /* ── Type · Families ─────────────────────────────────────────────────── */
+  --font-display: "Instrument Serif", "Times New Roman", Georgia, serif;
+  --font-sans:    "Geist", -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:    "Geist Mono", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+  /* ── Type · Scale ────────────────────────────────────────────────────── */
+  --t-display-xl: 88px;   /* hero / cover */
+  --t-display-l:  64px;
+  --t-display-m:  48px;
+  --t-display-s:  36px;
+  --t-h1:         32px;
+  --t-h2:         24px;
+  --t-h3:         20px;
+  --t-h4:         17px;
+  --t-body:       15px;
+  --t-body-s:     13px;
+  --t-caption:    12px;
+  --t-mono:       13px;
+  --t-overline:   11px;
+
+  --lh-tight:   1.05;
+  --lh-display: 1.1;
+  --lh-heading: 1.25;
+  --lh-body:    1.5;
+  --lh-loose:   1.65;
+
+  --tracking-display: -0.02em;
+  --tracking-heading: -0.012em;
+  --tracking-body:    0em;
+  --tracking-overline: 0.12em;
+
+  /* ── Spacing (4px base) ──────────────────────────────────────────────── */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ── Radii ───────────────────────────────────────────────────────────── */
+  /* Restrained. Cards are squarish (4–8px). Pills/badges only for status. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+
+  /* ── Shadow (low, precise — clinical instrument, not consumer-app fluff) */
+  --shadow-hairline: 0 0 0 1px var(--border);
+  --shadow-1: 0 1px 0 rgba(11,27,43,0.04), 0 1px 2px rgba(11,27,43,0.05);
+  --shadow-2: 0 1px 0 rgba(11,27,43,0.04), 0 4px 12px rgba(11,27,43,0.06);
+  --shadow-3: 0 2px 0 rgba(11,27,43,0.04), 0 12px 32px rgba(11,27,43,0.08);
+  --shadow-inset: inset 0 0 0 1px var(--border);
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1.2);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+
+  /* ── Layout ──────────────────────────────────────────────────────────── */
+  --container-max: 1240px;
+  --gutter: 24px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Element defaults — opt-in. Apply to a root with .doc, or set on body.
+   ───────────────────────────────────────────────────────────────────────── */
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  letter-spacing: var(--tracking-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.doc h1, h1.display, .t-display-l {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--t-display-l);
+  line-height: var(--lh-display);
+  letter-spacing: var(--tracking-display);
+  color: var(--ink-1000);
+  text-wrap: balance;
+}
+.t-display-xl { font-family: var(--font-display); font-weight: 400; font-size: var(--t-display-xl); line-height: var(--lh-tight); letter-spacing: var(--tracking-display); }
+.t-display-m  { font-family: var(--font-display); font-weight: 400; font-size: var(--t-display-m);  line-height: var(--lh-display); letter-spacing: var(--tracking-display); }
+.t-display-s  { font-family: var(--font-display); font-weight: 400; font-size: var(--t-display-s);  line-height: var(--lh-display); letter-spacing: var(--tracking-display); }
+
+.t-h1, .doc h2 { font-family: var(--font-sans); font-weight: 600; font-size: var(--t-h1); line-height: var(--lh-heading); letter-spacing: var(--tracking-heading); }
+.t-h2, .doc h3 { font-family: var(--font-sans); font-weight: 600; font-size: var(--t-h2); line-height: var(--lh-heading); letter-spacing: var(--tracking-heading); }
+.t-h3, .doc h4 { font-family: var(--font-sans); font-weight: 600; font-size: var(--t-h3); line-height: var(--lh-heading); letter-spacing: var(--tracking-heading); }
+.t-h4          { font-family: var(--font-sans); font-weight: 600; font-size: var(--t-h4); line-height: var(--lh-heading); }
+.t-body        { font-family: var(--font-sans); font-weight: 400; font-size: var(--t-body); line-height: var(--lh-body); }
+.t-body-s      { font-family: var(--font-sans); font-weight: 400; font-size: var(--t-body-s); line-height: var(--lh-body); }
+.t-caption     { font-family: var(--font-sans); font-weight: 400; font-size: var(--t-caption); line-height: var(--lh-body); color: var(--fg-muted); }
+.t-mono        { font-family: var(--font-mono); font-weight: 400; font-size: var(--t-mono); letter-spacing: 0; }
+.t-overline    {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: var(--t-overline);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-overline);
+  color: var(--fg-muted);
+}
+
+a { color: var(--fg-link); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+a:hover { color: var(--iris-700); text-decoration-thickness: 2px; }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-8) 0; }
+
+::selection { background: var(--iris-100); color: var(--iris-800); }

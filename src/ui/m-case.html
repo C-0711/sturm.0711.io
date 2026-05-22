@@ -65,6 +65,76 @@
     .panel { display: none; }
     .panel.active { display: block; }
 
+    /* ─── Compact-Mode für Belege-Liste (alle Chips kleiner, OCR-Streams collapsed) ─── */
+    .upload-row .anlage-chip,
+    .row-indikation .anlage-chip {
+      font-size: 9px !important;
+      padding: 1px 5px !important;
+      line-height: 1.4 !important;
+      letter-spacing: 0.02em !important;
+    }
+    .upload-row .belegtyp { font-size: 11px !important; }
+    .upload-row .anlagen-hint { gap: 3px !important; }
+    .upload-row .hint-label { font-size: 9px !important; }
+    .upload-row .werte-list { font-size: 10px !important; gap: 2px 8px !important; }
+    .upload-row .wert-label { font-size: 10px !important; }
+    .upload-row .wert-value { font-size: 10px !important; }
+    /* OCR-Seitenströme: standardmäßig nur Counter sichtbar — Preview-Text per Hover/Click ein */
+    .upload-row .page-stream {
+      max-height: 18px;
+      overflow: hidden;
+      transition: max-height 220ms ease;
+      padding: 3px 6px !important;
+      gap: 0 !important;
+      font-size: 10px !important;
+    }
+    .upload-row:hover .page-stream { max-height: 180px; }
+    .upload-row .page-item { font-size: 10px !important; }
+    .upload-row .page-counter { min-width: 38px !important; font-size: 10px !important; }
+    .upload-row .page-preview { font-size: 10px !important; }
+    .upload-row .upload-detail { gap: 2px !important; padding-left: 2px !important; }
+    /* row-indikation (in der Beleg-Table) ebenfalls kompakter */
+    .row-indikation { font-size: 11px !important; gap: 4px !important; margin-top: 3px !important; }
+    .row-indikation .ind-typ { font-size: 11px !important; }
+    .row-indikation .ind-wert { font-size: 10px !important; }
+    .row-indikation .ind-wert-label { font-size: 10px !important; }
+
+    /* Phone-Mirror: 2-Spalten-Grid ONLY für Belege-Panel auf Desktop ≥1280px.
+       Mobile/Tablet zeigt Phone-Mirror nicht (kein Platz). */
+    @media (min-width: 1280px) {
+      #panel-belege.active {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 32px;
+        align-items: start;
+      }
+      #panel-belege > :not(.phone-mirror-col) {
+        grid-column: 1;
+      }
+      .phone-mirror-col {
+        grid-column: 2;
+        grid-row: 1 / span 99;
+        position: sticky;
+        top: 24px;
+        padding: 16px;
+        border-radius: 16px;
+        background: var(--color-bg-secondary, #fafaf7);
+        border: 1px solid var(--color-border, #e4e0d6);
+      }
+      .phone-mirror-col .phone-mirror-caption {
+        text-align: center;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--color-text-tertiary, #999);
+        font-family: ui-monospace, monospace;
+        margin-bottom: 14px;
+      }
+    }
+    @media (max-width: 1279px) {
+      .phone-mirror-col { display: none; }
+    }
+
     /* Dropzone */
     .dropzone {
       display: flex;
@@ -677,6 +747,13 @@
           <tbody></tbody>
         </table>
       </div>
+
+      <!-- Phone-Mirror: Live-Abbild des Falls im iOS-26-Liquid-Glass-Frame.
+           Nur sichtbar auf Desktop ≥1280px. Auto-Rotation alle 5s, Tap-Nav. -->
+      <aside class="phone-mirror-col" aria-label="Phone-Mockup: Live-Spiegel des Falls">
+        <div class="phone-mirror-caption">Vorschau · iOS · Mandanten-App</div>
+        <div id="phone-mirror-host" style="display:flex;justify-content:center;"></div>
+      </aside>
     </section>
 
     <!-- Panel: Erkannte Felder mit Source-Viewer Split-Screen -->
@@ -902,6 +979,10 @@
     }
     const data = await r.json();
     CASE_DATA = data;
+    // Bridge an Phone-Mirror: window.__caseState + Event 'caseStateUpdated'.
+    // Phone liest die documents/displayName/etc. und befüllt seine Screens.
+    window.__caseState = data;
+    window.dispatchEvent(new CustomEvent('caseStateUpdated', { detail: data }));
     renderCaseHeader(data);
     // renderPipelineToggle(data); // entfernt 2026-05-18: v6-vision fix-default
     renderBelegeTable(data);
@@ -1356,10 +1437,22 @@
     stream.appendChild(item);
   }
 
+  // Debounced loadCase + Phone-Mirror-Event-Bridge
+  let _pmReloadTimer = null;
+  function triggerPhoneReload() {
+    if (_pmReloadTimer) return;
+    _pmReloadTimer = setTimeout(async () => {
+      _pmReloadTimer = null;
+      try { await loadCase(); } catch {}
+    }, 350);
+  }
+
   async function startUpload(files) {
     // Status-Liste leeren und initial befüllen
     statusList.innerHTML = '';
     files.forEach((f, i) => setStatusRow(i, f.name, 'running'));
+    // Phone-Mirror: Pipeline läuft → sofort neuen case-state fetchen
+    triggerPhoneReload();
 
     const fd = new FormData();
     for (const f of files) fd.append('files', f, f.name);
@@ -1404,17 +1497,21 @@
 
       if (evName === 'doc_start' && idx != null) {
         setStatusRow(idx, filename, 'running');
+        triggerPhoneReload();
       } else if (evName === 'doc_done' && idx != null) {
         const ok = payload.state === 'ok';
         setStatusRow(idx, filename, ok ? 'ok' : 'error');
         if (ok && Array.isArray(payload.anlagen) && payload.anlagen.length > 0) {
           setAnlagenHint(idx, payload.anlagen, 'final');
         }
+        triggerPhoneReload();
       } else if (evName === 'doc_error' && idx != null) {
         setStatusRow(idx, filename, 'error');
+        triggerPhoneReload();
       } else if (evName === 'beleg_indikation' && idx != null) {
         // Round-1 Vorschau (~1-3s, parallel zur OCR): Anlagen + wichtige Werte.
         setIndikation(idx, payload.anlagen, payload.belegtyp, payload.wichtige_werte);
+        triggerPhoneReload();  // ← Phone sieht Anlagen+Werte nach 1-3s
       } else if (evName === 'gemma_vision_ocr_page' && idx != null) {
         // Stück für Stück: pro Gemma-OCR-Seite die nächste Preview anhängen.
         appendPagePreview(idx, payload.index, payload.totalPages, payload.preview);
@@ -1937,6 +2034,67 @@
     const initialTab = (window.location.hash || '').replace(/^#/, '') || 'belege';
     setActiveTab(initialTab);
   })();
+})();
+</script>
+
+<!-- ─── Phone-Mirror (iOS 26 Liquid Glass Live-Mockup) ─── -->
+<!-- Lädt React + Babel via CDN. Die JSX-Dateien werden per fetch+Babel.transform
+     ausgeführt, weil Server text/jsx + nosniff liefert und Browser
+     <script src="*.jsx"> ablehnt. -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script>
+(async function loadPhoneMirror() {
+  const host = document.getElementById('phone-mirror-host');
+  const log = (msg, color) => { console.log('[phone-mirror]', msg); };
+  // Diagnose-DOM aus dem Pre-mount entfernen (war für Bug-Hunt)
+  if (host) host.innerHTML = '';
+  log('v6 boot · breite=' + window.innerWidth, '#7a9cd8');
+  if (window.innerWidth < 1280) { log('Fenster <1280px → Phone deaktiviert', '#999'); return; }
+  if (typeof React === 'undefined') { log('FEHLER: React nicht geladen', 'crimson'); return; }
+  if (typeof Babel === 'undefined') { log('FEHLER: Babel nicht geladen', 'crimson'); return; }
+  log('React ' + React.version + ' · Babel da', '#7ac0a4');
+  const files = ['ios-frame.jsx', 'screens.jsx', 'story-mode.jsx', 'live-stream.jsx', 'profile-view.jsx', 'phone-mirror.jsx'];
+  for (const f of files) {
+    try {
+      const res = await fetch('/phone-mirror/' + f + '?v=' + Date.now(), { credentials: 'omit' });
+      if (!res.ok) { log('✗ ' + f + ' HTTP ' + res.status, 'crimson'); return; }
+      const src = await res.text();
+      let compiled;
+      try { compiled = Babel.transform(src, { presets: ['react'] }).code; }
+      catch (be) { log('✗ ' + f + ' babel: ' + (be.message || be).slice(0, 80), 'crimson'); return; }
+      try { (new Function(compiled))(); }
+      catch (re) { log('✗ ' + f + ' run: ' + (re.message || re).slice(0, 80), 'crimson'); return; }
+      log('✓ ' + f, '#7ac0a4');
+    } catch (e) { log('✗ ' + f + ' net: ' + (e.message || e).slice(0, 80), 'crimson'); return; }
+  }
+  log('globals: IOSDevice=' + (typeof window.IOSDevice) + ' StoryMode=' + (typeof window.StoryMode) + ' LiveStream=' + (typeof window.LiveStream), '#7a9cd8');
+  log('caseState: ' + (window.__caseState ? 'present, docs=' + (window.__caseState.documents?.length ?? 0) : 'MISSING'), window.__caseState ? '#7ac0a4' : 'crimson');
+  // case_state evtl. noch nicht da — auf 'caseStateUpdated' warten ODER direkt mounten falls schon da
+  function doMount() {
+    if (typeof window.mountPhoneMirror !== 'function') {
+      log('FEHLER: window.mountPhoneMirror nicht exportiert', 'crimson');
+      return;
+    }
+    const r = window.mountPhoneMirror();
+    if (r && r.ok) {
+      log('✓ Mount erfolgreich — Phone sichtbar', '#7ac0a4');
+    } else {
+      log('✗ Mount-Fehler: ' + (r?.reason || 'unknown'), 'crimson');
+    }
+  }
+  if (window.__caseState) {
+    doMount();
+  } else {
+    log('warte auf caseStateUpdated…', '#999');
+    window.addEventListener('caseStateUpdated', () => {
+      log('caseStateUpdated empfangen → mount', '#7ac0a4');
+      doMount();
+    }, { once: true });
+    // safety: nach 5s trotzdem mounten
+    setTimeout(() => { if (!window.__phoneMounted) { log('5s timeout → mount ohne caseState', '#e89070'); doMount(); window.__phoneMounted = true; } }, 5000);
+  }
 })();
 </script>
 </body>

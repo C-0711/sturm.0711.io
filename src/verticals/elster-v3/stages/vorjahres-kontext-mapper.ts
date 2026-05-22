@@ -302,6 +302,17 @@ export function nestedToVorjahresKontext(
     expected_anlagen.push('AgB');
   }
 
+  // Person-A/B-Identitäten extrahieren — wird von v5_4-Mappern als hartes
+  // Seed für Person-A/B-Disambig genutzt (idnr ist ground-truth-Match).
+  const pa = hv.person_a;
+  const pb = hv.person_b;
+  const person_a = pa && (pa.idnr || pa.familienname || pa.vorname)
+    ? { idnr: pa.idnr, familienname: pa.familienname, vorname: pa.vorname }
+    : undefined;
+  const person_b = pb && (pb.idnr || pb.familienname || pb.vorname)
+    ? { idnr: pb.idnr, familienname: pb.familienname, vorname: pb.vorname }
+    : undefined;
+
   return {
     source: 'vorjahr',
     setAt: new Date().toISOString(),
@@ -312,5 +323,7 @@ export function nestedToVorjahresKontext(
     anzahl_kinder,
     daueranschnitte,
     missing_belege_erwartet: ableitenMissingBelege(expected_anlagen, jahr),
+    person_a,
+    person_b,
   };
 }

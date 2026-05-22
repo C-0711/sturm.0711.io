@@ -266,7 +266,14 @@ function escapeHtml(s) {
 function germanDecimalToNumber(s) {
   if (s == null) return 0;
   if (typeof s === 'number') return s;
-  const t = String(s).replace(/\./g, '').replace(',', '.');
+  const t0 = String(s).trim();
+  // Bereits dezimal-formatiert (Punkt = Dezimal) → direkt parsen.
+  // Beispiel: "30707.00", "4019.16", "0.00", "-1234.5"
+  if (/^-?\d+\.\d{1,4}$/.test(t0)) return Number(t0);
+  // Reine Ganzzahl → direkt parsen.
+  if (/^-?\d+$/.test(t0)) return Number(t0);
+  // Sonst: deutsches Format "1.234,56" oder "1234,56".
+  const t = t0.replace(/\./g, '').replace(',', '.');
   const n = Number(t);
   return isFinite(n) ? n : 0;
 }
@@ -383,11 +390,17 @@ function v(ml, ecode) { const e = ml[ecode]; return e ? e.value : null; }
 function vNum(ml, ecode) {
   const e = ml[ecode];
   if (!e) return 0;
-  // Currency normalized = integer cents
-  if (e.datentyp === 'currency' && e.normalized && /^-?\d+$/.test(e.normalized)) {
-    return parseInt(e.normalized, 10) / 100;
+  // 1. Bevorzugt normalizedNumber (vom Backend bereits sauber geparsed).
+  if (typeof e.normalizedNumber === 'number' && isFinite(e.normalizedNumber)) {
+    return e.normalizedNumber;
   }
-  return germanDecimalToNumber(e.value);
+  // 2. Sonst normalized als String (kann Integer-EUR oder Decimal-EUR sein).
+  //    Nicht mehr blind /100 — das war der 10x/100x-Bug.
+  if (e.normalized != null && e.normalized !== '') {
+    return germanDecimalToNumber(e.normalized);
+  }
+  // 3. Fallback: rohes value-Feld (kann "69.291,80 €" oder "69.291,80" sein).
+  return germanDecimalToNumber(String(e.value || '').replace(/[€\s]/g, ''));
 }
 
 // P6: evidence() returns HTML. If the master entry's first confirmed_by

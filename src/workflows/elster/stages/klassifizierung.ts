@@ -2,7 +2,6 @@ import { defineStage } from '../../../core/stage.ts';
 import { loadKatalog } from '../lib/anlagen-katalog.ts';
 import type { LlmHandle } from '../../../core/tools/handles.ts';
 import type { ToolContainerView } from '../../../core/tools/types.ts';
-import { chatJson } from '../../../lib/llm-chat.ts';
 
 export interface KlassifizierungInput {
   text: string;
@@ -21,6 +20,19 @@ export interface KlassifizierungInput {
    * dass anlagen_hint gegeben ist; sonst Fallback auf normale Klassifizierung.
    */
   skip?: boolean;
+  /**
+   * v5_4 Hybrid-Routing: strukturierte Block-Liste von gemma-vision-ocr-zoning.
+   * Wenn vorhanden: doc_type wird direkt aus den Block-Typen abgeleitet
+   * (Hauptvordruck_ESt1A → 'einkommensteuererklaerung'; nur VAST-typen →
+   * 'vast_bundle'; sonst 'einzelbeleg'). Regex-Heuristik wird nur als
+   * Fallback bei leerem/fehlendem Input verwendet. erkannte_anlagen wird
+   * zusätzlich aus den Block-Typen abgeleitet (Anlage_N → 'N' etc.).
+   */
+  erkannte_dokumente?: Array<{
+    dokumenten_typ: string;
+    gehoert_zu_person?: string;
+    ocr_zeilen?: Array<{ zeilen_nr: number; text: string }>;
+  }>;
 }
 
 export interface KlassifizierungOutput {
@@ -31,7 +43,102 @@ export interface KlassifizierungOutput {
   /** Wenn gesetzt: Meta-Dokument (Transferticket etc.) wurde erkannt,
    *  Downstream-Stages sollten zu No-ops werden. */
   kpi_warning?: 'meta-doc';
+  /** v5_4 Hybrid-Routing: grobe Dokumentklasse (immer gesetzt). */
+  doc_type: 'vast_bundle' | 'einkommensteuererklaerung' | 'einzelbeleg';
+  /** v5_4 Hybrid-Routing: Veranlagungszeitraum aus OCR (optional). */
+  steuerjahr?: number;
   ms: number;
+}
+
+/**
+ * v5_4 Hybrid-Routing: bestimmt doc_type rein heuristisch aus OCR-Text.
+ * Keine LLM-Calls, keine zusätzlichen Allokationen.
+ */
+function detectDocType(text: string): KlassifizierungOutput['doc_type'] {
+  const hasTransferticket = /Transferticket:\s*Steuer-Abruf/i.test(text);
+  const hasHauptvordruck = /Hauptvordruck\s+ESt\s*1\s*A|Einkommensteuererklärung\s+\d{4}/i.test(text);
+  return hasTransferticket
+    ? 'vast_bundle'
+    : hasHauptvordruck
+      ? 'einkommensteuererklaerung'
+      : 'einzelbeleg';
+}
+
+/**
+ * v5_4 Hybrid-Routing: leitet doc_type DETERMINISTISCH aus den von
+ * gemma-vision-ocr-zoning gelieferten Block-Typen ab. Bevorzugt vor der
+ * Regex-Heuristik, weil das Vision-Modell Person + Layout-Zonen bereits
+ * unverrückbar bestimmt hat.
+ *
+ * Regeln (in dieser Reihenfolge):
+ *   - irgendein Block 'Hauptvordruck_ESt1A' → 'einkommensteuererklaerung'
+ *   - alle Blocks sind VAST-Typen (Bescheinigung, Lohnsteuerbescheinigung,
+ *     Religionszugehoerigkeit, Mitteilung_Kapitalertraege, Steuerbescheinigung_Bank,
+ *     VAST_Bescheinigung) → 'vast_bundle'
+ *   - sonst → 'einzelbeleg'
+ */
+const VAST_BLOCK_TYPES = new Set<string>([
+  'Lohnsteuerbescheinigung',
+  'Religionszugehoerigkeit',
+  'Mitteilung_Kapitalertraege',
+  'Steuerbescheinigung_Bank',
+  'VAST_Bescheinigung',
+]);
+function detectDocTypeFromBlocks(
+  blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
+): KlassifizierungOutput['doc_type'] | null {
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const types = blocks.map((b) => b?.dokumenten_typ).filter(Boolean);
+  if (types.length === 0) return null;
+  if (types.includes('Hauptvordruck_ESt1A')) return 'einkommensteuererklaerung';
+  if (types.every((t) => VAST_BLOCK_TYPES.has(t))) return 'vast_bundle';
+  return 'einzelbeleg';
+}
+
+/**
+ * v5_4: leitet Anlagen-Liste aus Block-Typen ab. Direktes Mapping
+ * Anlage_N → 'N', Anlage_KAP → 'KAP', Anlage_Vorsorgeaufwand → 'VOR' etc.
+ * Lohnsteuerbescheinigung impliziert 'N' + 'VOR' (Sozialvers-Beiträge sind
+ * dort enthalten). Religionszugehoerigkeit impliziert 'ESt1A'.
+ */
+const BLOCK_TYPE_TO_ANLAGEN: Record<string, string[]> = {
+  Hauptvordruck_ESt1A: ['ESt1A'],
+  Anlage_N: ['N'],
+  Anlage_KAP: ['KAP'],
+  Anlage_Vorsorgeaufwand: ['VOR'],
+  Anlage_Sonderausgaben: ['SA'],
+  Lohnsteuerbescheinigung: ['N', 'VOR'],
+  Steuerbescheinigung_Bank: ['KAP'],
+  Mitteilung_Kapitalertraege: ['KAP'],
+  Religionszugehoerigkeit: ['ESt1A'],
+  VAST_Bescheinigung: [],
+  Spendenquittung: ['SA'],
+  Rentenbezugsmitteilung: ['R'],
+};
+function detectAnlagenFromBlocks(
+  blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
+): string[] {
+  const set = new Set<string>();
+  for (const b of blocks) {
+    const mapped = BLOCK_TYPE_TO_ANLAGEN[b?.dokumenten_typ ?? ''] ?? [];
+    for (const a of mapped) set.add(a);
+  }
+  return Array.from(set).sort();
+}
+
+/**
+ * v5_4 Hybrid-Routing: extrahiert Veranlagungszeitraum (Jahr) aus OCR.
+ * Bevorzugt explizite Marker ("Veranlagungszeitraum 2024"), fällt sonst
+ * auf die erste 20XX-Zahl im Text zurück. Range-Check 2010–2099.
+ */
+function detectSteuerjahr(text: string): number | undefined {
+  const yrMatch =
+    text.match(/(?:Veranlagungszeitraum|Steuerjahr|VZ|Erklärung|ESt)\s*[:.\s]*(\d{4})/i) ||
+    text.match(/\b(20[0-9]{2})\b/);
+  if (!yrMatch) return undefined;
+  const y = Number(yrMatch[1]);
+  if (y >= 2010 && y <= 2099) return y;
+  return undefined;
 }
 
 export interface KlassifizierungConfig {
@@ -144,77 +251,12 @@ function runRegex(text: string, allowed: Set<string>): Record<string, number> {
  * Anwendung-Kontext.
  */
 function pickKlassifizierungHandle(tools: ToolContainerView): LlmHandle {
-  // 2026-05-18: Preference invertiert. Vorher war claude-haiku bevorzugt
-  // ('classify-fallback' als critic-grade Gegenleser), das hat Anthropic-
-  // Credits gefressen und bei leerem Konto silent in Regex-only-Fallback
-  // gekippt. Strict no-fallback: nimm IMMER zuerst Mistral Small
-  // (classify-primary). Claude-haiku nur wenn Mistral nicht gebunden ist.
-  if (tools.has('mistral-small')) {
-    return tools.getByRole<LlmHandle>('classify-primary');
+  if (tools.has('claude-haiku')) {
+    return tools.getByRole<LlmHandle>('classify-fallback');
   }
-  return tools.getByRole<LlmHandle>('classify-fallback');
-}
-
-/** Like pickKlassifizierungHandle but returns null when no roster is bound
- *  (standalone runs via /api/workflows/.../run). Round-1 indication should
- *  still work in that case via direct chatJson fallback. */
-function safePickHandle(tools: ToolContainerView): LlmHandle | null {
-  try {
-    return pickKlassifizierungHandle(tools);
-  } catch {
-    return null;
-  }
-}
-
-/** Tool-bound when available, direct Mistral Small chatJson otherwise. Same
- *  prompt + evidence filter as llmClassify. */
-async function llmClassifyAny(
-  text: string,
-  anlagenNames: string[],
-  temperature: number,
-  signal: AbortSignal | undefined,
-  handle: LlmHandle | null,
-): Promise<{ names: string[]; rejected: Array<{ name: string; reason: string; evidence?: string }> }> {
-  if (handle) {
-    return llmClassify(text, anlagenNames, temperature, signal, handle);
-  }
-  const prompt = [
-    'Du bekommst den Text eines Steuerdokuments (OCR).',
-    'Für JEDE Anlage die TATSÄCHLICH im Dokument vorkommt, zitiere genau EINE',
-    'wörtliche Textstelle (10-200 Zeichen) die ihre Präsenz beweist.',
-    'WICHTIG: NUR Anlagen aufnehmen für die du eine echte Textstelle zitieren kannst.',
-    '',
-    'Antworte als JSON: {"anlagen": [{"name": "<CODE>", "evidence": "<exakte OCR-Zeile>"}, ...]}.',
-    'Erlaubte Anlagen-Codes:',
-    anlagenNames.join(', '),
-    '',
-    '--- OCR-Volltext ---',
-    text.slice(0, 30_000),
-  ].join('\n');
-  const { parsed } = await chatJson<{ anlagen?: Array<{ name: string; evidence?: string }> }>(prompt, {
-    provider: 'mistral',
-    model: 'mistral-small-latest',
-    temperature,
-    signal,
-  });
-  const allowed = new Set(anlagenNames);
-  const lowerText = text.toLowerCase();
-  const names: string[] = [];
-  const rejected: Array<{ name: string; reason: string; evidence?: string }> = [];
-  for (const entry of parsed.anlagen ?? []) {
-    if (!entry || typeof entry !== 'object') continue;
-    const name = String(entry.name ?? '').trim();
-    const evidence = typeof entry.evidence === 'string' ? entry.evidence.trim() : '';
-    if (!allowed.has(name)) { rejected.push({ name, reason: 'name_not_in_catalog', evidence }); continue; }
-    if (!evidence || evidence.length < 10) { rejected.push({ name, reason: 'evidence_too_short', evidence }); continue; }
-    const probe = evidence.toLowerCase().slice(0, 30).replace(/\s+/g, ' ').trim();
-    if (!(probe.length >= 6 && lowerText.includes(probe))) {
-      rejected.push({ name, reason: 'evidence_not_in_ocr', evidence });
-      continue;
-    }
-    names.push(name);
-  }
-  return { names, rejected };
+  // Falls claude-haiku nicht gebunden ist, fällt der Lookup auf classify-primary
+  // zurück — NullToolContainer wirft, wenn auch das fehlt.
+  return tools.getByRole<LlmHandle>('classify-primary');
 }
 
 async function llmClassify(
@@ -308,6 +350,23 @@ export const klassifizierungStage = defineStage<
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
 
+    // v5_4 Hybrid-Routing: bevorzugt strukturierte Block-Liste von
+    // gemma-vision-ocr-zoning (Vision-Modell hat Layout-Zonen bereits
+    // unverrückbar bestimmt). Fallback: Regex-Heuristik auf input.text.
+    const blocksDocType = detectDocTypeFromBlocks(input.erkannte_dokumente ?? []);
+    const doc_type = blocksDocType ?? detectDocType(input.text);
+    const blocksAnlagen = (input.erkannte_dokumente?.length ?? 0) > 0
+      ? detectAnlagenFromBlocks(input.erkannte_dokumente!)
+      : null;
+    const steuerjahr = detectSteuerjahr(input.text);
+    if (blocksDocType) {
+      ctx.emit('klassifizierung_block_routing', {
+        doc_type: blocksDocType,
+        anlagen_from_blocks: blocksAnlagen,
+        block_count: input.erkannte_dokumente?.length ?? 0,
+      });
+    }
+
     // ─── I1.4 Meta-Dokument-Heuristik ──────────────────────────────────────
     // ELSTER produziert eine Reihe von Meta-Dokumenten (Transferticket,
     // Steuer-Abruf-Quittung, Empfangsbestätigung), die für die Extraktion
@@ -324,36 +383,11 @@ export const klassifizierungStage = defineStage<
       /\bquittung\s+über\s+den\s+abruf\b/i,
       /\babruf[- ]?bescheinigung\b/i,
     ];
-    // ECHTE Belegtypen — wenn einer matched, ist es NIE ein Meta-Doc auch
-    // wenn z.B. "Transferticket" im Footer steht. Behebt false-positives
-    // wo Lohnsteuerbescheinigungen ein Transfer-Ticket-Nummer im Footer
-    // haben (Druckvorlagen-Boilerplate).
-    const REAL_BELEG_PATTERNS = [
-      /\bLohnsteuer[- ]?bescheinigung\b/i,
-      /\bKapitalertrag[s]?(steuer)?[- ]?bescheinigung\b/i,
-      /\bSteuer[- ]?bescheinigung\b/i,
-      /\bZins[- ]?bescheinigung\b/i,
-      /\bRenten[- ]?bezugs[- ]?mitteilung\b/i,
-      /\bBeitragsbescheinigung\b/i,
-      /\bSpenden[- ]?(quittung|bescheinigung)\b/i,
-      /\bJahressteuer[- ]?bescheinigung\b/i,
-      /\bBruttoarbeitslohn\b/i,
-      /\bKapitalerträge\b/i,
-    ];
-    const realBelegHits = REAL_BELEG_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
     const metaHits = META_DOC_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
-    // Currency-Heuristik: erweitert um Formate ohne € (z.B. "12.345,67" oder
-    // "12 345,67 EUR" wie Mistral OCR oft liefert).
-    const hasCurrency =
-      /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) ||
-      /\d+,\d{2}\s*€/.test(input.text) ||
-      /\d{1,3}(?:\.\d{3})*,\d{2}\s*EUR/i.test(input.text) ||
-      /\b\d{1,3}(?:[.\s]\d{3})+,\d{2}\b/.test(input.text);
-    // Strict: nur skippen wenn Meta-Pattern matched UND KEIN echter Beleg-
-    // pattern matched UND (kein Geld-Format ODER sehr kurzer Text).
-    const isMetaDoc = metaHits.length > 0
-      && realBelegHits.length === 0
-      && (!hasCurrency || input.text.length < 1200);
+    // Zusätzlich: sehr kurze Dokumente OHNE typische Wertspalten (€-Zeichen,
+    // Beträge mit Komma+Cent) sind selten Belege.
+    const hasCurrency = /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) || /\d+,\d{2}\s*€/.test(input.text);
+    const isMetaDoc = metaHits.length > 0 && (!hasCurrency || input.text.length < 1200);
     if (isMetaDoc) {
       ctx.emit('meta_doc_detected', { patterns: metaHits, hasCurrency, textLen: input.text.length });
       ctx.logger.info('Meta-Dokument erkannt — keine Beleg-Extraktion', {
@@ -374,6 +408,8 @@ export const klassifizierungStage = defineStage<
         llm_hits: [],
         used_llm: false,
         kpi_warning: 'meta-doc',
+        doc_type,
+        steuerjahr,
         ms: Date.now() - t0,
       };
     }
@@ -398,63 +434,73 @@ export const klassifizierungStage = defineStage<
         regex_hits: {},
         llm_hits: [],
         used_llm: false,
+        doc_type,
+        steuerjahr,
         ms: Date.now() - t0,
       };
     }
-
-    // Round-1 indication: Mistral Small ALWAYS fires in parallel with regex,
-    // so the UI can stream a fast first hit ("Erkannt: …") while the rest of
-    // the pipeline runs. Bound-tool handle is preferred (gives roster-aware
-    // provider routing); otherwise we fall back to a direct Mistral chatJson
-    // call via env MISTRAL_API_KEY. `llmFallbackWhen: 'never'` still disables.
-    const mode = ctx.config.llmFallbackWhen ?? 'always';
-    const shouldLlm = mode !== 'never';
-
-    const handle = shouldLlm ? safePickHandle(ctx.tools) : null;
-    const llmPromise: Promise<{
-      names: string[];
-      rejected: Array<{ name: string; reason: string; evidence?: string }>;
-      used: boolean;
-    }> = shouldLlm
-      ? llmClassifyAny(
-          input.text,
-          anlagenNames,
-          ctx.config.temperature ?? 0,
-          ctx.signal,
-          handle,
-        )
-          .then((r) => {
-            ctx.emit('llm_hits', { anlagen: r.names, rejected: r.rejected.length });
-            return { names: r.names, rejected: r.rejected, used: true };
-          })
-          .catch((err) => {
-            ctx.logger.warn('LLM classifier failed, keeping regex-only result', {
-              error: (err as Error).message,
-            });
-            return { names: [], rejected: [], used: false };
-          })
-      : Promise.resolve({ names: [], rejected: [], used: false });
 
     const regexHits = runRegex(input.text, allowed);
     const regexNames = Object.keys(regexHits);
     ctx.emit('regex_hits', { anlagen: regexNames, counts: regexHits });
 
-    const llmRes = await llmPromise;
-    const llmNames = llmRes.names;
-    const llmRejected = llmRes.rejected;
-    const usedLlm = llmRes.used;
-    if (llmRejected.length > 0) {
-      ctx.logger.info('LLM-Klassifizierung: rejected phantom anlagen', {
-        rejected: llmRejected,
+    // Default verschärft: 'zero' statt 'zero-or-one' — LLM-Fallback NUR
+    // wenn der Regex GAR NICHTS findet. Bei 1+ Regex-Hits trauen wir der
+    // deterministischen Erkennung und vermeiden Phantom-Anlagen.
+    const mode = ctx.config.llmFallbackWhen ?? 'zero';
+    const shouldLlm =
+      mode === 'always' ||
+      (mode === 'zero-or-one' && regexNames.length <= 1) ||
+      (mode === 'zero' && regexNames.length === 0);
+
+    let llmNames: string[] = [];
+    let llmRejected: Array<{ name: string; reason: string; evidence?: string }> = [];
+    let usedLlm = false;
+    if (shouldLlm) {
+      const handle = pickKlassifizierungHandle(ctx.tools);
+      ctx.logger.debug('klassifizierung: using bound LLM handle', {
+        tool: handle.name,
+        provider: handle.meta.provider,
+        model: handle.meta.model,
       });
+      try {
+        const r = await llmClassify(
+          input.text,
+          anlagenNames,
+          ctx.config.temperature ?? 0,
+          ctx.signal,
+          handle,
+        );
+        llmNames = r.names;
+        llmRejected = r.rejected;
+        usedLlm = true;
+        ctx.emit('llm_hits', { anlagen: llmNames, rejected: llmRejected.length });
+        if (llmRejected.length > 0) {
+          ctx.logger.info('LLM-Klassifizierung: rejected phantom anlagen', {
+            rejected: llmRejected,
+          });
+        }
+      } catch (err) {
+        ctx.logger.warn('LLM fallback failed, keeping regex-only result', {
+          error: (err as Error).message,
+        });
+      }
     }
 
-    const union = Array.from(new Set([...regexNames, ...llmNames])).sort();
+    // v5_4: wenn erkannte_dokumente (von gemma-vision-ocr-zoning) Blocks
+    // geliefert hat, deren abgeleitete Anlagen mit der Regex/LLM-Union
+    // vereinigen — Vision-Modell ist deterministisch besser als Drucktext-
+    // Regex bei Multi-Doc-Bundles (z.B. VAST mit 5 Sub-Belegen).
+    const baseUnion = Array.from(new Set([...regexNames, ...llmNames])).sort();
+    const union = blocksAnlagen
+      ? Array.from(new Set([...baseUnion, ...blocksAnlagen])).sort()
+      : baseUnion;
     await ctx.artifacts.write('erkannte_anlagen.json', {
       erkannte_anlagen: union,
       regex_hits: regexHits,
       llm_hits: llmNames,
       llm_rejected: llmRejected,
+      anlagen_from_blocks: blocksAnlagen,
     });
 
     return {
@@ -462,6 +508,8 @@ export const klassifizierungStage = defineStage<
       regex_hits: regexHits,
       llm_hits: llmNames,
       used_llm: usedLlm,
+      doc_type,
+      steuerjahr,
       ms: Date.now() - t0,
     };
   },

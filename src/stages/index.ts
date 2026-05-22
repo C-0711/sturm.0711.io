@@ -16,6 +16,7 @@ import { ocrConsensusMergeStage } from './ocr-consensus-merge.ts';
 import { autoSourceSplitStage } from './auto-source-split.ts';
 import { mistralSmallOcrStage } from './mistral-small-ocr.ts';
 import { gemmaVisionOcrStage } from './gemma-vision-ocr.ts';
+import { gemmaVisionOcrZoningStage } from './gemma-vision-ocr-zoning.ts';
 import { belegIndikationStage } from './beleg-indikation.ts';
 import { llmEnsembleVoteStage } from './llm-ensemble-vote.ts';
 
@@ -39,6 +40,7 @@ export function registerAllStages(): void {
   registerStage(ocrConsensusMergeStage);
   // Auto-source-split — adaptive page-fanout based on dynamic prompt budget
   registerStage(autoSourceSplitStage);
+  registerStage(gemmaVisionOcrZoningStage);
   registerStage(mistralSmallOcrStage);
   // Gemma-4 vision OCR — drop-in for mistral-ocr in v5.2-rag / v6-vision.
   registerStage(gemmaVisionOcrStage);

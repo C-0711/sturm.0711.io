@@ -49,6 +49,7 @@ import { layer1PrepopStage } from './stages/layer1-prepop-stage.ts';
 // Vorjahres-Erklärung → CaseContext (Engführung für Folge-Pipeline)
 import { lohnsteuerbescheidMapperStage } from './stages/lohnsteuerbescheid-mapper-stage.ts';
 import { einkommensteuererklaerungMapperStage } from './stages/einkommensteuererklaerung-mapper-stage.ts';
+import { systemReadinessCheckStage } from "./stages/system-readiness-check.ts";
 import { vorjahresKontextExtractStage } from './stages/vorjahres-kontext-extract.ts';
 
 export const ELSTER_V3_VERTICAL_META = {
@@ -108,6 +109,7 @@ export function registerElsterV3Stages(): void {
   registerStage(vorjahresKontextExtractStage);
   registerStage(lohnsteuerbescheidMapperStage);
   registerStage(einkommensteuererklaerungMapperStage);
+  registerStage(systemReadinessCheckStage);
 }
 
 /**
@@ -1665,6 +1667,17 @@ export function buildElsterV5_4ConditionalWorkflow() {
       'einen Pfad — 3× schneller als v5_2-rag, ohne Cross-Contamination zwischen den Pfaden.',
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
+      // 0. Pre-Flight Health-Check: Lane 1 / Ollama / Gemma4 / FP32 / atoms.json
+      systemReadiness: {
+        uses: 'elster-v3/system-readiness-check',
+        config: {
+          lane1Url: 'http://host.docker.internal:12010/health',
+          ollamaUrl: 'http://host.docker.internal:11434',
+          atomsJsonPath: 'src/verticals/elster-v3/data/atoms.json',
+          cascadeFp32Path: 'src/verticals/elster-v3/data/embeddings.gemma4.fp32.bin',
+        },
+        inputs: {},
+      },
       // 1. OCR + Document-Zoning in EINEM Gemma-4 Vision Call (strict json_schema):
       //    → erkannte_dokumente[{dokumenten_typ, gehoert_zu_person, ocr_zeilen[]}]
       //    Person-A/B-Suffix unverrückbar fest ab Frame 1.

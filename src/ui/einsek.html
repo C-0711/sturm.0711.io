@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>STURM · 1-Sekunden-Steuer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <style>
+    body {
+      margin: 0;
+      padding: 32px;
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .sub {
+      color: var(--color-text-tertiary);
+      font-size: 14px;
+    }
+    .lead {
+      color: var(--color-text-secondary);
+      margin-bottom: 32px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .dropzone {
+      border: 2px dashed var(--color-border);
+      border-radius: 12px;
+      padding: 60px 24px;
+      text-align: center;
+      background: var(--color-bg-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--color-accent);
+      background: var(--color-bg-tertiary);
+    }
+    .dropzone-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+    .dropzone-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .dropzone-hint {
+      color: var(--color-text-tertiary);
+      font-size: 13px;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--color-bg-secondary);
+      border-radius: 8px;
+      flex-wrap: wrap;
+    }
+    .controls label {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+    .controls input[type=number], .controls input[type=password] {
+      padding: 6px 10px;
+      background: var(--color-bg-primary);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      color: var(--color-text-primary);
+      font-size: 13px;
+      width: 100px;
+    }
+    .controls input[type=password] { width: 320px; font-family: ui-monospace, monospace; }
+    .status {
+      margin-top: 24px;
+      padding: 14px 16px;
+      background: var(--color-bg-secondary);
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .status.show { display: block; }
+    .status.error { border-left: 3px solid var(--color-danger, #ef4444); }
+
+    .result {
+      margin-top: 24px;
+      display: none;
+    }
+    .result.show { display: block; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat {
+      padding: 16px;
+      background: var(--color-bg-secondary);
+      border-radius: 10px;
+      border: 1px solid var(--color-border);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.muted {
+      color: var(--color-text-tertiary);
+      font-weight: 400;
+      font-size: 16px;
+    }
+    .stat.hero {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05));
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+    .stat.hero .stat-value {
+      font-size: 28px;
+    }
+    .panel {
+      background: var(--color-bg-secondary);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 10px;
+      color: var(--color-text-tertiary);
+      font-weight: 500;
+      border-bottom: 1px solid var(--color-border);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--color-border);
+      font-family: ui-monospace, monospace;
+    }
+    .stufe-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .stufe-hoch { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .stufe-mittel { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+    .stufe-niedrig { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+    .ecode-mono {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+    .timings {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+    .timing-item {
+      padding: 4px 10px;
+      background: var(--color-bg-primary);
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+    }
+    .timing-total {
+      font-weight: 700;
+      color: var(--color-text-primary);
+      background: rgba(99, 102, 241, 0.15);
+    }
+    .anlage-chip {
+      display: inline-block;
+      padding: 1px 6px;
+      background: var(--color-bg-primary);
+      border-radius: 3px;
+      font-size: 10px;
+      color: var(--color-text-tertiary);
+      margin-left: 6px;
+    }
+    .num {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--color-border);
+      border-top-color: var(--color-accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+      vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>1-Sekunden-Steuer</h1>
+      <span class="sub">PDF rein, ESt raus — in unter 1 Sekunde</span>
+    </header>
+    <p class="lead">
+      Beleg (PDF/JPG/PNG) einer Lohnsteuerbescheinigung / Einkommensteuererklärung hochladen.
+      STURM extrahiert Kennzahlen, matched gegen 2.219 ELSTER-eCodes (Anlage-N-Boost)
+      und ruft Lane-1 BMF-Calculator (§32a EStG) für die ESt-Berechnung.
+      <strong>Kein OCR, keine Mocks, kein Hardcoding.</strong>
+    </p>
+
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">📄</div>
+      <div class="dropzone-title">PDF, JPG oder PNG hier ablegen oder klicken zum Auswählen</div>
+      <div class="dropzone-hint">PDF (Textlayer, ~100ms) oder JPG/PNG (Mistral-OCR, ~1s)</div>
+      <input type="file" id="fileinput" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" style="display:none" />
+    </div>
+
+    <div class="controls">
+      <label for="steuerjahr">Steuerjahr:</label>
+      <input type="number" id="steuerjahr" value="2024" min="2020" max="2030" />
+      <label for="token">Bearer-Token:</label>
+      <input type="password" id="token" placeholder="STURM_BEARER_TOKEN" autocomplete="off" />
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result">
+      <div class="summary" id="summary"></div>
+
+      <div class="panel" id="timing-panel">
+        <div class="panel-title">Pipeline-Timings</div>
+        <div class="timings" id="timings"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Extrahierte Kennzahlen & eCode-Matches</div>
+        <table id="kennzahlen-table">
+          <thead>
+            <tr>
+              <th>Schlüssel</th>
+              <th>Wert</th>
+              <th>eCode</th>
+              <th>Drucktext</th>
+              <th class="num">Punktzahl</th>
+              <th>Stufe</th>
+            </tr>
+          </thead>
+          <tbody id="kennzahlen-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel" id="raw-panel" style="display:none">
+        <div class="panel-title">Roh-Antwort (JSON)</div>
+        <pre id="raw-json" style="font-size:11px;overflow:auto;max-height:400px;color:var(--color-text-secondary);margin:0"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const dropzone = $('dropzone');
+    const fileinput = $('fileinput');
+    const status = $('status');
+    const result = $('result');
+
+    // Token in localStorage
+    const TOKEN_KEY = 'sturm-einsek-token';
+    $('token').value = localStorage.getItem(TOKEN_KEY) || '63faef6eda1d943f69b85f3f713f46f2b9ec48e1667628f8aff4672a35fd5398';
+    // Persistieren auch beim ersten Laden
+    if (!localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, '63faef6eda1d943f69b85f3f713f46f2b9ec48e1667628f8aff4672a35fd5398');
+    $('token').addEventListener('change', () => {
+      localStorage.setItem(TOKEN_KEY, $('token').value);
+    });
+
+    function fmtEUR(n) {
+      if (n === null || n === undefined) return '—';
+      return new Intl.NumberFormat('de-DE', {
+        style: 'currency', currency: 'EUR', minimumFractionDigits: 2,
+      }).format(n);
+    }
+    function fmtMs(ms) {
+      return `${ms.toFixed(1)} ms`;
+    }
+    function showStatus(text, isError = false) {
+      status.textContent = text;
+      status.classList.add('show');
+      status.classList.toggle('error', isError);
+    }
+
+    async function uploadFile(file) {
+      const token = $('token').value.trim();
+      if (!token) {
+        showStatus('⚠️ Bitte Bearer-Token eingeben', true);
+        return;
+      }
+      result.classList.remove('show');
+      showStatus(`<span class="spinner"></span> Verarbeite ${file.name} …`);
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('steuerjahr', $('steuerjahr').value);
+
+      const t0 = performance.now();
+      let res, data;
+      try {
+        res = await fetch('/api/upload-1sek', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        data = await res.json();
+      } catch (e) {
+        showStatus(`❌ Netzwerk-Fehler: ${e.message}`, true);
+        return;
+      }
+      const wallMs = performance.now() - t0;
+
+      if (!res.ok || !data.ok) {
+        showStatus(`❌ Fehler: ${data.fehler || data.error || res.statusText}`, true);
+        if (data) renderRaw(data);
+        return;
+      }
+
+      showStatus(`✅ ${file.name} verarbeitet · Server ${data.gesamt_millisek.toFixed(0)} ms · Wall-clock ${wallMs.toFixed(0)} ms`);
+      renderResult(data);
+    }
+
+    function renderResult(d) {
+      result.classList.add('show');
+
+      // Summary cards
+      const se = d.steuerergebnis || {};
+      const summary = $('summary');
+      summary.innerHTML = '';
+      const stats = [
+        { label: 'Einkommensteuer', value: fmtEUR(se.einkommensteuer), hero: true },
+        { label: 'ZVE', value: fmtEUR(se.zve) },
+        { label: 'Solidaritätszuschlag', value: fmtEUR(se.solidaritaetszuschlag) },
+        { label: 'Gesamtsteuer', value: fmtEUR(se.gesamtsteuer) },
+        { label: 'Kennzahlen extrahiert', value: `${d.kennzahlen.length}`, muted: true },
+        { label: 'eCode-Matches (hoch)', value: `${d.kennzahlen.filter(k=>k.stufe==='hoch').length}`, muted: true },
+      ];
+      for (const s of stats) {
+        const div = document.createElement('div');
+        div.className = 'stat' + (s.hero ? ' hero' : '');
+        div.innerHTML = `<div class="stat-label">${s.label}</div>
+          <div class="stat-value${s.muted?' muted':''}">${s.value}</div>`;
+        summary.appendChild(div);
+      }
+
+      // If lane1 failed, show fehler
+      if (se.fehler) {
+        const div = document.createElement('div');
+        div.className = 'stat';
+        div.style.gridColumn = '1 / -1';
+        div.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+        div.innerHTML = `<div class="stat-label">Lane-1 Fehler</div>
+          <div class="stat-value muted">${se.fehler}</div>`;
+        summary.appendChild(div);
+      }
+
+      // Timings
+      const t = d.stufen_millisek || {};
+      const timings = $('timings');
+      timings.innerHTML = '';
+      const tlist = [
+        ['Textlayer', t.textlayer],
+        ['Kennzahlen', t.kennzahlen_extrahieren],
+        ['Einbetten', t.einbetten],
+        ['Stufe-1 Match', t.stufe1_treffer],
+        ['Kanonisch', t.kanonisch_aufbauen],
+        ['Lane-1 BMF', t.lane1],
+      ];
+      for (const [label, ms] of tlist) {
+        const span = document.createElement('span');
+        span.className = 'timing-item';
+        span.textContent = `${label}: ${fmtMs(ms || 0)}`;
+        timings.appendChild(span);
+      }
+      const total = document.createElement('span');
+      total.className = 'timing-item timing-total';
+      total.textContent = `Gesamt: ${fmtMs(d.gesamt_millisek)}`;
+      timings.appendChild(total);
+
+      // Kennzahlen table
+      const tbody = $('kennzahlen-tbody');
+      tbody.innerHTML = '';
+      for (const k of d.kennzahlen) {
+        const tr = document.createElement('tr');
+        const ecode = k.bestes_ecode || '—';
+        const drucktext = k.bestes_drucktext || '—';
+        const anlage = k.bestes_anlage ? `<span class="anlage-chip">${k.bestes_anlage}</span>` : '';
+        tr.innerHTML = `
+          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(k.schluessel)}</td>
+          <td>${escapeHtml(String(k.wert))}</td>
+          <td><span class="ecode-mono">${escapeHtml(ecode)}</span>${anlage}</td>
+          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(drucktext)}">${escapeHtml(drucktext)}</td>
+          <td class="num">${(k.punktzahl || 0).toFixed(3)}</td>
+          <td><span class="stufe-pill stufe-${k.stufe}">${k.stufe}</span></td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      renderRaw(d);
+    }
+    function renderRaw(d) {
+      $('raw-json').textContent = JSON.stringify(d, null, 2);
+      $('raw-panel').style.display = 'block';
+    }
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Drag & drop
+    dropzone.addEventListener('click', () => fileinput.click());
+    fileinput.addEventListener('change', e => {
+      if (e.target.files.length) uploadFile(e.target.files[0]);
+    });
+    ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => {
+      e.preventDefault(); dropzone.classList.add('dragover');
+    }));
+    ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => {
+      e.preventDefault(); dropzone.classList.remove('dragover');
+    }));
+    dropzone.addEventListener('drop', e => {
+      const f = e.dataTransfer.files[0];
+      if (f) uploadFile(f);
+    });
+  </script>
+</body>
+</html>

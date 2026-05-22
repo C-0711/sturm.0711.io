@@ -72,3 +72,4 @@ src/verticals/elster-v3/data/.backup-*
 
 # E2E / probe / shootout report dirs — runtime artifacts
 /reports/
+docker-compose.yml.bak-*

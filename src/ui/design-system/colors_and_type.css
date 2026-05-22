@@ -1,46 +1,110 @@
 /* ============================================================
-   Neo Design System — Colors & Type
-   Source: neo.0711.io  ·  Theme: "warm editorial AI tool"
-   Extracted from src/app/globals.css + layout.tsx
+   STURM Design System — Colors & Type
+   v2.0 · 2026-05-22 — warm-neutral · Geist + JetBrains Mono · champagne
+   ============================================================
+   Layered approach:
+   - NEW tokens:  --bg, --ink, --accent, --line, --radius (STURM-CI)
+   - LEGACY map:  --color-bg-*, --color-text-*, etc. (back-compat with
+                  existing HTML in /src/ui/*.html that used the Neo
+                  design system tokens before this re-skin)
    ============================================================ */
 
-/* --- Fonts ------------------------------------------------- */
-/* Primary display: Playfair Display 400 (serif, editorial)
-   Primary UI:      Inter 400/500/600/700
-   Accessibility:   OpenDyslexic fallback for dyslexic chat-font */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Spectral:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
 
-:root {
-  /* === Backgrounds — Light Mode === */
-  --color-bg: #ffffff;
-  --color-bg-secondary: #ffffff;
-  --color-bg-tertiary: #fafafa;
-  --color-bg-hover: #f5f0e8;        /* warm beige, NEVER cold grey */
-  --color-bg-active: #f0ebe3;
+/* ============================================================
+   STURM-CI tokens (canonical · use these in new code)
+   ============================================================ */
+:root,
+[data-theme="dark"],
+html.dark {
+  /* canvas + surfaces */
+  --bg:    oklch(0.20 0.005 80);
+  --bg-2:  oklch(0.235 0.005 80);
+  --bg-3:  oklch(0.27 0.005 80);
+  --bg-4:  oklch(0.31 0.005 80);
+  /* text */
+  --ink:   oklch(0.95 0.005 80);
+  --ink-2: oklch(0.72 0.005 80);
+  --ink-3: oklch(0.52 0.005 80);
+  --ink-4: oklch(0.40 0.005 80);
+  /* lines */
+  --line:   oklch(0.32 0.005 80);
+  --line-2: oklch(0.28 0.005 80);
+  /* accent — champagne */
+  --accent:       oklch(0.82 0.06 85);
+  --accent-deep:  oklch(0.72 0.07 85);
+  --accent-soft:  oklch(0.82 0.06 85 / 0.12);
+  --on-accent:    var(--bg);
+  /* status — muted */
+  --ok:   oklch(0.78 0.13 145);
+  --warn: oklch(0.82 0.14 85);
+  --err:  oklch(0.70 0.16 25);
+  /* radii */
+  --radius:    8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  /* type */
+  --font-sans:  'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Spectral', ui-serif, Georgia, serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: dark;
+}
 
-  /* === Text === */
-  --color-text-primary: #111111;
-  --color-text-secondary: #555555;
-  --color-text-tertiary: #999999;
+[data-theme="light"],
+html:not(.dark):not([data-theme="dark"]) {
+  --bg:    oklch(0.985 0.004 80);
+  --bg-2:  oklch(0.965 0.005 80);
+  --bg-3:  oklch(0.93  0.006 80);
+  --bg-4:  oklch(0.88  0.008 80);
+  --ink:   oklch(0.18 0.01 80);
+  --ink-2: oklch(0.42 0.01 80);
+  --ink-3: oklch(0.60 0.01 80);
+  --ink-4: oklch(0.72 0.005 80);
+  --line:   oklch(0.84 0.008 80);
+  --line-2: oklch(0.90 0.006 80);
+  --accent:       oklch(0.56 0.13 65);
+  --accent-deep:  oklch(0.48 0.14 60);
+  --accent-soft:  oklch(0.56 0.13 65 / 0.10);
+  --on-accent:    oklch(0.99 0.005 80);
+  --ok:   oklch(0.55 0.16 145);
+  --warn: oklch(0.62 0.15 65);
+  --err:  oklch(0.55 0.18 25);
+  color-scheme: light;
+}
 
-  /* === Borders === */
-  --color-border: #e8e8e8;
-  --color-border-light: #f0f0f0;
-
-  /* === Accent — Olive-Gold (the brand signature) === */
-  --color-accent: #857b61;
-  --color-accent-hover: #6e6550;
-  --color-accent-light: #f0ebe3;
-
-  /* === Status — intentionally muted === */
-  --color-success: #8ba88a;          /* sage, not neon */
-  --color-danger:  #d4a0a0;          /* rose, not alarm-red */
-
-  /* === Thinking / reasoning blocks === */
-  --color-thinking-bg: #faf8f5;
-  --color-thinking-border: #e8e3da;
-
-  /* === Extended palette (status badges; always /10–/30 alpha) === */
+/* ============================================================
+   Legacy mapping (back-compat — DO NOT use in new code)
+   Maps the old Neo --color-* tokens onto the new STURM-CI tokens
+   so existing HTML keeps rendering without HTML edits.
+   ============================================================ */
+:root,
+[data-theme="dark"],
+html.dark {
+  /* backgrounds */
+  --color-bg:           var(--bg);
+  --color-bg-primary:   var(--bg);
+  --color-bg-secondary: var(--bg-2);
+  --color-bg-tertiary:  var(--bg-3);
+  --color-bg-card:      var(--bg-2);
+  --color-bg-hover:     var(--bg-3);
+  --color-bg-active:    var(--bg-4);
+  /* text */
+  --color-text-primary:   var(--ink);
+  --color-text-secondary: var(--ink-2);
+  --color-text-tertiary:  var(--ink-3);
+  --color-text-quaternary:var(--ink-4);
+  /* borders */
+  --color-border:       var(--line);
+  --color-border-light: var(--line-2);
+  /* accent — champagne now (was olive-gold) */
+  --color-accent:       var(--accent);
+  --color-accent-hover: var(--accent-deep);
+  --color-accent-light: var(--accent-soft);
+  /* status */
+  --color-success: var(--ok);
+  --color-danger:  var(--err);
+  --color-warning: var(--warn);
+  /* extended palette — kept as static hex for badges/charts */
   --color-emerald: #00bb7f;
   --color-amber:   #f99c00;
   --color-red:     #fb2c36;
@@ -53,142 +117,38 @@
   --color-teal:    #00baa7;
   --color-slate:   #62748e;
   --color-zinc:    #71717b;
-
-  /* === Radii === */
-  --radius-sm:  0.25rem;
-  --radius-md:  0.375rem;
-  --radius-lg:  0.5rem;
-  --radius-xl:  0.75rem;
-  --radius-2xl: 1rem;
-  --radius-full: 9999px;
-
-  /* === Shadows (dezent, never harsh) === */
-  --shadow-sm:  0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
-  --shadow-md:  0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-  --shadow-lg:  0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
-  --shadow-xl:  0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
-  --shadow-2xl: 0 25px 50px -12px rgba(0,0,0,0.25);
-  --shadow-focus-accent: 0 0 0 3px rgba(133, 123, 97, 0.15);
-
-  /* === Motion === */
-  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out:     cubic-bezier(0, 0, 0.2, 1);
-  --duration-fast: 0.15s;
-  --duration-base: 0.2s;
-  --duration-slow: 0.5s;
-
-  /* === Type families === */
-  --font-inter:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-playfair: "Playfair Display", Georgia, "Times New Roman", serif;
-  --font-mono:     "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "Courier New", monospace;
-  --font-dyslexic: "OpenDyslexic", "Comic Sans MS", system-ui, sans-serif;
-
-  /* === Type scale (Tailwind v4 parity) === */
-  --text-xs:   0.75rem;
-  --text-sm:   0.875rem;
-  --text-base: 1rem;
-  --text-lg:   1.125rem;
-  --text-xl:   1.25rem;
-  --text-2xl:  1.5rem;
-  --text-3xl:  1.875rem;
-  --text-4xl:  2.25rem;
-  --text-5xl:  3rem;
-
-  /* === Z-index stack === */
-  --z-sticky: 10;
-  --z-dropdown: 20;
-  --z-overlay: 40;
-  --z-sidebar-fab: 50;
-  --z-modal: 100;
-  --z-toast: 150;
-  --z-command: 200;
-  --z-alert: 300;
-  --z-max: 400;
-}
-
-/* === Dark Mode — warm, NOT cold slate === */
-.dark,
-[data-theme="dark"] {
-  --color-bg: #1a1816;               /* warm black, slight red tint */
-  --color-bg-secondary: #242220;
-  --color-bg-tertiary: #2e2c2a;
-  --color-bg-hover: #383634;
-  --color-bg-active: #424040;
-
-  --color-text-primary: #e8e6e3;     /* cream, never pure white */
-  --color-text-secondary: #a8a6a3;
-  --color-text-tertiary: #787674;
-
-  --color-border: #3a3836;
-  --color-border-light: #2e2c2a;
-
-  --color-accent: #b0a688;           /* lighter for contrast on dark */
-  --color-accent-hover: #c4ba9e;
-  --color-accent-light: #3d362a;
-
-  /* success/danger remain identical by design */
-  --color-thinking-bg: #2a2720;
-  --color-thinking-border: #4a4435;
+  /* thinking-blocks (neo legacy) */
+  --color-thinking-bg:     var(--bg-2);
+  --color-thinking-border: var(--line-2);
+  /* radii */
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  /* fonts (legacy var names) */
+  --font:        var(--font-sans);
+  --font-mono:   var(--font-mono);
+  --font-display: var(--font-serif);
 }
 
 /* ============================================================
-   Semantic element styles
+   Selection + base typography
    ============================================================ */
-body {
-  font-family: var(--font-inter);
-  font-size: var(--text-base);
-  line-height: 1.5;
-  color: var(--color-text-primary);
-  background: var(--color-bg);
+::selection {
+  background: color-mix(in oklab, var(--accent) 40%, transparent);
+  color: var(--ink);
+}
+
+html, body {
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+.serif { font-family: var(--font-serif); }
+.mono  { font-family: var(--font-mono);  }
 
-h1, h2, h3 {
-  font-family: var(--font-playfair);
-  font-weight: 400;                  /* NEVER bold — editorial signature */
-  color: var(--color-text-primary);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+/* ============================================================
+   Print
+   ============================================================ */
+@media print {
+  body { background: white !important; color: black !important; }
 }
-h1 { font-size: var(--text-4xl); }
-h2 { font-size: var(--text-3xl); }
-h3 { font-size: var(--text-2xl); }
-
-h4, h5, h6 {
-  font-family: var(--font-inter);
-  font-weight: 600;
-  line-height: 1.25;
-}
-h4 { font-size: var(--text-xl); }
-h5 { font-size: var(--text-lg); }
-h6 { font-size: var(--text-base); }
-
-p  { font-size: var(--text-base); color: var(--color-text-primary); }
-small, .text-caption { font-size: var(--text-sm); color: var(--color-text-secondary); }
-.text-muted { color: var(--color-text-tertiary); }
-
-code, pre, kbd { font-family: var(--font-mono); font-size: 0.9em; }
-code { background: var(--color-bg-tertiary); padding: 0.1em 0.35em; border-radius: var(--radius-sm); }
-
-a { color: var(--color-accent); text-decoration: none; transition: color var(--duration-fast) var(--ease-default); }
-a:hover { color: var(--color-accent-hover); text-decoration: underline; text-underline-offset: 2px; }
-
-/* Chat-font variants (user-selectable in settings) */
-.chat-font-default  { font-family: var(--font-inter); }
-.chat-font-sans     { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-.chat-font-system   { font-family: var(--font-mono); }
-.chat-font-dyslexic { font-family: var(--font-dyslexic); letter-spacing: 0.03em; line-height: 1.6; }
-
-/* Scrollbar — 6px, subtle */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-tertiary); }
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-
-/* Keyframes */
-@keyframes neo-typing {
-  0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
-  30% { opacity: 1; transform: scale(1); }
-}
-@keyframes neo-pulse { 50% { opacity: 0.5; } }

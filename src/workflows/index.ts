@@ -23,6 +23,7 @@ import {
   buildElsterV52RagEnsembleWorkflow,
   buildElsterV6VisionWorkflow,
   buildElsterV4StrickerWorkflow,
+  buildElsterV5_4ConditionalWorkflow,
   buildVorjahresKontextWorkflow,
 } from '../verticals/elster-v3/index.ts';
 import { registerStage } from '../core/registry.ts';
@@ -31,6 +32,7 @@ import { registerElsterV3MultiStages, buildElsterV3MultiWorkflowWithSchema } fro
 import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc/index.ts';
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
 import { registerSealStages, buildSteuerfallSealWorkflow } from './steuerfall-seal/index.ts';
+import { registerBescheidStages, buildBescheidPipelineWorkflow } from './bescheid-pipeline/index.ts';
 
 export function registerAllWorkflows(): void {
   registerWorkflow(helloOcrWorkflow);
@@ -55,6 +57,7 @@ export function registerAllWorkflows(): void {
   registerWorkflow(buildElsterV4StrickerWorkflow());
   // Vorjahres-Kontext-Workflow (Slice 1a Mandanten-Onboarding via Vorjahres-Erklärung)
   registerWorkflow(buildVorjahresKontextWorkflow());
+  registerWorkflow(buildElsterV5_4ConditionalWorkflow());
   registerElsterV3MultiStages();
   registerWorkflow(buildElsterV3MultiWorkflowWithSchema());
   registerWorkflow(buildOcrShootoutWorkflow());
@@ -67,6 +70,8 @@ export function registerAllWorkflows(): void {
   // Steuerfall-Versiegelung: HMAC-Snapshot + Merkle + Anchor.
   registerSealStages();
   registerWorkflow(buildSteuerfallSealWorkflow());
+  registerBescheidStages();
+  registerWorkflow(buildBescheidPipelineWorkflow());
 }
 
 export { helloOcrWorkflow };

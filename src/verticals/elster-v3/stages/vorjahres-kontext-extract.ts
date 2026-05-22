@@ -38,6 +38,9 @@ export interface VorjahresKontextExtractInput {
   /** Vorjahr (z.B. 2023) — wird in CaseContext.vorjahr abgelegt. Wenn nicht
    *  übergeben, wird es aus hauptvordruck.steuerjahr im nested-Output gelesen. */
   vorjahr?: number;
+  /** Flache eCode-Map vom einkommensteuererklaerungMapper (Python-Solver).
+   *  Wenn vorhanden, wird sie in CaseContext.vorjahr_ecodes durchgereicht. */
+  ese_ecodes?: Record<string, string | number>;
 }
 
 export interface VorjahresKontextExtractOutput {
@@ -282,6 +285,15 @@ export const vorjahresKontextExtractStage = defineStage<
       ?? (typeof hv.steuerjahr === 'number' ? (hv.steuerjahr as number) : new Date().getFullYear() - 1);
 
     const context = nestedToVorjahresKontext(nested as Parameters<typeof nestedToVorjahresKontext>[0], jahr);
+    // Pfad B (ESE-Mapper) als Pipeline 1: 31 eCodes @ conf 1.0 direkt in den
+    // CaseContext einbetten — werden in v5_4-Folgeruns als Vorjahres-Backbone
+    // genutzt (Δ-Checks, RAG-Anker, Sweeper-Hints).
+    if (input.ese_ecodes && Object.keys(input.ese_ecodes).length > 0) {
+      context.vorjahr_ecodes = input.ese_ecodes;
+      ctx.emit('vorjahres_kontext_ese_merged', {
+        ese_ecodes_count: Object.keys(input.ese_ecodes).length,
+      });
+    }
 
     await ctx.artifacts.write('vorjahres_kontext.json', {
       filename: input.filename,
