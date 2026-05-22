@@ -147,10 +147,18 @@ const steuerfallEstTools: ToolRef[] = [
     },
   },
   // 10 — Gitchain-Anker (on-seal-only) — IMMER aktiv (User-Vorgabe)
+  //
+  // required: false — der Anker-Service ist in dev/test nicht deployed
+  // (cb-chat-backend setzt analog GITCHAIN_DISABLED=1). Der Handle bleibt
+  // dank alwaysOn:true im Container registriert; nur der Boot-Time-Health-
+  // Gate wird relaxed. Stage-Aufrufe (seal/commit-and-anchor, runner) sind
+  // bereits best-effort (try/catch + log_warn), und der Seal-Stage prüft
+  // selbst, ob der Handle alive ist. Ohne diesen Flip kann sturm nicht
+  // booten, solange keine Gitchain-Instanz erreichbar ist.
   {
     name: 'gitchain',
     kind: 'gitchain',
-    required: true,
+    required: false,
     alwaysOn: true,
     roles: ['anchor'],
     config: {
