@@ -1,5 +1,48 @@
 # 0711-STURM — Claude Code Notes
 
+> ## ⚠️ STOP — READ THIS FIRST (any LLM / agent / human)
+>
+> ### 🚨 PRIMARY ORIGIN = GITLAB, **NOT** GITHUB 🚨
+>
+> The canonical, deployed-from origin for this repo is:
+>
+> **`ssh://git@gitlab.mediacockpit.dev:2222/0711/sturm.git`**
+> (web: <https://gitlab.mediacockpit.dev/0711/sturm>)
+>
+> The previous `github.com/C-0711/sturm.0711.io` location is a **historical mirror only**.
+> It is read-only from our side and **may be retired without notice**.
+>
+> **Do not** push to GitHub. **Do not** open PRs on GitHub. **Do not** treat any
+> GitHub branch as authoritative. Any branch / tag / image referenced by the
+> Kubernetes manifests in `ctax-manifests` resolves against **GitLab only**.
+>
+> The CI image `registry.gitlab.mediacockpit.dev/0711/sturm:dev` is built from
+> the `feat/polar-turbo-gemma` branch on GitLab. That is what the dev cluster
+> pulls. Drift between GitHub and GitLab = drift between H200 and the cluster.
+>
+> ---
+>
+> ### Mandatory workflow rules (apply here, same as `ctax/ctax-architecture#1`)
+>
+> 1. **Always pull `origin/main` before starting a new branch.** Understand it, then branch.
+> 2. **Never reuse old / existing branches.** One feature = one branch. No `fix/p0-quickwins` collector branches.
+> 3. **Branch name must reflect actual content.** No piggybacking unrelated changes.
+> 4. **Before flipping MR Draft → Ready:** rebase or merge `origin/main` into your branch and confirm green.
+> 5. **Data sources must be declared explicitly.** When a change reads or writes data, name the source (H200 path, DB table, MCP endpoint, env var) and the schema. See `ctax/ctaxv1:/docs/DB_OWNERSHIP_CONTRACT.md` + `DB_HARMONIZATION_ROADMAP.md` (validate — docs are not yet fully reliable; correct + concretize as needed).
+> 6. **`ctax-manifests` is the single source of truth for Kubernetes.** STURM runs in the cluster via [`ctax-manifests/base/sturm.yaml`](https://gitlab.mediacockpit.dev/ctax/ctax-manifests/-/blob/main/base/sturm.yaml). If you change a runtime contract here (port, env, healthcheck, PVC layout), update the manifests in the same MR set.
+> 7. **No state survives without a PVC.** The cluster mounts `sturm-state` (5 Gi, RWO) at `/app/{workspaces,runs,uploads,schemas,logs}`. Anything written outside those paths dies on pod restart.
+> 8. **GitLab MCP exists** (`https://gitlab-mcp.mediacockpit.dev/mcp`) — use it for repo analysis, MR handling, structured queries. Don't scrape the web UI.
+>
+> ### What "deployed" means for STURM
+>
+> H200 dev-server runs STURM via `docker-compose.yml` against bind-mounted host
+> data (`STURM_DATA_ROOT=/home/christoph.bertsch/0711/0711-STURM`). The k3s
+> `dev-01` cluster runs the same code from the GitLab-built image against the
+> `sturm-state` PVC. **Both must point at the GitLab origin.** Any commit that
+> lands on GitHub but not GitLab = invisible to the cluster.
+>
+> ---
+
 ## Was ist das
 
 Workflow-Engine für LLM/OCR-Pipelines. Stages bilden einen gerichteten Graph; die Engine übernimmt Runner, SSE-Streaming, ReactFlow-UI, Artefakt-Persistenz pro Run.

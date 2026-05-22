@@ -1,5 +1,14 @@
 # 0711-STURM
 
+> **⚠️ Primary origin: GitLab — not GitHub.**
+> Canonical repo: <https://gitlab.mediacockpit.dev/0711/sturm>
+> (`ssh://git@gitlab.mediacockpit.dev:2222/0711/sturm.git`)
+> The `github.com/C-0711/sturm.0711.io` location is a historical mirror only.
+> Do not push to GitHub. Do not treat GitHub branches as authoritative.
+> The k3s `dev-01` cluster pulls `registry.gitlab.mediacockpit.dev/0711/sturm:dev`,
+> built by CI from this repo's `feat/polar-turbo-gemma` branch.
+> Full rules → see [`CLAUDE.md`](CLAUDE.md).
+
 Workflow-Engine für LLM/OCR-Pipelines. Ein Workflow ist ein gerichteter Graph aus Stages; die Engine liefert Runner, SSE-Streaming, ReactFlow-UI und Artefakt-Persistenz pro Run.
 
 ## Status
