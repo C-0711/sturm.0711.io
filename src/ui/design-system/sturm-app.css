@@ -23,6 +23,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
   padding: 10px;
 }
 .sturm-sidebar.is-collapsed { width: 48px; padding: 10px 6px; }
@@ -138,7 +140,13 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   color: var(--color-text-tertiary); text-transform: uppercase;
 }
 .sturm-sb-nav { display: flex; flex-direction: column; gap: 1px; }
-.sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; }
+.sturm-sb-nav-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-top: 4px;
+}
 
 .sturm-sb-item {
   display: flex; align-items: flex-start; gap: 10px;
@@ -171,6 +179,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 
 .sturm-sb-foot {
   display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
   padding: 8px; margin-top: 8px;
   border-top: 1px solid var(--color-border-light);
 }

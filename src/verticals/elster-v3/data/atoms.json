@@ -4785,39 +4785,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-145",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0107607",
-    "field_name": "E0107607",
-    "value": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 3<B>6</B> der Anlage Außergewöhnliche Belastungen und / oder Zeile 4 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "HA_35a - Felder",
-    "citation_excerpt": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 36 der Anlage Außergewöhnliche Belastungen und / oder Zeile 4 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "HA_35a",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "12",
-      "drucktext": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 36 der Anlage Außergewöhnliche Belastungen und / oder Zeile 4 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-      "formatRegex": "^(?=.{1,3}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 3,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "St_Erm/Alleinst_EVEG_Auft/Alleinst_EVEG_Auft_Proz"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-146",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -4847,39 +4814,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Weit_Aufw/Gez_VersL_D_L_Vertrag/Einz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-147",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0107704",
-    "field_name": "E0107704",
-    "value": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 3<B>7</B> der Anlage Außergewöhnliche Belastungen und / oder Zeile 5 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "HA_35a - Felder",
-    "citation_excerpt": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 37 der Anlage Außergewöhnliche Belastungen und / oder Zeile 5 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "HA_35a",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "13",
-      "drucktext": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 37 der Anlage Außergewöhnliche Belastungen und / oder Zeile 5 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-      "formatRegex": "^(?=.{1,3}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 3,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "St_Erm/Alleinst_EVEG_Auft/Alleinst_EVEG_Auft_Proz"
       ]
     }
   },
@@ -4946,39 +4880,6 @@
       "minLaenge": null,
       "kontextPaths": [
         "Belast_ErbSt"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-150",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0107803",
-    "field_name": "E0107803",
-    "value": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 3<B>8</B> der Anlage Außergewöhnliche Belastungen und / oder Zeile 9 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "HA_35a - Felder",
-    "citation_excerpt": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 38 der Anlage Außergewöhnliche Belastungen und / oder Zeile 9 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "HA_35a",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "14",
-      "drucktext": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 38 der Anlage Außergewöhnliche Belastungen und / oder Zeile 9 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
-      "formatRegex": "^(?=.{1,3}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 3,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "St_Erm/Alleinst_EVEG_Auft/Alleinst_EVEG_Auft_Proz"
       ]
     }
   },
@@ -6930,39 +6831,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-210",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0120103",
-    "field_name": "E0120103",
-    "value": "Höhe der Unterhaltszahlung (einschließlich Beiträge zu Basis-Kranken- und Pflegeversicherungen laut Zeile 43, die von der unterstützten Person als Versicherungsnehmer geschuldet und von mir getragen wurden, und einschließlich Unterhaltsleistungen an im Ausland lebende Personen laut den Zeilen 13 bis 16)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "ESt1A_U - Felder",
-    "citation_excerpt": "Höhe der Unterhaltszahlung (einschließlich Beiträge zu Basis-Kranken- und Pflegeversicherungen laut Zeile 43, die von der unterstützten Person als Versicherungsnehmer geschuldet und von mir getragen w",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "ESt1A_U",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "9",
-      "drucktext": "Höhe der Unterhaltszahlung (einschließlich Beiträge zu Basis-Kranken- und Pflegeversicherungen laut Zeile 43, die von der unterstützten Person als Versicherungsnehmer geschuldet und von mir getragen wurden, und einschließlich Unterhaltsleistungen an im Ausland lebende Personen laut den Zeilen 13 bis 16)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "AW_U/U_Ztr"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-211",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -7392,39 +7260,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-224",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0120302",
-    "field_name": "E0120302",
-    "value": "Zeitraum, in dem das Vermögen der unterstützten Person größer war als maximal (je nach Wohnsitzstaat) 15.500 EUR, bei Ehegatten / Lebenspartnern im gemeinsamen Haushalt insgesamt über maximal (je nach Wohnsitzstaat) 31.000 EUR",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "ESt1A_U - Felder",
-    "citation_excerpt": "Zeitraum, in dem das Vermögen der unterstützten Person größer war als maximal (je nach Wohnsitzstaat) 15.500 EUR, bei Ehegatten / Lebenspartnern im gemeinsamen Haushalt insgesamt über maximal (je nach",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "ESt1A_U",
-      "datentyp": "date",
-      "pflicht": false,
-      "vordruckzeile": "31",
-      "drucktext": "Zeitraum, in dem das Vermögen der unterstützten Person größer war als maximal (je nach Wohnsitzstaat) 15.500 EUR, bei Ehegatten / Lebenspartnern im gemeinsamen Haushalt insgesamt über maximal (je nach Wohnsitzstaat) 31.000 EUR",
-      "formatRegex": "\\d\\d\\.\\d\\d-\\d\\d\\.\\d\\d",
-      "formatkennzeichen": "B",
-      "maxLaenge": 11,
-      "minLaenge": null,
-      "kontextPaths": [
-        "Ang_Unt_Pers/Allg/Verm_u_P/GWV_Ztr_Betr"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-225",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -7782,39 +7617,6 @@
       "formatkennzeichen": "B",
       "maxLaenge": 11,
       "minLaenge": null,
-      "kontextPaths": [
-        "Ang_Unt_Pers/Weit_beitr_P/Einz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-236",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0120804",
-    "field_name": "E0120804",
-    "value": "In Zeile 49 enthaltene Beiträge zur Basis-Kranken- und gesetzlichen Pflegeversicherung für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von der / den Person(en) laut Zeile 48 getragen wurden",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "ESt1A_U - Felder",
-    "citation_excerpt": "In Zeile 49 enthaltene Beiträge zur Basis-Kranken- und gesetzlichen Pflegeversicherung für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von der / den Person(en) laut Zei",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "ESt1A_U",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "50",
-      "drucktext": "In Zeile 49 enthaltene Beiträge zur Basis-Kranken- und gesetzlichen Pflegeversicherung für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von der / den Person(en) laut Zeile 48 getragen wurden",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
       "kontextPaths": [
         "Ang_Unt_Pers/Weit_beitr_P/Einz"
       ]
@@ -8580,39 +8382,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-260",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0122713",
-    "field_name": "E0122713",
-    "value": "Die unterstützte Person ist mein geschiedener Ehegatte, Lebenspartner einer aufgehobenen Lebenspartnerschaft oder dauernd getrennt lebender Ehegatte / Lebenspartner (kein Abzug von Sonderausgaben nach § 10 Abs. 1a Nr. 1 EStG, keine Zusammenveranlagung).",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "ESt1A_U - Felder",
-    "citation_excerpt": "Die unterstützte Person ist mein geschiedener Ehegatte, Lebenspartner einer aufgehobenen Lebenspartnerschaft oder dauernd getrennt lebender Ehegatte / Lebenspartner (kein Abzug von Sonderausgaben nach",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "ESt1A_U",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "27",
-      "drucktext": "Die unterstützte Person ist mein geschiedener Ehegatte, Lebenspartner einer aufgehobenen Lebenspartnerschaft oder dauernd getrennt lebender Ehegatte / Lebenspartner (kein Abzug von Sonderausgaben nach § 10 Abs. 1a Nr. 1 EStG, keine Zusammenveranlagung).",
-      "formatRegex": "1|2",
-      "formatkennzeichen": "Y",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "Ang_Unt_Pers/Allg/U_Berecht"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-261",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -9005,39 +8774,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Ang_Unt_Pers/Ek_Bez_u_P/Kost_alle_Bez"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-273",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0124401",
-    "field_name": "E0124401",
-    "value": "In Zeile 9 enthaltene übernommene Beiträge zu Basis-Kranken- und gesetzlichen Pflegeversicherungen für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von mir getragen wurden",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "ESt1A_U - Felder",
-    "citation_excerpt": "In Zeile 9 enthaltene übernommene Beiträge zu Basis-Kranken- und gesetzlichen Pflegeversicherungen für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von mir getragen wurd",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "ESt1A_U",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "43",
-      "drucktext": "In Zeile 9 enthaltene übernommene Beiträge zu Basis-Kranken- und gesetzlichen Pflegeversicherungen für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von mir getragen wurden",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ang_Unt_Pers/KV_PV"
       ]
     }
   },
@@ -16533,39 +16269,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-501",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0206704",
-    "field_name": "E0206704",
-    "value": "Anstelle der Mehraufwendungen für doppelte Haushaltsführung werden bei den Wegen zwischen Wohnung und erster Tätigkeitsstätte in den Zeilen 30 bis 37 der Anlage N Fahrtkosten für mehr als eine Heimfahrt wöchentlich geltend gemacht",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "N_DHH - Felder",
-    "citation_excerpt": "Anstelle der Mehraufwendungen für doppelte Haushaltsführung werden bei den Wegen zwischen Wohnung und erster Tätigkeitsstätte in den Zeilen 30 bis 37 der Anlage N Fahrtkosten für mehr als eine Heimfah",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "N_DHH",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "12",
-      "drucktext": "Anstelle der Mehraufwendungen für doppelte Haushaltsführung werden bei den Wegen zwischen Wohnung und erster Tätigkeitsstätte in den Zeilen 30 bis 37 der Anlage N Fahrtkosten für mehr als eine Heimfahrt wöchentlich geltend gemacht",
-      "formatRegex": "1",
-      "formatkennzeichen": "J",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "DHHF/Allg"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-502",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -19800,39 +19503,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-600",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0224102",
-    "field_name": "E0224102",
-    "value": "Für die berufliche Tätigkeit steht ein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit ganz oder überwiegend in der häuslichen Wohnung ausgeübt und keine erste Tätigkeitsstätte aufgesucht wurde\n– Diese Kalendertage dürfen nicht in Zeile 54 enthalten sein. –",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "N_GRE - Felder",
-    "citation_excerpt": "Für die berufliche Tätigkeit steht ein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit ganz oder überwiegend in der häuslichen Wohnung ausgeübt und keine",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "N_GRE",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "53",
-      "drucktext": "Für die berufliche Tätigkeit steht ein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit ganz oder überwiegend in der häuslichen Wohnung ausgeübt und keine erste Tätigkeitsstätte aufgesucht wurde\n– Diese Kalendertage dürfen nicht in Zeile 54 enthalten sein. –",
-      "formatRegex": "^(?=.{1,3}$)(?=.*[1-9].*)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "G",
-      "maxLaenge": 3,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Arb_V/Wk/Homeoffice"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-601",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -20159,39 +19829,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Arb_V/Wk/Arbeitsmittel/Einz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-611",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0224403",
-    "field_name": "E0224403",
-    "value": "Die Fahrten wurden ganz oder teilweise mit einem Firmenwagen oder im Rahmen einer unentgeltlichen Sammelbeförderung des Arbeitgebers durchgeführt\n– Falls „Ja“: Für die Fahrten mit Firmenwagen oder Sammelbeförderung dürfen mangels Aufwands keine Eintragungen zu Fahrtkosten in Zeile 61 vorgenommen werden. –",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "N_GRE - Felder",
-    "citation_excerpt": "Die Fahrten wurden ganz oder teilweise mit einem Firmenwagen oder im Rahmen einer unentgeltlichen Sammelbeförderung des Arbeitgebers durchgeführt\n– Falls „Ja“: Für die Fahrten mit Firmenwagen oder Sam",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "N_GRE",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "60",
-      "drucktext": "Die Fahrten wurden ganz oder teilweise mit einem Firmenwagen oder im Rahmen einer unentgeltlichen Sammelbeförderung des Arbeitgebers durchgeführt\n– Falls „Ja“: Für die Fahrten mit Firmenwagen oder Sammelbeförderung dürfen mangels Aufwands keine Eintragungen zu Fahrtkosten in Zeile 61 vorgenommen werden. –",
-      "formatRegex": "1|2",
-      "formatkennzeichen": "Y",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "Arb_V/Wk/AWT"
       ]
     }
   },
@@ -20984,39 +20621,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Arb_V/Wk/VMA/VMA_Ersatz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-636",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0225406",
-    "field_name": "E0225406",
-    "value": "Für die berufliche Tätigkeit steht dauerhaft kein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit (auch) in der häuslichen Wohnung ausgeübt wurde\n– Diese Kalendertage dürfen nicht in Zeile 53 enthalten sein. –",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "N_GRE - Felder",
-    "citation_excerpt": "Für die berufliche Tätigkeit steht dauerhaft kein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit (auch) in der häuslichen Wohnung ausgeübt wurde\n– Diese",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "N_GRE",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "54",
-      "drucktext": "Für die berufliche Tätigkeit steht dauerhaft kein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit (auch) in der häuslichen Wohnung ausgeübt wurde\n– Diese Kalendertage dürfen nicht in Zeile 53 enthalten sein. –",
-      "formatRegex": "^(?=.{1,3}$)(?=.*[1-9].*)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "G",
-      "maxLaenge": 3,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Arb_V/Wk/Homeoffice"
       ]
     }
   },
@@ -22968,39 +22572,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-696",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0240902",
-    "field_name": "E0240902",
-    "value": "Ich habe / Wir haben für die energetischen Maßnahmen beantragt / in Anspruch genommen:\n\nöffentliche Förderung durch zinsverbilligte Darlehen (z. B. KfW-Bank, landeseigene Förderbank) oder\nsteuerfreie Zuschüsse (z. B. KfW-Bank, BAFA, Gemeinde) oder\nSteuerbegünstigung für Gebäude in Sanierungsgebieten und städtebaulichen Entwicklungsbereichen oder\nSteuerermäßigung für Handwerkerleistungen nach § 35a EStG",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "EM_35c - Felder",
-    "citation_excerpt": "Ich habe / Wir haben für die energetischen Maßnahmen beantragt / in Anspruch genommen:\n\nöffentliche Förderung durch zinsverbilligte Darlehen (z. B. KfW-Bank, landeseigene Förderbank) oder\nsteuerfreie ",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "EM_35c",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "9",
-      "drucktext": "Ich habe / Wir haben für die energetischen Maßnahmen beantragt / in Anspruch genommen:\n\nöffentliche Förderung durch zinsverbilligte Darlehen (z. B. KfW-Bank, landeseigene Förderbank) oder\nsteuerfreie Zuschüsse (z. B. KfW-Bank, BAFA, Gemeinde) oder\nSteuerbegünstigung für Gebäude in Sanierungsgebieten und städtebaulichen Entwicklungsbereichen oder\nSteuerermäßigung für Handwerkerleistungen nach § 35a EStG",
-      "formatRegex": "1|2",
-      "formatkennzeichen": "Y",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "Obj/Aufw"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-697",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -23529,39 +23100,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-713",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0242501",
-    "field_name": "E0242501",
-    "value": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-1$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-1$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen: entsprechend erhöhte / verminderte Aufwendungen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "EM_35c - Felder",
-    "citation_excerpt": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-1$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-1$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "EM_35c",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "27",
-      "drucktext": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-1$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-1$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen: entsprechend erhöhte / verminderte Aufwendungen",
-      "formatRegex": "^(?=.{1,12}$)(?=.*[1-9].*)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "G",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Obj/EM_Vorj"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-714",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -23789,39 +23327,6 @@
       "minLaenge": 4,
       "kontextPaths": [
         "Ant_35c/Ant/Einz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-721",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0243401",
-    "field_name": "E0243401",
-    "value": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-2$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-2$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen: entsprechend erhöhte / verminderte Aufwendungen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "EM_35c - Felder",
-    "citation_excerpt": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-2$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-2$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "EM_35c",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "28",
-      "drucktext": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-2$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-2$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen: entsprechend erhöhte / verminderte Aufwendungen",
-      "formatRegex": "^(?=.{1,12}$)(?=.*[1-9].*)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "G",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Obj/EM_Vorj"
       ]
     }
   },
@@ -43461,39 +42966,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1317",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0801602",
-    "field_name": "E0801602",
-    "value": "Veräußerungsgewinn laut Zeile <B>59</B>, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "G - Felder",
-    "citation_excerpt": "Veräußerungsgewinn laut Zeile 59, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 e",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "G",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "63",
-      "drucktext": "Veräußerungsgewinn laut Zeile 59, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB/Betr_TBetr_MUAnt<B>/VAe_G_FB_Antr</B>"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1318",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -43847,39 +43319,6 @@
       "pflicht": false,
       "vordruckzeile": "68",
       "drucktext": "In Zeile 67 enthaltener steuerpflichtiger Teil, für den das Teileinkünfteverfahren gilt",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB/Betr_TBetr_MUAnt<B>/VAe_G_kein_FB</B>"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1329",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0801903",
-    "field_name": "E0801903",
-    "value": "In Zeile <B>6</B>7 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "G - Felder",
-    "citation_excerpt": "In Zeile 67 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "G",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "71",
-      "drucktext": "In Zeile 67 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
       "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
       "formatkennzeichen": "N",
       "maxLaenge": 12,
@@ -44843,72 +44282,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Gewinn/Ges_Fest/Einz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1359",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0803306",
-    "field_name": "E0803306",
-    "value": "Auf den Veräußerungsgewinn laut Zeile <B>59</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "G - Felder",
-    "citation_excerpt": "Auf den Veräußerungsgewinn laut Zeile 59 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "G",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "61",
-      "drucktext": "Auf den Veräußerungsgewinn laut Zeile 59 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB/Betr_TBetr_MUAnt<B>/VAe_G_FB_Antr</B>"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1360",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0803401",
-    "field_name": "E0803401",
-    "value": "Auf den Veräußerungsgewinn laut Zeile <B>59</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "G - Felder",
-    "citation_excerpt": "Auf den Veräußerungsgewinn laut Zeile 59 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "G",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "62",
-      "drucktext": "Auf den Veräußerungsgewinn laut Zeile 59 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB/Betr_TBetr_MUAnt<B>/VAe_G_FB_Antr</B>"
       ]
     }
   },
@@ -45969,39 +45342,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1393",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0805003",
-    "field_name": "E0805003",
-    "value": "Veräußerungsgewinn laut Zeile <B>33</B>, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz nach § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "S - Felder",
-    "citation_excerpt": "Veräußerungsgewinn laut Zeile 33, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 e",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "S",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "37",
-      "drucktext": "Veräußerungsgewinn laut Zeile 33, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz nach § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_Gew/Vor_FB"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1394",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -46196,39 +45536,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Sonst/Einn_neb_berufl_Taet"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1400",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0805305",
-    "field_name": "E0805305",
-    "value": "In Zeile <B>41</B> enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "S - Felder",
-    "citation_excerpt": "In Zeile 41 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "S",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "45",
-      "drucktext": "In Zeile 41 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_Gew/V<B>Ae_G_kein</B>_FB"
       ]
     }
   },
@@ -47091,39 +46398,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1427",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0809201",
-    "field_name": "E0809201",
-    "value": "60 % des Betrags laut Zeile 91 (Veräußerungsgewinn / -verlust nach Anwendung des Teileinkünfteverfahrens – § 3 Nr. 40 Satz 1 Buchst. c, § 3c Abs. 2 EStG)\n– wenn positiv: Übertrag in Zeile 93; wenn negativ: Übertrag in Zeile 94 ohne Minuszeichen –",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "G - Felder",
-    "citation_excerpt": "60 % des Betrags laut Zeile 91 (Veräußerungsgewinn / -verlust nach Anwendung des Teileinkünfteverfahrens – § 3 Nr. 40 Satz 1 Buchst. c, § 3c Abs. 2 EStG)\n– wenn positiv: Übertrag in Zeile 93; wenn neg",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "G",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "92",
-      "drucktext": "60 % des Betrags laut Zeile 91 (Veräußerungsgewinn / -verlust nach Anwendung des Teileinkünfteverfahrens – § 3 Nr. 40 Satz 1 Buchst. c, § 3c Abs. 2 EStG)\n– wenn positiv: Übertrag in Zeile 93; wenn negativ: Übertrag in Zeile 94 ohne Minuszeichen –",
-      "formatRegex": "^(?=.{1,13}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 13,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB/VAe_G_Verl_17/Einz"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1428",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -47916,72 +47190,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1452",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0823302",
-    "field_name": "E0823302",
-    "value": "Auf den Veräußerungsgewinn laut Zeile <B>33</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "S - Felder",
-    "citation_excerpt": "Auf den Veräußerungsgewinn laut Zeile 33 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "S",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "35",
-      "drucktext": "Auf den Veräußerungsgewinn laut Zeile 33 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_Gew/Vor_FB"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1453",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0823401",
-    "field_name": "E0823401",
-    "value": "Auf den Veräußerungsgewinn laut Zeile <B>33</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "S - Felder",
-    "citation_excerpt": "Auf den Veräußerungsgewinn laut Zeile 33 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "S",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "36",
-      "drucktext": "Auf den Veräußerungsgewinn laut Zeile 33 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_Gew/Vor_FB"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1454",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -48312,39 +47520,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1464",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0840401",
-    "field_name": "E0840401",
-    "value": "Wurden im Jahr $VZ$ für einen / mehrere Betrieb(e) und / oder für eine / mehrere selbständige Tätigkeit(en) Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse bezogen oder zurückgezahlt?",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Corona - Felder",
-    "citation_excerpt": "Wurden im Jahr $VZ$ für einen / mehrere Betrieb(e) und / oder für eine / mehrere selbständige Tätigkeit(en) Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse bezogen oder zur",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Corona",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "4",
-      "drucktext": "Wurden im Jahr $VZ$ für einen / mehrere Betrieb(e) und / oder für eine / mehrere selbständige Tätigkeit(en) Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse bezogen oder zurückgezahlt?",
-      "formatRegex": "1",
-      "formatkennzeichen": "J",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "ESt"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1465",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -48440,72 +47615,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "ESt/Hilfen/Sum"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1468",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0841201",
-    "field_name": "E0841201",
-    "value": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse ausgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Forderung / sonstiger Vermögensgegenstand) und der Anlage Corona-Hilfen $VZ-1$ erklärt wurden.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Corona - Felder",
-    "citation_excerpt": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse ausgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Forderung / sonstige",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Corona",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "12",
-      "drucktext": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse ausgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Forderung / sonstiger Vermögensgegenstand) und der Anlage Corona-Hilfen $VZ-1$ erklärt wurden.",
-      "formatRegex": "1",
-      "formatkennzeichen": "J",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "ESt/Bilanz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1469",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0841301",
-    "field_name": "E0841301",
-    "value": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse zurückgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Rückstellung / Verbindlichkeit) und der Anlage Corona-Hilfen $VZ-1$ erklärt wurden.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Corona - Felder",
-    "citation_excerpt": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse zurückgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Rückstellung / Ve",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Corona",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "13",
-      "drucktext": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse zurückgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Rückstellung / Verbindlichkeit) und der Anlage Corona-Hilfen $VZ-1$ erklärt wurden.",
-      "formatRegex": "1",
-      "formatkennzeichen": "J",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "ESt/Bilanz"
       ]
     }
   },
@@ -49236,39 +48345,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1492",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0901003",
-    "field_name": "E0901003",
-    "value": "In den Gewinnen des Kalenderjahres $VZ$ (Zeile <B>7</B> bis 2<B>8</B>) nicht enthaltener steuerfreier Teil der Einkünfte, für die das Teileinkünfteverfahren gilt - Aufstellung",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "L - Felder",
-    "citation_excerpt": "In den Gewinnen des Kalenderjahres $VZ$ (Zeile 7 bis 28) nicht enthaltener steuerfreier Teil der Einkünfte, für die das Teileinkünfteverfahren gilt - Aufstellung",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "L",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "37",
-      "drucktext": "In den Gewinnen des Kalenderjahres $VZ$ (Zeile 7 bis 28) nicht enthaltener steuerfreier Teil der Einkünfte, für die das Teileinkünfteverfahren gilt - Aufstellung",
-      "formatRegex": ".{1,999}",
-      "formatkennzeichen": "C",
-      "maxLaenge": 999,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Gewinn/TEV"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1493",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -49830,39 +48906,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1510",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0901704",
-    "field_name": "E0901704",
-    "value": "Veräußerungsgewinn laut Zeile <B>4</B>4, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "L - Felder",
-    "citation_excerpt": "Veräußerungsgewinn laut Zeile 44, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 e",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "L",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "48",
-      "drucktext": "Veräußerungsgewinn laut Zeile 44, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB<B>/VAe_G_FB_Antr</B>"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1511",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -49985,39 +49028,6 @@
       "pflicht": false,
       "vordruckzeile": "50",
       "drucktext": "In Zeile 49 enthaltener steuerpflichtiger Teil, für den das Teileinkünfteverfahren gilt",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB<B>/VAe_G_kein_FB</B>"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1515",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0902002",
-    "field_name": "E0902002",
-    "value": "In Zeile <B>4</B>9 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "L - Felder",
-    "citation_excerpt": "In Zeile 49 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "L",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "53",
-      "drucktext": "In Zeile 49 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
       "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
       "formatkennzeichen": "N",
       "maxLaenge": 12,
@@ -50585,72 +49595,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Flaechen_Beginn_WJ/Hof_Geb"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1533",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0903324",
-    "field_name": "E0903324",
-    "value": "Auf den Veräußerungsgewinn laut Zeile <B>4</B>4 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "L - Felder",
-    "citation_excerpt": "Auf den Veräußerungsgewinn laut Zeile 44 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "L",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "46",
-      "drucktext": "Auf den Veräußerungsgewinn laut Zeile 44 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB<B>/VAe_G_FB_Antr</B>"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1534",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E0903401",
-    "field_name": "E0903401",
-    "value": "Auf den Veräußerungsgewinn laut Zeile <B>4</B>4 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "L - Felder",
-    "citation_excerpt": "Auf den Veräußerungsgewinn laut Zeile 44 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "L",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "47",
-      "drucktext": "Auf den Veräußerungsgewinn laut Zeile 44 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "VAe_G_v_FB<B>/VAe_G_FB_Antr</B>"
       ]
     }
   },
@@ -60254,39 +59198,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1826",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1804001",
-    "field_name": "E1804001",
-    "value": "Andere Leistungen laut den Nummern 7, 8 und 10 oder Leistungen wegen schädlicher Verwendung laut den Nummern 9c und 9d der Leistungsmitteilung oder der Auflösungsbetrag bei Aufgabe der Selbstnutzung oder der Reinvestitionsabsicht vor dem Beginn der Auszahlungsphase oder der Verminderungsbetrag laut Bescheid der Zentralen Zulagenstelle für Altersvermögen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "RAV_bAV - Felder",
-    "citation_excerpt": "Andere Leistungen laut den Nummern 7, 8 und 10 oder Leistungen wegen schädlicher Verwendung laut den Nummern 9c und 9d der Leistungsmitteilung oder der Auflösungsbetrag bei Aufgabe der Selbstnutzung o",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "RAV_bAV",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "21",
-      "drucktext": "Andere Leistungen laut den Nummern 7, 8 und 10 oder Leistungen wegen schädlicher Verwendung laut den Nummern 9c und 9d der Leistungsmitteilung oder der Auflösungsbetrag bei Aufgabe der Selbstnutzung oder der Reinvestitionsabsicht vor dem Beginn der Auszahlungsphase oder der Verminderungsbetrag laut Bescheid der Zentralen Zulagenstelle für Altersvermögen",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Leist_AV_betr/Einz"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1827",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -65435,39 +64346,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1983",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1904601",
-    "field_name": "E1904601",
-    "value": "Gewinne aus der Veräußerung oder Einlösung von Kapitalanlagen aus sonstigen Kapitalforderungen jeder Art, aus stiller Gesellschaft und partiarischen Darlehen, Verluste aus der ganzen oder teilweisen Uneinbringlichkeit der Kapitalforderungen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Gewinne aus der Veräußerung oder Einlösung von Kapitalanlagen aus sonstigen Kapitalforderungen jeder Art, aus stiller Gesellschaft und partiarischen Darlehen, Verluste aus der ganzen oder teilweisen U",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "32",
-      "drucktext": "Gewinne aus der Veräußerung oder Einlösung von Kapitalanlagen aus sonstigen Kapitalforderungen jeder Art, aus stiller Gesellschaft und partiarischen Darlehen, Verluste aus der ganzen oder teilweisen Uneinbringlichkeit der Kapitalforderungen",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ertr/Tar_ESt_unterl"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1984",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -65563,39 +64441,6 @@
       "minLaenge": 4,
       "kontextPaths": [
         "St_Abz_Betr_Ert_m_o_inl_StAbz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-1987",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1904703",
-    "field_name": "E1904703",
-    "value": "Hinzurechnungsbetrag nach § 10 AStG",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Hinzurechnungsbetrag nach § 10 AStG",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "30",
-      "drucktext": "Hinzurechnungsbetrag nach § 10 AStG",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ertr/Tar_ESt_unterl"
       ]
     }
   },
@@ -66722,39 +65567,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2022",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1921302",
-    "field_name": "E1921302",
-    "value": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfal",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "15",
-      "drucktext": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ertr/M_inl_St_Abz"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2023",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -66821,39 +65633,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2025",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1922101",
-    "field_name": "E1922101",
-    "value": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfal",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "23",
-      "drucktext": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ertr/O_inl_St_Abz"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2026",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -66883,39 +65662,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Ertr/Tar_ESt_unterl"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2027",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1922401",
-    "field_name": "E1922401",
-    "value": "In Zeile 2<B>5</B> enthaltene Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "In Zeile 25 enthaltene Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "30",
-      "drucktext": "In Zeile 25 enthaltene Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ertr/O_inl_St_Abz"
       ]
     }
   },
@@ -67048,105 +65794,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Ertr/O_inl_St_Abz"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2032",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1922901",
-    "field_name": "E1922901",
-    "value": "Minderung des Hinzurechnungsbetrags nach § 10 Abs. 6 AStG",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Minderung des Hinzurechnungsbetrags nach § 10 Abs. 6 AStG",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "31",
-      "drucktext": "Minderung des Hinzurechnungsbetrags nach § 10 Abs. 6 AStG",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ertr/Tar_ESt_unterl"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2033",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1924201",
-    "field_name": "E1924201",
-    "value": "Kürzungsbetrag zu Erträgen, die dem gesonderten Steuertarif nach § 32d Abs. 1 EStG unterliegen",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Kürzungsbetrag zu Erträgen, die dem gesonderten Steuertarif nach § 32d Abs. 1 EStG unterliegen",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "45",
-      "drucktext": "Kürzungsbetrag zu Erträgen, die dem gesonderten Steuertarif nach § 32d Abs. 1 EStG unterliegen",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Kuerz_P11_AStG"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2034",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E1924301",
-    "field_name": "E1924301",
-    "value": "Kürzungsbetrag zu Erträgen, die der tariflichen Einkommensteuer unterliegen (siehe die Zeilen 20 und / oder 24 der Anlage AUS)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "KAP_BET - Felder",
-    "citation_excerpt": "Kürzungsbetrag zu Erträgen, die der tariflichen Einkommensteuer unterliegen (siehe die Zeilen 20 und / oder 24 der Anlage AUS)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "KAP_BET",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "46",
-      "drucktext": "Kürzungsbetrag zu Erträgen, die der tariflichen Einkommensteuer unterliegen (siehe die Zeilen 20 und / oder 24 der Anlage AUS)",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Kuerz_P11_AStG"
       ]
     }
   },
@@ -68933,39 +67580,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2089",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2000501",
-    "field_name": "E2000501",
-    "value": "Beiträge zur landwirtschaftlichen Alterskasse; zu berufsständischen Versorgungseinrichtungen, die den gesetzlichen Rentenversicherungen vergleichbare Leistungen erbringen (abzüglich steuerfreier Zuschüsse laut Nr. 22 b der Lohnsteuerbescheinigung)\n– ohne Beiträge, die in Zeile 4 geltend gemacht werden –",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Beiträge zur landwirtschaftlichen Alterskasse; zu berufsständischen Versorgungseinrichtungen, die den gesetzlichen Rentenversicherungen vergleichbare Leistungen erbringen (abzüglich steuerfreier Zusch",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "5",
-      "drucktext": "Beiträge zur landwirtschaftlichen Alterskasse; zu berufsständischen Versorgungseinrichtungen, die den gesetzlichen Rentenversicherungen vergleichbare Leistungen erbringen (abzüglich steuerfreier Zuschüsse laut Nr. 22 b der Lohnsteuerbescheinigung)\n– ohne Beiträge, die in Zeile 4 geltend gemacht werden –",
-      "formatRegex": "^(?=.{1,7}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,6}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 7,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "AVor"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2090",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -68992,72 +67606,6 @@
       "formatRegex": "^(?=.{1,7}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,6}$",
       "formatkennzeichen": "N",
       "maxLaenge": 7,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "AVor"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2091",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2000701",
-    "field_name": "E2000701",
-    "value": "Beiträge zu zertifizierten Basisrentenverträgen (sog. Rürup-Verträge) mit Laufzeitbeginn nach dem 31.12.2004 (abzüglich steuerfreier Zuschüsse)\n– ohne Altersvorsorgebeiträge, die in der Anlage AV geltend gemacht werden –",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Beiträge zu zertifizierten Basisrentenverträgen (sog. Rürup-Verträge) mit Laufzeitbeginn nach dem 31.12.2004 (abzüglich steuerfreier Zuschüsse)\n– ohne Altersvorsorgebeiträge, die in der Anlage AV gelt",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "8",
-      "drucktext": "Beiträge zu zertifizierten Basisrentenverträgen (sog. Rürup-Verträge) mit Laufzeitbeginn nach dem 31.12.2004 (abzüglich steuerfreier Zuschüsse)\n– ohne Altersvorsorgebeiträge, die in der Anlage AV geltend gemacht werden –",
-      "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "AVor"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2092",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2000703",
-    "field_name": "E2000703",
-    "value": "Erstattete Beiträge und / oder steuerfreie Zuschüsse zu den Zeilen 4 bis 6 (ohne Zuschüsse, die von den Beiträgen laut Zeile 8 abzuziehen sind und ohne Zuschüsse laut den Zeilen 9 und 10)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Erstattete Beiträge und / oder steuerfreie Zuschüsse zu den Zeilen 4 bis 6 (ohne Zuschüsse, die von den Beiträgen laut Zeile 8 abzuziehen sind und ohne Zuschüsse laut den Zeilen 9 und 10)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "7",
-      "drucktext": "Erstattete Beiträge und / oder steuerfreie Zuschüsse zu den Zeilen 4 bis 6 (ohne Zuschüsse, die von den Beiträgen laut Zeile 8 abzuziehen sind und ohne Zuschüsse laut den Zeilen 9 und 10)",
-      "formatRegex": "^(?=.{1,13}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 13,
       "minLaenge": 1,
       "kontextPaths": [
         "AVor"
@@ -69626,39 +68174,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2110",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2001805",
-    "field_name": "E2001805",
-    "value": "Beiträge zu Krankenversicherungen\n– ohne Beiträge, die in Zeile 11 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Beiträge zu Krankenversicherungen\n– ohne Beiträge, die in Zeile 11 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "16",
-      "drucktext": "Beiträge zu Krankenversicherungen\n– ohne Beiträge, die in Zeile 11 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
-      "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_g_KV_PV_Inl/And_Pers"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2111",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -69890,105 +68405,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2118",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002103",
-    "field_name": "E2002103",
-    "value": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf Person B übertragen wurden",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "AV - Felder",
-    "citation_excerpt": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf ",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "AV",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "16",
-      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf Person B übertragen wurden",
-      "formatRegex": "^(?=.{1,2}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 2,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ang_Kinder/Elt_Verh/Geb_v_2008"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2119",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002104",
-    "field_name": "E2002104",
-    "value": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf Person B übertragen wurden",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "AV - Felder",
-    "citation_excerpt": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf ",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "AV",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "16",
-      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf Person B übertragen wurden",
-      "formatRegex": "^(?=.{1,2}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 2,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ang_Kinder/Elt_Verh/Geb_n_2007"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2120",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002105",
-    "field_name": "E2002105",
-    "value": "Beiträge zu sozialen Pflegeversicherungen\n– ohne Beiträge, die in Zeile 13 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Beiträge zu sozialen Pflegeversicherungen\n– ohne Beiträge, die in Zeile 13 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "18",
-      "drucktext": "Beiträge zu sozialen Pflegeversicherungen\n– ohne Beiträge, die in Zeile 13 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
-      "formatRegex": "^(?=.{1,5}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,4}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 5,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_g_KV_PV_Inl/And_Pers"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2121",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -70051,72 +68467,6 @@
       "minLaenge": null,
       "kontextPaths": [
         "Erg_Ang/Keine_RV_Pfl"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2123",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002204",
-    "field_name": "E2002204",
-    "value": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den Vater / von Person B auf Person A übertragen wurde, die bei Einzelveranlagung von Ehegatten / Lebenspartnern der Mutter / Person A zugeordnet werden oder die bei Zusammenveranlagung Person A zugeordnet werden",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "AV - Felder",
-    "citation_excerpt": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den ",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "AV",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "17",
-      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den Vater / von Person B auf Person A übertragen wurde, die bei Einzelveranlagung von Ehegatten / Lebenspartnern der Mutter / Person A zugeordnet werden oder die bei Zusammenveranlagung Person A zugeordnet werden",
-      "formatRegex": "^(?=.{1,2}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 2,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ang_Kinder/Elt_Verh/Geb_v_2008"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2124",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002205",
-    "field_name": "E2002205",
-    "value": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den Vater / von Person B auf Person A übertragen wurde, die bei Einzelveranlagung von Ehegatten / Lebenspartnern der Mutter / Person A zugeordnet werden oder die bei Zusammenveranlagung Person A zugeordnet werden",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "AV - Felder",
-    "citation_excerpt": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den ",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "AV",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "17",
-      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den Vater / von Person B auf Person A übertragen wurde, die bei Einzelveranlagung von Ehegatten / Lebenspartnern der Mutter / Person A zugeordnet werden oder die bei Zusammenveranlagung Person A zugeordnet werden",
-      "formatRegex": "^(?=.{1,2}$)(?!0\\d)\\d{1,15}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 2,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ang_Kinder/Elt_Verh/Geb_n_2007"
       ]
     }
   },
@@ -70286,72 +68636,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2130",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002402",
-    "field_name": "E2002402",
-    "value": "Zuschuss zu den Beiträgen laut den Zeilen 16 und / oder 18\n– ohne Beträge laut den Zeilen 34 und 36 –\n(z. B. von der Deutschen Rentenversicherung)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Zuschuss zu den Beiträgen laut den Zeilen 16 und / oder 18\n– ohne Beträge laut den Zeilen 34 und 36 –\n(z. B. von der Deutschen Rentenversicherung)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "21",
-      "drucktext": "Zuschuss zu den Beiträgen laut den Zeilen 16 und / oder 18\n– ohne Beträge laut den Zeilen 34 und 36 –\n(z. B. von der Deutschen Rentenversicherung)",
-      "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_g_KV_PV_Inl/And_Pers"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2131",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002502",
-    "field_name": "E2002502",
-    "value": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 34 –) zur Krankenversicherung, die mit einer inländischen Krankenversicherung vergleichbar ist (nur Basisabsicherung, keine Wahlleistungen)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 34 –) zur Krankenversicherung, die mit einer inländischen Krankenversicherung vergleichbar ist (nur Basisabsicherung, keine Wahllei",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "28",
-      "drucktext": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 34 –) zur Krankenversicherung, die mit einer inländischen Krankenversicherung vergleichbar ist (nur Basisabsicherung, keine Wahlleistungen)",
-      "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_g_p_KV_PV_Ausl"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2132",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -70378,39 +68662,6 @@
       "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
       "formatkennzeichen": "N",
       "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_g_p_KV_PV_Ausl"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2133",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2002703",
-    "field_name": "E2002703",
-    "value": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 36 –) zur sozialen Pflegeversicherung / Pflege-Pflichtversicherung, die mit einer inländischen Pflegeversicherung vergleichbar ist",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 36 –) zur sozialen Pflegeversicherung / Pflege-Pflichtversicherung, die mit einer inländischen Pflegeversicherung vergleichbar ist",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "30",
-      "drucktext": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 36 –) zur sozialen Pflegeversicherung / Pflege-Pflichtversicherung, die mit einer inländischen Pflegeversicherung vergleichbar ist",
-      "formatRegex": "^(?=.{1,5}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,4}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 5,
       "minLaenge": 1,
       "kontextPaths": [
         "Beitr_g_p_KV_PV_Ausl"
@@ -70579,72 +68830,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Beitr_p_KV_PV_Inl"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2139",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2003402",
-    "field_name": "E2003402",
-    "value": "Zuschuss von dritter Seite zu den Beiträgen laut den Zeilen 23 und / oder 24 (z. B. von der Deutschen Rentenversicherung)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Zuschuss von dritter Seite zu den Beiträgen laut den Zeilen 23 und / oder 24 (z. B. von der Deutschen Rentenversicherung)",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "26",
-      "drucktext": "Zuschuss von dritter Seite zu den Beiträgen laut den Zeilen 23 und / oder 24 (z. B. von der Deutschen Rentenversicherung)",
-      "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_p_KV_PV_Inl"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2140",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2003502",
-    "field_name": "E2003502",
-    "value": "Über die Basisabsicherung hinausgehende Beiträge zu Krankenversicherungen (z. B. für Wahlleistungen, Zusatzversicherungen) und / oder zu zusätzlichen Pflegeversicherungen abzüglich erstatteter Beiträge",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Über die Basisabsicherung hinausgehende Beiträge zu Krankenversicherungen (z. B. für Wahlleistungen, Zusatzversicherungen) und / oder zu zusätzlichen Pflegeversicherungen abzüglich erstatteter Beiträg",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "27",
-      "drucktext": "Über die Basisabsicherung hinausgehende Beiträge zu Krankenversicherungen (z. B. für Wahlleistungen, Zusatzversicherungen) und / oder zu zusätzlichen Pflegeversicherungen abzüglich erstatteter Beiträge",
-      "formatRegex": "^(?=.{1,6}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,5}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 6,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Beitr_p_KV_PV_Inl/WL_Zvers"
       ]
     }
   },
@@ -71342,39 +69527,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2162",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2004801",
-    "field_name": "E2004801",
-    "value": "Einnahmen aus einer Beschäftigung, die einer ausländischen gesetzlichen Rentenversicherungspflicht unterlag und / oder Jahres(brutto)betrag der Rente wegen voller Erwerbsminderung oder Erwerbsunfähigkeit aus einer ausländischen gesetzlichen Rentenversicherung $VZ-1$",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "AV - Felder",
-    "citation_excerpt": "Einnahmen aus einer Beschäftigung, die einer ausländischen gesetzlichen Rentenversicherungspflicht unterlag und / oder Jahres(brutto)betrag der Rente wegen voller Erwerbsminderung oder Erwerbsunfähigk",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "AV",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "13",
-      "drucktext": "Einnahmen aus einer Beschäftigung, die einer ausländischen gesetzlichen Rentenversicherungspflicht unterlag und / oder Jahres(brutto)betrag der Rente wegen voller Erwerbsminderung oder Erwerbsunfähigkeit aus einer ausländischen gesetzlichen Rentenversicherung $VZ-1$",
-      "formatRegex": "^(?=.{1,12}$)(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "U",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Ber_Grundl/Begue_unmitt"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2163",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -71573,39 +69725,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2169",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2005801",
-    "field_name": "E2005801",
-    "value": "Es wurde Arbeitslohn aus einem nicht aktiven Dienstverhältnis - insbesondere Betriebsrente / Werkspension - bezogen, bei dem es sich nicht um steuerbegünstigte Versorgungsbezüge (Zeile 11 bis 16 der Anlage N) handelt. Bei Altersteilzeit ist hier keine Eintragung vorzunehmen.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "VOR - Felder",
-    "citation_excerpt": "Es wurde Arbeitslohn aus einem nicht aktiven Dienstverhältnis - insbesondere Betriebsrente / Werkspension - bezogen, bei dem es sich nicht um steuerbegünstigte Versorgungsbezüge (Zeile 11 bis 16 der A",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "VOR",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "55",
-      "drucktext": "Es wurde Arbeitslohn aus einem nicht aktiven Dienstverhältnis - insbesondere Betriebsrente / Werkspension - bezogen, bei dem es sich nicht um steuerbegünstigte Versorgungsbezüge (Zeile 11 bis 16 der Anlage N) handelt. Bei Altersteilzeit ist hier keine Eintragung vorzunehmen.",
-      "formatRegex": "1",
-      "formatkennzeichen": "J",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "Erg_Ang/BetrR_WerksP_n_stbeg_VersoB"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2170",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -71800,39 +69919,6 @@
       "minLaenge": 1,
       "kontextPaths": [
         "Kein_SA_Abz/Vertr"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2176",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2024103",
-    "field_name": "E2024103",
-    "value": "Ich habe bisher gegenüber dem Anbieter meines Altersversorgungsvertrages auf den zusätzlichen Sonderausgabenabzug verzichtet. Hiermit widerrufe ich den gegenüber meinem Anbieter erklärten Verzicht auf den zusätzlichen Sonderausgabenabzug für die nachfolgenden Verträge.",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "AV - Felder",
-    "citation_excerpt": "Ich habe bisher gegenüber dem Anbieter meines Altersversorgungsvertrages auf den zusätzlichen Sonderausgabenabzug verzichtet. Hiermit widerrufe ich den gegenüber meinem Anbieter erklärten Verzicht auf",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "AV",
-      "datentyp": "string",
-      "pflicht": false,
-      "vordruckzeile": "31",
-      "drucktext": "Ich habe bisher gegenüber dem Anbieter meines Altersversorgungsvertrages auf den zusätzlichen Sonderausgabenabzug verzichtet. Hiermit widerrufe ich den gegenüber meinem Anbieter erklärten Verzicht auf den zusätzlichen Sonderausgabenabzug für die nachfolgenden Verträge.",
-      "formatRegex": "1",
-      "formatkennzeichen": "J",
-      "maxLaenge": null,
-      "minLaenge": null,
-      "kontextPaths": [
-        "Doch_SA_Abz"
       ]
     }
   },
@@ -72058,72 +70144,6 @@
       "pflicht": false,
       "vordruckzeile": "8",
       "drucktext": "Zinsaufwendungen des laufenden Wirtschaftsjahres i. S. d. § 4h Abs. 3 Satz 2 und 4 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2184",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2110701",
-    "field_name": "E2110701",
-    "value": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut Aufstellung - (Betrag)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "9",
-      "drucktext": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut Aufstellung - (Betrag)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2185",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2110801",
-    "field_name": "E2110801",
-    "value": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. a EStG)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "7",
-      "drucktext": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. a EStG)",
       "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
       "formatkennzeichen": "N",
       "maxLaenge": 12,
@@ -72365,39 +70385,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2193",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2111201",
-    "field_name": "E2111201",
-    "value": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 2 und 3 KStG –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 2 und 3 KStG –\n(Bei Organträgern",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "16",
-      "drucktext": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 2 und 3 KStG –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2194",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -72457,39 +70444,6 @@
       "formatRegex": ".{1,999}",
       "formatkennzeichen": "C",
       "maxLaenge": 999,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/EBITDA_Vortr"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2196",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2111401",
-    "field_name": "E2111401",
-    "value": "Verrechenbares EBITDA des laufenden Wirtschaftsjahres (wenn Wert negativ, „0“ eintragen)\n– nur, wenn im Wirtschaftsjahr kein Anwendungsfall des § 4h Abs. 2 EStG vorliegt –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Verrechenbares EBITDA des laufenden Wirtschaftsjahres (wenn Wert negativ, „0“ eintragen)\n– nur, wenn im Wirtschaftsjahr kein Anwendungsfall des § 4h Abs. 2 EStG vorliegt –\n(Bei Organträgern: einschlie",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "30",
-      "drucktext": "Verrechenbares EBITDA des laufenden Wirtschaftsjahres (wenn Wert negativ, „0“ eintragen)\n– nur, wenn im Wirtschaftsjahr kein Anwendungsfall des § 4h Abs. 2 EStG vorliegt –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
       "minLaenge": 1,
       "kontextPaths": [
         "Betr/EBITDA_Vortr"
@@ -72629,39 +70583,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2201",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2111703",
-    "field_name": "E2111703",
-    "value": "Verringerung des EBITDA-Vortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. b EStG)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Verringerung des EBITDA-Vortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden ei",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "29",
-      "drucktext": "Verringerung des EBITDA-Vortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. b EStG)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/EBITDA_Vortr"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2202",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -72685,105 +70606,6 @@
       "pflicht": false,
       "vordruckzeile": "17",
       "drucktext": "Zinsvortrag zum Schluss des vorangegangenen Wirtschaftsjahres",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort_ab_2024"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2203",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2111801",
-    "field_name": "E2111801",
-    "value": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. a EStG)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "18",
-      "drucktext": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. a EStG)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort_ab_2024"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2204",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2111901",
-    "field_name": "E2111901",
-    "value": "Zinsaufwendungen des laufenden Wirtschaftsjahres i. S. d. § 4h Abs. 3 Satz 2 EStG ohne Zinsaufwendungen i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Zinsaufwendungen des laufenden Wirtschaftsjahres i. S. d. § 4h Abs. 3 Satz 2 EStG ohne Zinsaufwendungen i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organ",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "19",
-      "drucktext": "Zinsaufwendungen des laufenden Wirtschaftsjahres i. S. d. § 4h Abs. 3 Satz 2 EStG ohne Zinsaufwendungen i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort_ab_2024"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2205",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2112001",
-    "field_name": "E2112001",
-    "value": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut Aufstellung - (Betrag)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "20",
-      "drucktext": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut Aufstellung - (Betrag)",
       "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
       "formatkennzeichen": "N",
       "maxLaenge": 12,
@@ -72959,39 +70781,6 @@
     }
   },
   {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2211",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2112501",
-    "field_name": "E2112501",
-    "value": "Zinserträge des laufenden Wirtschaftsjahres nach § 4h Abs. 3 Satz 3 EStG ohne Zinserträge i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Zinserträge des laufenden Wirtschaftsjahres nach § 4h Abs. 3 Satz 3 EStG ohne Zinserträge i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "25",
-      "drucktext": "Zinserträge des laufenden Wirtschaftsjahres nach § 4h Abs. 3 Satz 3 EStG ohne Zinserträge i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort_ab_2024"
-      ]
-    }
-  },
-  {
     "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2212",
     "container_id": "0711:elster:bmf:jahresdok-2024:v1",
     "layer_id": "elster",
@@ -73015,39 +70804,6 @@
       "pflicht": false,
       "vordruckzeile": "26",
       "drucktext": "Nach § 6 Abs. 2 Satz 1, § 6 Abs. 2a Satz 2 und 7 EStG abgesetzte Beträge\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-      "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
-      "formatkennzeichen": "N",
-      "maxLaenge": 12,
-      "minLaenge": 1,
-      "kontextPaths": [
-        "Betr/Zins_Vort_ab_2024"
-      ]
-    }
-  },
-  {
-    "atom_id": "0711:elster:bmf:jahresdok-2024:v1/atom-elster-2213",
-    "container_id": "0711:elster:bmf:jahresdok-2024:v1",
-    "layer_id": "elster",
-    "field_path": "elster.E2112701",
-    "field_name": "E2112701",
-    "value": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 3 KStG –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
-    "value_type": "string",
-    "lang": "de",
-    "citation_document": "Jahresdokumentation_10_2024 1.xml",
-    "citation_section": "Zins - Felder",
-    "citation_excerpt": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 3 KStG –\n(Bei Organträgern: eins",
-    "citation_confidence": 1,
-    "citation_method": "official-bmf-catalog",
-    "trust_level": "verified",
-    "source_type": "primary-source",
-    "contributor_id": "bmf-jahresdok-2024-10",
-    "commit_hash": "1731ae5d5f45",
-    "metadata": {
-      "anlage": "Zins",
-      "datentyp": "currency",
-      "pflicht": false,
-      "vordruckzeile": "27",
-      "drucktext": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 3 KStG –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
       "formatRegex": "^(?=.{1,12}$)(-(?=.*[1-9].*))?(?!0\\d)\\d{1,12}$",
       "formatkennzeichen": "N",
       "maxLaenge": 12,

@@ -347,6 +347,15 @@ function fmtDur(ms) {
   return `${Math.round(ms / 1000)}s`;
 }
 
+function fmtRecentRunAt(iso) {
+  if (!iso) return 'läuft';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'läuft';
+  return d.toLocaleString('de-DE', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 function workflowVersionLabel(id) {
   const m = String(id || '').match(/-(v\d+)$/i);
   return m ? m[1].toUpperCase() : '';
@@ -1112,7 +1121,7 @@ function SidebarUpload({ workflow, file, onFile, onStart, running }) {
   );
 }
 
-function Sidebar({ collapsed, onToggle, workflows, activeId, workflow, file, onFile, onStart, running }) {
+function Sidebar({ collapsed, onToggle, workflows, activeId, workflow, file, onFile, onStart, running, previousRuns, runId }) {
   if (collapsed) {
     return (
       <aside className="sturm-sidebar is-collapsed">
@@ -1185,9 +1194,42 @@ function Sidebar({ collapsed, onToggle, workflows, activeId, workflow, file, onF
 
       <div className="sturm-sb-section"><span>Letzte Runs</span></div>
       <div className="sturm-sb-nav sturm-sb-nav-scroll">
-        <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
-          folgen nach erstem Lauf
-        </div>
+        {!workflow && (
+          <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+            Workflow wählen
+          </div>
+        )}
+        {workflow && (!previousRuns || previousRuns.length === 0) && (
+          <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+            folgen nach erstem Lauf
+          </div>
+        )}
+        {workflow && (previousRuns || []).slice(0, 8).map(r => {
+          const stateLabel = r.state === 'ok' ? 'ok' : r.state === 'error' ? 'fehler' : 'läuft';
+          const meta = [fmtRecentRunAt(r.finishedAt), r.ms != null ? fmtDur(r.ms) : stateLabel];
+          if (typeof r.kpiScore === 'number') meta.push(`${Math.round(r.kpiScore * 100)}%`);
+          const gcLabel = r.hasGitchainExport
+            ? `gc${typeof r.gitchainFileCount === 'number' ? `·${r.gitchainFileCount}` : ''}`
+            : '—';
+          return (
+            <a
+              key={r.runId}
+              href={`/pipeline.html?workflow=${encodeURIComponent(workflow.id)}&run=${encodeURIComponent(r.runId)}`}
+              className={`sturm-sb-item ${r.runId === runId ? 'is-active' : ''}`}
+              style={{ textDecoration: 'none' }}
+              title={r.hasGitchainExport
+                ? `_gitchain_v2 vorhanden · ${r.gitchainFileCount ?? 0} Dateien`
+                : 'kein _gitchain_v2 Export'}
+            >
+              <i data-lucide={r.hasGitchainExport ? 'folder-tree' : 'history'}></i>
+              <span className="sturm-sb-item-main">
+                <span className="sturm-sb-item-label">{r.runId}</span>
+                <span className="sturm-sb-item-sub">{meta.join(' · ')}</span>
+              </span>
+              <span className="sturm-sb-item-meta">{gcLabel}</span>
+            </a>
+          );
+        })}
       </div>
 
       <div className="sturm-sb-foot">
@@ -2137,6 +2179,225 @@ function ExportBar({ model, runId, workflowId, previousRuns, compareRunId, onCom
   );
 }
 
+function formatBytes(n) {
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function gitChainDownloadFilename(relPath, kind, format) {
+  const safe = (typeof relPath === 'string' && relPath ? relPath : 'gitchain-export').replace(/[\\/]+/g, '__');
+  if (kind === 'pretty') {
+    if (format === 'jsonl') return safe.replace(/\.jsonl$/i, '.pretty.json');
+    if (format === 'json') return safe.replace(/\.json$/i, '.pretty.json');
+    return `${safe}.pretty.json`;
+  }
+  return safe;
+}
+
+function gitChainRawMime(format) {
+  if (format === 'json' || format === 'jsonl') return 'application/json;charset=utf-8';
+  return 'text/plain;charset=utf-8';
+}
+
+function gitChainPanelHref(workflowId, runId) {
+  const url = new URL(location.href);
+  if (workflowId) url.searchParams.set('workflow', workflowId);
+  if (runId) url.searchParams.set('run', runId);
+  url.searchParams.set('gc', '1');
+  url.hash = 'gitchain-v2-panel';
+  return url.toString();
+}
+
+function GitChainEntryBar({ workflowId, runId }) {
+  if (!workflowId || !runId) return null;
+  return (
+    <div className="sturm-result-toolbar" style={{ marginBottom: 10 }}>
+      <a
+        className="sturm-btn sturm-btn-ghost sturm-btn-xs"
+        href={gitChainPanelHref(workflowId, runId)}
+        title="GitChain-Export dieses Runs öffnen"
+      >GitChain öffnen →</a>
+    </div>
+  );
+}
+
+function GitChainInspector({ workflowId, runId }) {
+  const [open, setOpen] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('gc') === '1' || !!params.get('gcf');
+  });
+  const [loadingTree, setLoadingTree] = useState(false);
+  const [tree, setTree] = useState(null);
+  const [treeError, setTreeError] = useState(null);
+  const [selectedPath, setSelectedPath] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('gcf') || null;
+  });
+  const [fileState, setFileState] = useState({ loading: false, error: null, data: null });
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setOpen(params.get('gc') === '1' || !!params.get('gcf'));
+    setTree(null);
+    setTreeError(null);
+    setSelectedPath(params.get('gcf') || null);
+    setFileState({ loading: false, error: null, data: null });
+  }, [workflowId, runId]);
+
+  useEffect(() => {
+    if (!open || !workflowId || !runId || tree || loadingTree) return;
+    setLoadingTree(true);
+    setTreeError(null);
+    fetch(`/api/runs/${encodeURIComponent(workflowId)}/${encodeURIComponent(runId)}/gitchain/tree`, { headers: authHeaders() })
+      .then(async (resp) => {
+        if (!resp.ok) throw new Error((await resp.json().catch(() => null))?.error || `HTTP ${resp.status}`);
+        return resp.json();
+      })
+      .then((json) => {
+        setTree(json || null);
+        const availableFiles = Array.isArray(json?.files) ? json.files : [];
+        const first = availableFiles[0]?.path || null;
+        setSelectedPath((cur) => {
+          if (cur && availableFiles.some((file) => file.path === cur)) return cur;
+          return first;
+        });
+      })
+      .catch((err) => setTreeError(err.message || String(err)))
+      .finally(() => setLoadingTree(false));
+  }, [open, workflowId, runId, tree, loadingTree]);
+
+  useEffect(() => {
+    if (!open || !selectedPath || !workflowId || !runId) return;
+    setFileState({ loading: true, error: null, data: null });
+    fetch(`/api/runs/${encodeURIComponent(workflowId)}/${encodeURIComponent(runId)}/gitchain/file?path=${encodeURIComponent(selectedPath)}`, { headers: authHeaders() })
+      .then(async (resp) => {
+        if (!resp.ok) throw new Error((await resp.json().catch(() => null))?.error || `HTTP ${resp.status}`);
+        return resp.json();
+      })
+      .then((json) => setFileState({ loading: false, error: null, data: json || null }))
+      .catch((err) => setFileState({ loading: false, error: err.message || String(err), data: null }));
+  }, [open, selectedPath, workflowId, runId]);
+
+  useEffect(() => {
+    if (!runId) return;
+    const url = new URL(location.href);
+    if (open) url.searchParams.set('gc', '1');
+    else url.searchParams.delete('gc');
+    if (open && selectedPath) url.searchParams.set('gcf', selectedPath);
+    else url.searchParams.delete('gcf');
+    history.replaceState(null, '', url.toString());
+  }, [open, selectedPath, runId]);
+
+  const files = tree?.files || [];
+  const selectedFileMeta = useMemo(() => files.find((file) => file.path === selectedPath) || null, [files, selectedPath]);
+  const viewerPayload = fileState.data?.parsed ?? fileState.data?.raw ?? null;
+  const viewerHtml = useMemo(() => {
+    if (viewerPayload == null) return jsonToHtml(null);
+    if (typeof viewerPayload === 'string') return jsonToHtml(viewerPayload);
+    return jsonToHtml(viewerPayload);
+  }, [viewerPayload]);
+  const canDownloadRaw = !!selectedPath && !fileState.loading && !fileState.error && typeof fileState.data?.raw === 'string';
+  const canDownloadPretty = !!selectedPath && !fileState.loading && !fileState.error && fileState.data?.parsed != null
+    && (fileState.data?.format === 'json' || fileState.data?.format === 'jsonl');
+  const handleRawDownload = useCallback(() => {
+    if (!canDownloadRaw) return;
+    downloadBlob(
+      gitChainDownloadFilename(selectedPath, 'raw', fileState.data?.format),
+      gitChainRawMime(fileState.data?.format),
+      fileState.data.raw,
+    );
+  }, [canDownloadRaw, selectedPath, fileState.data]);
+  const handlePrettyDownload = useCallback(() => {
+    if (!canDownloadPretty) return;
+    downloadBlob(
+      gitChainDownloadFilename(selectedPath, 'pretty', fileState.data?.format),
+      'application/json;charset=utf-8',
+      JSON.stringify(fileState.data.parsed, null, 2),
+    );
+  }, [canDownloadPretty, selectedPath, fileState.data]);
+
+  return (
+    <div id="gitchain-v2-panel" className="sturm-result-group" style={{ marginTop: 10 }}>
+      <div className="sturm-result-group-head">
+        <span className="sturm-result-group-label">GitChain v2</span>
+        <span className="sturm-result-group-count">{tree?.fileCount ?? 0} Dateien</span>
+        <button
+          type="button"
+          className={`sturm-result-group-jsonbtn ${open ? 'is-active' : ''}`}
+          onClick={() => setOpen(v => !v)}
+          title={open ? 'GitChain-Ansicht schließen' : 'GitChain-Export anzeigen'}
+        >{open ? '⊟' : '⟨gc⟩'}</button>
+      </div>
+      {open && (
+        <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 12, marginTop: 10 }}>
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-bg-secondary)', maxHeight: 340, overflow: 'auto' }}>
+            {loadingTree && <div style={{ padding: 12, color: 'var(--color-text-tertiary)', fontSize: 12 }}>Lade GitChain-Dateien …</div>}
+            {treeError && <div style={{ padding: 12, color: 'var(--color-danger)', fontSize: 12 }}>{treeError}</div>}
+            {!loadingTree && !treeError && files.length === 0 && (
+              <div style={{ padding: 12, color: 'var(--color-text-tertiary)', fontSize: 12 }}>Kein `_gitchain_v2`-Export für diesen Run gefunden.</div>
+            )}
+            {files.map((file) => (
+              <button
+                key={file.path}
+                type="button"
+                onClick={() => setSelectedPath(file.path)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 2,
+                  padding: '9px 10px',
+                  border: 'none',
+                  borderBottom: '1px solid var(--color-border-light, var(--color-border))',
+                  background: selectedPath === file.path ? 'rgba(88, 166, 255, 0.10)' : 'transparent',
+                  color: 'var(--color-text-primary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }}>{file.path}</span>
+                <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>{formatBytes(file.size)}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-bg-secondary)', minHeight: 180, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 12px', borderBottom: '1px solid var(--color-border)' }}>
+              <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, wordBreak: 'break-all' }}>{selectedPath || 'Datei wählen'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 }}>
+                {selectedFileMeta && <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{formatBytes(selectedFileMeta.size)}</div>}
+                {fileState.data?.format && <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>{fileState.data.format}</div>}
+                <button
+                  type="button"
+                  className="sturm-btn sturm-btn-ghost sturm-btn-xs"
+                  onClick={handleRawDownload}
+                  disabled={!canDownloadRaw}
+                  title="Originaldatei herunterladen"
+                >Raw ↓</button>
+                {canDownloadPretty && (
+                  <button
+                    type="button"
+                    className="sturm-btn sturm-btn-ghost sturm-btn-xs"
+                    onClick={handlePrettyDownload}
+                    title={fileState.data?.format === 'jsonl' ? 'Als formatiertes JSON-Array herunterladen' : 'Als formatiertes JSON herunterladen'}
+                  >JSON ↓</button>
+                )}
+              </div>
+            </div>
+            {fileState.loading && <div style={{ padding: 12, color: 'var(--color-text-tertiary)', fontSize: 12 }}>Lade Datei …</div>}
+            {fileState.error && <div style={{ padding: 12, color: 'var(--color-danger)', fontSize: 12 }}>{fileState.error}</div>}
+            {!fileState.loading && !fileState.error && selectedPath && (
+              <pre className="sturm-json-viewer" style={{ margin: 0, maxHeight: 340, overflow: 'auto' }} dangerouslySetInnerHTML={{ __html: viewerHtml }} />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------
    RawJsonViewer — collapsible per-group JSON view.
    ------------------------------------------------------------ */
@@ -2624,20 +2885,29 @@ function ResultPanel({ model, runId, workflowId, previousRuns, compareRunId, onC
   const [rawJsonGroup, setRawJsonGroup] = useState({}); // { [groupKey]: bool }
   if (!model) {
     return (
-      <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
-        Noch kein Ergebnis. Starte den Workflow — extrahierte Werte erscheinen hier nach dem Lauf.
+      <div className="sturm-result-panel">
+        <GitChainEntryBar workflowId={workflowId} runId={runId} />
+        <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
+          Noch kein Ergebnis. Starte den Workflow — extrahierte Werte erscheinen hier nach dem Lauf.
+        </div>
+        {workflowId && runId && <GitChainInspector workflowId={workflowId} runId={runId} />}
       </div>
     );
   }
   if (model.groups.length === 0) {
     return (
-      <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
-        Lauf abgeschlossen, aber keine extrahierten Felder. Prüfe den Events-Tab nach Fehlern.
+      <div className="sturm-result-panel">
+        <GitChainEntryBar workflowId={workflowId} runId={runId} />
+        <div style={{ padding: 18, textAlign: 'center', fontSize: 12.5, color: 'var(--color-text-tertiary)' }}>
+          Lauf abgeschlossen, aber keine extrahierten Felder. Prüfe den Events-Tab nach Fehlern.
+        </div>
+        {workflowId && runId && <GitChainInspector workflowId={workflowId} runId={runId} />}
       </div>
     );
   }
   return (
     <div className="sturm-result-panel">
+      <GitChainEntryBar workflowId={workflowId} runId={runId} />
       <SummaryCard summary={model.summary} meta={model.meta} />
       <ExportBar
         model={model}
@@ -2647,6 +2917,7 @@ function ResultPanel({ model, runId, workflowId, previousRuns, compareRunId, onC
         compareRunId={compareRunId}
         onCompareChange={onCompareChange}
       />
+      {workflowId && runId && <GitChainInspector workflowId={workflowId} runId={runId} />}
       {onTogglePdf && (
         <div className="sturm-result-toolbar">
           <button
@@ -3552,6 +3823,8 @@ function App() {
         onFile={setFile}
         onStart={start}
         running={running}
+        previousRuns={previousRuns}
+        runId={runId}
       />
 
       <div className="sturm-main">

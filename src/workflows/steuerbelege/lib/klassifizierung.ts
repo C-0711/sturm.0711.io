@@ -45,6 +45,50 @@ function rank(scores: Record<string, number>): { id: string; score: number }[] {
     .sort((a, b) => b.score - a.score);
 }
 
+function mergeHints(typen: Dokumenttyp[]): Record<string, string[]> {
+  const merged = new Map<string, Set<string>>();
+  for (const typ of typen) {
+    for (const [anlage, hints] of Object.entries(typ.ecodeHintsProAnlage ?? {})) {
+      if (!merged.has(anlage)) merged.set(anlage, new Set());
+      const bucket = merged.get(anlage)!;
+      for (const hint of hints ?? []) bucket.add(hint);
+    }
+  }
+  return Object.fromEntries([...merged.entries()].map(([anlage, hints]) => [anlage, [...hints]]));
+}
+
+function detectMixedBundle(
+  ranked: { id: string; score: number }[],
+  typen: Dokumenttyp[],
+  strongThreshold: number,
+): ClassificationResult | null {
+  const strong = ranked
+    .filter((entry) => entry.score >= strongThreshold)
+    .map((entry) => ({ entry, typ: typen.find((t) => t.id === entry.id) ?? null }))
+    .filter((entry): entry is { entry: { id: string; score: number }; typ: Dokumenttyp } => !!entry.typ);
+
+  if (strong.length < 2) return null;
+
+  const totalScore = strong.reduce((sum, item) => sum + item.entry.score, 0);
+  const topShare = totalScore > 0 ? strong[0].entry.score / totalScore : 1;
+  const distinctAnlagen = new Set(strong.flatMap((item) => item.typ.anlagen ?? []));
+  if (distinctAnlagen.size < 2 || topShare > 0.7) return null;
+
+  const topTypes = strong.slice(0, 3).map((item) => item.typ);
+  const label = 'Gemischtes Belegbündel: ' + topTypes.map((typ) => typ.label).join(' + ');
+  return {
+    typ_id: 'mixed_tax_bundle',
+    label,
+    anlagen: [...distinctAnlagen],
+    ecodeHintsProAnlage: mergeHints(topTypes),
+    konfidenz: 'regex-schwach',
+    regex_scores: Object.fromEntries(strong.map((item) => [item.entry.id, item.entry.score])),
+    llm_vote: null,
+    used_llm: false,
+    ms: 0,
+  };
+}
+
 async function llmPick(
   text: string,
   typen: Dokumenttyp[],
@@ -93,6 +137,14 @@ export async function classifyText(
 
   const scores = scoreRegex(text, typen);
   const ranked = rank(scores);
+
+  const mixed = detectMixedBundle(ranked, typen, strongThreshold);
+  if (mixed) {
+    return {
+      ...mixed,
+      ms: Date.now() - t0,
+    };
+  }
 
   const top = ranked[0];
   const second = ranked[1];

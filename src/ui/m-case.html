@@ -823,6 +823,23 @@
     return anlagenZuKategorie(d && d.anlagen);
   }
 
+  function sichtbareKennzahlen(d) {
+    if (d && typeof d.fieldsExtracted === 'number' && d.fieldsExtracted > 0) {
+      return d.fieldsExtracted;
+    }
+    const werte = d && d.indikation && Array.isArray(d.indikation.wichtige_werte)
+      ? d.indikation.wichtige_werte.filter((w) => w && w.label && w.value)
+      : [];
+    return werte.length;
+  }
+
+  function docStatus(d) {
+    if (d && typeof d.state === 'string' && d.state) return d.state;
+    if (sichtbareKennzahlen(d) > 0) return 'ok';
+    if (d && d.indikation) return 'partial';
+    return 'unknown';
+  }
+
   function fmtDate(iso) {
     if (!iso) return '';
     try {
@@ -1018,7 +1035,7 @@
     tbody.innerHTML = docsSorted.map((d) => {
       const filename = d.filename || '(unbekannte Datei)';
       const kategorie = docKategorie(d);
-      const state = d.state || (typeof d.fieldsExtracted === 'number' && d.fieldsExtracted > 0 ? 'ok' : 'unknown');
+      const state = docStatus(d);
       const uploaded = fmtDate(d.uploadedAt);
       // Keine PDF-View-Route — Datei als Klar-Text. Sobald P1 sie liefert,
       // kann hier ein Link daraus werden.

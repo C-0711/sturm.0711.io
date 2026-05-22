@@ -1,0 +1,419 @@
+{
+  "reason": "BMF Lane-1 Active-eCodes-2024 Whitelist",
+  "pruned_at": "2026-05-20T20:09:20.493Z",
+  "pruned_by": "bombas",
+  "before_count": 2287,
+  "after_count": 2219,
+  "removed_count": 68,
+  "source": "ctax-postgres.ag_catalog.elster_fields WHERE is_active AND tax_year=2024",
+  "removed": [
+    {
+      "ecode": "E0107607",
+      "anlage": "HA_35a",
+      "drucktext": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 3<B>6</B> der Anlage Außergewöhnliche Belastungen und / oder Zeile 4 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0107704",
+      "anlage": "HA_35a",
+      "drucktext": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 3<B>7</B> der Anlage Außergewöhnliche Belastungen und / oder Zeile 5 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0107803",
+      "anlage": "HA_35a",
+      "drucktext": "Der bei mir zu berücksichtigende Anteil am Höchstbetrag für Aufwendungen laut Zeile 3<B>8</B> der Anlage Außergewöhnliche Belastungen und / oder Zeile 9 der Anlage Haushaltsnahe Aufwendungen beträgt (in %)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0120103",
+      "anlage": "ESt1A_U",
+      "drucktext": "Höhe der Unterhaltszahlung (einschließlich Beiträge zu Basis-Kranken- und Pflegeversicherungen laut Zeile 43, die von der unterstützten Person als Versicherungsnehmer geschuldet und von mir getragen wurden, und einschließlich Unterhaltsleistungen an im Ausland lebende Personen laut den Zeilen 13 bis 16)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0120302",
+      "anlage": "ESt1A_U",
+      "drucktext": "Zeitraum, in dem das Vermögen der unterstützten Person größer war als maximal (je nach Wohnsitzstaat) 15.500 EUR, bei Ehegatten / Lebenspartnern im gemeinsamen Haushalt insgesamt über maximal (je nach Wohnsitzstaat) 31.000 EUR",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0120804",
+      "anlage": "ESt1A_U",
+      "drucktext": "In Zeile 49 enthaltene Beiträge zur Basis-Kranken- und gesetzlichen Pflegeversicherung für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von der / den Person(en) laut Zeile 48 getragen wurden",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0122713",
+      "anlage": "ESt1A_U",
+      "drucktext": "Die unterstützte Person ist mein geschiedener Ehegatte, Lebenspartner einer aufgehobenen Lebenspartnerschaft oder dauernd getrennt lebender Ehegatte / Lebenspartner (kein Abzug von Sonderausgaben nach § 10 Abs. 1a Nr. 1 EStG, keine Zusammenveranlagung).",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0124401",
+      "anlage": "ESt1A_U",
+      "drucktext": "In Zeile 9 enthaltene übernommene Beiträge zu Basis-Kranken- und gesetzlichen Pflegeversicherungen für die unterstützte Person, die von ihr als Versicherungsnehmer geschuldet und von mir getragen wurden",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0206704",
+      "anlage": "N_DHH",
+      "drucktext": "Anstelle der Mehraufwendungen für doppelte Haushaltsführung werden bei den Wegen zwischen Wohnung und erster Tätigkeitsstätte in den Zeilen 30 bis 37 der Anlage N Fahrtkosten für mehr als eine Heimfahrt wöchentlich geltend gemacht",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0224102",
+      "anlage": "N_GRE",
+      "drucktext": "Für die berufliche Tätigkeit steht ein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit ganz oder überwiegend in der häuslichen Wohnung ausgeübt und keine erste Tätigkeitsstätte aufgesucht wurde\n– Diese Kalendertage dürfen nicht in Zeile 54 enthalten sein. –",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0224403",
+      "anlage": "N_GRE",
+      "drucktext": "Die Fahrten wurden ganz oder teilweise mit einem Firmenwagen oder im Rahmen einer unentgeltlichen Sammelbeförderung des Arbeitgebers durchgeführt\n– Falls „Ja“: Für die Fahrten mit Firmenwagen oder Sammelbeförderung dürfen mangels Aufwands keine Eintragungen zu Fahrtkosten in Zeile 61 vorgenommen werden. –",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0225406",
+      "anlage": "N_GRE",
+      "drucktext": "Für die berufliche Tätigkeit steht dauerhaft kein anderer Arbeitsplatz zur Verfügung:\nAnzahl der Kalendertage, an denen die berufliche Tätigkeit (auch) in der häuslichen Wohnung ausgeübt wurde\n– Diese Kalendertage dürfen nicht in Zeile 53 enthalten sein. –",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0240902",
+      "anlage": "EM_35c",
+      "drucktext": "Ich habe / Wir haben für die energetischen Maßnahmen beantragt / in Anspruch genommen:\n\nöffentliche Förderung durch zinsverbilligte Darlehen (z. B. KfW-Bank, landeseigene Förderbank) oder\nsteuerfreie Zuschüsse (z. B. KfW-Bank, BAFA, Gemeinde) oder\nSteuerbegünstigung für Gebäude in Sanierungsgebieten und städtebaulichen Entwicklungsbereichen oder\nSteuerermäßigung für Handwerkerleistungen nach § 35a EStG",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0242501",
+      "anlage": "EM_35c",
+      "drucktext": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-1$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-1$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen: entsprechend erhöhte / verminderte Aufwendungen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0243401",
+      "anlage": "EM_35c",
+      "drucktext": "Anerkannte Aufwendungen für energetische Maßnahmen des Jahres $VZ-2$ (diese können Sie den Erläuterungen Ihres Einkommensteuerbescheides $VZ-2$ entnehmen); bei Nutzungs- und / oder Eigentumsänderungen: entsprechend erhöhte / verminderte Aufwendungen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0801602",
+      "anlage": "G",
+      "drucktext": "Veräußerungsgewinn laut Zeile <B>59</B>, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0801903",
+      "anlage": "G",
+      "drucktext": "In Zeile <B>6</B>7 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0803306",
+      "anlage": "G",
+      "drucktext": "Auf den Veräußerungsgewinn laut Zeile <B>59</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0803401",
+      "anlage": "G",
+      "drucktext": "Auf den Veräußerungsgewinn laut Zeile <B>59</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0805003",
+      "anlage": "S",
+      "drucktext": "Veräußerungsgewinn laut Zeile <B>33</B>, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz nach § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0805305",
+      "anlage": "S",
+      "drucktext": "In Zeile <B>41</B> enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0809201",
+      "anlage": "G",
+      "drucktext": "60 % des Betrags laut Zeile 91 (Veräußerungsgewinn / -verlust nach Anwendung des Teileinkünfteverfahrens – § 3 Nr. 40 Satz 1 Buchst. c, § 3c Abs. 2 EStG)\n– wenn positiv: Übertrag in Zeile 93; wenn negativ: Übertrag in Zeile 94 ohne Minuszeichen –",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0823302",
+      "anlage": "S",
+      "drucktext": "Auf den Veräußerungsgewinn laut Zeile <B>33</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0823401",
+      "anlage": "S",
+      "drucktext": "Auf den Veräußerungsgewinn laut Zeile <B>33</B> wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0840401",
+      "anlage": "Corona",
+      "drucktext": "Wurden im Jahr $VZ$ für einen / mehrere Betrieb(e) und / oder für eine / mehrere selbständige Tätigkeit(en) Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse bezogen oder zurückgezahlt?",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0841201",
+      "anlage": "Corona",
+      "drucktext": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse ausgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Forderung / sonstiger Vermögensgegenstand) und der Anlage Corona-Hilfen $VZ-1$ erklärt wurden.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0841301",
+      "anlage": "Corona",
+      "drucktext": "Es wurden im Jahr $VZ$ Corona-Soforthilfen, Überbrückungshilfen und / oder vergleichbare Zuschüsse zurückgezahlt, die bereits in der Bilanz des vorangegangenen Wirtschaftsjahres (als Rückstellung / Verbindlichkeit) und der Anlage Corona-Hilfen $VZ-1$ erklärt wurden.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0901003",
+      "anlage": "L",
+      "drucktext": "In den Gewinnen des Kalenderjahres $VZ$ (Zeile <B>7</B> bis 2<B>8</B>) nicht enthaltener steuerfreier Teil der Einkünfte, für die das Teileinkünfteverfahren gilt - Aufstellung",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0901704",
+      "anlage": "L",
+      "drucktext": "Veräußerungsgewinn laut Zeile <B>4</B>4, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0902002",
+      "anlage": "L",
+      "drucktext": "In Zeile <B>4</B>9 enthaltener Veräußerungsgewinn, für den der ermäßigte Steuersatz des § 34 Abs. 3 EStG wegen dauernder Berufsunfähigkeit oder Vollendung des 55. Lebensjahres beantragt wird. Für nach dem 31.12.2000 erfolgte Veräußerungen / Aufgaben wurde der ermäßigte Steuersatz des § 34 Abs. 3 EStG bei keiner Einkunftsart in Anspruch genommen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0903324",
+      "anlage": "L",
+      "drucktext": "Auf den Veräußerungsgewinn laut Zeile <B>4</B>4 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 1 bis 9 ggf. i. V. m. § 6c EStG betragen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E0903401",
+      "anlage": "L",
+      "drucktext": "Auf den Veräußerungsgewinn laut Zeile <B>4</B>4 wurde zumindest teilweise § 6b oder § 6b i. V. m. § 6c EStG angewendet. Die Übertragungen von aufgedeckten stillen Reserven und / oder die in Anspruch genommenen Rücklagen nach § 6b Abs. 10 ggf. i. V. m. § 6c EStG betragen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1804001",
+      "anlage": "RAV_bAV",
+      "drucktext": "Andere Leistungen laut den Nummern 7, 8 und 10 oder Leistungen wegen schädlicher Verwendung laut den Nummern 9c und 9d der Leistungsmitteilung oder der Auflösungsbetrag bei Aufgabe der Selbstnutzung oder der Reinvestitionsabsicht vor dem Beginn der Auszahlungsphase oder der Verminderungsbetrag laut Bescheid der Zentralen Zulagenstelle für Altersvermögen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1904601",
+      "anlage": "KAP_BET",
+      "drucktext": "Gewinne aus der Veräußerung oder Einlösung von Kapitalanlagen aus sonstigen Kapitalforderungen jeder Art, aus stiller Gesellschaft und partiarischen Darlehen, Verluste aus der ganzen oder teilweisen Uneinbringlichkeit der Kapitalforderungen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1904703",
+      "anlage": "KAP_BET",
+      "drucktext": "Hinzurechnungsbetrag nach § 10 AStG",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1921302",
+      "anlage": "KAP_BET",
+      "drucktext": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1922101",
+      "anlage": "KAP_BET",
+      "drucktext": "Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1922401",
+      "anlage": "KAP_BET",
+      "drucktext": "In Zeile 2<B>5</B> enthaltene Verluste aus der ganzen oder teilweisen Uneinbringlichkeit einer Kapitalforderung, Ausbuchung, Übertragung wertlos gewordener Wirtschaftsgüter i. S. d. § 20 Abs. 1 EStG oder aus einem sonstigen Ausfall von Wirtschaftsgütern i. S. d. § 20 Abs. 1 EStG",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1922901",
+      "anlage": "KAP_BET",
+      "drucktext": "Minderung des Hinzurechnungsbetrags nach § 10 Abs. 6 AStG",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1924201",
+      "anlage": "KAP_BET",
+      "drucktext": "Kürzungsbetrag zu Erträgen, die dem gesonderten Steuertarif nach § 32d Abs. 1 EStG unterliegen",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E1924301",
+      "anlage": "KAP_BET",
+      "drucktext": "Kürzungsbetrag zu Erträgen, die der tariflichen Einkommensteuer unterliegen (siehe die Zeilen 20 und / oder 24 der Anlage AUS)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2000501",
+      "anlage": "VOR",
+      "drucktext": "Beiträge zur landwirtschaftlichen Alterskasse; zu berufsständischen Versorgungseinrichtungen, die den gesetzlichen Rentenversicherungen vergleichbare Leistungen erbringen (abzüglich steuerfreier Zuschüsse laut Nr. 22 b der Lohnsteuerbescheinigung)\n– ohne Beiträge, die in Zeile 4 geltend gemacht werden –",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2000701",
+      "anlage": "VOR",
+      "drucktext": "Beiträge zu zertifizierten Basisrentenverträgen (sog. Rürup-Verträge) mit Laufzeitbeginn nach dem 31.12.2004 (abzüglich steuerfreier Zuschüsse)\n– ohne Altersvorsorgebeiträge, die in der Anlage AV geltend gemacht werden –",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2000703",
+      "anlage": "VOR",
+      "drucktext": "Erstattete Beiträge und / oder steuerfreie Zuschüsse zu den Zeilen 4 bis 6 (ohne Zuschüsse, die von den Beiträgen laut Zeile 8 abzuziehen sind und ohne Zuschüsse laut den Zeilen 9 und 10)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2001805",
+      "anlage": "VOR",
+      "drucktext": "Beiträge zu Krankenversicherungen\n– ohne Beiträge, die in Zeile 11 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002103",
+      "anlage": "AV",
+      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf Person B übertragen wurden",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002104",
+      "anlage": "AV",
+      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und die bei der Zusammenveranlagung der Mutter / Person B zugeordnet werden oder die bei der Zusammenveranlagung von Person A auf Person B übertragen wurden",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002105",
+      "anlage": "VOR",
+      "drucktext": "Beiträge zu sozialen Pflegeversicherungen\n– ohne Beiträge, die in Zeile 13 geltend gemacht werden –\n(z. B. bei Rentnern, bei freiwillig gesetzlich versicherten Selbstzahlern)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002204",
+      "anlage": "AV",
+      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den Vater / von Person B auf Person A übertragen wurde, die bei Einzelveranlagung von Ehegatten / Lebenspartnern der Mutter / Person A zugeordnet werden oder die bei Zusammenveranlagung Person A zugeordnet werden",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002205",
+      "anlage": "AV",
+      "drucktext": "Anzahl der Kinder, für die für $VZ$ Kindergeld festgesetzt worden ist und für die bei Zusammenveranlagung oder Einzelveranlagung von Ehegatten / Lebenspartnern die Kinderzulage von der Mutter auf den Vater / von Person B auf Person A übertragen wurde, die bei Einzelveranlagung von Ehegatten / Lebenspartnern der Mutter / Person A zugeordnet werden oder die bei Zusammenveranlagung Person A zugeordnet werden",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002402",
+      "anlage": "VOR",
+      "drucktext": "Zuschuss zu den Beiträgen laut den Zeilen 16 und / oder 18\n– ohne Beträge laut den Zeilen 34 und 36 –\n(z. B. von der Deutschen Rentenversicherung)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002502",
+      "anlage": "VOR",
+      "drucktext": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 34 –) zur Krankenversicherung, die mit einer inländischen Krankenversicherung vergleichbar ist (nur Basisabsicherung, keine Wahlleistungen)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2002703",
+      "anlage": "VOR",
+      "drucktext": "Beiträge (abzüglich steuerfreier Zuschüsse – ohne Beträge laut Zeile 36 –) zur sozialen Pflegeversicherung / Pflege-Pflichtversicherung, die mit einer inländischen Pflegeversicherung vergleichbar ist",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2003402",
+      "anlage": "VOR",
+      "drucktext": "Zuschuss von dritter Seite zu den Beiträgen laut den Zeilen 23 und / oder 24 (z. B. von der Deutschen Rentenversicherung)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2003502",
+      "anlage": "VOR",
+      "drucktext": "Über die Basisabsicherung hinausgehende Beiträge zu Krankenversicherungen (z. B. für Wahlleistungen, Zusatzversicherungen) und / oder zu zusätzlichen Pflegeversicherungen abzüglich erstatteter Beiträge",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2004801",
+      "anlage": "AV",
+      "drucktext": "Einnahmen aus einer Beschäftigung, die einer ausländischen gesetzlichen Rentenversicherungspflicht unterlag und / oder Jahres(brutto)betrag der Rente wegen voller Erwerbsminderung oder Erwerbsunfähigkeit aus einer ausländischen gesetzlichen Rentenversicherung $VZ-1$",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2005801",
+      "anlage": "VOR",
+      "drucktext": "Es wurde Arbeitslohn aus einem nicht aktiven Dienstverhältnis - insbesondere Betriebsrente / Werkspension - bezogen, bei dem es sich nicht um steuerbegünstigte Versorgungsbezüge (Zeile 11 bis 16 der Anlage N) handelt. Bei Altersteilzeit ist hier keine Eintragung vorzunehmen.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2024103",
+      "anlage": "AV",
+      "drucktext": "Ich habe bisher gegenüber dem Anbieter meines Altersversorgungsvertrages auf den zusätzlichen Sonderausgabenabzug verzichtet. Hiermit widerrufe ich den gegenüber meinem Anbieter erklärten Verzicht auf den zusätzlichen Sonderausgabenabzug für die nachfolgenden Verträge.",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2110701",
+      "anlage": "Zins",
+      "drucktext": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut Aufstellung - (Betrag)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2110801",
+      "anlage": "Zins",
+      "drucktext": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. a EStG)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2111201",
+      "anlage": "Zins",
+      "drucktext": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 2 und 3 KStG –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2111401",
+      "anlage": "Zins",
+      "drucktext": "Verrechenbares EBITDA des laufenden Wirtschaftsjahres (wenn Wert negativ, „0“ eintragen)\n– nur, wenn im Wirtschaftsjahr kein Anwendungsfall des § 4h Abs. 2 EStG vorliegt –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2111703",
+      "anlage": "Zins",
+      "drucktext": "Verringerung des EBITDA-Vortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. b EStG)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2111801",
+      "anlage": "Zins",
+      "drucktext": "Verringerung des Zinsvortrags, z. B. durch Aufgabe oder Übertragung eines Betriebs oder Teilbetriebs oder Ausscheiden eines Mitunternehmers aus einer Gesellschaft (§ 4h Abs. 5 EStG), Ausscheiden einer Organgesellschaft aus dem Organkreis (§ 15 Satz 1 Nr. 3, § 8a Abs. 1 KStG i. V. m. § 4h Abs. 5 EStG), Sanierungsertrag (§ 3a Abs. 3 Satz 2 Nr. 13 Buchst. a EStG)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2111901",
+      "anlage": "Zins",
+      "drucktext": "Zinsaufwendungen des laufenden Wirtschaftsjahres i. S. d. § 4h Abs. 3 Satz 2 EStG ohne Zinsaufwendungen i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2112001",
+      "anlage": "Zins",
+      "drucktext": "Nach Anwendung des § 4h EStG abziehbare Beträge (bei der Ermittlung des Gewinns berücksichtigt)\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)\n - Berechnung laut Aufstellung - (Betrag)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2112501",
+      "anlage": "Zins",
+      "drucktext": "Zinserträge des laufenden Wirtschaftsjahres nach § 4h Abs. 3 Satz 3 EStG ohne Zinserträge i. S. d. § 4h Abs. 6 EStG\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
+      "reason": "not-bmf-active-2024"
+    },
+    {
+      "ecode": "E2112701",
+      "anlage": "Zins",
+      "drucktext": "Vergütungen für Fremdkapital an wesentlich beteiligte Anteilseigner, diesen nahestehende Personen und rückgriffsberechtigte Dritte\n– § 4h Abs. 2 Satz 2 EStG, § 8a Abs. 3 KStG –\n(Bei Organträgern: einschließlich der entsprechenden Beträge der Organgesellschaften)",
+      "reason": "not-bmf-active-2024"
+    }
+  ]
+}

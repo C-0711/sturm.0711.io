@@ -3,6 +3,7 @@ import { getStage } from './registry.ts';
 import { EventBus } from './events.ts';
 import { createArtifactStore } from './artifacts.ts';
 import { createGitChainArtifactStore, type GitChainArtifactStore } from './artifacts-gitchain.ts';
+import { exportStageOutputAsRawFirst } from '../lib/gitchain-schema-export.ts';
 import { getToolContainer } from './tools/tool-container.ts';
 import { NullToolContainer } from './tools/null-container.ts';
 import type { ToolContainerView } from './tools/types.ts';
@@ -202,6 +203,25 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           stageOutputs[stageId] = output;
           stageResults[stageId] = { stageId, state: 'ok', ms, output: sanitizeForLog(output) };
           await artifacts.write(`${stageId}/output.json`, output);
+          try {
+            const exported = await exportStageOutputAsRawFirst({
+              runRoot: artifacts.absolutePath(''),
+              workflowId: def.id,
+              runId,
+              stageId,
+              output,
+              runInput: opts.input as Record<string, unknown>,
+            });
+            if (exported) {
+              bus.emit('log_info', {
+                msg: `gitchain-schema-v2 export updated ${exported.targetRoot} (01 docs=${exported.extractedDocuments}, 01 facts=${exported.extractedFacts}, 02 products=${exported.normalizedProducts}, 03 docLinks=${exported.documentLinks}, 03 entityLinks=${exported.entityLinks}, 04 resolved=${exported.resolvedValues}, 04 conflicts=${exported.conflicts})`,
+              }, stageId);
+            }
+          } catch (e) {
+            bus.emit('log_warn', {
+              msg: `gitchain-schema-v2 export failed for ${stageId}: ${e instanceof Error ? e.message : e}`,
+            }, stageId);
+          }
           if (gitChainStore) {
             const stageName = stageDef.name ?? stageId;
             await gitChainStore.commitStage(stageId, `${stageName} OK (${ms}ms)`).catch(e => {

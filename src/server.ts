@@ -1,4 +1,4 @@
-import express, { type Request } from 'express';
+import express from 'express';
 import multer from 'multer';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -27,8 +27,6 @@ import { createCtxRouter } from './lib/ctx-server.ts';
 import { createCtxBenchRouter } from './lib/ctx-bench-server.ts';
 import { createIntegrationsRouter } from './server/integrations.ts';
 import { createTokensRouter, createSessionRedeemRouter, sessionCookieMiddleware } from './server/sessions.ts';
-import { createMandantenAuthRouter } from './server/m-auth.ts';
-import { createMandantenCasesRouter, createOwnershipGuard } from './server/m-cases.ts';
 import { createClassifyRouter } from './server/classify-route.ts';
 import { createWorkflowsUserRouter, loadAndRegisterUserWorkflows } from './server/workflows-user.ts';
 import {
@@ -36,7 +34,6 @@ import {
   loadInstanceFile,
   saveInstanceFile,
 } from './server/applications.ts';
-import { registerOnboardingEndpoint } from './server/onboarding-handler.ts';
 // Stubs für noch nicht implementierte workspace→gitchain-Funktionen.
 // Werden in der Seal-Handler-Pipeline aufgerufen aber sind in der aktuellen
 // Codebase nicht fertig — return noop. Volle Impl folgt mit Lane-5-Anbindung.
@@ -59,7 +56,6 @@ import {
   writeStageOverride,
 } from './core/config-overrides.ts';
 import { startUploadSweep } from './server/upload-sweep.ts';
-import { registerVorjahresUploadEndpoint } from './server/vorjahres-upload-handler.ts';
 import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
 import {
   getSchemaIndex,
@@ -76,10 +72,6 @@ const RUNS_DIR = path.join(ROOT, 'runs');
 const WORKSPACES_DIR = path.join(ROOT, 'workspaces');
 const USER_WORKFLOWS_DIR = path.join(ROOT, 'workflows-user');
 const APPLICATIONS_DIR = path.join(ROOT, 'applications-data');
-// Mandanten-Useraccounts (Mandanten-Workspace, /m/*-Surface). Liegt unter
-// runs/ damit es per Default gitignored ist — User-JSONs enthalten
-// Passwort-Hashes.
-const USERS_DIR = path.join(RUNS_DIR, '_users');
 const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
 const PIPELINES_DIR = path.join(__dirname, 'pipelines-seed');
 const UI_DIR = path.join(__dirname, 'ui');
@@ -89,7 +81,6 @@ fs.mkdirSync(RUNS_DIR, { recursive: true });
 fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 fs.mkdirSync(USER_WORKFLOWS_DIR, { recursive: true });
 fs.mkdirSync(APPLICATIONS_DIR, { recursive: true });
-fs.mkdirSync(USERS_DIR, { recursive: true });
 
 // Bootstrap-Registries
 registerAllStages();
@@ -198,26 +189,6 @@ const schemaGenerateLimiter = rateLimit({
 
 // ============ Workflow-Metadaten ============
 
-/** Pick the extraction workflow ID for a case upload. Priority:
- *   1. URL query `?workflow=elster-v6-vision` (per-request override, useful
- *      for one-off tests via UI toggle)
- *   2. inst.extractionWorkflow (per-case override, PATCH-set, persisted)
- *   3. app_.workflows.extraction (Anwendung default; env-overridable via
- *      STURM_EXTRACTION_WORKFLOW)
- * Returns undefined if none configured.
- */
-function pickExtractionWorkflow(
-  req: import('express').Request,
-  inst: { extractionWorkflow?: string } | null,
-  app_: { workflows: { extraction?: string } },
-): string | undefined {
-  const fromQuery = typeof req.query?.workflow === 'string' ? req.query.workflow.trim() : '';
-  if (fromQuery && /^[A-Za-z0-9._-]+$/.test(fromQuery)) return fromQuery;
-  const fromInst = inst?.extractionWorkflow;
-  if (typeof fromInst === 'string' && fromInst.length > 0) return fromInst;
-  return app_.workflows.extraction;
-}
-
 function summarizeWorkflow(def: WorkflowDef) {
   return {
     id: def.id,
@@ -289,25 +260,8 @@ app.get('/api/applications/:id', (req, res) => {
   res.json(def);
 });
 
-// Ownership-Guard für Mandanten-Cookies. Greift NUR wenn sturm-session-Cookie
-// gesetzt UND der Fall einen ownerUserId hat. Bearer-Aufrufe (Admin) und
-// Legacy-Cases ohne Owner werden durchgelassen. Muss VOR den
-// Instance-Handlern montiert sein. Siehe docs/MANDANTEN_WORKSPACE.md.
-app.use(
-  '/api/applications/:appId/instances/:caseId',
-  createOwnershipGuard({
-    applicationsDir: APPLICATIONS_DIR,
-    workspacesDir: WORKSPACES_DIR,
-    usersDir: USERS_DIR,
-  }),
-);
-
 // Instances: GET (list), GET (one), POST (create) — file-backed JSON registry.
 app.use('/api/applications', express.json(), createApplicationsRouter({ dir: APPLICATIONS_DIR }));
-
-// Onboarding-Wizard (5-Fragen) — alternative zum Vorjahres-Upload für Neukunden.
-// Schreibt einen `CaseContext` mit source='onboarding' in die Instance.
-registerOnboardingEndpoint(app, { applicationsDir: APPLICATIONS_DIR });
 
 // ── Orchestrator: Gemma-4 Steuerassistent ──────────────────────────────
 // SSE-Stream-Surface unter /api/orchestrator + Vanilla-Chat-UI unter
@@ -472,13 +426,6 @@ app.get(
     // Instanz-Datei spiegelt Manifest — Documents im Instance-JSON
     // ebenfalls aktualisieren, damit der nächste GET die Counts sieht.
     inst.documents = manifest.documents;
-    // Persist the workflow that processed this upload so a later
-    // /master?refresh=1 (without ?workflow=) aggregates from the SAME
-    // workflow's run dir. Without this, refresh falls back to the app
-    // default and finds 0 runs for cases that used a per-request override.
-    if (extractionId && inst.extractionWorkflow !== extractionId) {
-      inst.extractionWorkflow = extractionId;
-    }
     await saveInstanceFile(APPLICATIONS_DIR, inst);
     res.json({
       caseId,
@@ -505,10 +452,7 @@ app.post(
     if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
-    // Per-case workflow override (set via PATCH /api/m/cases/:caseId or
-    // upload-time query ?workflow=…). Falls back to the application's
-    // default extraction workflow.
-    const extractionId = pickExtractionWorkflow(req, inst, app_);
+    const extractionId = app_.workflows.extraction;
     if (!extractionId) { res.status(409).json({ error: `application ${appId} has no extraction workflow configured` }); return; }
     const baseDef = getWorkflow(extractionId);
     if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
@@ -547,12 +491,6 @@ app.post(
     inst.documents = inst.documents ?? [];
     inst.documents.push(doc);
     inst.status = 'in_bearbeitung';
-    // Persist Workflow-Wahl für spätere master-Refresh (sonst fällt der
-    // pickExtractionWorkflow ohne Query auf den App-Default zurück und
-    // findet keine Runs im richtigen workflow-Verzeichnis).
-    if (extractionId && inst.extractionWorkflow !== extractionId) {
-      inst.extractionWorkflow = extractionId;
-    }
     await saveInstanceFile(APPLICATIONS_DIR, inst);
 
     const unsub = run.bus.subscribe((env) => res.write(formatSseEvent(env)));
@@ -571,22 +509,11 @@ app.post(
         const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
         const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
         const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
-        const indikationOut = (result.stages?.indikation?.output as {
-          anlagen?: string[]; belegtyp?: string | null;
-          wichtige_werte?: Array<{ label: string; value: string }>; ms?: number;
-        } | undefined);
         const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
         await recordDocumentRunCompletion(ROOT, inst, run.runId, {
           anlagen: klass?.erkannte_anlagen,
           fieldsExtracted: layer ? Object.keys(layer).length : 0,
           trustBreakdown: computeTrustBreakdown(layer),
-          indikation: indikationOut ? {
-            anlagen: indikationOut.anlagen ?? [],
-            belegtyp: indikationOut.belegtyp ?? null,
-            wichtige_werte: indikationOut.wichtige_werte ?? [],
-            ms: indikationOut.ms ?? 0,
-            at: new Date().toISOString(),
-          } : undefined,
         });
         // P2: refresh the case-level master.json (single source of truth
         // consumed by abrechnung.html, source-viewer, ELSTER export, etc.).
@@ -621,16 +548,13 @@ app.post(
     if (!app_) { res.status(404).json({ error: `application not found: ${appId}` }); return; }
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) { res.status(404).json({ error: `case not found: ${caseId}` }); return; }
-    const extractionId = pickExtractionWorkflow(req, inst, app_);
+    const extractionId = app_.workflows.extraction;
     if (!extractionId) { res.status(409).json({ error: `application ${appId} has no extraction workflow configured` }); return; }
     const baseDef = getWorkflow(extractionId);
     if (!baseDef) { res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` }); return; }
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     if (files.length === 0) { res.status(400).json({ error: 'mindestens eine Datei erforderlich (multipart field "files")' }); return; }
-    // Default 16, Cap 32 — H200v hat 248GB GPU, Gemma-4 31B braucht ~60GB,
-    // vLLM continuous-batching nimmt locker 16-32 parallele Requests.
-    // Override per ?concurrency=N.
-    const concurrency = Math.max(1, Math.min(32, Number(req.query.concurrency) || 16));
+    const concurrency = Math.max(1, Math.min(5, Number(req.query.concurrency) || 4));
 
     const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
 
@@ -752,41 +676,7 @@ app.post(
       }
     };
 
-    // ── Round-1 Indikation: ALLE Dokumente parallel + ungethrottelt ──────
-    // Vor dem (gethrottelten) Workflow-Pool feuern wir Mistral Small Vision
-    // für jedes Dokument SOFORT — die Indikation soll für alle Dokumente
-    // innerhalb von ~3s sichtbar sein, unabhängig davon wann die jeweilige
-    // Heavy-Pipeline dran ist (Gemma-OCR cappt bei concurrency=4).
-    void (async () => {
-      const { runBelegIndikation } = await import('./stages/beleg-indikation.ts');
-      const { recordEagerIndikation } = await import('./server/inbox.ts');
-      await Promise.all(files.map(async (file, idx) => {
-        if (aborted) return;
-        try {
-          const result = await runBelegIndikation(
-            { filePath: file.path, filename: file.originalname },
-            { dpi: 150, maxTokens: 800, timeoutMs: 30_000 },
-          );
-          if (aborted) return;
-          res.write(formatSseEvent({
-            name: 'beleg_indikation',
-            runId: '',
-            workflowId: def.id,
-            at: new Date().toISOString(),
-            payload: { docIdx: idx, filename: file.originalname, ...result },
-          }));
-          // Persist into manifest so UI sees indikation.belegtyp after reload
-          // (docKategorie() falls back to belegtyp wenn vorhanden).
-          await recordEagerIndikation(ROOT, inst, file.originalname, {
-            ...result, at: new Date().toISOString(),
-          });
-        } catch (err) {
-          console.warn('[bulk] eager indikation failed for', file.originalname, ':', (err as Error).message);
-        }
-      }));
-    })();
-
-    // Concurrency-limited Pool für die schwere Pipeline (OCR + Extraction).
+    // Concurrency-limited Pool
     let nextIdx = 0;
     async function worker() {
       while (!aborted) {
@@ -808,11 +698,6 @@ app.post(
       const manifest = await readManifest(ROOT, freshInst);
       freshInst.documents = manifest.documents;
       freshInst.status = 'in_bearbeitung';
-      // Persist actually-used workflow so /aggregate + /master ohne ?workflow
-      // den richtigen runs/<workflowId>/ Pfad scannen.
-      if (extractionId && freshInst.extractionWorkflow !== extractionId) {
-        freshInst.extractionWorkflow = extractionId;
-      }
       await saveInstanceFile(APPLICATIONS_DIR, freshInst);
     }
 
@@ -824,207 +709,6 @@ app.post(
       payload: { runIds, fileCount: files.length },
     }));
     res.end();
-  },
-);
-
-// ── POST /api/applications/:appId/instances/:caseId/vorjahres-upload ───
-// Mandanten-Onboarding via Vorjahres-Erklärung — triggert den Workflow
-// `vorjahres-kontext-extract` und persistiert den CaseContext am Case.
-registerVorjahresUploadEndpoint(app, {
-  rootDir: ROOT,
-  runsDir: RUNS_DIR,
-  uploadsDir: UPLOADS_DIR,
-  applicationsDir: APPLICATIONS_DIR,
-  requireBearerToken,
-});
-
-// ── DELETE /api/applications/:appId/instances/:caseId/documents/:runId ─
-// Löscht einen Beleg aus dem Fall: Manifest-Eintrag, Inbox-Datei,
-// Run-Artefakte. Master.json wird neu geschrieben. 200 wenn erfolgreich,
-// 404 wenn runId unbekannt. Idempotent: bereits gelöschte Dateien sind ok.
-app.delete(
-  '/api/applications/:appId/instances/:caseId/documents/:runId',
-  async (req, res) => {
-    const { appId, caseId, runId } = req.params;
-    const app_ = getApplication(appId);
-    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
-    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
-    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
-
-    const { readManifest, writeManifest, inboxDirFor } = await import('./server/inbox.ts');
-    const manifest = await readManifest(ROOT, inst);
-    const docIdx = manifest.documents.findIndex((d) => d.runId === runId);
-    if (docIdx < 0) return res.status(404).json({ error: 'document not found', runId });
-
-    const doc = manifest.documents[docIdx];
-    const inboxAbs = path.join(inboxDirFor(ROOT, inst), path.basename(doc.inboxPath));
-
-    // 1. Inbox-Datei entfernen (best-effort)
-    try { await fs.promises.unlink(inboxAbs); } catch { /* schon weg */ }
-
-    // 2. Run-Artefakte entfernen (best-effort über alle bekannten Workflow-Verzeichnisse)
-    const extractionId = app_.workflows.extraction;
-    if (extractionId) {
-      const runDir = path.join(RUNS_DIR, extractionId, runId);
-      try { await fs.promises.rm(runDir, { recursive: true, force: true }); } catch { /* nix */ }
-    }
-
-    // 3. Manifest-Eintrag entfernen
-    manifest.documents.splice(docIdx, 1);
-    await writeManifest(ROOT, inst, manifest);
-
-    // 4. runs[] in der Instance auch bereinigen
-    inst.runs = inst.runs.filter((r) => r !== runId);
-    inst.documents = manifest.documents;
-    await saveInstanceFile(APPLICATIONS_DIR, inst);
-
-    // 5. master.json neu schreiben damit die Abrechnung den gelöschten Beleg vergisst
-    if (extractionId) {
-      try {
-        const { writeCaseMaster } = await import('./server/case-master.ts');
-        await writeCaseMaster(inst, {
-          runsDir: RUNS_DIR,
-          extractionWorkflowId: extractionId,
-          workspaceBase: ROOT,
-        });
-      } catch (e) {
-        console.error('[delete-doc] master.json refresh failed:', (e as Error).message);
-      }
-    }
-
-    res.json({ ok: true, runId, filename: doc.filename, remaining: manifest.documents.length });
-  },
-);
-
-// ── POST /api/applications/:appId/instances/:caseId/documents/:runId/retry
-// Startet einen NEUEN Extraction-Run auf die schon vorhandene Inbox-Datei.
-// Antwortet als SSE (gleiches Schema wie /upload-bulk: doc_start, stage_*, doc_done).
-// Im Manifest wird der runId-Eintrag auf den neuen Run umgehängt; alte
-// Run-Artefakte werden vorher gelöscht.
-app.post(
-  '/api/applications/:appId/instances/:caseId/documents/:runId/retry',
-  async (req, res) => {
-    const { appId, caseId, runId: oldRunId } = req.params;
-    const app_ = getApplication(appId);
-    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
-    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
-    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
-    const extractionId = app_.workflows.extraction;
-    if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
-    const baseDef = getWorkflow(extractionId);
-    if (!baseDef) return res.status(409).json({ error: `extraction workflow not registered: ${extractionId}` });
-
-    const { readManifest, writeManifest, inboxDirFor } = await import('./server/inbox.ts');
-    const manifest = await readManifest(ROOT, inst);
-    const doc = manifest.documents.find((d) => d.runId === oldRunId);
-    if (!doc) return res.status(404).json({ error: 'document not found', runId: oldRunId });
-
-    const inboxAbs = path.join(inboxDirFor(ROOT, inst), path.basename(doc.inboxPath));
-    try { await fs.promises.access(inboxAbs); } catch {
-      return res.status(410).json({ error: 'inbox file gone', inboxPath: doc.inboxPath });
-    }
-
-    // SSE-Stream starten
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders?.();
-    let aborted = false;
-    req.on('close', () => { aborted = true; });
-
-    const def = applyOverrides(baseDef, await readOverrides(ROOT, baseDef.id));
-
-    const input: Record<string, unknown> = {
-      filePath: inboxAbs,
-      filename: doc.filename,
-      size: doc.size,
-      mime: doc.mimeType,
-      mandant_id: inst.mandantId,
-      case_id: inst.caseId,
-    };
-    const run = runWorkflow(def, { runsDir: RUNS_DIR, input, appId });
-    void persistInputForRun(def.id, run.runId, inboxAbs, doc.filename, doc.size, doc.mimeType);
-
-    // Alte Run-Artefakte entsorgen (best-effort)
-    try {
-      await fs.promises.rm(path.join(RUNS_DIR, def.id, oldRunId), { recursive: true, force: true });
-    } catch { /* egal */ }
-
-    // Doc-Eintrag im Manifest auf neuen Run umhängen + alte runId aus instance.runs entfernen
-    doc.runId = run.runId;
-    delete doc.fieldsExtracted;
-    delete doc.anlagen;
-    delete doc.trustBreakdown;
-    await writeManifest(ROOT, inst, manifest);
-    inst.runs = inst.runs.filter((r) => r !== oldRunId);
-    inst.runs.push(run.runId);
-    await saveInstanceFile(APPLICATIONS_DIR, inst);
-
-    res.write(formatSseEvent({
-      name: 'doc_start',
-      runId: run.runId,
-      workflowId: def.id,
-      at: new Date().toISOString(),
-      payload: { runId: run.runId, oldRunId, filename: doc.filename, totalStages: Object.keys(def.stages).length },
-    }));
-
-    const unsub = run.bus.subscribe((env) => {
-      if (aborted) return;
-      const wrapped = { ...env, payload: { ...((env.payload as Record<string, unknown>) ?? {}), runId: run.runId } };
-      res.write(formatSseEvent(wrapped));
-    });
-
-    try {
-      const result = await run.result;
-      if (result.state === 'ok') {
-        const klass = (result.stages?.klassifizierung?.output as { erkannte_anlagen?: string[] } | undefined);
-        const bmf = (result.stages?.phase6BmfRechner?.output as { canonical_layer?: Record<string, unknown> } | undefined);
-        const merge = (result.stages?.phase5Merge?.output as { canonical_layer?: Record<string, unknown> } | undefined);
-        const indikationOut = (result.stages?.indikation?.output as {
-          anlagen?: string[]; belegtyp?: string | null;
-          wichtige_werte?: Array<{ label: string; value: string }>; ms?: number;
-        } | undefined);
-        const layer = bmf?.canonical_layer ?? merge?.canonical_layer ?? null;
-        await recordDocumentRunCompletion(ROOT, inst, run.runId, {
-          anlagen: klass?.erkannte_anlagen,
-          fieldsExtracted: layer ? Object.keys(layer).length : 0,
-          trustBreakdown: computeTrustBreakdown(layer),
-          indikation: indikationOut ? {
-            anlagen: indikationOut.anlagen ?? [],
-            belegtyp: indikationOut.belegtyp ?? null,
-            wichtige_werte: indikationOut.wichtige_werte ?? [],
-            ms: indikationOut.ms ?? 0,
-            at: new Date().toISOString(),
-          } : undefined,
-        });
-        // master.json refresh
-        try {
-          const fresh = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
-          if (fresh) {
-            const { writeCaseMaster } = await import('./server/case-master.ts');
-            await writeCaseMaster(fresh, { runsDir: RUNS_DIR, extractionWorkflowId: extractionId, workspaceBase: ROOT });
-          }
-        } catch (e) { console.error('[retry] master refresh failed:', (e as Error).message); }
-        res.write(formatSseEvent({
-          name: 'doc_done', runId: run.runId, workflowId: def.id, at: new Date().toISOString(),
-          payload: { runId: run.runId, state: 'ok', fields: layer ? Object.keys(layer).length : 0, anlagen: klass?.erkannte_anlagen ?? [] },
-        }));
-      } else {
-        res.write(formatSseEvent({
-          name: 'doc_done', runId: run.runId, workflowId: def.id, at: new Date().toISOString(),
-          payload: { runId: run.runId, state: result.state },
-        }));
-      }
-    } catch (err) {
-      res.write(formatSseEvent({
-        name: 'doc_error', runId: run.runId, workflowId: def.id, at: new Date().toISOString(),
-        payload: { runId: run.runId, error: (err as Error).message },
-      }));
-    } finally {
-      unsub();
-      res.end();
-    }
   },
 );
 
@@ -1202,59 +886,6 @@ app.get('/api/_deploycheck', (_req, res) => {
   res.json({ deployedAt: '__V5_DEPLOY_CHECK__', ts: new Date().toISOString() });
 });
 
-// ── GET /api/source-bbox/:sha256/:page ─────────────────────────────────
-// Returns word-level bounding boxes (in %) for a given snippet on a PDF
-// page. Used by m-case.html viewer to highlight the source on the rendered
-// PNG via absolute-positioned overlay divs.
-//
-// Query: ?q=<snippet> (URL-encoded text fragment). Server uses pdftotext
-// -bbox-layout (Poppler) to get word positions, fuzzy-matches the snippet
-// against the word sequence, returns matching word boxes as % of page-dim.
-app.get(
-  '/api/source-bbox/:sha256/:page',
-  async (req, res) => {
-    const sha = String(req.params.sha256 ?? '');
-    const page = parseInt(req.params.page ?? '0', 10);
-    const snippet = String(req.query.q ?? '').trim();
-    if (!/^[0-9a-f]{64}$/i.test(sha)) return res.status(400).json({ error: 'invalid sha256' });
-    if (!Number.isFinite(page) || page < 1 || page > 100) return res.status(400).json({ error: 'invalid page' });
-    if (!snippet) return res.json({ matches: [] });
-    // PDF path: uploads sind multer-random, sha256 ist im Case-Manifest →
-    // Walk applications-data manifests, find doc mit matching sha256.
-    let pdfPath: string | null = null;
-    try {
-      const appDir = path.join(APPLICATIONS_DIR, 'steuerfall-est');
-      const files = await fs.promises.readdir(appDir);
-      for (const f of files) {
-        if (!f.endsWith('.json')) continue;
-        try {
-          const raw = await fs.promises.readFile(path.join(appDir, f), 'utf8');
-          const inst = JSON.parse(raw) as { workspacePath?: string; documents?: Array<{ sha256?: string; inboxPath?: string }> };
-          const doc = (inst.documents ?? []).find((d) => d.sha256 === sha);
-          if (doc && inst.workspacePath && doc.inboxPath) {
-            const cand = path.join(ROOT, inst.workspacePath, doc.inboxPath);
-            try {
-              await fs.promises.stat(cand);
-              pdfPath = cand;
-              break;
-            } catch { /* try next */ }
-          }
-        } catch { /* skip corrupt */ }
-      }
-    } catch { /* dir missing */ }
-    if (!pdfPath) return res.status(404).json({ error: 'pdf not found for sha' });
-    // Tesseract Fallback nutzt das gecachte PNG (gleicher render-cache wie /source-page)
-    const pngPath = path.join(RUNS_DIR, '_pdf_render', sha, `page-${page}.png`);
-    try {
-      const { findSnippetBboxes } = await import('./server/pdf-bbox.ts');
-      const matches = await findSnippetBboxes(pdfPath, page, snippet, pngPath);
-      res.json({ matches });
-    } catch (err) {
-      res.status(500).json({ error: 'bbox-extract failed', message: (err as Error).message });
-    }
-  },
-);
-
 // ── GET /api/source-page/:sha256/:page ─────────────────────────────────
 // Streams a cached PDF-render PNG by content hash (P6 source viewer).
 // Path constrained: sha256 must be hex, page must be 1-based ≤ 50.
@@ -1298,9 +929,7 @@ app.get(
     if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
-    // Respect per-case extractionWorkflow override (set via PATCH /api/m/cases/:id).
-    // Picker: query > inst.extractionWorkflow > app default.
-    const extractionId = pickExtractionWorkflow(req, inst, app_);
+    const extractionId = app_.workflows.extraction;
     if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
 
     const { readCaseMaster, writeCaseMaster } = await import('./server/case-master.ts');
@@ -1341,9 +970,7 @@ app.get(
     if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
     const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
     if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
-    // Respect per-case extractionWorkflow override (set via PATCH /api/m/cases/:id).
-    // Picker: query > inst.extractionWorkflow > app default.
-    const extractionId = pickExtractionWorkflow(req, inst, app_);
+    const extractionId = app_.workflows.extraction;
     if (!extractionId) return res.status(409).json({ error: 'no-extraction-workflow' });
 
     const { aggregateCase } = await import('./server/aggregation.ts');
@@ -1819,23 +1446,6 @@ app.use(sessionCookieMiddleware(sessionsOpts));
 // Session redeem is PUBLIC (no Bearer) — sessionId in body is the auth.
 app.use('/api/sessions', createSessionRedeemRouter(sessionsOpts));
 
-// ── Mandanten-Surface (/api/m/*) ──────────────────────────────────────
-// Auth + Cases für die /m/* HTML-Surface. Nutzt dieselbe Session-Mechanik
-// (sturm-session-Cookie) wie das Embed-Flow, aber mit User+Workspace-Stub.
-// Siehe docs/MANDANTEN_WORKSPACE.md.
-app.use('/api/m', createMandantenAuthRouter({
-  usersDir: USERS_DIR,
-  workspacesDir: WORKSPACES_DIR,
-  cookieName: sessionsOpts.cookieName,
-  secureCookie: sessionsOpts.secureCookie,
-}));
-app.use('/api/m', createMandantenCasesRouter({
-  usersDir: USERS_DIR,
-  workspacesDir: WORKSPACES_DIR,
-  applicationsDir: APPLICATIONS_DIR,
-  runsDir: RUNS_DIR,
-}));
-
 app.use('/api/jobs', requireBearerToken, createJobsRouter(jobRunner));
 app.use('/api/pipelines', requireBearerToken, createPipelinesRouter(PIPELINES_DIR));
 const masterKeyResolver = () => resolveMasterKey(ROOT);
@@ -2045,7 +1655,16 @@ app.get('/api/workflows/:id/runs', requireBearerToken, async (req, res) => {
   } catch {
     res.json([]); return;
   }
-  type Row = { runId: string; state: string | null; ms: number | null; kpiScore: number | null; finishedAt: string | null; mtime: number };
+  type Row = {
+    runId: string;
+    state: string | null;
+    ms: number | null;
+    kpiScore: number | null;
+    finishedAt: string | null;
+    hasGitchainExport: boolean;
+    gitchainFileCount: number | null;
+    mtime: number;
+  };
   const rows: Row[] = [];
   for (const name of entries) {
     if (!/^[A-Za-z0-9._-]+$/.test(name)) continue;
@@ -2058,6 +1677,8 @@ app.get('/api/workflows/:id/runs', requireBearerToken, async (req, res) => {
     let ms: number | null = null;
     let kpiScore: number | null = null;
     let finishedAt: string | null = null;
+    let hasGitchainExport = false;
+    let gitchainFileCount: number | null = null;
     try {
       const raw = await fs.promises.readFile(resultPath, 'utf8');
       const j = JSON.parse(raw) as Record<string, unknown>;
@@ -2070,7 +1691,17 @@ app.get('/api/workflows/:id/runs', requireBearerToken, async (req, res) => {
     } catch {
       // still-running or missing _result.json — keep state=null, useful to show "running"
     }
-    rows.push({ runId: name, state, ms, kpiScore, finishedAt, mtime: st.mtimeMs });
+    const gitchainRoot = path.join(runDir, '_gitchain_v2');
+    try {
+      const gcStat = await fs.promises.stat(gitchainRoot);
+      if (gcStat.isDirectory()) {
+        hasGitchainExport = true;
+        gitchainFileCount = (await listFilesRecursive(gitchainRoot)).length;
+      }
+    } catch {
+      // no gitchain export for this run
+    }
+    rows.push({ runId: name, state, ms, kpiScore, finishedAt, hasGitchainExport, gitchainFileCount, mtime: st.mtimeMs });
   }
   rows.sort((a, b) => b.mtime - a.mtime);
   res.json(rows.slice(0, 20).map(({ mtime: _m, ...r }) => r));
@@ -2102,6 +1733,98 @@ app.get('/api/runs/:workflowId/:runId/_input/:filename', requireBearerToken, asy
   if (!filename) { res.status(400).json({ error: 'invalid filename' }); return; }
   const p = path.join(RUNS_DIR, safeSeg(req.params.workflowId), safeSeg(req.params.runId), '_input', filename);
   res.sendFile(p, (err) => { if (err) res.status(404).end(); });
+});
+
+async function listFilesRecursive(rootDir: string, prefix = ''): Promise<Array<{ path: string; size: number }>> {
+  const out: Array<{ path: string; size: number }> = [];
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = await fs.promises.readdir(rootDir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const full = path.join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...await listFilesRecursive(full, rel));
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const st = await fs.promises.stat(full).catch(() => null);
+    out.push({ path: rel, size: st?.size ?? 0 });
+  }
+  return out;
+}
+
+function safeRelativeArtifactPath(input: unknown): string {
+  if (typeof input !== 'string' || input.length === 0) return '';
+  if (input.includes('\u0000')) return '';
+  const normalized = path.posix.normalize(input.replace(/\\/g, '/')).replace(/^\/+/, '');
+  if (!normalized || normalized.startsWith('..') || normalized.includes('/../') || normalized === '..') return '';
+  return normalized;
+}
+
+app.get('/api/runs/:workflowId/:runId/gitchain/tree', requireBearerToken, async (req, res) => {
+  const wf = safeSeg(req.params.workflowId);
+  const run = safeSeg(req.params.runId);
+  if (!wf || !run) { res.status(400).json({ error: 'invalid path segment' }); return; }
+  const root = path.join(RUNS_DIR, wf, run, '_gitchain_v2');
+  try {
+    const st = await fs.promises.stat(root);
+    if (!st.isDirectory()) throw new Error('not-a-dir');
+  } catch {
+    res.status(404).json({ error: 'gitchain export not found' });
+    return;
+  }
+  const files = await listFilesRecursive(root);
+  res.json({
+    workflowId: wf,
+    runId: run,
+    root: '_gitchain_v2',
+    fileCount: files.length,
+    files,
+  });
+});
+
+app.get('/api/runs/:workflowId/:runId/gitchain/file', requireBearerToken, async (req, res) => {
+  const wf = safeSeg(req.params.workflowId);
+  const run = safeSeg(req.params.runId);
+  const rel = safeRelativeArtifactPath(req.query.path);
+  if (!wf || !run || !rel) { res.status(400).json({ error: 'invalid path' }); return; }
+  const root = path.join(RUNS_DIR, wf, run, '_gitchain_v2');
+  const full = path.join(root, rel);
+  if (!full.startsWith(root + path.sep) && full !== root) {
+    res.status(400).json({ error: 'path escape blocked' });
+    return;
+  }
+  try {
+    const raw = await fs.promises.readFile(full, 'utf8');
+    const format = rel.endsWith('.jsonl') ? 'jsonl' : rel.endsWith('.json') ? 'json' : 'text';
+    let parsed: unknown = null;
+    try {
+      if (format === 'jsonl') {
+        parsed = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => JSON.parse(line));
+      } else if (format === 'json') {
+        parsed = JSON.parse(raw);
+      }
+    } catch {
+      parsed = null;
+    }
+    res.json({
+      workflowId: wf,
+      runId: run,
+      root: '_gitchain_v2',
+      path: rel,
+      format,
+      parsed,
+      raw,
+    });
+  } catch {
+    res.status(404).json({ error: 'gitchain file not found' });
+  }
 });
 
 // Workflow stage config — used by the Studio to prefill from a stage.
@@ -2214,62 +1937,18 @@ app.use('/design-system', express.static(path.join(UI_DIR, 'design-system')));
 // jeder UI-Console.
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
 app.get('/', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
-
-// ── Mandanten-Surface (/m/*) ──────────────────────────────────────────
-// HTML-Routen für die Mandanten-Surface. Auth-Logik (Session-Cookie) wird
-// in den jeweiligen API-Endpoints geprüft, die /m-*.html-Files selbst sind
-// statisch und führen den eigenen Auth-Probe-Call (/api/m/me) durch.
-// Siehe docs/MANDANTEN_WORKSPACE.md.
-app.get('/m/login', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-login.html')));
-app.get('/m/dashboard', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-dashboard.html')));
-app.get('/m/case/:caseId', (_req, res) => res.sendFile(path.join(UI_DIR, 'm-case.html')));
-app.get('/onboarding-wizard.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'onboarding-wizard.html')));
-
-// ── Dev-Surface (Sturm-internal) ──────────────────────────────────────
-// Diese Seiten sind Dev-Tools und sollten in Produktion hinter Bearer
-// liegen. `requireBearerToken` ist no-op solange STURM_BEARER_TOKEN unset.
-app.get('/pipeline.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
-app.get('/designer.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));
+app.get('/pipeline.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'pipeline.html')));
+app.get('/designer.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'designer.html')));
 app.get('/index.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'index.html')));
-app.get('/anwendungen.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
-app.get('/steuerfall.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
-app.get('/orchestrator', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
-app.get('/orchestrator.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
+app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwendungen.html')));
+app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
+app.get('/orchestrator', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
+app.get('/orchestrator.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
 app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
 app.get('/ctx-demo.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-demo.html')));
-app.get('/studio-ocr.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
-app.get('/workspaces.html', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, 'workspaces.html')));
-app.get('/fleet', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
-app.get('/api/fleet/data', requireBearerToken, (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
-
-// Block dev HTML files via the static catch-all when a session cookie is
-// present (Mandanten-Modus). Bearer-Aufrufe und sessionlose Public-Calls
-// (ctx-demo.html, abrechnung.html, m-*.html) gehen durch.
-const DEV_ONLY_HTML = new Set([
-  'anwendungen.html', 'pipeline.html', 'designer.html', 'studio-ocr.html',
-  'workspaces.html', 'steuerfall.html', 'orchestrator.html', '0711-fleet.html',
-  'document.html',
-]);
-app.use((req, res, next) => {
-  if (req.method !== 'GET') return next();
-  const file = req.path.replace(/^\//, '');
-  if (!DEV_ONLY_HTML.has(file)) return next();
-  const hasBearer = (req.headers['authorization'] ?? '').toString().toLowerCase().startsWith('bearer ');
-  if (hasBearer) return next();
-  const session = (req as Request & { sturmSession?: unknown }).sturmSession;
-  if (session) {
-    // Mandant — explizit blockieren
-    return res.status(403).type('text/html').send(
-      '<!doctype html><html><body style="font-family:system-ui;max-width:480px;margin:80px auto;padding:0 20px">'
-      + '<h1 style="font-size:20px">403 — kein Zugriff</h1>'
-      + '<p>Diese Seite ist nicht für Mandanten zugänglich.</p>'
-      + '<p><a href="/m/dashboard">Zurück zum Dashboard</a></p>'
-      + '</body></html>',
-    );
-  }
-  return next();
-});
-
+app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
+app.get('/fleet', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
+app.get('/api/fleet/data', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
 app.use(express.static(UI_DIR));
 
 // Docs: /docs/WORKFLOW_TEMPLATE.md direkt ausliefern (plain text)

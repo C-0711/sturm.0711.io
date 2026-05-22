@@ -1,0 +1,128 @@
+[
+  {
+    "module": "altersentlastungsbetrag_24a",
+    "formula": "altersentlastungs_berechnet",
+    "field": "altersentlastungs_prozent",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "anlage_aus",
+    "formula": "anlage_aus_einkuenfte",
+    "field": "foreign_tax_credit",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "anlage_kap",
+    "formula": "church_tax_capital",
+    "field": "abgeltungsteuer",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "tax_saved_by_freibetrag",
+    "field": "betreuungsfreibetrag",
+    "resolver_kind": "parameter",
+    "db_value": "2928.0000"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "tax_saved_by_freibetrag",
+    "field": "kinderfreibetrag",
+    "resolver_kind": "parameter",
+    "db_value": "6612.0000"
+  },
+  {
+    "module": "anlage_l",
+    "formula": "anlage_l_einkuenfte",
+    "field": "agricultural_afa",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "anlage_l",
+    "formula": "anlage_l_einkuenfte",
+    "field": "eu_agricultural_subsidies",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "anlage_r",
+    "formula": "versorgung_steuerfrei_total",
+    "field": "versorgungsfreibetrag_berechnet",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "anlage_v",
+    "formula": "anlage_v_einkuenfte",
+    "field": "werbungskosten_rental",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "aussergewoehnliche_33",
+    "formula": "aussergewoehnliche_33_total",
+    "field": "disaster_damage_deduction",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "aussergewoehnliche_33",
+    "formula": "aussergewoehnliche_33_total",
+    "field": "medical_expenses_deduction",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "kirchensteuer",
+    "formula": "kirchensteuer_berechnet",
+    "field": "kirchensteuer_bemessungsgrundlage",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "kleinunternehmer_ust",
+    "formula": "is_kleinunternehmer",
+    "field": "kleinunternehmer_threshold",
+    "resolver_kind": "derived",
+    "db_value": null
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone3_y",
+    "field": "Z3_START",
+    "resolver_kind": "parameter",
+    "db_value": "17006.0000"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone4_tax",
+    "field": "Z4_K",
+    "resolver_kind": "parameter",
+    "db_value": "10602.1300"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone4_tax",
+    "field": "Z4_RATE",
+    "resolver_kind": "parameter",
+    "db_value": "0.4200"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone5_tax",
+    "field": "Z5_K",
+    "resolver_kind": "parameter",
+    "db_value": "18936.8800"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone5_tax",
+    "field": "Z5_RATE",
+    "resolver_kind": "parameter",
+    "db_value": "0.4500"
+  }
+]

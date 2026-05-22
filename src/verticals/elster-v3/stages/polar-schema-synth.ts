@@ -24,12 +24,26 @@ import { greedySetCover, type ECodeCandidate, type SectionRef } from '../lib/set
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+interface AtomMetadata {
+  anlage?: string;
+  datentyp?: string; // 'currency' | 'date' | 'string' | …
+  pflicht?: boolean;
+  vordruckzeile?: string;
+  drucktext?: string;
+  formatRegex?: string;
+  formatkennzeichen?: string; // 'N' (numeric) | 'D' (date) | 'T' (text) | …
+  maxLaenge?: number;
+  minLaenge?: number;
+  kontextPaths?: string[];
+}
+
 interface Atom {
   atom_id: string;
   field_name: string; // = eCode (z.B. "E2001203")
-  value: string; // BMF-Bezeichnung (z.B. "Krankenversicherungsbeitrag")
-  citation_section: string; // z.B. "Anlage Vorsorge - Z.11"
+  value: string; // BMF-Bezeichnung
+  citation_section: string; // z.B. "VOR - Felder"
   value_type: string;
+  metadata?: AtomMetadata;
 }
 
 interface PflichtAtomsMap {
@@ -57,10 +71,10 @@ interface PolarSynthInput {
 interface PolarSynthOutput {
   doc_class: string;
   anlage_hints: string[];
-  sections: { id: string; label: string; ocr_excerpt: string }[];
+  sections: { id: string; label: string; ocr_excerpt: string; ocr_full: string }[];
   ecodes_required: string[];
   ecodes_optional: string[];
-  ecode_descriptions: Record<string, { value: string; anlage: string; value_type: string }>;
+  ecode_descriptions: Record<string, { value: string; anlage: string; value_type: string; metadata?: AtomMetadata }>;
   /** Cosinus-Score pro eCode (max ueber alle Sektions-Treffer) — fuer downstream Critic. */
   ecode_scores: Record<string, number>;
   type_hints: Record<string, 'geldbetrag' | 'datum' | 'string' | 'integer' | 'idnr' | 'steuernummer'>;
@@ -183,10 +197,113 @@ function loadPflichtAtoms(): PflichtAtomsMap {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section-Splitter (v1: paragraph-basiert)
+// Section-Splitter — zwei Modi:
+//   1. HTML-Input (von mistral-structure): jedes <section>…</section> ist eine
+//      Polar-Section. Sub-Sections (z.B. Person-Personen innerhalb stammdaten)
+//      werden flach gemacht.
+//   2. Rohes OCR-Markdown (Fallback): paragraph-split nach \n\s*\n.
 // ─────────────────────────────────────────────────────────────────────────────
 
+function isHtmlInput(text: string): boolean {
+  return /^\s*<section\b/i.test(text);
+}
+
+interface ParsedHtmlSection {
+  id: string;
+  label: string;
+  fullText: string;
+}
+
+function splitHtmlSections(html: string): ParsedHtmlSection[] {
+  const out: ParsedHtmlSection[] = [];
+  // Find all <section …>…</section> blocks (depth-aware).
+  let pos = 0;
+  let idx = 0;
+  while (pos < html.length) {
+    const m = html.slice(pos).match(/<section\b([^>]*)>/);
+    if (!m || m.index === undefined) break;
+    const startAt = pos + m.index;
+    const openLen = m[0].length;
+    // depth-walk to matching close
+    let depth = 1;
+    let cursor = startAt + openLen;
+    const tagRe = /<\/?section\b[^>]*>/g;
+    tagRe.lastIndex = cursor;
+    while (depth > 0) {
+      const t = tagRe.exec(html);
+      if (!t) break;
+      if (t[0].startsWith('</')) depth--;
+      else depth++;
+      cursor = t.index + t[0].length;
+    }
+    const block = html.slice(startAt, cursor);
+    pos = cursor;
+
+    // Wenn der Block nested <section>-Children hat, jedes Child wird eigene Section.
+    const innerContent = block
+      .replace(/^<section\b[^>]*>/, '')
+      .replace(/<\/section>$/, '');
+    const innerRe = /<section\b([^>]*)>([\s\S]*?)<\/section>/g;
+    const children: { tag: string; attrs: string; body: string }[] = [];
+    let cm: RegExpExecArray | null;
+    while ((cm = innerRe.exec(innerContent)) !== null) {
+      children.push({ tag: cm[0], attrs: cm[1], body: cm[2] });
+    }
+
+    if (children.length === 0) {
+      // Flache Section: nur Felder
+      const label = makeLabel(block);
+      out.push({ id: `s${++idx}`, label, fullText: textOfSection(block) });
+    } else {
+      // Parent-Anteil ohne nested-Kinder + jedes Kind als eigene Section
+      const flatInner = innerContent.replace(/<section\b[^>]*>[\s\S]*?<\/section>/g, '');
+      if (flatInner.trim()) {
+        out.push({ id: `s${++idx}`, label: makeLabel(m[0] + flatInner + '</section>'), fullText: textOfSection(flatInner) });
+      }
+      for (const c of children) {
+        out.push({ id: `s${++idx}`, label: makeLabel(c.tag), fullText: textOfSection(c.body) });
+      }
+    }
+  }
+  return out;
+}
+
+function makeLabel(block: string): string {
+  // First <section>-attrs als Label (z.B. "datensatz block=1")
+  const m = block.match(/<section\b([^>]*)>/);
+  if (!m) return block.slice(0, 80);
+  const attrs = m[1].replace(/\s+/g, ' ').trim();
+  return attrs.slice(0, 80);
+}
+
+function textOfSection(body: string): string {
+  // Voll-Text-Repraesentation der Section: alle <field>-Werte + Drucktext-Labels
+  // joined als "key: value" Pairs, plus rohe <note>-Texte.
+  // Das ist was Polar embedded — und es enthaelt sowohl Label als auch Wert,
+  // semantisch nahe an dem was im Drucktext steht.
+  const parts: string[] = [];
+  const fieldRe = /<field\b([^>]*)>([\s\S]*?)<\/field>/g;
+  let m: RegExpExecArray | null;
+  while ((m = fieldRe.exec(body)) !== null) {
+    const attrs: Record<string,string> = {};
+    const ar = /(\w+)\s*=\s*"([^"]*)"/g;
+    let a: RegExpExecArray | null;
+    while ((a = ar.exec(m[1])) !== null) attrs[a[1]] = a[2];
+    parts.push(`${attrs.key ?? '?'}: ${m[2].trim()}`);
+  }
+  const noteRe = /<note\b[^>]*>([\s\S]*?)<\/note>/g;
+  while ((m = noteRe.exec(body)) !== null) {
+    parts.push(`note: ${m[1].trim()}`);
+  }
+  return parts.join('\n');
+}
+
 function splitIntoSections(ocrText: string, minLen: number): SectionRef[] {
+  if (isHtmlInput(ocrText)) {
+    const parsed = splitHtmlSections(ocrText);
+    return parsed.map((p) => ({ id: p.id, label: p.label }));
+  }
+  // Fallback: rohes OCR-Markdown
   const blocks = ocrText
     .split(/\n\s*\n/g)
     .map((b) => b.trim())
@@ -201,6 +318,10 @@ function splitIntoSections(ocrText: string, minLen: number): SectionRef[] {
 }
 
 function sectionText(ocrText: string, sectionIndex: number, minLen: number): string {
+  if (isHtmlInput(ocrText)) {
+    const parsed = splitHtmlSections(ocrText);
+    return parsed[sectionIndex]?.fullText ?? '';
+  }
   const blocks = ocrText
     .split(/\n\s*\n/g)
     .map((b) => b.trim())
@@ -414,6 +535,7 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
         value: atom.value,
         anlage: atom.citation_section,
         value_type: atom.value_type,
+        metadata: atom.metadata,
       };
       typeHints[ec] = inferType(atom);
       // Score = best cosinus across sections for this eCode (Pflicht atoms may
@@ -421,11 +543,17 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
       ecodeScores[ec] = candidatesByEcode.get(ec)?.score ?? 0;
     }
 
-    const sectionExcerpts = sections.map((s, i) => ({
-      id: s.id,
-      label: s.label ?? `Section ${i + 1}`,
-      ocr_excerpt: sectionText(input.ocrText, i, minSectionLength).slice(0, 280),
-    }));
+    // sections-Output: voller Section-Text fuer downstream (Tier-1 etc.) und
+    // ein kurzer Excerpt fuer Logs/UI separat.
+    const sectionOutput = sections.map((s, i) => {
+      const fullText = sectionText(input.ocrText, i, minSectionLength);
+      return {
+        id: s.id,
+        label: s.label ?? `Section ${i + 1}`,
+        ocr_excerpt: fullText.slice(0, 280), // for display
+        ocr_full: fullText,                  // for value extraction
+      };
+    });
 
     // Coverage-Stats: jetzt bezogen auf die Set-Cover-Min-Cover-Pfad (informativ),
     // nicht auf die "alles >=threshold"-Menge.
@@ -436,7 +564,7 @@ export const polarSchemaSynthStage = defineStage<PolarSynthInput, PolarSynthOutp
     return {
       doc_class: input.docClass,
       anlage_hints: anlagen,
-      sections: sectionExcerpts,
+      sections: sectionOutput,
       ecodes_required: ecodesRequired,
       ecodes_optional: ecodesOptional,
       ecode_descriptions: ecodeDescriptions,

@@ -202,6 +202,7 @@ export async function recordEagerIndikation(
     anlagen: string[];
     belegtyp: string | null;
     wichtige_werte: Array<{ label: string; value: string }>;
+    steuerjahr?: number | null;
     ms: number;
     at: string;
   },

@@ -1,0 +1,200 @@
+[
+  {
+    "module": "altersentlastungsbetrag_24a",
+    "formula": "altersentlastungs_berechnet",
+    "field": "altersentlastungs_prozent",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_g",
+    "formula": "anlage_g_einkuenfte",
+    "field": "business_afa_property",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_g",
+    "formula": "anlage_g_einkuenfte",
+    "field": "business_operating_expenses",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_g",
+    "formula": "anlage_g_einkuenfte",
+    "field": "iab_deduction",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_g",
+    "formula": "anlage_g_einkuenfte",
+    "field": "sonder_afa",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "betreuungsfreibetrag_total",
+    "field": "betreuungsfreibetrag",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "kinderfreibetrag_total",
+    "field": "kinderfreibetrag",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "kinder_und_betreuungsfreibetrag",
+    "field": "betreuungsfreibetrag",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "kinder_und_betreuungsfreibetrag",
+    "field": "kinderfreibetrag",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "tax_saved_by_freibetrag",
+    "field": "betreuungsfreibetrag",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "anlage_kind",
+    "formula": "tax_saved_by_freibetrag",
+    "field": "kinderfreibetrag",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "anlage_l",
+    "formula": "anlage_l_einkuenfte",
+    "field": "agricultural_afa",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_l",
+    "formula": "anlage_l_einkuenfte",
+    "field": "eu_agricultural_subsidies",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_r",
+    "formula": "versorgung_steuerfrei_total",
+    "field": "versorgungsfreibetrag_berechnet",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_s",
+    "formula": "anlage_s_einkuenfte",
+    "field": "business_travel_expenses",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_s",
+    "formula": "anlage_s_einkuenfte",
+    "field": "freelance_afa_assets",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_s",
+    "formula": "anlage_s_einkuenfte",
+    "field": "freelance_operating_expenses",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_s",
+    "formula": "anlage_s_einkuenfte",
+    "field": "home_office_deduction",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_s",
+    "formula": "anlage_s_einkuenfte",
+    "field": "vehicle_expenses_business",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "anlage_v",
+    "formula": "anlage_v_einkuenfte",
+    "field": "werbungskosten_rental",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "arbeitnehmer_sparzulage",
+    "formula": "sparzulage_vwl",
+    "field": "sparzulage_rate_vwl",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "aussergewoehnliche_33",
+    "formula": "aussergewoehnliche_33_total",
+    "field": "disaster_damage_deduction",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "aussergewoehnliche_33",
+    "formula": "aussergewoehnliche_33_total",
+    "field": "medical_expenses_deduction",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "aussergewoehnliche_33",
+    "formula": "medical_expenses_deduction",
+    "field": "zumutbare_belastung_threshold",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "energie_35c",
+    "formula": "energie_35c_total",
+    "field": "energie_advisor_credit",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "kirchensteuer",
+    "formula": "kirchensteuer_berechnet",
+    "field": "kirchensteuer_bemessungsgrundlage",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "kirchensteuer",
+    "formula": "kirchensteuer_nachzahlung_erstattung",
+    "field": "kirchensteuer_festgesetzt",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "kleinunternehmer_ust",
+    "formula": "is_kleinunternehmer",
+    "field": "kleinunternehmer_threshold",
+    "kind": "derived_formula_output"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone3_y",
+    "field": "Z3_START",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone4_tax",
+    "field": "Z4_K",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone4_tax",
+    "field": "Z4_RATE",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone5_tax",
+    "field": "Z5_K",
+    "kind": "parameter_or_threshold"
+  },
+  {
+    "module": "tarif_32a",
+    "formula": "zone5_tax",
+    "field": "Z5_RATE",
+    "kind": "parameter_or_threshold"
+  }
+]

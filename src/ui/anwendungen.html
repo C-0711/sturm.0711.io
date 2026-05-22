@@ -908,6 +908,14 @@
 
     function runKey(appId, caseId, runId) { return `${appId}|${caseId}|${runId}`; }
 
+    function sichtbareKennzahlen(d) {
+      if (d && typeof d.fieldsExtracted === 'number' && d.fieldsExtracted > 0) return d.fieldsExtracted;
+      const werte = d && d.indikation && Array.isArray(d.indikation.wichtige_werte)
+        ? d.indikation.wichtige_werte.filter(v => v && v.label && v.value)
+        : [];
+      return werte.length;
+    }
+
     function docIsInFlight(d) {
       // No fieldsExtracted yet AND we have a runId we can poll for.
       return !!d && !!d.runId && (typeof d.fieldsExtracted !== 'number');
@@ -942,7 +950,7 @@
       const hasAnyBreakdown = docs.some(d => d.trustBreakdown);
       const rows = docs.map(d => {
         const tb = d.trustBreakdown || { high: 0, medium: 0, suspicious: 0, low: 0 };
-        const fields = typeof d.fieldsExtracted === 'number' ? d.fieldsExtracted : 0;
+        const fields = sichtbareKennzahlen(d);
         const anlagen = Array.isArray(d.anlagen) && d.anlagen.length
           ? `· ${escapeHtml(d.anlagen.join(', '))}`
           : '';
