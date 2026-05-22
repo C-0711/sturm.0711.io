@@ -1,21 +1,31 @@
 # STURM — Workflow-Engine CI
 #
-# Builds the Docker image and pushes to the GitLab container registry.
-# Consumed by ctax/ctax-manifests (overlays/{dev,test}/kustomization.yaml).
+# Builds the Docker image and pushes to the GitLab container registry,
+# then (on main) bumps the sha tag in ctax/ctax-manifests/overlays/dev/
+# so Flux deploys the new build automatically.
 #
 # Tag scheme:
 #   any commit            → :sha-<short>
 #                         + :<branch_slug>-sha-<short>
 #   main branch           → :main-dev
-#   feat/polar-turbo-gemma → :dev + :polar-dev   (= what dev cluster pulls)
+#   feat/polar-turbo-gemma → :dev + :polar-dev   (legacy, kept for parity)
 #   git tag               → :<tag>
+#
+# Required CI/CD variables (project- or 0711-group-level):
+#   MANIFESTS_DEPLOY_KEY  — SSH private key (File-type var) with write
+#                           access to ctax/ctax-manifests. Same key used
+#                           by ctaxv1 and cb-chat-ctax. See
+#                           ctax-manifests/BUILD_STRATEGY.md.
 
 stages:
   - build
+  - deploy
 
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
+  MANIFESTS_REPO: ssh://git@gitlab.mediacockpit.dev:2222/ctax/ctax-manifests.git
+  IMAGE_NAME: registry.gitlab.mediacockpit.dev/0711/sturm
 
 build:image:
   stage: build
@@ -62,3 +72,36 @@ build:image:
         docker tag "${IMG}:sha-${SHORT}" "${IMG}:${CI_COMMIT_TAG}"
         docker push "${IMG}:${CI_COMMIT_TAG}"
       fi
+
+# ─────────────────────────────────────────────────────────────────────────
+# Stage: deploy — bump sha tag in ctax-manifests/overlays/dev (auto on main)
+# Mirrors the pattern used by ctax/cb-chat-ctax and ctax/ctaxv1.
+# ─────────────────────────────────────────────────────────────────────────
+
+deploy-dev:
+  stage: deploy
+  image: registry.mediacockpit.dev/public/docker-alpine-wget:latest
+  needs: [build:image]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  environment:
+    name: dev
+    url: https://ctax-dev.internal.infra.bertsch.io
+  before_script:
+    - eval $(ssh-agent -s)
+    - chmod 600 "$MANIFESTS_DEPLOY_KEY"
+    - ssh-add "$MANIFESTS_DEPLOY_KEY"
+    - mkdir -p ~/.ssh
+    - ssh-keyscan -p 2222 gitlab.mediacockpit.dev >> ~/.ssh/known_hosts
+    - git config --global user.email "ci@gitlab.mediacockpit.dev"
+    - git config --global user.name "GitLab CI (0711/sturm)"
+  script:
+    - |
+      git clone "$MANIFESTS_REPO" ctax-manifests
+      cd ctax-manifests
+      export IMAGE_TAG="sha-${CI_COMMIT_SHORT_SHA}"
+      export TARGET="${IMAGE_NAME}"
+      yq -i '(.images[] | select(.name == env(TARGET))).newTag = env(IMAGE_TAG)' overlays/dev/kustomization.yaml
+      git diff --quiet && echo "No image changes -- skipping commit" && exit 0
+      git commit -am "ci: deploy sturm ${IMAGE_TAG} to dev"
+      git push
