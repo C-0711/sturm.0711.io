@@ -65,7 +65,7 @@ import { startUploadSweep } from './server/upload-sweep.ts';
 import { analyzeFastPdfUpload, materializeFastCaseFacts, runFastAudit } from './server/fast-path.ts';
 import { cold_preprocess_stub_freistehend, einsekunde_pipeline, einsekunde_pipeline_freistehend } from './server/einsekunde.ts';
 import { getEmbedCacheStats, clearEmbedCache } from './lib/gemma-embed.ts';
-import { getLane1CacheStats, clearLane1Cache, getStufe1CacheStats, clearStufe1Cache } from './server/einsekunde.ts';
+import { getLane1CacheStats, clearLane1Cache, getStufe1CacheStats, clearStufe1Cache, getTextlayerCacheStats, clearTextlayerCache } from './server/einsekunde.ts';
 import { registerVorjahresUploadEndpoint } from './server/vorjahres-upload-handler.ts';
 import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
 import {
@@ -262,13 +262,15 @@ app.get('/api/quantum/cache-stats', (_req, res) => {
     embed_cache: getEmbedCacheStats(),
     lane1_cache: getLane1CacheStats(),
     stufe1_cache: getStufe1CacheStats(),
+    textlayer_cache: getTextlayerCacheStats(),
   });
 });
 app.post('/api/quantum/cache-clear', (_req, res) => {
   clearEmbedCache();
   clearLane1Cache();
   clearStufe1Cache();
-  res.json({ ok: true, cleared: ['embed', 'lane1', 'stufe1'] });
+  clearTextlayerCache();
+  res.json({ ok: true, cleared: ['embed', 'lane1', 'stufe1', 'textlayer'] });
 });
 
 app.get('/api/workflows', (_req, res) => {

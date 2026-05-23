@@ -807,6 +807,152 @@ const LANE1_CACHE_ENABLED = process.env.LANE1_CACHE_ENABLED !== '0';
 const LANE1_CACHE_CAPACITY = Number(process.env.LANE1_CACHE_CAPACITY ?? '5000') || 5_000;
 const lane1_cache = new Lane1LRU(LANE1_CACHE_CAPACITY);
 
+// ───── TIER C.3: Textlayer file-hash cache ──────────────────────
+//
+// Cache key: sha1(file_bytes).slice(0, 24)
+// Cache val: PdfTextLayerOutput (deep-clone via JSON-roundtrip)
+//
+// Why deterministic: pdftotext is a pure function of the input PDF bytes.
+// Same bytes -> same text-layer extraction. Always.
+//
+// Use case: same PDF uploaded twice (re-test, duplicate, retry) -> skip
+// pdftotext (12ms) entirely. Hit-rate in production depends on user behavior.
+// Toggle: TEXTLAYER_CACHE_ENABLED=0 disables.
+
+interface TextlayerCacheEntry {
+  out: any;  // PdfTextLayerOutput
+  hits: number;
+}
+
+class TextlayerLRU {
+  private map = new Map<string, TextlayerCacheEntry>();
+  private capacity: number;
+  hits = 0;
+  misses = 0;
+  evictions = 0;
+
+  constructor(capacity = 500) {
+    this.capacity = capacity;
+  }
+
+  get(key: string): any | undefined {
+    const entry = this.map.get(key);
+    if (!entry) {
+      this.misses++;
+      return undefined;
+    }
+    this.map.delete(key);
+    this.map.set(key, entry);
+    entry.hits++;
+    this.hits++;
+    return JSON.parse(JSON.stringify(entry.out));
+  }
+
+  set(key: string, out: any): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.capacity) {
+      const oldest = this.map.keys().next().value;
+      if (oldest !== undefined) {
+        this.map.delete(oldest);
+        this.evictions++;
+      }
+    }
+    this.map.set(key, {
+      out: JSON.parse(JSON.stringify(out)),
+      hits: 0,
+    });
+  }
+
+  stats() {
+    return {
+      size: this.map.size,
+      capacity: this.capacity,
+      hits: this.hits,
+      misses: this.misses,
+      evictions: this.evictions,
+      hit_rate: this.hits + this.misses > 0
+        ? this.hits / (this.hits + this.misses)
+        : 0,
+    };
+  }
+
+  clear() {
+    this.map.clear();
+    this.hits = 0;
+    this.misses = 0;
+    this.evictions = 0;
+  }
+}
+
+const TEXTLAYER_CACHE_ENABLED = process.env.TEXTLAYER_CACHE_ENABLED !== '0';
+const TEXTLAYER_CACHE_CAPACITY = Number(process.env.TEXTLAYER_CACHE_CAPACITY ?? '500') || 500;
+const textlayer_cache = new TextlayerLRU(TEXTLAYER_CACHE_CAPACITY);
+
+export function getTextlayerCacheStats() {
+  return textlayer_cache.stats();
+}
+
+export function clearTextlayerCache() {
+  textlayer_cache.clear();
+}
+
+async function textlayer_extract_cached(
+  filePath: string,
+  filename: string,
+  runIdPrefix: string,
+  workflowId: string,
+): Promise<any> {
+  if (TEXTLAYER_CACHE_ENABLED) {
+    // Hash the file bytes. fs.readFile is fast for typical tax PDFs (50-500 KB).
+    const bytes = await fs.readFile(filePath);
+    const file_hash = createHash('sha1').update(bytes).digest('hex').slice(0, 24);
+
+    const cached = textlayer_cache.get(file_hash);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    // Cache miss: run the real stage
+    const ctrl = new AbortController();
+    const out = await pdfTextLayerStage.run(
+      { filePath, filename },
+      {
+        runId: `${runIdPrefix}-${Date.now().toString(36)}`,
+        workflowId,
+        stageId: 'extract/pdf-text-layer',
+        config: { layout: true },
+        logger: stiller_logger,
+        artifacts: stille_artefakte,
+        emit() {},
+        signal: ctrl.signal,
+        results: {},
+        tools: {} as never,
+      },
+    );
+    textlayer_cache.set(file_hash, out);
+    return out;
+  }
+
+  // Cache disabled: pass-through
+  const ctrl = new AbortController();
+  return pdfTextLayerStage.run(
+    { filePath, filename },
+    {
+      runId: `${runIdPrefix}-${Date.now().toString(36)}`,
+      workflowId,
+      stageId: 'extract/pdf-text-layer',
+      config: { layout: true },
+      logger: stiller_logger,
+      artifacts: stille_artefakte,
+      emit() {},
+      signal: ctrl.signal,
+      results: {},
+      tools: {} as never,
+    },
+  );
+}
+
 export function getLane1CacheStats() {
   return lane1_cache.stats();
 }
@@ -930,21 +1076,11 @@ export async function einsekunde_pipeline(
 
   // ─ Stufe 1: Textlayer ─
   const t1 = performance.now();
-  const ctrl = new AbortController();
-  const textlayer_out = await pdfTextLayerStage.run(
-    { filePath: quell_pfad, filename: doc.filename },
-    {
-      runId: `einsek-${Date.now().toString(36)}`,
-      workflowId: 'einsekunde',
-      stageId: 'extract/pdf-text-layer',
-      config: { layout: true },
-      logger: stiller_logger,
-      artifacts: stille_artefakte,
-      emit() {},
-      signal: ctrl.signal,
-      results: {},
-      tools: {} as never,
-    },
+  const textlayer_out = await textlayer_extract_cached(
+    quell_pfad,
+    doc.filename,
+    'einsek',
+    'einsekunde',
   );
   const ms_textlayer = performance.now() - t1;
   const voller_text = textlayer_out.text ?? '';
@@ -1159,21 +1295,11 @@ export async function einsekunde_pipeline_freistehend(
     hat_textlayer = true;
     ocr_genutzt = true;
   } else {
-    const ctrl = new AbortController();
-    const textlayer_out = await pdfTextLayerStage.run(
-      { filePath: pdf_pfad, filename: dateiname },
-      {
-        runId: `freistehend-${Date.now().toString(36)}`,
-        workflowId: 'einsekunde-freistehend',
-        stageId: 'extract/pdf-text-layer',
-        config: { layout: true },
-        logger: stiller_logger,
-        artifacts: stille_artefakte,
-        emit() {},
-        signal: ctrl.signal,
-        results: {},
-        tools: {} as never,
-      },
+    const textlayer_out = await textlayer_extract_cached(
+      pdf_pfad,
+      dateiname,
+      'freistehend',
+      'einsekunde-freistehend',
     );
     voller_text = textlayer_out.text ?? '';
     seiten_count = textlayer_out.pages.length;
