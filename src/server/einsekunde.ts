@@ -384,22 +384,36 @@ function vorverarbeitung_hinweis(kontext: BelegKontext, hat_textlayer: boolean, 
 }
 
 // ───── Stufe 4: Stufe-1-Treffer via Matmul-Sidecar ──────────────
+// TIER-D instrumentation: stores last-run sub-timings of stufe1
+export const stufe1_sub_timings: Record<string, number> = {};
+
 async function stufe1_treffer_holen(
   kennzahlen: Kennzahl[],
   vektoren: Float32Array[],
   atome: any[],
   kontext: BelegKontext,
 ): Promise<Array<{ kennzahl: Kennzahl; top: any[] }>> {
+  const t_serialize = performance.now();
   const anfragen_payload = vektoren.map(v => Array.from(v));
+  const body = JSON.stringify({ queries: anfragen_payload, top_k: 12 });
+  stufe1_sub_timings.serialize_ms = performance.now() - t_serialize;
+  stufe1_sub_timings.payload_bytes = body.length;
+
+  const t_http = performance.now();
   const antwort = await fetch(MATMUL_SIDECAR_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ queries: anfragen_payload, top_k: 12 }),
+    body,
   });
   if (!antwort.ok) throw new Error(`matmul-sidecar HTTP ${antwort.status}`);
-  const daten = await antwort.json() as { topk: Array<Array<{ idx: number; score: number }>> };
+  stufe1_sub_timings.http_roundtrip_ms = performance.now() - t_http;
 
-  return kennzahlen.map((kz, i) => {
+  const t_parse = performance.now();
+  const daten = await antwort.json() as { topk: Array<Array<{ idx: number; score: number }>> };
+  stufe1_sub_timings.parse_ms = performance.now() - t_parse;
+
+  const t_postproc = performance.now();
+  const ergebnis = kennzahlen.map((kz, i) => {
     const query = schluessel_saeubern(String(kz.schluessel));
     const roh = (daten.topk[i] ?? []).map(t => {
       const atom = atome[t.idx] ?? {};
@@ -432,6 +446,8 @@ async function stufe1_treffer_holen(
     dedup.sort((a, b) => b.punktzahl - a.punktzahl);
     return { kennzahl: kz, top: dedup.slice(0, 5) };
   });
+  stufe1_sub_timings.postproc_ms = performance.now() - t_postproc;
+  return ergebnis;
 }
 
 
@@ -706,16 +722,23 @@ export async function einsekunde_pipeline(
   const t3 = performance.now();
   // Schlüssel säubern + KEIN formatQuery (asymmetric prompt verzerrt diesen Catalog,
   // empirisch verifiziert: RAW gewinnt in 4/4 getesteten Fällen).
+  const t3a = performance.now();
   const anfragen = kennzahlen.map(k => schluessel_saeubern(String(k.schluessel)));
+  const ms_saeubern = performance.now() - t3a;
+
+  const t3b = performance.now();
   const [vektoren, atome] = await Promise.all([
     embedBatch(anfragen),
     atome_laden(),
   ]);
+  const ms_embed_plus_atome = performance.now() - t3b;
   const ms_einbetten = performance.now() - t3;
 
   const t4 = performance.now();
   const treffer = await stufe1_treffer_holen(kennzahlen, vektoren, atome, belegkontext);
   const ms_stufe1 = performance.now() - t4;
+  // TIER-D: capture sub-timings (mutates global)
+  const stufe1_sub = { ...stufe1_sub_timings };
 
   // ─ Stufe 5: kanonische Felder aufbauen ─
   const t5 = performance.now();
@@ -768,6 +791,16 @@ export async function einsekunde_pipeline(
       kanonisch_aufbauen: ms_kanonisch,
       lane1: ms_lane1,
     },
+    // TIER-D detailed sub-timings (instrumentation; not part of stable API contract)
+    detailed_timings: {
+      stufe3_saeubern_ms: ms_saeubern,
+      stufe3_embed_plus_atome_ms: ms_embed_plus_atome,
+      stufe4_serialize_ms: stufe1_sub.serialize_ms,
+      stufe4_payload_bytes: stufe1_sub.payload_bytes,
+      stufe4_http_roundtrip_ms: stufe1_sub.http_roundtrip_ms,
+      stufe4_parse_ms: stufe1_sub.parse_ms,
+      stufe4_postproc_ms: stufe1_sub.postproc_ms,
+    } as any,
     textlayer: {
       seiten: seiten_count,
       zeichen: zeichen_count,
@@ -924,18 +957,23 @@ export async function einsekunde_pipeline_freistehend(
 
   // ─ Stufe 3+4: Einbetten + Matmul parallel mit Atom-Laden ─
   const t3 = performance.now();
-  // Schlüssel säubern + KEIN formatQuery (asymmetric prompt verzerrt diesen Catalog,
-  // empirisch verifiziert: RAW gewinnt in 4/4 getesteten Fällen).
+  const t3a = performance.now();
   const anfragen = kennzahlen.map(k => schluessel_saeubern(String(k.schluessel)));
+  const ms_saeubern = performance.now() - t3a;
+
+  const t3b = performance.now();
   const [vektoren, atome] = await Promise.all([
     embedBatch(anfragen),
     atome_laden(),
   ]);
+  const ms_embed_plus_atome = performance.now() - t3b;
   const ms_einbetten = performance.now() - t3;
 
   const t4 = performance.now();
   const treffer = await stufe1_treffer_holen(kennzahlen, vektoren, atome, belegkontext);
   const ms_stufe1 = performance.now() - t4;
+  // TIER-D: capture sub-timings
+  const stufe1_sub_freistehend = { ...stufe1_sub_timings };
 
   // ─ Stufe 5: kanonische Felder aufbauen ─
   const t5 = performance.now();
@@ -987,6 +1025,16 @@ export async function einsekunde_pipeline_freistehend(
       kanonisch_aufbauen: ms_kanonisch,
       lane1: ms_lane1,
     },
+    // TIER-D detailed sub-timings (instrumentation; not part of stable API contract)
+    detailed_timings: {
+      stufe3_saeubern_ms: ms_saeubern,
+      stufe3_embed_plus_atome_ms: ms_embed_plus_atome,
+      stufe4_serialize_ms: stufe1_sub_freistehend.serialize_ms,
+      stufe4_payload_bytes: stufe1_sub_freistehend.payload_bytes,
+      stufe4_http_roundtrip_ms: stufe1_sub_freistehend.http_roundtrip_ms,
+      stufe4_parse_ms: stufe1_sub_freistehend.parse_ms,
+      stufe4_postproc_ms: stufe1_sub_freistehend.postproc_ms,
+    } as any,
     textlayer: {
       seiten: seiten_count,
       zeichen: zeichen_count,
