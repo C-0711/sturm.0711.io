@@ -65,6 +65,106 @@ interface EmbedResponse {
   prompt_eval_count?: number;
 }
 
+// ───── TIER A.1: LRU cache für embed-aufrufe ────────────────────────────
+//
+// Cache key:  ${provider}:${model}:${dimensions}:sha1(normalized_text)
+// Cache val:  Float32Array (deep-clone on get/set to vermeiden caller-mutation)
+//
+// Normalize: trim + collapse whitespace + lowercase. ELSTER-kennzahl-namen
+// (z.B. "Bruttoarbeitslohn", "Werbungskosten") sind case-insensitive and
+// whitespace-tolerant in ihrer matching-semantik.
+//
+// Capacity:  10_000 entries × ~3 KB Float32Array (768 dim × 4 bytes) = ~30 MB
+// Toggle:    EMBED_CACHE_ENABLED=0 disabled cache (debugging/A-B testing)
+
+import { createHash } from 'node:crypto';
+
+interface CacheEntry {
+  vec: Float32Array;
+  hits: number;
+}
+
+class EmbedLRU {
+  private map = new Map<string, CacheEntry>();
+  private capacity: number;
+  hits = 0;
+  misses = 0;
+  evictions = 0;
+
+  constructor(capacity = 10_000) {
+    this.capacity = capacity;
+  }
+
+  get(key: string): Float32Array | undefined {
+    const entry = this.map.get(key);
+    if (!entry) {
+      this.misses++;
+      return undefined;
+    }
+    // Move-to-end for LRU recency
+    this.map.delete(key);
+    this.map.set(key, entry);
+    entry.hits++;
+    this.hits++;
+    // Return a defensive copy to prevent caller mutation
+    return new Float32Array(entry.vec);
+  }
+
+  set(key: string, vec: Float32Array): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.capacity) {
+      // Evict oldest (first inserted/least recently used)
+      const oldest = this.map.keys().next().value;
+      if (oldest !== undefined) {
+        this.map.delete(oldest);
+        this.evictions++;
+      }
+    }
+    // Store defensive copy so caller can't mutate it
+    this.map.set(key, { vec: new Float32Array(vec), hits: 0 });
+  }
+
+  stats() {
+    return {
+      size: this.map.size,
+      capacity: this.capacity,
+      hits: this.hits,
+      misses: this.misses,
+      evictions: this.evictions,
+      hit_rate: this.hits + this.misses > 0
+        ? this.hits / (this.hits + this.misses)
+        : 0,
+    };
+  }
+
+  clear() {
+    this.map.clear();
+    this.hits = 0;
+    this.misses = 0;
+    this.evictions = 0;
+  }
+}
+
+const CACHE_ENABLED = process.env.EMBED_CACHE_ENABLED !== '0';
+const CACHE_CAPACITY = Number(process.env.EMBED_CACHE_CAPACITY ?? '10000') || 10_000;
+const embed_cache = new EmbedLRU(CACHE_CAPACITY);
+
+export function getEmbedCacheStats() {
+  return embed_cache.stats();
+}
+
+export function clearEmbedCache() {
+  embed_cache.clear();
+}
+
+function cache_key(text: string, provider: string, model: string, dims: number | undefined): string {
+  // Normalize: trim, collapse whitespace, lowercase. Same as match-semantik.
+  const normalized = text.trim().replace(/\s+/g, ' ').toLowerCase();
+  const h = createHash('sha1').update(normalized).digest('hex').slice(0, 16);
+  return `${provider}:${model}:${dims ?? 'native'}:${h}`;
+}
+
 export async function embedBatch(
   texts: string[],
   opts: GemmaEmbedOptions = {},
@@ -73,9 +173,52 @@ export async function embedBatch(
   const provider = opts.provider ?? DEFAULT_PROVIDER;
   const url = opts.url ?? (provider === 'vllm' ? DEFAULT_VLLM_URL : DEFAULT_OLLAMA_URL);
   const model = opts.model ?? DEFAULT_MODEL;
-  return provider === 'vllm'
-    ? embedBatchVllm(texts, url, model, opts)
-    : embedBatchOllama(texts, url, model, opts);
+  const dims = opts.dimensions;
+
+  if (!CACHE_ENABLED) {
+    return provider === 'vllm'
+      ? embedBatchVllm(texts, url, model, opts)
+      : embedBatchOllama(texts, url, model, opts);
+  }
+
+  // Check cache for each text. Collect misses.
+  const results: (Float32Array | null)[] = new Array(texts.length).fill(null);
+  const miss_indices: number[] = [];
+  const miss_texts: string[] = [];
+  const miss_keys: string[] = [];
+
+  for (let i = 0; i < texts.length; i++) {
+    const key = cache_key(texts[i], provider, model, dims);
+    const cached = embed_cache.get(key);
+    if (cached) {
+      results[i] = cached;
+    } else {
+      miss_indices.push(i);
+      miss_texts.push(texts[i]);
+      miss_keys.push(key);
+    }
+  }
+
+  // If all hit, return early
+  if (miss_texts.length === 0) {
+    return results as Float32Array[];
+  }
+
+  // Embed only the misses
+  const fresh = provider === 'vllm'
+    ? await embedBatchVllm(miss_texts, url, model, opts)
+    : await embedBatchOllama(miss_texts, url, model, opts);
+
+  // Insert into cache + into result-slots
+  for (let i = 0; i < miss_indices.length; i++) {
+    const idx = miss_indices[i];
+    const key = miss_keys[i];
+    const vec = fresh[i];
+    embed_cache.set(key, vec);
+    results[idx] = vec;
+  }
+
+  return results as Float32Array[];
 }
 
 async function embedBatchVllm(
