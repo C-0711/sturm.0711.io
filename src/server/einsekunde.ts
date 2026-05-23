@@ -23,6 +23,7 @@
  *   - vLLM für Einbettungen (Standard: env VLLM_URL)
  */
 import * as fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { readFileSync as fs_readFileSync, statSync as fs_statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname as path_dirname } from 'node:path';
@@ -579,6 +580,140 @@ function bmf_params_aus_ecodes(
   return out;
 }
 
+// ───── TIER A.3: Lane-1 BMF result-cache ────────────────────────
+//
+// Lane-1 ist deterministisch gegeben (steuerjahr + bmf_params).
+// Selbe BMF-params -> selbes ESt-result. 100% safe to cache.
+//
+// Cache key: sha1(canonical-JSON(steuerjahr + bmf_params))
+// Cache val: EinsekundeAntwort['steuerergebnis'] (deep-clone on get/set)
+//
+// Toggle: LANE1_CACHE_ENABLED=0 disables
+
+interface Lane1CacheEntry {
+  result: any;
+  hits: number;
+}
+
+class Lane1LRU {
+  private map = new Map<string, Lane1CacheEntry>();
+  private capacity: number;
+  hits = 0;
+  misses = 0;
+  evictions = 0;
+
+  constructor(capacity = 5_000) {
+    this.capacity = capacity;
+  }
+
+  get(key: string): any | undefined {
+    const entry = this.map.get(key);
+    if (!entry) {
+      this.misses++;
+      return undefined;
+    }
+    this.map.delete(key);
+    this.map.set(key, entry);
+    entry.hits++;
+    this.hits++;
+    // Defensive copy via JSON-roundtrip
+    return JSON.parse(JSON.stringify(entry.result));
+  }
+
+  set(key: string, result: any): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.capacity) {
+      const oldest = this.map.keys().next().value;
+      if (oldest !== undefined) {
+        this.map.delete(oldest);
+        this.evictions++;
+      }
+    }
+    this.map.set(key, {
+      result: JSON.parse(JSON.stringify(result)),
+      hits: 0,
+    });
+  }
+
+  stats() {
+    return {
+      size: this.map.size,
+      capacity: this.capacity,
+      hits: this.hits,
+      misses: this.misses,
+      evictions: this.evictions,
+      hit_rate: this.hits + this.misses > 0
+        ? this.hits / (this.hits + this.misses)
+        : 0,
+    };
+  }
+
+  clear() {
+    this.map.clear();
+    this.hits = 0;
+    this.misses = 0;
+    this.evictions = 0;
+  }
+}
+
+const LANE1_CACHE_ENABLED = process.env.LANE1_CACHE_ENABLED !== '0';
+const LANE1_CACHE_CAPACITY = Number(process.env.LANE1_CACHE_CAPACITY ?? '5000') || 5_000;
+const lane1_cache = new Lane1LRU(LANE1_CACHE_CAPACITY);
+
+export function getLane1CacheStats() {
+  return lane1_cache.stats();
+}
+
+export function clearLane1Cache() {
+  lane1_cache.clear();
+}
+
+function canonical_json(obj: Record<string, any>): string {
+  // Sort keys for stable serialization (parameter order shouldn't change cache key)
+  const sorted_keys = Object.keys(obj).sort();
+  const out: Record<string, any> = {};
+  for (const k of sorted_keys) {
+    out[k] = obj[k];
+  }
+  return JSON.stringify(out);
+}
+
+async function _lane1_fetch_uncached(
+  parameter: Record<string, any>,
+): Promise<EinsekundeAntwort['steuerergebnis']> {
+  const antwort = await fetch(LANE1_BMF_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parameters: parameter }),
+  });
+  if (!antwort.ok) {
+    return {
+      zve: null, einkommensteuer: null, solidaritaetszuschlag: null,
+      gesamtsteuer: null, verwendete_rechner: null,
+      fehler: `lane1 HTTP ${antwort.status}`,
+    };
+  }
+  const ergebnis = await antwort.json() as any;
+  if (ergebnis?.fehler) {
+    return {
+      zve: null, einkommensteuer: null, solidaritaetszuschlag: null,
+      gesamtsteuer: null, verwendete_rechner: null,
+      fehler: String(ergebnis.fehler),
+    };
+  }
+  const daten = ergebnis?.calculation_result?.daten ?? {};
+  const orch = daten?.berechnungsdetails?.orchestrierung ?? {};
+  return {
+    zve: daten.zve ?? null,
+    einkommensteuer: daten.einkommensteuer ?? null,
+    solidaritaetszuschlag: daten.solidaritaetszuschlag ?? null,
+    gesamtsteuer: daten.gesamtsteuer ?? null,
+    verwendete_rechner: orch.ausgewaehlte_rechner ?? null,
+    fehler: null,
+  };
+}
+
 // ───── Stufe 6: Lane-1 BMF anstoßen ─────────────────────────────
 async function lane1_aufrufen(
   jahr: number,
@@ -608,36 +743,23 @@ async function lane1_aufrufen(
   }
 
   try {
-    const antwort = await fetch(LANE1_BMF_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parameters: parameter }),
-    });
-    if (!antwort.ok) {
-      return {
-        zve: null, einkommensteuer: null, solidaritaetszuschlag: null,
-        gesamtsteuer: null, verwendete_rechner: null,
-        fehler: `lane1 HTTP ${antwort.status}`,
-      };
+    // TIER A.3: cache lookup
+    if (LANE1_CACHE_ENABLED) {
+      const cache_key = createHash('sha1').update(canonical_json(parameter)).digest('hex').slice(0, 24);
+      const cached = lane1_cache.get(cache_key);
+      if (cached !== undefined) {
+        return cached;
+      }
+      // miss -> fetch + store
+      const result = await _lane1_fetch_uncached(parameter);
+      // Only cache successful results (don't cache HTTP errors)
+      if (result.fehler === null) {
+        lane1_cache.set(cache_key, result);
+      }
+      return result;
     }
-    const ergebnis = await antwort.json() as any;
-    if (ergebnis?.fehler) {
-      return {
-        zve: null, einkommensteuer: null, solidaritaetszuschlag: null,
-        gesamtsteuer: null, verwendete_rechner: null,
-        fehler: String(ergebnis.fehler),
-      };
-    }
-    const daten = ergebnis?.calculation_result?.daten ?? {};
-    const orch = daten?.berechnungsdetails?.orchestrierung ?? {};
-    return {
-      zve: daten.zve ?? null,
-      einkommensteuer: daten.einkommensteuer ?? null,
-      solidaritaetszuschlag: daten.solidaritaetszuschlag ?? null,
-      gesamtsteuer: daten.gesamtsteuer ?? null,
-      verwendete_rechner: orch.ausgewaehlte_rechner ?? null,
-      fehler: null,
-    };
+    // Cache disabled: pass-through
+    return await _lane1_fetch_uncached(parameter);
   } catch (e: any) {
     return {
       zve: null, einkommensteuer: null, solidaritaetszuschlag: null,

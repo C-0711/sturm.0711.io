@@ -65,6 +65,7 @@ import { startUploadSweep } from './server/upload-sweep.ts';
 import { analyzeFastPdfUpload, materializeFastCaseFacts, runFastAudit } from './server/fast-path.ts';
 import { cold_preprocess_stub_freistehend, einsekunde_pipeline, einsekunde_pipeline_freistehend } from './server/einsekunde.ts';
 import { getEmbedCacheStats, clearEmbedCache } from './lib/gemma-embed.ts';
+import { getLane1CacheStats, clearLane1Cache } from './server/einsekunde.ts';
 import { registerVorjahresUploadEndpoint } from './server/vorjahres-upload-handler.ts';
 import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
 import {
@@ -257,11 +258,15 @@ function summarizeWorkflow(def: WorkflowDef) {
 
 // TIER A.1: cache observability endpoints
 app.get('/api/quantum/cache-stats', (_req, res) => {
-  res.json({ embed_cache: getEmbedCacheStats() });
+  res.json({
+    embed_cache: getEmbedCacheStats(),
+    lane1_cache: getLane1CacheStats(),
+  });
 });
 app.post('/api/quantum/cache-clear', (_req, res) => {
   clearEmbedCache();
-  res.json({ ok: true, cleared: true });
+  clearLane1Cache();
+  res.json({ ok: true, cleared: ['embed', 'lane1'] });
 });
 
 app.get('/api/workflows', (_req, res) => {
