@@ -388,7 +388,153 @@ function vorverarbeitung_hinweis(kontext: BelegKontext, hat_textlayer: boolean, 
 // TIER-D instrumentation: stores last-run sub-timings of stufe1
 export const stufe1_sub_timings: Record<string, number> = {};
 
+// ───── TIER B.1: Stufe-1 result-cache ───────────────────────────
+//
+// Cache key: sha1(
+//   kennzahl_strings_sorted +
+//   kontext.klasse +
+//   kontext.docClass +
+//   sorted(kontext.bevorzugte_anlagen) +
+//   sorted(kontext.flags)
+// )
+//
+// Why deterministic: given the same kennzahl-strings (-> same embeddings,
+// already cached by A.1) and the same belegkontext, stufe1_treffer_holen
+// is a pure function of (vektoren, atome). Atoms are loaded-once. Vectors
+// are cache-deterministic. Output -> cache.
+//
+// Cache value: full ergebnis array (kennzahl + top: [...])
+// We store kennzahl as data, NOT reference, to keep cache portable across
+// different upload contexts (each upload has its own kennzahl-instances).
+
+interface Stufe1CacheEntry {
+  ergebnis: Array<{ kennzahl: Kennzahl; top: any[] }>;
+  hits: number;
+}
+
+class Stufe1LRU {
+  private map = new Map<string, Stufe1CacheEntry>();
+  private capacity: number;
+  hits = 0;
+  misses = 0;
+  evictions = 0;
+
+  constructor(capacity = 1_000) {
+    this.capacity = capacity;
+  }
+
+  get(key: string): Array<{ kennzahl: Kennzahl; top: any[] }> | undefined {
+    const entry = this.map.get(key);
+    if (!entry) {
+      this.misses++;
+      return undefined;
+    }
+    this.map.delete(key);
+    this.map.set(key, entry);
+    entry.hits++;
+    this.hits++;
+    return JSON.parse(JSON.stringify(entry.ergebnis));
+  }
+
+  set(key: string, ergebnis: Array<{ kennzahl: Kennzahl; top: any[] }>): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.capacity) {
+      const oldest = this.map.keys().next().value;
+      if (oldest !== undefined) {
+        this.map.delete(oldest);
+        this.evictions++;
+      }
+    }
+    this.map.set(key, {
+      ergebnis: JSON.parse(JSON.stringify(ergebnis)),
+      hits: 0,
+    });
+  }
+
+  stats() {
+    return {
+      size: this.map.size,
+      capacity: this.capacity,
+      hits: this.hits,
+      misses: this.misses,
+      evictions: this.evictions,
+      hit_rate: this.hits + this.misses > 0
+        ? this.hits / (this.hits + this.misses)
+        : 0,
+    };
+  }
+
+  clear() {
+    this.map.clear();
+    this.hits = 0;
+    this.misses = 0;
+    this.evictions = 0;
+  }
+}
+
+const STUFE1_CACHE_ENABLED = process.env.STUFE1_CACHE_ENABLED !== '0';
+const STUFE1_CACHE_CAPACITY = Number(process.env.STUFE1_CACHE_CAPACITY ?? '1000') || 1_000;
+const stufe1_cache = new Stufe1LRU(STUFE1_CACHE_CAPACITY);
+
+export function getStufe1CacheStats() {
+  return stufe1_cache.stats();
+}
+
+export function clearStufe1Cache() {
+  stufe1_cache.clear();
+}
+
+function stufe1_cache_key(
+  kennzahlen: Kennzahl[],
+  kontext: BelegKontext,
+): string {
+  // Normalize: kennzahl-strings sorted (order shouldn't matter for cache identity)
+  // We include kennzahl.wert too because direkte_ecode_vorgabe doesn't, but kennzahl
+  // matters for the output structure (kennzahl is in the output).
+  const keys_sorted = kennzahlen
+    .map(k => `${String(k.schluessel)}::${String(k.wert ?? '')}`)
+    .sort();
+  const anlagen_sorted = Array.from(kontext.bevorzugte_anlagen).sort();
+  const flags_sorted = Object.keys(kontext.flags ?? {}).sort()
+    .map(k => `${k}=${String((kontext.flags as any)[k])}`);
+  const composite = [
+    keys_sorted.join('|'),
+    kontext.klasse,
+    kontext.docClass,
+    anlagen_sorted.join(','),
+    flags_sorted.join(','),
+  ].join('::');
+  return createHash('sha1').update(composite).digest('hex').slice(0, 24);
+}
+
 async function stufe1_treffer_holen(
+  kennzahlen: Kennzahl[],
+  vektoren: Float32Array[],
+  atome: any[],
+  kontext: BelegKontext,
+): Promise<Array<{ kennzahl: Kennzahl; top: any[] }>> {
+  // TIER B.1: cache lookup
+  if (STUFE1_CACHE_ENABLED) {
+    const ckey = stufe1_cache_key(kennzahlen, kontext);
+    const cached = stufe1_cache.get(ckey);
+    if (cached !== undefined) {
+      // Re-stitch the kennzahl references — cached values have plain-object
+      // kennzahl-data, but downstream may compare by reference. Reattach the
+      // live kennzahl objects by index.
+      return cached.map((entry, i) => ({
+        kennzahl: kennzahlen[i] ?? entry.kennzahl,
+        top: entry.top,
+      }));
+    }
+    const ergebnis = await _stufe1_treffer_holen_uncached(kennzahlen, vektoren, atome, kontext);
+    stufe1_cache.set(ckey, ergebnis);
+    return ergebnis;
+  }
+  return _stufe1_treffer_holen_uncached(kennzahlen, vektoren, atome, kontext);
+}
+
+async function _stufe1_treffer_holen_uncached(
   kennzahlen: Kennzahl[],
   vektoren: Float32Array[],
   atome: any[],
