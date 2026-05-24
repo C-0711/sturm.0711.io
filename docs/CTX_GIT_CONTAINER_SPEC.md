@@ -139,3 +139,52 @@ Git-per-container gives us:
 - **Diff-ability** — compare any two versions of a container precisely
 - **CI/CD integration** — G5 gate enforces quality at publish time
 - **Trust chain** — signature + git history = cryptographically verifiable provenance
+
+## Required Repository Layout
+
+Every CTX container git repository MUST contain:
+
+```
+container-id/
+  .git/                    # git repository (MANDATORY)
+  manifest.json            # container metadata: id, visibility, createdAt, type
+  events.jsonl             # append-only audit log (B7 schema)
+  signature                # Ed25519 signature of manifest (C2)
+  atoms/                   # content atoms (optional, for semantic containers)
+    *.md                   # individual atom files
+  provenance.json          # for retroactively-inited containers only
+```
+
+### manifest.json schema
+```json
+{
+  "id": "0711:ctx:<namespace>:<uuid>",
+  "visibility": "public|private",
+  "createdAt": "<ISO8601>",
+  "type": "knowledge|workflow|product",
+  "namespace": "<string>",
+  "version": "v1"
+}
+```
+
+## Required Commit Protocol
+
+Every mutation to a container MUST produce a git commit:
+
+### Commit message format
+```
+<type>(ctx): <description>
+```
+
+Types:
+- feat(ctx): new content or capability added
+- fix(ctx): correction to existing content
+- chore(ctx): metadata updates, provenance markers
+- seal(ctx): Ed25519 signature applied (C2)
+- anchor(ctx): on-chain anchor recorded (C5)
+
+### Rules
+1. No bare file writes without a commit
+2. Commit must include the author: git -c user.name="<agent-id>" -c user.email="<agent-id>@0711.io" commit
+3. Every commit is audited via events.jsonl (events_appended event type)
+4. Sealed containers: only chore/anchor commits allowed after sealing
