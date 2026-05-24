@@ -25,7 +25,8 @@
     "build:ui:pipeline": "esbuild src/ui/pipeline.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/pipeline.bundle.js",
     "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js",
     "test:e2e:ui:smoke": "node scripts/ui-regression.mjs --smoke-only",
-    "test:e2e:ui:visual": "node scripts/ui-regression.mjs"
+    "test:e2e:ui:visual": "node scripts/ui-regression.mjs",
+    "test:e2e:sister-parity": "node scripts/sister-parity-probe.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

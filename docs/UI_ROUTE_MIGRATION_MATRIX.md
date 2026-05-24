@@ -1,6 +1,6 @@
 # UI Route Migration Matrix (UI-02)
 
-Updated: 2026-05-24 17:10 CEST  
+Updated: 2026-05-24 17:09 CEST  
 Owner: Operator
 
 This is the canonical route map for the v1 → v2 rollout across STURM, Gateway, and sister surfaces.
@@ -19,7 +19,8 @@ This is the canonical route map for the v1 → v2 rollout across STURM, Gateway,
 | `/gateway` | graph workbench | `/v6/gateway.html` | Minimi + Pope | TODO |
 | `/designer.html` | document studio | `/v6/designer.html` | Minimi | TODO |
 | `/studio-ocr.html` | OCR studio | `/v6/ocr-studio.html` | Minimi | TODO |
-| `/anwendungen.html` | app/case hub | v2 tokenized shell | Minimi | TODO |
+| `/app.html` | app/case hub (canonical) | `/v6/app.html` | Minimi | TODO |
+| `/anwendungen.html` | optional DE alias to `/app.html` | alias route | Minimi | TODO |
 | `/steuerfall.html` | case cockpit | v2 tokenized shell | Minimi + Pope | TODO |
 | `/abrechnung.html` | report cockpit | v2 tokenized shell | Minimi + Pope | TODO |
 | `/workspaces.html` | workspace ops | v2 tokenized shell | Minimi | TODO |
@@ -72,3 +73,6 @@ All priority domains were probed live and currently respond **HTTP 200**:
 - `bosch-edu.0711.io` — Bosch Thermotechnik Academy
 - `hoor.0711.io` — Hoor
 
+## Explicit out-of-scope
+
+- ctax is out of scope for this migration stream (no audit, no redesign, no token alignment in this lane).

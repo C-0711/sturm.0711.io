@@ -1,13 +1,14 @@
 # UI-06 Sister Surface Parity Baseline
 
-Updated: 2026-05-24 17:10 CEST  
+Updated: 2026-05-24 17:08 CEST  
 Owners: Architect + Operator
 
 ## Scope in this pass
 
 - Establish live baseline for P1/P2 sister surfaces
 - Lock adapter strategy per domain
-- Prepare the checklist used for parity rollout
+- Add automated screenshot baseline hooks per surface
+- Keep `ctax` fully out of scope for this UI migration stream
 
 ## Current baseline (live)
 
@@ -26,13 +27,19 @@ Owners: Architect + Operator
 - [ ] Add shared header shell and breadcrumb parity
 - [ ] Apply token bridge (`sturm.css` mapped vars)
 - [ ] Verify nav semantics and route handoff to primary apps
-- [ ] Add screenshot baseline and diff hooks for each surface
+- [x] Add screenshot baseline and diff hooks for each surface (`scripts/sister-parity-probe.mjs`)
 
 ### P2 (selective)
 
 - [ ] Keep service identity intact, add only token/nav alignment where safe
 - [ ] No forced full-skin rewrite
 - [ ] Keep docs/status pages readable and consistent with control-plane language
+
+## Automation and evidence
+
+- Probe command: `npm run test:e2e:sister-parity`
+- Latest probe artifact: `reports/sister-parity-2026-05-24T15-08-09-909Z/REPORT.md`
+- Latest result: 5/5 reachable, desktop + mobile screenshots captured for all sister surfaces
 
 ## Execution note
 
