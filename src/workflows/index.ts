@@ -31,6 +31,10 @@ import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
 import { registerSealStages, buildSteuerfallSealWorkflow } from './steuerfall-seal/index.ts';
 
+import {
+  registerCtxBootstrapStages,
+  ctxBootstrapWorkflow,
+} from './ctx-bootstrap/index.ts';
 export function registerAllWorkflows(): void {
   registerWorkflow(helloOcrWorkflow);
   registerLegacyElsterStages();
@@ -64,6 +68,10 @@ export function registerAllWorkflows(): void {
   // Steuerfall-Versiegelung: HMAC-Snapshot + Merkle + Anchor.
   registerSealStages();
   registerWorkflow(buildSteuerfallSealWorkflow());
+  // CTX-Bootstrap: transcript → atoms → quantum index → /ctx/* HTTP surface.
+  // Drop-in context container for cross-LLM consumption (ChatGPT, Claude, Cursor, Gemini).
+  registerCtxBootstrapStages();
+  registerWorkflow(ctxBootstrapWorkflow);
 }
 
 export { helloOcrWorkflow };
