@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STURM + Gateway UI Integration Plan</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#111831; --card:#172347; --txt:#e8eefc; --muted:#9fb1d6; --ok:#2ecc71; --warn:#f1c40f; --todo:#7f8cff; --line:#2a3a69; }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);}
+    .wrap{max-width:1200px;margin:0 auto;padding:28px 18px 44px}
+    h1{margin:0 0 10px;font-size:28px} h2{margin:28px 0 12px;font-size:20px} h3{margin:18px 0 10px;font-size:16px}
+    p,li{color:var(--muted);line-height:1.45} .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+    .meta{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+    .pill{padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:#0f1630}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .k{font-size:12px;color:#a9bbdf;text-transform:uppercase;letter-spacing:.08em}.v{font-weight:700;margin-top:4px}
+    table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+    th{color:#c8d6f7;background:#111c3b;position:sticky;top:0}
+    .st{font-weight:700}.todo{color:var(--todo)}.prog{color:var(--warn)}.done{color:var(--ok)}
+    code{background:#0f1734;border:1px solid #2a3a69;border-radius:6px;padding:1px 5px;color:#d9e6ff}
+    .small{font-size:12px;color:#8ea3cf}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>STURM + Gateway + Sister Surfaces · UI/UX Integration Plan</h1>
+    <div class="meta">
+      <span class="pill">Status: execution-ready</span>
+      <span class="pill">Source pack: <code>alpha.6_2.zip</code> (latest)</span>
+      <span class="pill">Publish target: <code>sturm.0711.io/ui</code></span>
+      <span class="pill">Updated: 2026-05-24</span>
+    </div>
+
+    <h2>1) Design package truth (review result)</h2>
+    <section class="panel">
+      <div class="grid">
+        <div class="card"><div class="k">Core views</div><div class="v">index, app, designer, OCR</div><p>From latest package: <code>index.html</code>, <code>app.html</code>, <code>designer.html</code>, <code>ocr-studio.html</code>.</p></div>
+        <div class="card"><div class="k">Gateway surface</div><div class="v">New Gateway UX included</div><p>New files: <code>gateway.html</code> + <code>gateway-app.jsx</code>.</p></div>
+        <div class="card"><div class="k">Styling delta</div><div class="v">v2 stylesheet expanded</div><p><code>sturm.css</code> grew significantly in latest archive and should be treated as the visual baseline.</p></div>
+        <div class="card"><div class="k">Asset baseline</div><div class="v">Screenshot bundle</div><p>Reference screenshots are included for visual parity checks and regression gating.</p></div>
+      </div>
+    </section>
+
+    <h2>2) Integration objective</h2>
+    <section class="panel">
+      <p>Ship one coherent design system and interaction language across <b>STURM</b>, <b>Gateway</b>, and related sister surfaces without breaking live operational workflows. Deliver in phases with measurable acceptance gates, not a big-bang replacement.</p>
+      <ul>
+        <li>Preserve all existing backend contracts and production flows first.</li>
+        <li>Migrate UI shell + components incrementally behind feature flags.</li>
+        <li>Track parity with screenshot diffs, route-level smoke, and API contract checks.</li>
+      </ul>
+    </section>
+
+    <h2>3) Task list (execution order)</h2>
+    <section class="panel" style="overflow:auto">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Workstream</th><th>Task</th><th>Owner</th><th>ETA</th><th>Status</th><th>Acceptance</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>UI-01</td><td>Foundation</td><td>Create unified design token map from <code>sturm.css</code> (color, spacing, typography, states) and apply to shared shell CSS.</td><td>Minimi + Architect</td><td>0.5d</td><td class="st todo">TODO</td><td>Token file merged, zero hardcoded duplicates in new screens.</td></tr>
+          <tr><td>UI-02</td><td>Foundation</td><td>Define route migration matrix: <code>/</code>, <code>/gateway</code>, <code>/designer.html</code>, <code>/studio-ocr.html</code>, related sister pages.</td><td>Operator</td><td>0.5d</td><td class="st todo">TODO</td><td>Single route map doc + owner assigned per route.</td></tr>
+          <tr><td>UI-03</td><td>Shell</td><td>Implement shared top-nav + context breadcrumbs for STURM/Gateway parity.</td><td>Minimi</td><td>1d</td><td class="st todo">TODO</td><td>All primary surfaces use same shell component.</td></tr>
+          <tr><td>UI-04</td><td>Gateway</td><td>Integrate <code>gateway.html</code> + <code>gateway-app.jsx</code> into production gateway route with current live APIs.</td><td>Pope + Minimi</td><td>1d</td><td class="st todo">TODO</td><td>No API regressions, smoke on <code>/gateway</code> green.</td></tr>
+          <tr><td>UI-05</td><td>STURM Core</td><td>Migrate <code>index/app/designer/ocr</code> to new components and align interaction states.</td><td>Minimi</td><td>1.5d</td><td class="st todo">TODO</td><td>Visual parity to archive screenshots within agreed threshold.</td></tr>
+          <tr><td>UI-06</td><td>Sister Surfaces</td><td>Apply shell + token parity to sister endpoints (Sturm-Mandanten, Quantum views, relevant sub-sites).</td><td>Architect + Operator</td><td>1d</td><td class="st todo">TODO</td><td>Cross-surface nav and style consistency checklist passes.</td></tr>
+          <tr><td>UI-07</td><td>Backend Contracts</td><td>Ensure all migrated views read only live APIs; remove residual mock bindings.</td><td>Pope</td><td>0.5d</td><td class="st todo">TODO</td><td>Contract tests pass; no hardcoded data in migrated views.</td></tr>
+          <tr><td>UI-08</td><td>Quality</td><td>Add visual regression + route smoke suite (desktop + mobile viewport baseline).</td><td>Operator</td><td>0.5d</td><td class="st todo">TODO</td><td>CI gate fails on route break or major visual drift.</td></tr>
+          <tr><td>UI-09</td><td>Rollout</td><td>Progressive rollout: canary flag → full switch, with rollback toggle preserved for 1 release cycle.</td><td>Fleet</td><td>0.5d</td><td class="st todo">TODO</td><td>Rollback tested and documented.</td></tr>
+          <tr><td>UI-10</td><td>Sign-off</td><td>Final acceptance run: STURM + Gateway + sister surfaces, performance + accessibility + UX signoff.</td><td>C + Fleet</td><td>0.5d</td><td class="st todo">TODO</td><td>Formal go-live signoff with evidence links.</td></tr>
+        </tbody>
+      </table>
+      <p class="small">Total planned effort: ~7 days (can run in parallel to hit 3-4 calendar days with 3 lanes).</p>
+    </section>
+
+    <h2>4) Delivery lanes (parallelized)</h2>
+    <section class="panel">
+      <div class="grid">
+        <div class="card"><div class="k">Lane A · UX/System</div><div class="v">UI-01 · UI-03 · UI-05</div><p>Tokenization, shell, and main screen migrations.</p></div>
+        <div class="card"><div class="k">Lane B · API/Contracts</div><div class="v">UI-04 · UI-07</div><p>Gateway wiring and strict live contract adherence.</p></div>
+        <div class="card"><div class="k">Lane C · Ops/Quality</div><div class="v">UI-02 · UI-08 · UI-09 · UI-10</div><p>Route map, regression gates, rollout, and final acceptance.</p></div>
+      </div>
+    </section>
+
+    <h2>5) Non-negotiable acceptance gates</h2>
+    <section class="panel">
+      <ul>
+        <li>No route loses functionality during migration (<code>0 critical regressions</code>).</li>
+        <li>Gateway + STURM maintain truthful live data surfaces (no mock fallback in production).</li>
+        <li>UI consistency score achieved across STURM/Gateway/sister pages using review checklist.</li>
+        <li>Rollback path proven before final full rollout.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
