@@ -1,0 +1,1376 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STURM · UI Migration · v1 → v2 (merged)</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('sturm-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Spectral:wght@300;400;500;600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <!-- Live design system: pull the canonical sturm.css from the v6 mount.
+       Falls back to inline tokens below if request fails (e.g. offline preview). -->
+  <link rel="stylesheet" href="/v6/sturm.css" />
+
+  <style>
+    /* ── fallback design tokens (verbatim from /tmp/alpha-review/v2/sturm.css) ── */
+    :root, [data-theme="dark"] {
+      --bg: oklch(0.2 0.005 80);
+      --bg-2: oklch(0.235 0.005 80);
+      --bg-3: oklch(0.27 0.005 80);
+      --bg-4: oklch(0.31 0.005 80);
+      --ink: oklch(0.95 0.005 80);
+      --ink-2: oklch(0.72 0.005 80);
+      --ink-3: oklch(0.52 0.005 80);
+      --ink-4: oklch(0.4 0.005 80);
+      --line: oklch(0.32 0.005 80);
+      --line-2: oklch(0.28 0.005 80);
+      --accent: oklch(0.82 0.06 85);
+      --accent-deep: oklch(0.72 0.07 85);
+      --accent-soft: oklch(0.82 0.06 85 / 0.12);
+      --on-accent: var(--bg);
+      --ok: oklch(0.78 0.13 145);
+      --warn: oklch(0.82 0.14 85);
+      --err: oklch(0.7 0.16 25);
+      --info: oklch(0.75 0.09 230);
+      --truth-live: var(--ok);
+      --truth-mixed: oklch(0.78 0.13 75);
+      --truth-seeded: oklch(0.72 0.06 60);
+      --truth-inferred: var(--info);
+      --truth-unavailable: oklch(0.5 0.005 80);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --radius-lg: 12px;
+      color-scheme: dark;
+    }
+    [data-theme="light"] {
+      --bg: oklch(0.985 0.004 80);
+      --bg-2: oklch(0.965 0.005 80);
+      --bg-3: oklch(0.93 0.006 80);
+      --bg-4: oklch(0.88 0.008 80);
+      --ink: oklch(0.18 0.01 80);
+      --ink-2: oklch(0.42 0.01 80);
+      --ink-3: oklch(0.6 0.01 80);
+      --ink-4: oklch(0.72 0.005 80);
+      --line: oklch(0.84 0.008 80);
+      --line-2: oklch(0.9 0.006 80);
+      --accent: oklch(0.56 0.13 65);
+      --accent-deep: oklch(0.48 0.14 60);
+      --accent-soft: oklch(0.56 0.13 65 / 0.1);
+      --on-accent: oklch(0.99 0.005 80);
+      --ok: oklch(0.55 0.16 145);
+      --warn: oklch(0.62 0.15 65);
+      --err: oklch(0.55 0.18 25);
+      --info: oklch(0.5 0.13 230);
+      --truth-live: var(--ok);
+      --truth-mixed: oklch(0.62 0.15 65);
+      --truth-seeded: oklch(0.55 0.1 60);
+      --truth-inferred: var(--info);
+      --truth-unavailable: oklch(0.65 0.005 80);
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 400;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── page layout ── */
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--line-2);
+      background: color-mix(in oklab, var(--bg) 88%, transparent);
+      backdrop-filter: saturate(140%) blur(14px);
+      -webkit-backdrop-filter: saturate(140%) blur(14px);
+    }
+    .topbar-l, .topbar-r { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-2); }
+    .brand-tile {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent);
+      display: grid; place-items: center;
+      font-weight: 600; font-size: 15px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+    }
+    .brand-name { font-weight: 600; letter-spacing: 0.16em; font-size: 13px; }
+    .brand-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: var(--ink-3);
+      padding-left: 12px; margin-left: 4px;
+      border-left: 1px solid var(--line);
+    }
+    .crumb-sep { color: var(--ink-4); margin: 0 2px; }
+    .theme-toggle {
+      display: inline-grid; place-items: center;
+      width: 32px; height: 32px;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink-2);
+      cursor: pointer;
+      transition: border-color 150ms ease, color 150ms ease;
+    }
+    .theme-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+
+    /* ── hero ── */
+    .hero {
+      padding: 64px 0 32px;
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-family: 'Geist', sans-serif;
+      font-weight: 300;
+      font-size: 40px;
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      margin: 0;
+    }
+    .hero h1 .accent { color: var(--accent); font-weight: 400; }
+    .hero p {
+      color: var(--ink-2);
+      font-size: 15px;
+      max-width: 60ch;
+      line-height: 1.55;
+      margin: 0;
+      text-wrap: pretty;
+    }
+    .hero-meta {
+      display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+      margin-top: 4px;
+    }
+
+    /* ── truth badge ── */
+    .truth {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 8px 3px 6px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+      background: color-mix(in oklab, currentColor 8%, transparent);
+      white-space: nowrap;
+      font-weight: 500;
+    }
+    .truth::before {
+      content: ''; width: 5px; height: 5px;
+      border-radius: 50%; background: currentColor;
+      flex-shrink: 0;
+    }
+    .truth.live { color: var(--truth-live); }
+    .truth.mixed { color: var(--truth-mixed); }
+    .truth.seeded { color: var(--truth-seeded); }
+    .truth.inferred { color: var(--truth-inferred); }
+    .truth.unavailable { color: var(--truth-unavailable); }
+    .truth.unavailable::before { background: transparent; border: 1px solid currentColor; }
+    .truth.plan { color: var(--truth-seeded); }
+    .truth.plan::before { background: transparent; border: 1px solid currentColor; }
+
+    .brand-pill {
+      display: inline-block;
+      padding: 3px 8px;
+      background: var(--bg-3);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      color: var(--ink-3);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    /* ── live status strip ── */
+    .live-panel {
+      margin: 0 auto 48px;
+      max-width: 100%;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      align-items: center;
+    }
+    .live-cell {
+      display: flex; flex-direction: column; gap: 4px;
+      min-width: 0;
+    }
+    .live-cell .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-4);
+    }
+    .live-cell .val {
+      font-size: 14px;
+      color: var(--ink);
+      display: flex; align-items: center; gap: 8px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .live-cell .mono-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .s-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .s-dot.ok { background: var(--ok); box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 60%, transparent); animation: spulse 2s ease-in-out infinite; }
+    .s-dot.warn { background: var(--warn); }
+    .s-dot.err { background: var(--err); }
+    .s-dot.idle { background: var(--ink-4); }
+    @keyframes spulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 60%, transparent); }
+      50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--ok) 0%, transparent); }
+    }
+
+    /* ── phase nav (pills) ── */
+    .phase-nav {
+      position: sticky; top: 56px; z-index: 40;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line-2);
+      padding: 14px 0;
+      margin-bottom: 24px;
+    }
+    .pill-row {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      justify-content: center;
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12.5px;
+      color: var(--ink-2);
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+    .pill:hover { color: var(--ink); border-color: var(--ink-3); }
+    .pill .count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 1px 6px;
+      background: var(--bg-3);
+      border-radius: 999px;
+      color: var(--ink-3);
+    }
+
+    /* ── phase section ── */
+    .phase {
+      margin: 56px 0;
+      scroll-margin-top: 120px;
+    }
+    .phase-head {
+      display: flex; align-items: baseline; gap: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px dashed var(--line-2);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .phase-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      padding: 3px 7px;
+      border: 1px solid color-mix(in oklab, var(--accent) 50%, var(--line));
+      border-radius: 4px;
+      background: var(--accent-soft);
+    }
+    .phase-head h2 {
+      font-family: 'Geist', sans-serif;
+      font-weight: 400;
+      font-size: 26px;
+      letter-spacing: -0.02em;
+      margin: 0;
+      flex: 1 1 auto;
+    }
+    .phase-meta {
+      display: flex; gap: 14px; align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+    .phase-meta .sep { color: var(--ink-4); }
+
+    /* ── task cards ── */
+    .tasks {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .task {
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px;
+      align-items: start;
+      transition: border-color 150ms ease, background 150ms ease;
+    }
+    .task:hover { border-color: var(--line); background: oklch(0.245 0.005 80); }
+    [data-theme="light"] .task:hover { background: oklch(0.975 0.005 80); }
+
+    .task-check {
+      width: 18px; height: 18px;
+      border: 1.5px solid var(--line);
+      border-radius: 4px;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+      background: var(--bg);
+    }
+    .task[data-status="done"] .task-check {
+      border-color: var(--ok);
+      background: var(--ok);
+    }
+    .task[data-status="done"] .task-check::after {
+      content: '';
+      width: 9px; height: 5px;
+      border-left: 2px solid var(--bg);
+      border-bottom: 2px solid var(--bg);
+      transform: rotate(-45deg) translate(1px, -1px);
+    }
+    .task[data-status="doing"] .task-check {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .task[data-status="doing"] .task-check::after {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: spulse 2s ease-in-out infinite;
+    }
+    .task[data-status="blocked"] .task-check {
+      border-color: var(--err);
+      background: color-mix(in oklab, var(--err) 15%, transparent);
+    }
+
+    .task-body { min-width: 0; }
+    .task-id {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      margin-bottom: 6px;
+    }
+    .task-id .new-id {
+      color: var(--accent);
+      font-weight: 600;
+      padding: 1px 6px;
+      border: 1px solid color-mix(in oklab, var(--accent) 50%, var(--line));
+      border-radius: 3px;
+      background: var(--accent-soft);
+    }
+    .task-id .src-id {
+      color: var(--ink-4);
+      padding: 1px 6px;
+      border: 1px dashed var(--line);
+      border-radius: 3px;
+    }
+    .task-id .arrow { color: var(--ink-4); }
+    .task-title {
+      font-size: 14px;
+      color: var(--ink);
+      font-weight: 500;
+      line-height: 1.4;
+      margin: 0 0 4px;
+    }
+    .task[data-status="done"] .task-title {
+      color: var(--ink-3);
+      text-decoration: line-through;
+      text-decoration-color: var(--ink-4);
+      text-decoration-thickness: 1px;
+    }
+    .status-note { display:inline-block; margin-left:8px; padding:1px 7px; border:1px solid var(--line-2); border-radius:var(--radius-sm); font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-3); background:var(--bg-3); }
+    .task-sub {
+      font-size: 12.5px;
+      color: var(--ink-2);
+      line-height: 1.5;
+      margin: 0;
+    }
+    .task-sub code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      background: var(--bg-3);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--ink-2);
+      border: 1px solid var(--line-2);
+    }
+
+    .task-meta {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--ink-3);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .task-meta .status-pill {
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 9.5px;
+      font-weight: 500;
+      border: 1px solid currentColor;
+      background: color-mix(in oklab, currentColor 8%, transparent);
+    }
+    .task[data-status="done"] .status-pill { color: var(--ok); }
+    .task[data-status="doing"] .status-pill { color: var(--accent); }
+    .task[data-status="todo"] .status-pill { color: var(--ink-3); }
+    .task[data-status="blocked"] .status-pill { color: var(--err); }
+    .task-meta .owner {
+      color: var(--ink-3);
+      font-size: 10.5px;
+    }
+
+    /* ── risks block ── */
+    .risks {
+      margin: 64px 0 32px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+    .risks h2 {
+      font-family: 'Geist', sans-serif;
+      font-weight: 400;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+      margin: 0 0 8px;
+    }
+    .risks ol {
+      margin: 8px 0 0;
+      padding-left: 20px;
+      color: var(--ink-2);
+      font-size: 13.5px;
+      line-height: 1.65;
+    }
+    .risks ol li { margin: 6px 0; }
+    .risks code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      background: var(--bg-3);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--ink-2);
+      border: 1px solid var(--line-2);
+    }
+
+    /* ── footer ── */
+    footer {
+      margin: 80px 0 32px;
+      text-align: center;
+      color: var(--ink-3);
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.7;
+    }
+    footer .sep { color: var(--ink-4); margin: 0 6px; }
+
+    /* ── responsive ── */
+    @media (max-width: 720px) {
+      .task { grid-template-columns: auto 1fr; }
+      .task-meta { grid-column: 2; align-items: flex-start; }
+      .hero h1 { font-size: 30px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<div class="topbar">
+  <div class="topbar-l">
+    <a href="/" style="display:flex;align-items:center;gap:10px;">
+      <div class="brand-tile">S</div>
+      <span class="brand-name">STURM</span>
+    </a>
+    <span class="brand-tag">UI · v1 → v2</span>
+    <span class="crumb-sep">/</span>
+    <span style="color: var(--ink-3); font-family: 'JetBrains Mono', monospace; font-size: 11px;">migration</span>
+  </div>
+  <div class="topbar-r">
+    <span class="truth plan">PLAN</span>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle theme">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ── HERO ── -->
+  <section class="hero">
+    <h1>STURM · UI Migration <span class="accent">v1 → v2</span></h1>
+    <p>
+      The plan and the live tasklist for porting <span class="mono">alpha.6_2</span> across the fleet. This page is built using the new design system itself — every token, every component, sourced verbatim from <code style="font-family:'JetBrains Mono',monospace;background:var(--bg-3);padding:1px 5px;border-radius:3px;border:1px solid var(--line-2);font-size:12px;">sturm.css</code>. Self-demonstrating.
+    </p>
+    <p style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--ink-3);max-width:70ch;margin:0;">
+      Merged 2026-05-24 16:23 CEST · sources: bombas/draft (27 tasks) + existing/ui (10 tasks · author Pope) · <span style="color:var(--accent);">canonical version</span>
+    </p>
+    <div class="hero-meta">
+      <span class="brand-pill">6 PHASES</span>
+      <span class="brand-pill">48 TASKS</span>
+      <span class="brand-pill">SOURCE alpha.6_2 + ui/14:21-board</span>
+      <span class="brand-pill">2026-05-24 · MERGED</span>
+    </div>
+  </section>
+
+  
+  <!-- ── how to update tasks (Bombas tooling) ── -->
+  <details class="update-help panel" style="margin-top:14px;">
+    <summary style="cursor:pointer;font-family:&#39;JetBrains Mono&#39;,monospace;font-size:13px;color:var(--ink-2);">How to update a task status &nbsp;<span style="color:var(--ink-3);">(any officer, one-liner)</span></summary>
+    <div style="padding:10px 4px 4px;font-size:13px;color:var(--ink-2);">
+      <pre style="background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--radius);padding:10px 12px;overflow-x:auto;font-family:&#39;JetBrains Mono&#39;,monospace;font-size:12px;color:var(--ink);">ssh reactor &#39;~/0711-sturm-ui-tools/update-status.sh &lt;task-id&gt; &lt;status&gt; [&lt;owner&gt;] [&lt;note&gt;]&#39;
+
+Examples:
+  ssh reactor &#39;~/0711-sturm-ui-tools/update-status.sh A3 doing&#39;
+  ssh reactor &#39;~/0711-sturm-ui-tools/update-status.sh C1 done @minimi "shipped, smoke green"&#39;
+  ssh reactor &#39;~/0711-sturm-ui-tools/update-status.sh F.2a doing @pope&#39;</pre>
+      <p style="margin:8px 0 4px;"><b>Status values:</b> <code>todo</code> · <code>doing</code> · <code>done</code> · <code>blocked</code></p>
+      <p style="margin:4px 0;">Page updates instantly. Questions: <code>@bombas</code>.</p>
+    </div>
+  </details>
+
+  <!-- ── LIVE STATUS PANEL ── -->
+  <div class="live-panel" id="livePanel">
+    <div class="live-cell">
+      <div class="label">STURM</div>
+      <div class="val"><span class="s-dot ok"></span><span class="mono-val" id="status-sturm">sturm.0711.io · 200</span></div>
+    </div>
+    <div class="live-cell">
+      <div class="label">v6 DESIGN</div>
+      <div class="val"><span class="s-dot ok"></span><span class="mono-val">alpha.6_2 deployed</span></div>
+    </div>
+    <div class="live-cell">
+      <div class="label">GATEWAY</div>
+      <div class="val"><span class="s-dot warn"></span><span class="mono-val">port pending</span></div>
+    </div>
+    <div class="live-cell">
+      <div class="label">PROGRESS</div>
+      <div class="val mono-val" id="progress-bar">1 of 5 phases</div>
+    </div>
+    <div class="live-cell">
+      <div class="label">LAST CHECK</div>
+      <div class="val mono-val" id="last-check">just now</div>
+    </div>
+  </div>
+
+  <!-- ── PHASE NAV ── -->
+  <nav class="phase-nav">
+    <div class="pill-row">
+      <a class="pill" href="#phase-a">Phase A <span class="count">5</span></a>
+      <a class="pill" href="#phase-b">Phase B <span class="count">6</span></a>
+      <a class="pill" href="#phase-c">Phase C <span class="count">5</span></a>
+      <a class="pill" href="#phase-d">Phase D <span class="count">8</span></a>
+      <a class="pill" href="#phase-e">Phase E <span class="count">6</span></a>
+      <a class="pill" href="#phase-f">Phase F <span class="count">18</span></a>
+      <a class="pill" href="#risks">Risks <span class="count">6</span></a>
+    </div>
+  </nav>
+
+  <!-- ── PHASE A ── -->
+  <section id="phase-a" class="phase">
+    <div class="phase-head">
+      <span class="phase-key">PHASE · A</span>
+      <h2>STURM core — verify &amp; document</h2>
+      <div class="phase-meta">
+        <span>ETA <span style="color:var(--ink-2);">~½ day</span></span>
+        <span class="sep">·</span>
+        <span>owner <span style="color:var(--ink-2);">Minimi</span></span>
+        <span class="sep">·</span>
+        <span class="truth live">DEPLOYED</span>
+      </div>
+    </div>
+    <div class="tasks">
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">A1</span></div>
+          <p class="task-title">alpha.6_2 files staged inside sturm container at <code>/app/src/ui/v6/</code></p>
+          <p class="task-sub">md5sums match <code>/tmp/alpha-review/v2/</code> for all 6 HTML+CSS files. <code>index.html</code> additionally mounted at <code>/app/src/ui/index.html</code>, served at https://sturm.0711.io/.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">A2</span><span class="arrow">←</span><span class="src-id">UI-01</span></div>
+          <p class="task-title">sturm.css v2 (19.7 KB) deployed as design-system canonical — unified token map</p>
+          <p class="task-sub">Live at <code>/v6/sturm.css</code> and <code>/design-system/sturm.css</code>. Includes warm-neutral oklch palette, champagne accent, full truth-state primitives, sidebar + topbar shell.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">A3</span><span class="arrow">←</span><span class="src-id">UI-02</span><span class="src-id">UI-05</span></div>
+          <p class="task-title">Smoke-test all existing routes against new sturm.css — visual parity to archive screenshots</p>
+          <p class="task-sub">Click through <code>/</code>, <code>/designer.html</code>, <code>/anwendungen.html</code>, <code>/abrechnung.html</code>, <code>/orchestrator</code>, <code>/ctx-demo.html</code>, <code>/studio-ocr.html</code>. Capture any layout regressions caused by the new tokens.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">A4</span></div>
+          <p class="task-title">Verify <code>app.html</code> asset dependencies</p>
+          <p class="task-sub">Check whether <code>/tmp/alpha-review/v2/uploads/Screenshot*.png</code> are referenced from <code>app.html</code>. If yes, ship them into <code>/app/src/ui/v6/uploads/</code> alongside.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">A5</span></div>
+          <p class="task-title">Decide: <code>app.html</code> vs <code>anwendungen.html</code> as canonical app shell</p>
+          <p class="task-sub"><b>Decision (Bombas, 2026-05-24):</b> <code>app.html</code> is canonical — it is the filename <code>alpha.6_2</code> shipped under. <code>anwendungen.html</code> remains available as an optional German-language alias if a route ever needs it; tracked as a low-priority side task, not a blocker.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@bombas</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PHASE B ── -->
+  <section id="phase-b" class="phase">
+    <div class="phase-head">
+      <span class="phase-key">PHASE · B</span>
+      <h2>Gateway control plane port</h2>
+      <div class="phase-meta">
+        <span>ETA <span style="color:var(--ink-2);">~1 day</span></span>
+        <span class="sep">·</span>
+        <span>owners <span style="color:var(--ink-2);">Minimi + Pope</span></span>
+        <span class="sep">·</span>
+        <span class="truth seeded">PLANNED</span>
+      </div>
+    </div>
+    <div class="tasks">
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">B1</span><span class="arrow">←</span><span class="src-id">UI-03</span><span class="src-id">UI-04</span></div>
+          <p class="task-title">Split <code>gateway-app.jsx</code> (106 KB monolith) into JSX modules — incl. shared top-nav + breadcrumbs shell</p>
+          <p class="task-sub"><code>WizardStepper</code>, <code>MultiLLMWorkspace</code>, <code>ConnectivityMatrix</code>, <code>TopologyGraph</code>, <code>TruthBadge</code>, <code>CostMeter</code>. Drop the React-CDN pattern; use Next.js JSX modules + React 18 hooks.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">B2</span><span class="arrow">←</span><span class="src-id">UI-04</span><span class="src-id">UI-07</span></div>
+          <p class="task-title">Wire to <code>/api/agents</code> · <code>/api/containers</code> · <code>/api/health</code> — zero mock fallback in production</p>
+          <p class="task-sub">Replace hard-coded model lists and container stubs with the real Pope-side endpoints. Status dot on topbar feeds off <code>/api/health</code>.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">B3</span></div>
+          <p class="task-title">Preserve TRUTH system end-to-end</p>
+          <p class="task-sub">Pope already ships <code>truth: "live"</code> on <code>/api/klavis/*</code> (commits <code>eef8eb2</code>, <code>435b828</code>). Map directly onto the <code>.truth.live | .mixed | .seeded | .inferred | .unavailable</code> CSS primitives.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">B4</span><span class="arrow">←</span><span class="src-id">UI-04</span></div>
+          <p class="task-title">Stage in <code>gateway-ui-next</code> before promoting to <code>gateway.0711.io</code></p>
+          <p class="task-sub">Build out a preview route. Smoke test full WIZARD flow + MULTI-LLM (5 modes). No hot deploy to production gateway container in this pass.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">B5</span></div>
+          <p class="task-title">Replace or coexist? Decide gateway-app.jsx's role</p>
+          <p class="task-sub"><b>Decision (Bombas, 2026-05-24):</b> <code>gateway-app.jsx</code> <em>replaces</em> <code>gateway-ui-next</code> over time — MC said “integrate as best as possible”, not fork a separate lab. Container Quality Lab (Phase F) lives <em>inside</em> the new control plane as a top-level tab. Rollout staged behind the feature flag from B6 — zero downtime, canary first.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@bombas</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">B6</span><span class="arrow">←</span><span class="src-id">UI-09</span></div>
+          <p class="task-title">Progressive rollout: canary flag → full switch, with rollback toggle preserved for 1 release cycle</p>
+          <p class="task-sub">Feature-flag the gateway-app.jsx port. Canary to internal fleet first; full cutover only after smoke-suite is green. Rollback tested + documented before promotion.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@fleet</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PHASE C ── -->
+  <section id="phase-c" class="phase">
+    <div class="phase-head">
+      <span class="phase-key">PHASE · C</span>
+      <h2>Missing Phase-6/7 pieces</h2>
+      <div class="phase-meta">
+        <span>ETA <span style="color:var(--ink-2);">~½ day</span></span>
+        <span class="sep">·</span>
+        <span>owner <span style="color:var(--ink-2);">Minimi</span></span>
+        <span class="sep">·</span>
+        <span class="truth seeded">PLANNED</span>
+      </div>
+    </div>
+    <div class="tasks">
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">C1</span></div>
+          <p class="task-title">$100/session cost cap UI</p>
+          <p class="task-sub">Yellow banner at 80 %, abort modal at 100 %. CSS already has <code>--warn</code> + <code>--err</code> — needs a new <code>.cost-meter</code> component on the topbar.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">C2</span></div>
+          <p class="task-title">SSE wiring for <code>cost.warn</code> / <code>cost.abort</code></p>
+          <p class="task-sub">Server-side emission needs to be added to the gateway agent runner. Client subscribes via EventSource on the multi-LLM workspace mount.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">C3</span></div>
+          <p class="task-title">Container-quality-lab framing</p>
+          <p class="task-sub">The lab is always about <em>one specific container under test</em>. Add a "container under test:" selector at the top of the lab view; bind the entire session to that container id.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">C4</span></div>
+          <p class="task-title">Per-turn commit-to-branch button</p>
+          <p class="task-sub">On the multi-LLM workspace, after a successful turn, expose a button → opens a small prompt → commits the diff to <code>lab/&lt;container&gt;/&lt;turn&gt;-&lt;short&gt;</code>. Needs <code>/api/lab/commit</code> on server.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">C5</span></div>
+          <p class="task-title">Swap model roster: kill <code>gpt-5</code>, ship MC's actual roster</p>
+          <p class="task-sub">Anthropic 3.x (Claude Opus 4.5, Sonnet 4.5) · OpenAI (GPT-4o, o3-mini) · Gemma 4 31B (local on REACTOR) · Mistral/Pixtral. <code>gpt-5</code> placeholder strings need replacing wherever they appear in <code>gateway-app.jsx</code>.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@minimi</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PHASE D ── -->
+  <section id="phase-d" class="phase">
+    <div class="phase-head">
+      <span class="phase-key">PHASE · D</span>
+      <h2>Sister sites alignment</h2>
+      <div class="phase-meta">
+        <span>ETA <span style="color:var(--ink-2);">~1 day</span></span>
+        <span class="sep">·</span>
+        <span>owner <span style="color:var(--ink-2);">Architect</span></span>
+        <span class="sep">·</span>
+        <span class="truth seeded">PLANNED</span>
+      </div>
+    </div>
+    <div class="tasks">
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D1</span><span class="arrow">←</span><span class="src-id">UI-06</span></div>
+          <p class="task-title">Audit <code>sturm-mandanten</code></p>
+          <p class="task-sub">Container running on REACTOR. Likely already on Minimi's sturm.css — confirm via diff against <code>/tmp/alpha-review/v2/sturm.css</code>.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D2</span><span class="arrow">←</span><span class="src-id">UI-06</span></div>
+          <p class="task-title">Audit <code>bosch-edu</code></p>
+          <p class="task-sub">Bosch-themed — likely keeps its own palette. Decision: adopt typography + spacing only (token-partial migration).</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D3</span><span class="arrow">←</span><span class="src-id">UI-06</span></div>
+          <p class="task-title">Audit <code>cb-chat</code></p>
+          <p class="task-sub">Chat surface, design status unknown. Inventory + decide migrate vs token-only.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D4</span><span class="arrow">←</span><span class="src-id">UI-06</span></div>
+          <p class="task-title"><code>ctax</code> — DO NOT TOUCH</p>
+          <p class="task-sub"><b>Decision (Bombas, 2026-05-24):</b> <code>ctax</code> is <em>out of scope, fully</em> — standing fleet rule (see <code>IDENTITY.md</code>). No migration, no audit, no token alignment. <code>ctax</code> stays exactly as it is until MC says otherwise.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@bombas</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D5</span><span class="arrow">←</span><span class="src-id">UI-06</span></div>
+          <p class="task-title">Audit <code>dl</code>, <code>jarvis</code>, <code>cornea</code></p>
+          <p class="task-sub">Status unknown. Confirm with MC which actually need migration; some may be deprecated.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D6</span></div>
+          <p class="task-title">Decision per site: full migration vs token-only adoption</p>
+          <p class="task-sub">Full = adopt all components + tokens. Token-only = import <code>:root</code> variables for color/typography consistency, keep local components.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D7</span></div>
+          <p class="task-title">Append audit table to <code>MIGRATION-PLAN.md</code></p>
+          <p class="task-sub">Site · current status · decision · ETA. Single source of truth for fleet-wide alignment.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">D8</span><span class="arrow">←</span><span class="src-id">UI-08</span></div>
+          <p class="task-title">Visual regression + route smoke suite (desktop + mobile viewport baseline)</p>
+          <p class="task-sub">CI gate fails on route break or major visual drift. Screenshot-diff against the alpha.6_2 reference bundle. Covers STURM, gateway, and all migrated sister surfaces.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@operator</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PHASE E ── -->
+  <section id="phase-e" class="phase">
+    <div class="phase-head">
+      <span class="phase-key">PHASE · E</span>
+      <h2>Design system extraction</h2>
+      <div class="phase-meta">
+        <span>ETA <span style="color:var(--ink-2);">~½ day</span></span>
+        <span class="sep">·</span>
+        <span>owner <span style="color:var(--ink-2);">Architect</span></span>
+        <span class="sep">·</span>
+        <span class="truth seeded">PLANNED</span>
+      </div>
+    </div>
+    <div class="tasks">
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">E1</span></div>
+          <p class="task-title">Carve stable endpoint: <code>sturm.0711.io/ds/sturm.css</code></p>
+          <p class="task-sub">Add explicit route in <code>src/server.ts</code>. Sister sites pull from this URL, not from local file copies.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">E2</span></div>
+          <p class="task-title">Versioned URL: <code>/ds/sturm-css@1.0.0.css</code></p>
+          <p class="task-sub">Semver. Sites pin a version. Breaking changes → new major. Immutable + 1-year cache.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">E3</span></div>
+          <p class="task-title">CORS headers for cross-origin sister sites</p>
+          <p class="task-sub">Allow <code>*.0711.io</code> origins on the <code>/ds/*</code> path. Plain GET, no credentials.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">E4</span></div>
+          <p class="task-title">Migrate sister sites to CDN-style import</p>
+          <p class="task-sub">Each site: replace local <code>sturm.css</code> copy with <code>&lt;link rel="stylesheet" href="https://sturm.0711.io/ds/sturm-css@1.0.0.css"&gt;</code>. Drop the file from each repo.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">E5</span></div>
+          <p class="task-title">Optional follow-up: <code>sturm-ui</code> npm package for Next.js sites</p>
+          <p class="task-sub">Extract <code>.card</code>, <code>.truth</code>, <code>.btn</code>, <code>.shell</code> as React components. CSS-first first; npm only if proven valuable.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@architect</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">E6</span><span class="arrow">←</span><span class="src-id">UI-10</span></div>
+          <p class="task-title">Final acceptance run: STURM + Gateway + sister surfaces — performance + accessibility + UX signoff</p>
+          <p class="task-sub">Formal go-live signoff with evidence links. Mastermind C + Fleet review. Gate: zero critical regressions, all migrated routes green, design-system version pinned.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@mc + @fleet</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PHASE F ── -->
+  <section id="phase-f" class="phase">
+    <div class="phase-head">
+      <span class="phase-key">PHASE · F</span>
+      <h2>Per-page deep migration</h2>
+      <div class="phase-meta">
+        <span>ETA <span style="color:var(--ink-2);">TBD</span></span>
+        <span class="sep">·</span>
+        <span>owner <span style="color:var(--ink-2);">Pope</span></span>
+        <span class="sep">·</span>
+        <span class="truth mixed">EXPANDING</span>
+      </div>
+    </div>
+    <div class="tasks">
+      <!-- F.0 · Architecture principle -->
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.0</span></div>
+          <p class="task-title">Architecture principle: one shared design system, two primary product families</p>
+          <p class="task-sub">STURM = workflow / studio / workspace / case / report / assistant. Gateway = control-plane / topology / ops matrix / execution docs / operator chat. Sister surfaces get adapters, not forced full-skin rewrites.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <!-- F.1 · Migration priority tiers -->
+      <div class="task" data-status="doing">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.1a</span></div>
+          <p class="task-title">P0 full migration: <strong>STURM + Gateway</strong></p>
+          <p class="task-sub">Already in flight via Phases A + B. Full design-system adoption, route-level rebuild.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">doing</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.1b</span></div>
+          <p class="task-title">P1 adapter / shell parity: <strong>sturm-mandanten + cornea-quantum</strong></p>
+          <p class="task-sub">Shared shell + design tokens via the <code>/ds/*</code> endpoint. Adapter layer only — no full skin rewrite required.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.1c</span></div>
+          <p class="task-title">P2 service-only: <strong>elster-quantum</strong></p>
+          <p class="task-sub">Status + docs surfaces exposed only. No page redesign. Keep current UI, add token-aligned status/health views.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="done">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.1d</span></div>
+          <p class="task-title">P2 selective alignment: <strong>academy / edu family</strong></p>
+          <p class="task-sub">Token adoption only. Typography + color tokens flow in via <code>/ds/sturm.css</code>. No structural changes.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">done</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <!-- F.2 · STURM route families -->
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2a</span></div>
+          <p class="task-title">STURM · <strong>dashboard</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2b</span></div>
+          <p class="task-title">STURM · <strong>graph workbench</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2c</span></div>
+          <p class="task-title">STURM · <strong>document studio</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2d</span></div>
+          <p class="task-title">STURM · <strong>app / case hub</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2e</span></div>
+          <p class="task-title">STURM · <strong>case / report cockpit</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2f</span></div>
+          <p class="task-title">STURM · <strong>workspace / document ops</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2g</span></div>
+          <p class="task-title">STURM · <strong>assistant / embed</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.2h</span></div>
+          <p class="task-title">STURM · <strong>strategy / lab pages</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <!-- F.3 · Gateway route families -->
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.3a</span></div>
+          <p class="task-title">Gateway · <strong>control center</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.3b</span></div>
+          <p class="task-title">Gateway · <strong>execution docs</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.3c</span></div>
+          <p class="task-title">Gateway · <strong>merge / catalog matrices</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <div class="task" data-status="todo">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.3d</span></div>
+          <p class="task-title">Gateway · <strong>operator / admiral surfaces</strong></p>
+          <p class="task-sub">Page-level audit &amp; migration — exact route bullets coming from Pope's sub-agent fleet.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">todo</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+      <!-- F.4 · Sub-agent expansion placeholder -->
+      <div class="task" data-status="doing">
+        <div class="task-check"></div>
+        <div class="task-body">
+          <div class="task-id"><span class="new-id">F.4</span></div>
+          <p class="task-title">Pope's sub-agent expansion: per-route detail cards</p>
+          <p class="task-sub">Per-route detail cards land here once Pope's sub-agent fleet completes the page-by-page audit. Follow-up commit pending. Feeds <code>UI-02</code> route migration matrix and <code>UI-05</code> per-screen work at finer granularity.</p>
+        </div>
+        <div class="task-meta">
+          <span class="status-pill">doing</span>
+          <span class="owner">@pope</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── RISKS ── -->
+  <section id="risks" class="risks">
+    <h2>Risks &amp; open questions</h2>
+    <ol>
+      <li><strong>Phase A discovery:</strong> alpha.6_2 is <em>already live</em> at <code>sturm.0711.io/</code>. Either Minimi already deployed it (and didn't announce) or it shipped with the last image rebuild. Confirm with MC that this was intentional.</li>
+      <li><strong>gateway-app.jsx — replacement or lab mode?</strong> 106 KB of JSX. Either replaces gateway-ui-next entirely or runs alongside as a "lab mode" route. Architectural fork.</li>
+      <li><strong>Sister-site list.</strong> Plan covers 7 candidates but only MC knows which actually matter. List is a hypothesis.</li>
+      <li><strong><code>sturm.0711.io/ui</code> URL.</strong> Verified 404 today — free to claim. ✓</li>
+      <li><strong>Container rebuild discipline.</strong> Phase A is no-restart-safe. Phases B/C/E require <code>server.ts</code> edits → rebuild → coordinate around live workflow runs.</li>
+      <li><strong><code>app.html</code> vs <code>anwendungen.html</code>.</strong> Conceptual overlap. One must win, the other go.</li>
+    </ol>
+  </section>
+
+</div>
+
+<footer>
+  Merged + curated by Fleet Admiral Bombas 💣 <span class="sep">·</span> sources: alpha.6_2 (Minimi design pack) + Pope's /ui board (2026-05-24 14:21) + Pope's per-page audit handoff (16:27) <span class="sep">·</span> 2026-05-24
+  <br />
+  <span style="color: var(--ink-4);">design system: /v6/sturm.css <span class="sep">·</span> truth state: PLAN <span class="sep">·</span> source of record: <a href="#" style="color: var(--accent); text-decoration: none;">MIGRATION-PLAN.md</a> <span class="sep">·</span> original archived at <a href="/ui/_archive/index.2026-05-24-14-21.html" style="color: var(--accent); text-decoration: none;">/ui/_archive/</a></span>
+</footer>
+
+<script>
+  // ── theme toggle ──
+  const tt = document.getElementById('themeToggle');
+  tt && tt.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('sturm-theme', next); } catch (e) {}
+  });
+
+  // ── live status ──
+  // Periodically refresh the "last check" timestamp; ping sturm root to refresh status dot.
+  // Minimi can later swap this for a /api/migration-status.json endpoint.
+  async function refreshStatus() {
+    const lastCheck = document.getElementById('last-check');
+    try {
+      const r = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+      const sturm = document.getElementById('status-sturm');
+      if (sturm) sturm.textContent = 'sturm.0711.io · ' + r.status;
+    } catch (e) {}
+    if (lastCheck) {
+      const d = new Date();
+      lastCheck.textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+  }
+  refreshStatus();
+  setInterval(refreshStatus, 15000);
+
+  // ── progress count (done / total tasks) ──
+  (function () {
+    const tasks = document.querySelectorAll('.task');
+    const done = document.querySelectorAll('.task[data-status="done"]').length;
+    const phases = document.querySelectorAll('.phase').length;
+    // Count phases whose tasks are all-done as "complete"
+    let phasesDone = 0;
+    document.querySelectorAll('.phase').forEach(p => {
+      const ts = p.querySelectorAll('.task');
+      const doneTs = p.querySelectorAll('.task[data-status="done"]');
+      if (ts.length > 0 && ts.length === doneTs.length) phasesDone++;
+    });
+    const el = document.getElementById('progress-bar');
+    const doing = document.querySelectorAll('.task[data-status="doing"]').length;
+    const todo  = document.querySelectorAll('.task[data-status="todo"]').length;
+    const blocked = document.querySelectorAll('.task[data-status="blocked"]').length;
+    if (el) el.textContent = done + ' done · ' + doing + ' doing · ' + todo + ' todo · ' + blocked + ' blocked';
+  })();
+</script>
+
+</body>
+</html>
