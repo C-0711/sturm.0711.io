@@ -5,6 +5,19 @@
 
 const $ = (id) => document.getElementById(id);
 
+(function captureUrlToken() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const tok = params.get('token');
+    if (!tok || tok.length === 0) return;
+    localStorage.setItem('sturm-token', tok);
+    params.delete('token');
+    const qs = params.toString();
+    const cleanUrl = location.pathname + (qs ? `?${qs}` : '') + location.hash;
+    history.replaceState(null, '', cleanUrl);
+  } catch {}
+})();
+
 const params = new URLSearchParams(location.search);
 const wsId = params.get('ws');
 if (!wsId) {

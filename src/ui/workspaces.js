@@ -1,19 +1,100 @@
 /* STURM Workspaces — list + create. Phase 1 (no auth handling, no GitChain). */
 
+(function captureUrlToken() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const tok = params.get('token');
+    if (!tok || tok.length === 0) return;
+    localStorage.setItem('sturm-token', tok);
+    params.delete('token');
+    const qs = params.toString();
+    const cleanUrl = location.pathname + (qs ? `?${qs}` : '') + location.hash;
+    history.replaceState(null, '', cleanUrl);
+  } catch {}
+})();
+
 const $ = (id) => document.getElementById(id);
 const grid = $('ws-grid');
 const form = $('create-form');
 const nameInput = $('ws-name');
 const errEl = $('create-error');
+const authState = { checked: false, kind: 'unknown', session: null };
+
+function readBearerToken() {
+  try { return localStorage.getItem('sturm-token'); }
+  catch { return null; }
+}
+
+function authRequiredMessage() {
+  return 'Authentifizierung fehlt. Öffne die Seite einmal mit ?token=<STURM_BEARER_TOKEN> oder über einen gültigen Session-Link.';
+}
+
+function setAuthUiEnabled(enabled) {
+  nameInput.disabled = !enabled;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = !enabled;
+  const cbBtnEl = document.getElementById('cbchat-import-btn');
+  if (cbBtnEl) cbBtnEl.disabled = !enabled;
+}
+
+function renderAuthRequired(message = authRequiredMessage()) {
+  setAuthUiEnabled(false);
+  errEl.textContent = '';
+  grid.innerHTML = `
+    <div class="ws-card" style="display:block">
+      <div class="ws-card-name">Login erforderlich</div>
+      <p class="muted" style="margin:8px 0 0">${escapeHtml(message)}</p>
+      <p class="muted" style="margin:8px 0 0">Direktlinks dürfen weiter <code>?ws=…</code> nutzen, der Bearer wird jetzt zusätzlich sauber aus <code>?token=…</code> übernommen.</p>
+    </div>
+  `;
+}
+
+async function detectAuth(force = false) {
+  if (authState.checked && !force) return authState;
+  const tok = readBearerToken();
+  if (tok) {
+    authState.checked = true;
+    authState.kind = 'bearer';
+    authState.session = null;
+    return authState;
+  }
+  try {
+    const resp = await fetch('/api/sessions/me', { credentials: 'same-origin' });
+    if (resp.ok) {
+      authState.checked = true;
+      authState.kind = 'session';
+      authState.session = await resp.json();
+      return authState;
+    }
+  } catch {}
+  authState.checked = true;
+  authState.kind = 'missing';
+  authState.session = null;
+  return authState;
+}
+
+async function ensureWorkspaceAuth() {
+  const state = await detectAuth();
+  if (state.kind === 'missing') {
+    renderAuthRequired();
+    return null;
+  }
+  setAuthUiEnabled(true);
+  return state;
+}
 
 async function api(path, opts = {}) {
   const headers = { ...(opts.headers ?? {}) };
-  const tok = localStorage.getItem('sturm-token');
+  const tok = readBearerToken();
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const resp = await fetch(path, { ...opts, headers });
+  const resp = await fetch(path, { credentials: 'same-origin', ...opts, headers });
   if (!resp.ok) {
     let msg = `HTTP ${resp.status}`;
     try { const j = await resp.json(); msg = j.message || j.error || msg; } catch {}
+    if (resp.status === 401) {
+      const state = await detectAuth(true);
+      if (state.kind === 'missing') msg = authRequiredMessage();
+    }
     throw new Error(msg);
   }
   return resp.json();
@@ -30,6 +111,8 @@ function fmtDate(iso) {
 
 async function refreshList() {
   try {
+    const state = await ensureWorkspaceAuth();
+    if (!state) return;
     const list = await api('/api/workspaces');
     if (list.length === 0) {
       grid.innerHTML = '<p class="muted">Noch keine Workspaces. Lege oben einen an.</p>';
@@ -46,13 +129,23 @@ async function refreshList() {
       </a>
     `).join('');
   } catch (e) {
-    grid.innerHTML = `<p class="error-text">Fehler beim Laden: ${escapeHtml(e.message)}</p>`;
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === authRequiredMessage()) {
+      renderAuthRequired(msg);
+      return;
+    }
+    grid.innerHTML = `<p class="error-text">Fehler beim Laden: ${escapeHtml(msg)}</p>`;
   }
 }
 
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   errEl.textContent = '';
+  const state = await ensureWorkspaceAuth();
+  if (!state) {
+    errEl.textContent = authRequiredMessage();
+    return;
+  }
   const name = nameInput.value.trim();
   if (!name) return;
   const submitBtn = form.querySelector('button[type="submit"]');
@@ -66,7 +159,7 @@ form.addEventListener('submit', async (ev) => {
     nameInput.value = '';
     await refreshList();
   } catch (e) {
-    errEl.textContent = e.message;
+    errEl.textContent = e instanceof Error ? e.message : String(e);
   } finally {
     submitBtn.disabled = false;
   }
