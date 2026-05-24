@@ -392,7 +392,8 @@ export function createCtxRouter(opts: { ollamaUrl?: string; embedCpu?: boolean }
 
 
   // ─── C5: POST /:id/anchor ──────────────────────────────────────────
-  router.post('/:id/anchor', authMiddleware, async (req, res) => {
+  router.post('/:id/anchor', async (req, res) => {
+    if (!hasValidAuth(req)) return res.status(401).json({ error: 'unauthorized' });
     const { id } = req.params as { id: string };
     const rec = await getContainer(id);
     if (!rec) return res.status(404).json({ error: 'container not found' });
