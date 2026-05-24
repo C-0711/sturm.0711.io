@@ -1,6 +1,6 @@
 # UI Migration Plan
 
-Updated: 2026-05-24 17:27 CEST
+Updated: 2026-05-24 18:36 CEST
 
 ## Coordinator defaults now locked
 
@@ -8,6 +8,7 @@ Updated: 2026-05-24 17:27 CEST
 - `B5`: replace `gateway-ui-next`. Quality Lab lives inside the integrated control plane as a top-level tab behind the rollout flag, not as a parallel lab.
 - `D4`: `ctax` is fully out of scope unless leadership explicitly reopens it.
 - E6: no page is deleted or archived. Every page is transferred to the new design.
+- Full inventory lock added: `/docs/UI_PAGE_INVENTORY_2026-05-24.md` (28-page transfer map).
 
 ## Shipped now
 
@@ -34,9 +35,19 @@ Updated: 2026-05-24 17:27 CEST
 | `jarvis.0711.io` | 200 GET / HEAD 405 | Standalone OpenJarvis surface with its own asset pipeline | Selective alignment only for landing/status surfaces, no product-shell rewrite | later |
 | `ctax` | production | Protected surface | Explicitly out of scope per D4. No migration work unless leadership reopens it. | n/a |
 
+## Full inventory lock (28 pages)
+
+- Tier 1: 2 pages fully alpha.6_2
+- Tier 2: 11 pages in finish-pass
+- Tier 3: 15 pages in full migration path
+
+Canonical inventory source:
+
+- `/docs/UI_PAGE_INVENTORY_2026-05-24.md`
+
 ## Recommended next pickup
 
 1. Complete the public cutover for `sturm-mandanten`. The DS adapter is already shipped internally in `1dbb589`, but the hostname still lands on the shared coming-soon page.
-2. Retire local sister-surface copies of STURM CSS where the import path is safe.
-3. Cut the next P1 consumer patch for `cornea-quantum` and link shipped commits back into `/ui`.
-4. Transfer remaining Tier-3 legacy pages into the new design path (no archival/deletion route).
+2. Cut the next P1 consumer patch for `cornea-quantum` and link shipped commits back into `/ui`.
+3. Transfer Tier-3 high-value pages first: `/anwendungen.html` -> `/steuerfall.html` -> `/abrechnung.html`.
+4. Continue remaining Tier-3 pages route-by-route, with smoke/visual gate after each chunk.
