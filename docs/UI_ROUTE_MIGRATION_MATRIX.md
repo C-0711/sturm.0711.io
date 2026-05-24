@@ -76,3 +76,9 @@ All priority domains were probed live and currently respond **HTTP 200**:
 ## Explicit out-of-scope
 
 - ctax is out of scope for this migration stream (no audit, no redesign, no token alignment in this lane).
+
+
+## No-archive policy
+
+- Leadership lock: no page will be deleted or archived in this migration stream.
+- All existing pages are transferred to the new design language, then validated by smoke/visual gates.

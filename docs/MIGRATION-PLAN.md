@@ -7,6 +7,7 @@ Updated: 2026-05-24 17:27 CEST
 - `A5`: `app.html` is canonical from `alpha.6_2.zip`. `anwendungen.html` is alias-only if retained.
 - `B5`: replace `gateway-ui-next`. Quality Lab lives inside the integrated control plane as a top-level tab behind the rollout flag, not as a parallel lab.
 - `D4`: `ctax` is fully out of scope unless leadership explicitly reopens it.
+- E6: no page is deleted or archived. Every page is transferred to the new design.
 
 ## Shipped now
 
@@ -38,3 +39,4 @@ Updated: 2026-05-24 17:27 CEST
 1. Complete the public cutover for `sturm-mandanten`. The DS adapter is already shipped internally in `1dbb589`, but the hostname still lands on the shared coming-soon page.
 2. Retire local sister-surface copies of STURM CSS where the import path is safe.
 3. Cut the next P1 consumer patch for `cornea-quantum` and link shipped commits back into `/ui`.
+4. Transfer remaining Tier-3 legacy pages into the new design path (no archival/deletion route).
