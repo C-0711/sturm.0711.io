@@ -79,6 +79,10 @@ services:
       - ${STURM_DATA_ROOT:-./.local-state}/uploads:/app/uploads
       - ${STURM_DATA_ROOT:-./.local-state}/schemas:/app/schemas
       - ${STURM_DATA_ROOT:-./.local-state}/logs:/app/logs
+      # Keep live UI checklist/docs persistent across rebuild/restart cycles.
+      # Without these binds, /ui and /docs can revert to image-baked copies.
+      - ./src/ui/ui:/app/src/ui/ui
+      - ./docs:/app/docs:ro
       # gitchain bare repos already live separately on h200v at
       # ~/gitchain-repos (referenced by GITCHAIN_REPO_ROOT in the env).
       # Override here if the host path differs from default.

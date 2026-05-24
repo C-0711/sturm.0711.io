@@ -1,6 +1,6 @@
 # UI Migration Plan
 
-Updated: 2026-05-24 17:18 CEST
+Updated: 2026-05-24 17:27 CEST
 
 ## Coordinator defaults now locked
 
@@ -16,12 +16,15 @@ Updated: 2026-05-24 17:18 CEST
 - `https://sturm.0711.io/ds/sturm@0.1.0.css`
 - `https://sturm.0711.io/ds/sturm@latest.css`
 - Cross-origin delivery enabled for `*.0711.io`
+- UI-02 delivered: `/docs/UI_ROUTE_MIGRATION_MATRIX.md` (owner map + P0/P1/P2 route tiers)
+- UI-08 delivered: `scripts/ui-regression.mjs` + `.github/workflows/ui-regression.yml`
+- UI-06 advanced: `scripts/sister-parity-probe.mjs` + `/docs/UI_SISTER_PARITY_BASELINE.md`
 
 ## Sister-surface audit matrix
 
 | Site | Live state | Current UI state | Decision | ETA |
 | --- | --- | --- | --- | --- |
-| `sturm-mandanten.0711.io` | 200 | Public lane/placeholder posture live, repo contains richer STURM-family shell variants | Adapter/shell parity via `/ds/sturm.css`, not a bespoke third system | 0.5d after route-owner alignment |
+| `sturm-mandanten.0711.io` | 200 | Public lane/placeholder posture still live, internal v6 surface now ships the shared DS import from the running `sturm-mandanten` container | Adapter parity shipped in `1dbb589` with `https://sturm.0711.io/ds/sturm.css`; remaining gap is hostname cutover because the public domain still resolves to the shared nginx coming-soon page | cutover pending |
 | `cornea-quantum.0711.io` | 200 | Public placeholder posture, not yet a full product-family shell | P1 adapter parity only, reuse shared shell and tokens when route family goes live | 0.5d |
 | `bosch-edu.0711.io` | 200 | Distinct branded Next.js product with its own palette and IA | Token-only/selective adoption for status and doc surfaces, no forced full-skin rewrite | 1d |
 | `cb-chat.0711.io` | 200 | CTAX-branded chat experience with separate product grammar | Selective token-only alignment for shared primitives if kept active, no shell rewrite | 0.5d |
@@ -32,6 +35,6 @@ Updated: 2026-05-24 17:18 CEST
 
 ## Recommended next pickup
 
-1. Switch the first P1 adapter consumers, starting with `sturm-mandanten` and `cornea-quantum`, to import `https://sturm.0711.io/ds/sturm.css`.
+1. Complete the public cutover for `sturm-mandanten`. The DS adapter is already shipped internally in `1dbb589`, but the hostname still lands on the shared coming-soon page.
 2. Retire local sister-surface copies of STURM CSS where the import path is safe.
-3. Expand the route migration matrix so UI-02 and UI-06 converge into one actionable ownership map.
+3. Cut the next P1 consumer patch for `cornea-quantum` and link shipped commits back into `/ui`.

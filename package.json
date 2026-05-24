@@ -23,7 +23,10 @@
     "test": "npm run test:codec && npm run test:schema && npm run test:gitchain && npm run test:pentacam-kc && npm run test:myopia && npm run test:applications && npm run test:seal && npm run test:ensemble && npm run test:aggregation",
     "build:ui": "npm run build:ui:pipeline && npm run build:ui:designer",
     "build:ui:pipeline": "esbuild src/ui/pipeline.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/pipeline.bundle.js",
-    "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js"
+    "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js",
+    "test:e2e:ui:smoke": "node scripts/ui-regression.mjs --smoke-only",
+    "test:e2e:ui:visual": "node scripts/ui-regression.mjs",
+    "test:e2e:sister-parity": "node scripts/sister-parity-probe.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",
@@ -43,6 +46,9 @@
     "esbuild": "^0.27.7",
     "puppeteer-core": "^24.43.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "playwright": "^1.54.1",
+    "pngjs": "^7.0.0",
+    "pixelmatch": "^7.1.0"
   }
 }

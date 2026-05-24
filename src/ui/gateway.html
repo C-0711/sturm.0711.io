@@ -6,8 +6,12 @@
   <title>Quantum Gateway · Control Plane</title>
   <script>
     (function() {
+      // Force dark by default for operator surfaces to avoid unreadable light inversion.
+      // Optional override for diagnostics: ?theme=light
       try {
-        var t = localStorage.getItem('sturm-theme') || 'dark';
+        var q = new URLSearchParams(window.location.search);
+        var forced = q.get('theme');
+        var t = (forced === 'light' || forced === 'dark') ? forced : 'dark';
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
     })();

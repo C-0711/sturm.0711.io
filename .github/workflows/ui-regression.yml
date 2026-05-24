@@ -1,0 +1,77 @@
+name: UI Regression (D8)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  ui-smoke-and-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PORT: 7800
+      STURM_TOOLS_BOOT: skip
+      STURM_BEARER_TOKEN: ci-token
+      STURM_MASTER_HMAC_KEY: ci-master-key
+      MISTRAL_API_KEY: ci-mistral-key
+      ANTHROPIC_API_KEY: ci-anthropic-key
+      UI_VISUAL_MAX_DIFF_PERCENT: "18"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start STURM
+        run: |
+          nohup npm run start > /tmp/sturm-server.log 2>&1 &
+          echo $! > /tmp/sturm-server.pid
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null; then
+              echo "server ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server not ready" >&2
+          cat /tmp/sturm-server.log || true
+          exit 1
+
+      - name: Route smoke gate
+        run: npm run test:e2e:ui:smoke -- --base "http://127.0.0.1:${PORT}"
+
+      - name: Visual regression gate
+        run: npm run test:e2e:ui:visual -- --base "http://127.0.0.1:${PORT}"
+
+      - name: Upload regression reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-regression-reports
+          path: reports/ui-regression-*/
+          if-no-files-found: ignore
+
+      - name: Server logs (on failure)
+        if: failure()
+        run: cat /tmp/sturm-server.log || true
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/sturm-server.pid ]; then
+            kill "$(cat /tmp/sturm-server.pid)" || true
+          fi

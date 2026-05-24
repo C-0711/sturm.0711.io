@@ -78,18 +78,18 @@
         </thead>
         <tbody>
           <tr><td>UI-01</td><td>Foundation</td><td>Create unified design token map from <code>sturm.css</code> and apply it to the shared shell. Canonical distribution path now exists via <code>/ds/*</code>; dedupe pass across surfaces is still pending.</td><td>Minimi + Architect</td><td>0.5d</td><td class="st prog">IN PROGRESS</td><td>Canonical CSS published, duplicate local token maps retired where safe.</td></tr>
-          <tr><td>UI-02</td><td>Foundation</td><td>Define route migration matrix for <code>/</code>, <code>/gateway</code>, <code>/designer.html</code>, <code>/studio-ocr.html</code>, and sister routes.</td><td>Operator</td><td>0.5d</td><td class="st todo">TODO</td><td>Single route map doc + owner assigned per route.</td></tr>
+          <tr><td>UI-02</td><td>Foundation</td><td>Define route migration matrix for <code>/</code>, <code>/gateway</code>, <code>/designer.html</code>, <code>/studio-ocr.html</code>, and sister routes.</td><td>Operator</td><td>0.5d</td><td class="st done">DONE</td><td>Published <code>/docs/UI_ROUTE_MIGRATION_MATRIX.md</code> with route owners and P0/P1/P2 tiering.</td></tr>
           <tr><td>UI-03</td><td>Shell</td><td>Implement shared top-nav + context breadcrumbs for STURM/Gateway parity.</td><td>Minimi</td><td>1d</td><td class="st todo">TODO</td><td>All primary surfaces use same shell component.</td></tr>
           <tr><td>UI-04</td><td>Gateway</td><td>Replace <code>gateway-ui-next</code> with the integrated control plane. Quality Lab stays inside that surface as a top-level tab and rolls out behind the feature flag, not as a parallel product.</td><td>Pope + Minimi</td><td>1d</td><td class="st todo">TODO</td><td>No API regressions, smoke on <code>/gateway</code> green, Quality Lab reachable inside the same control-plane shell.</td></tr>
           <tr><td>UI-05</td><td>STURM Core</td><td>Migrate <code>index/app/designer/ocr</code> to new components and align interaction states. Canonical route/file naming follows <code>app.html</code>; <code>anwendungen.html</code> is alias-only if kept.</td><td>Minimi</td><td>1.5d</td><td class="st todo">TODO</td><td>Visual parity to archive screenshots within agreed threshold and route naming stays canonical.</td></tr>
-          <tr><td>UI-06</td><td>Sister Surfaces</td><td>Audit and classify sister endpoints, then apply shell or token parity only where it fits the product family. Initial audit is now recorded in <code>MIGRATION-PLAN.md</code>.</td><td>Architect + Operator</td><td>1d</td><td class="st prog">IN PROGRESS</td><td>Every candidate site has a migration decision and ETA.</td></tr>
+          <tr><td>UI-06</td><td>Sister Surfaces</td><td>Audit and classify sister endpoints, then apply shell or token parity only where it fits the product family. Initial audit is now recorded in <code>MIGRATION-PLAN.md</code>.</td><td>Architect + Operator</td><td>1d</td><td class="st prog">IN PROGRESS</td><td>Baseline + automation now live in <code>/docs/UI_SISTER_PARITY_BASELINE.md</code> and <code>scripts/sister-parity-probe.mjs</code>.</td></tr>
           <tr><td>UI-07</td><td>Backend Contracts</td><td>Ensure all migrated views read only live APIs; remove residual mock bindings.</td><td>Pope</td><td>0.5d</td><td class="st todo">TODO</td><td>Contract tests pass; no hardcoded data in migrated views.</td></tr>
-          <tr><td>UI-08</td><td>Quality</td><td>Add visual regression + route smoke suite (desktop + mobile viewport baseline).</td><td>Operator</td><td>0.5d</td><td class="st todo">TODO</td><td>CI gate fails on route break or major visual drift.</td></tr>
+          <tr><td>UI-08</td><td>Quality</td><td>Add visual regression + route smoke suite (desktop + mobile viewport baseline).</td><td>Operator</td><td>0.5d</td><td class="st done">DONE</td><td>Shipped <code>scripts/ui-regression.mjs</code> + CI workflow <code>.github/workflows/ui-regression.yml</code> (smoke + visual gate).</td></tr>
           <tr><td>UI-09</td><td>Rollout</td><td>Progressive rollout: canary flag → full switch, with rollback toggle preserved for 1 release cycle.</td><td>Fleet</td><td>0.5d</td><td class="st todo">TODO</td><td>Rollback tested and documented.</td></tr>
           <tr><td>UI-10</td><td>Sign-off</td><td>Final acceptance run: STURM + Gateway + sister surfaces, performance + accessibility + UX signoff.</td><td>C + Fleet</td><td>0.5d</td><td class="st todo">TODO</td><td>Formal go-live signoff with evidence links.</td></tr>
         </tbody>
       </table>
-      <p class="small">Current pickup order: finish sister-site decisions and move the first adapter consumers onto <code>/ds/sturm.css</code>.</p>
+      <p class="small">Current pickup order: finish public cutover for <code>sturm-mandanten</code> after the shipped DS adapter, then move <code>cornea-quantum</code> onto <code>/ds/sturm.css</code>, then retire local CSS copies where safe.</p>
     </section>
 
     <h2>5) Sister-surface audit snapshot</h2>
@@ -99,7 +99,7 @@
           <tr><th>Site</th><th>Live state</th><th>Current UI state</th><th>Decision</th><th>ETA</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>sturm-mandanten.0711.io</code></td><td>200</td><td>Public lane/placeholder posture live; repo contains richer STURM-family shell variants.</td><td>Adapter / shell parity via <code>/ds/sturm.css</code>, not a bespoke third system.</td><td>0.5d after route-owner alignment</td></tr>
+          <tr><td><code>sturm-mandanten.0711.io</code></td><td>200</td><td>Public lane/placeholder posture still live; internal v6 surface now ships the shared DS import from the running <code>sturm-mandanten</code> container.</td><td>Adapter parity shipped in <code>1dbb589</code> with <code>https://sturm.0711.io/ds/sturm.css</code>; remaining gap is hostname cutover because the public domain still resolves to the shared nginx coming-soon page.</td><td>cutover pending</td></tr>
           <tr><td><code>cornea-quantum.0711.io</code></td><td>200</td><td>Public placeholder posture, not yet a full product-family shell.</td><td>P1 adapter parity only. Reuse shared shell and tokens when route family goes live.</td><td>0.5d</td></tr>
           <tr><td><code>bosch-edu.0711.io</code></td><td>200</td><td>Distinct branded Next.js product with its own palette and information architecture.</td><td>Token-only / selective adoption for status-doc surfaces, no forced full-skin rewrite.</td><td>1d</td></tr>
           <tr><td><code>cb-chat.0711.io</code></td><td>200</td><td>CTAX-branded chat experience with separate product grammar.</td><td>Selective token-only alignment for shared primitives if kept active, no shell rewrite.</td><td>0.5d</td></tr>
@@ -114,9 +114,9 @@
     <h2>6) Next pickup queue</h2>
     <section class="panel">
       <ol>
-        <li>Switch the first P1 adapter consumers, starting with <code>sturm-mandanten</code> and <code>cornea-quantum</code>, to import <code>https://sturm.0711.io/ds/sturm.css</code>.</li>
+        <li>Complete the public cutover for <code>sturm-mandanten</code>. The DS adapter is already shipped internally in <code>1dbb589</code>, but the hostname still lands on the shared coming-soon page.</li>
         <li>Retire local sister-surface copies of STURM CSS where the import path is safe.</li>
-        <li>Expand the route migration matrix so UI-02 and UI-06 converge into one actionable ownership map.</li>
+        <li>Cut the next P1 consumer patch for <code>cornea-quantum</code> and link shipped commits back into this checklist.</li>
       </ol>
     </section>
   </div>
