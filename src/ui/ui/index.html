@@ -37,8 +37,8 @@
     <div class="meta">
       <span class="pill">Status: active execution</span>
       <span class="pill">Publish target: <code>sturm.0711.io/ui</code></span>
-      <span class="pill">Latest shipped: <code>b0a59c7</code> · design-system endpoint</span>
-      <span class="pill">Updated: 2026-05-24 17:10 CEST</span>
+      <span class="pill">Latest shipped: <code>711dc3d</code> · audit + live checklist</span>
+      <span class="pill">Updated: 2026-05-24 17:18 CEST</span>
     </div>
 
     <h2>1) Current shipped work</h2>
@@ -51,7 +51,16 @@
       </div>
     </section>
 
-    <h2>2) Integration objective</h2>
+    <h2>2) Coordinator defaults now locked</h2>
+    <section class="panel">
+      <ul>
+        <li><b>A5</b> · <code>app.html</code> is canonical from <code>alpha.6_2.zip</code>. <code>anwendungen.html</code> remains an optional alias, not the source name.</li>
+        <li><b>B5</b> · replace <code>gateway-ui-next</code> rather than running a parallel lab. Quality Lab modes live inside the new control plane as a top-level tab, staged behind the rollout flag.</li>
+        <li><b>D4</b> · <code>ctax</code> is fully out of scope. No audit, no migration, no token-alignment pass unless leadership explicitly reopens it.</li>
+      </ul>
+    </section>
+
+    <h2>3) Integration objective</h2>
     <section class="panel">
       <p>Ship one coherent design system and interaction language across <b>STURM</b>, <b>Gateway</b>, and related sister surfaces without breaking live operational workflows. Deliver in phases with measurable acceptance gates, not a big-bang replacement.</p>
       <ul>
@@ -61,7 +70,7 @@
       </ul>
     </section>
 
-    <h2>3) Execution checklist</h2>
+    <h2>4) Execution checklist</h2>
     <section class="panel" style="overflow:auto">
       <table>
         <thead>
@@ -71,8 +80,8 @@
           <tr><td>UI-01</td><td>Foundation</td><td>Create unified design token map from <code>sturm.css</code> and apply it to the shared shell. Canonical distribution path now exists via <code>/ds/*</code>; dedupe pass across surfaces is still pending.</td><td>Minimi + Architect</td><td>0.5d</td><td class="st prog">IN PROGRESS</td><td>Canonical CSS published, duplicate local token maps retired where safe.</td></tr>
           <tr><td>UI-02</td><td>Foundation</td><td>Define route migration matrix for <code>/</code>, <code>/gateway</code>, <code>/designer.html</code>, <code>/studio-ocr.html</code>, and sister routes.</td><td>Operator</td><td>0.5d</td><td class="st todo">TODO</td><td>Single route map doc + owner assigned per route.</td></tr>
           <tr><td>UI-03</td><td>Shell</td><td>Implement shared top-nav + context breadcrumbs for STURM/Gateway parity.</td><td>Minimi</td><td>1d</td><td class="st todo">TODO</td><td>All primary surfaces use same shell component.</td></tr>
-          <tr><td>UI-04</td><td>Gateway</td><td>Integrate <code>gateway.html</code> + <code>gateway-app.jsx</code> into production gateway route with current live APIs.</td><td>Pope + Minimi</td><td>1d</td><td class="st todo">TODO</td><td>No API regressions, smoke on <code>/gateway</code> green.</td></tr>
-          <tr><td>UI-05</td><td>STURM Core</td><td>Migrate <code>index/app/designer/ocr</code> to new components and align interaction states.</td><td>Minimi</td><td>1.5d</td><td class="st todo">TODO</td><td>Visual parity to archive screenshots within agreed threshold.</td></tr>
+          <tr><td>UI-04</td><td>Gateway</td><td>Replace <code>gateway-ui-next</code> with the integrated control plane. Quality Lab stays inside that surface as a top-level tab and rolls out behind the feature flag, not as a parallel product.</td><td>Pope + Minimi</td><td>1d</td><td class="st todo">TODO</td><td>No API regressions, smoke on <code>/gateway</code> green, Quality Lab reachable inside the same control-plane shell.</td></tr>
+          <tr><td>UI-05</td><td>STURM Core</td><td>Migrate <code>index/app/designer/ocr</code> to new components and align interaction states. Canonical route/file naming follows <code>app.html</code>; <code>anwendungen.html</code> is alias-only if kept.</td><td>Minimi</td><td>1.5d</td><td class="st todo">TODO</td><td>Visual parity to archive screenshots within agreed threshold and route naming stays canonical.</td></tr>
           <tr><td>UI-06</td><td>Sister Surfaces</td><td>Audit and classify sister endpoints, then apply shell or token parity only where it fits the product family. Initial audit is now recorded in <code>MIGRATION-PLAN.md</code>.</td><td>Architect + Operator</td><td>1d</td><td class="st prog">IN PROGRESS</td><td>Every candidate site has a migration decision and ETA.</td></tr>
           <tr><td>UI-07</td><td>Backend Contracts</td><td>Ensure all migrated views read only live APIs; remove residual mock bindings.</td><td>Pope</td><td>0.5d</td><td class="st todo">TODO</td><td>Contract tests pass; no hardcoded data in migrated views.</td></tr>
           <tr><td>UI-08</td><td>Quality</td><td>Add visual regression + route smoke suite (desktop + mobile viewport baseline).</td><td>Operator</td><td>0.5d</td><td class="st todo">TODO</td><td>CI gate fails on route break or major visual drift.</td></tr>
@@ -83,7 +92,7 @@
       <p class="small">Current pickup order: finish sister-site decisions and move the first adapter consumers onto <code>/ds/sturm.css</code>.</p>
     </section>
 
-    <h2>4) Sister-surface audit snapshot</h2>
+    <h2>5) Sister-surface audit snapshot</h2>
     <section class="panel" style="overflow:auto">
       <table>
         <thead>
@@ -97,12 +106,12 @@
           <tr><td><code>academy.0711.io</code></td><td>200</td><td>Placeholder/lane-in-preparation surface.</td><td>P2 selective alignment only, token adoption when that lane graduates to a real surface.</td><td>later</td></tr>
           <tr><td><code>dl.0711.io</code></td><td>302 → <code>/login</code></td><td>GitChain auth/app surface.</td><td>Token-only for auth, docs, and status surfaces. Do not force STURM shell on core app UX.</td><td>0.5d</td></tr>
           <tr><td><code>jarvis.0711.io</code></td><td>200 GET / HEAD 405</td><td>Standalone OpenJarvis surface with its own asset pipeline.</td><td>Selective alignment only for landing or status surfaces, no product-shell rewrite.</td><td>later</td></tr>
-          <tr><td><code>ctax</code></td><td>production</td><td>Protected surface.</td><td>Do not touch without explicit signoff.</td><td>blocked</td></tr>
+          <tr><td><code>ctax</code></td><td>production</td><td>Protected surface.</td><td>Explicitly out of scope per D4. No migration work unless leadership reopens it.</td><td>n/a</td></tr>
         </tbody>
       </table>
     </section>
 
-    <h2>5) Next pickup queue</h2>
+    <h2>6) Next pickup queue</h2>
     <section class="panel">
       <ol>
         <li>Switch the first P1 adapter consumers, starting with <code>sturm-mandanten</code> and <code>cornea-quantum</code>, to import <code>https://sturm.0711.io/ds/sturm.css</code>.</li>

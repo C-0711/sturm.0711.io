@@ -1,10 +1,17 @@
 # UI Migration Plan
 
-Updated: 2026-05-24 17:10 CEST
+Updated: 2026-05-24 17:18 CEST
+
+## Coordinator defaults now locked
+
+- `A5`: `app.html` is canonical from `alpha.6_2.zip`. `anwendungen.html` is alias-only if retained.
+- `B5`: replace `gateway-ui-next`. Quality Lab lives inside the integrated control plane as a top-level tab behind the rollout flag, not as a parallel lab.
+- `D4`: `ctax` is fully out of scope unless leadership explicitly reopens it.
 
 ## Shipped now
 
 - `b0a59c7` `feat(ui): add stable design system css routes`
+- `711dc3d` `docs(ui): publish sister-surface audit and live checklist`
 - `https://sturm.0711.io/ds/sturm.css`
 - `https://sturm.0711.io/ds/sturm@0.1.0.css`
 - `https://sturm.0711.io/ds/sturm@latest.css`
@@ -21,7 +28,7 @@ Updated: 2026-05-24 17:10 CEST
 | `academy.0711.io` | 200 | Placeholder/lane-in-preparation surface | P2 selective alignment only, token adoption when lane graduates to a real surface | later |
 | `dl.0711.io` | 302 → `/login` | GitChain auth/app surface | Token-only for auth, docs, and status surfaces, do not force STURM shell on core app UX | 0.5d |
 | `jarvis.0711.io` | 200 GET / HEAD 405 | Standalone OpenJarvis surface with its own asset pipeline | Selective alignment only for landing/status surfaces, no product-shell rewrite | later |
-| `ctax` | production | Protected surface | Do not touch without explicit signoff | blocked |
+| `ctax` | production | Protected surface | Explicitly out of scope per D4. No migration work unless leadership reopens it. | n/a |
 
 ## Recommended next pickup
 
