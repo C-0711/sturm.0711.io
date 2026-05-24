@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STURM UI Integration Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/v6/sturm.css" />
+  <style>
+    .ui-shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 28px 96px;
+    }
+    .ui-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .ui-brand {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .ui-title h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 0.96;
+      letter-spacing: -0.04em;
+      font-weight: 560;
+    }
+    .ui-sub {
+      margin: 12px 0 0;
+      max-width: 78ch;
+      color: var(--ink-2);
+      font-size: 15px;
+    }
+    .meta-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 240px;
+    }
+    .meta-card,
+    .section,
+    .track,
+    .todo-row {
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-lg);
+    }
+    .meta-card {
+      padding: 14px 16px;
+    }
+    .meta-card .k,
+    .eyebrow,
+    .todo-id,
+    .stack-label {
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+    .meta-card .v {
+      margin-top: 6px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .hero-grid,
+    .principles,
+    .track-grid,
+    .deliverables,
+    .rollout-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .hero-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+    .kpi {
+      padding: 18px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-lg);
+    }
+    .kpi .value {
+      margin-top: 10px;
+      font-size: 30px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-weight: 560;
+    }
+    .kpi .note {
+      margin-top: 10px;
+      color: var(--ink-2);
+      font-size: 13px;
+    }
+    .section {
+      padding: 24px;
+      margin-top: 16px;
+    }
+    .section h2,
+    .track h3,
+    .todo-copy h4 {
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .section-copy,
+    .track-copy,
+    .todo-copy p,
+    .small-note {
+      color: var(--ink-2);
+    }
+    .principles {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .principle {
+      padding: 18px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius);
+    }
+    .principle strong,
+    .track-copy strong,
+    .todo-copy strong {
+      color: var(--ink);
+    }
+    .principle p {
+      color: var(--ink-2);
+      margin: 10px 0 0;
+      line-height: 1.6;
+    }
+    .track-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .track {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .track-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .pill.now { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 50%, var(--line)); }
+    .pill.next { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 50%, var(--line)); }
+    .pill.later { color: var(--info); border-color: color-mix(in oklab, var(--info) 50%, var(--line)); }
+    .deliverables {
+      grid-template-columns: 1fr;
+    }
+    .todo-row {
+      display: grid;
+      grid-template-columns: 92px 1fr 220px;
+      gap: 16px;
+      padding: 16px;
+      align-items: start;
+    }
+    .todo-id {
+      color: var(--accent);
+    }
+    .todo-copy h4 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+    .todo-copy p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .todo-copy ul {
+      margin: 12px 0 0;
+      padding-left: 18px;
+      color: var(--ink-2);
+    }
+    .todo-copy li + li { margin-top: 6px; }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .stack-card {
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius);
+    }
+    .stack-card strong {
+      display: block;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .stack-card span {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--ink-2);
+      line-height: 1.5;
+    }
+    .rollout-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .rollout-step {
+      padding: 18px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius);
+    }
+    .rollout-step h3 {
+      margin: 8px 0 10px;
+      font-size: 18px;
+    }
+    .rollout-step ol {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--ink-2);
+    }
+    .rollout-step li + li { margin-top: 8px; }
+    .footer {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line-2);
+      color: var(--ink-3);
+      font-size: 12px;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink);
+    }
+    @media (max-width: 1040px) {
+      .hero-grid,
+      .principles,
+      .track-grid,
+      .rollout-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .todo-row {
+        grid-template-columns: 92px 1fr;
+      }
+      .todo-row .stack {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 760px) {
+      .ui-shell { padding: 24px 16px 72px; }
+      .hero-grid,
+      .principles,
+      .track-grid,
+      .rollout-grid {
+        grid-template-columns: 1fr;
+      }
+      .todo-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="ui-shell">
+    <section class="ui-top">
+      <div class="ui-brand">
+        <div class="brand-tile lg">S</div>
+        <div class="ui-title">
+          <div class="brand-pill">Published task board</div>
+          <h1>STURM + Gateway UI integration board</h1>
+          <p class="ui-sub">This board turns the new STURM/Gateway design direction into a concrete integration plan. The goal is one shared shell, one shared component language, truthful live data surfaces, and a staged rollout across STURM, Gateway, and sister product surfaces.</p>
+        </div>
+      </div>
+      <div class="meta-stack">
+        <div class="meta-card">
+          <div class="k">scope</div>
+          <div class="v">STURM, Quantum Gateway, related sister surfaces</div>
+        </div>
+        <div class="meta-card">
+          <div class="k">canonical design baseline</div>
+          <div class="v"><code>src/ui/v6/</code> + shared <code>/v6/sturm.css</code></div>
+        </div>
+        <div class="meta-card">
+          <div class="k">publish path</div>
+          <div class="v"><code>https://sturm.0711.io/ui</code></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="hero-grid">
+      <article class="kpi">
+        <div class="eyebrow">workstreams</div>
+        <div class="value">6</div>
+        <div class="note">Shared system, STURM, Gateway, subsidiaries, data truth, rollout.</div>
+      </article>
+      <article class="kpi">
+        <div class="eyebrow">priority now</div>
+        <div class="value">3</div>
+        <div class="note">Unify design primitives, migrate core shells, wire truthful runtime data.</div>
+      </article>
+      <article class="kpi">
+        <div class="eyebrow">target outcome</div>
+        <div class="value">1</div>
+        <div class="note">One visual language across STURM, Gateway, and sibling surfaces.</div>
+      </article>
+      <article class="kpi">
+        <div class="eyebrow">deployment mode</div>
+        <div class="value">phased</div>
+        <div class="note">Ship shell first, then live surface migrations, then subsidiary adoption.</div>
+      </article>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">integration principles</div>
+          <h2>How to integrate this without design drift</h2>
+        </div>
+        <div class="small-note">Truth over mockups, shared assets over duplicated one-off CSS.</div>
+      </div>
+      <div class="principles">
+        <article class="principle">
+          <strong>1. Canonical shared system</strong>
+          <p>Keep <code>/v6/sturm.css</code> as the canonical shared design language first, then extract stable primitives into <code>src/ui/design-system</code> once STURM and Gateway both use them.</p>
+        </article>
+        <article class="principle">
+          <strong>2. Shell before depth</strong>
+          <p>Migrate navigation, layout, headers, panels, tables, status badges, and forms first. Deep workflow-specific screens come after the shell and information architecture stop moving.</p>
+        </article>
+        <article class="principle">
+          <strong>3. Live runtime, not fantasy UI</strong>
+          <p>Gateway and STURM surfaces must read from real APIs and expose truth states. If a panel is partial or seeded, mark it that way instead of polishing inaccurate states.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">workstream map</div>
+          <h2>Plan of attack</h2>
+        </div>
+        <div class="small-note">Recommended execution order: WS-1 → WS-2/3 → WS-4 → WS-5 → WS-6</div>
+      </div>
+      <div class="track-grid">
+        <article class="track">
+          <div class="track-head"><h3>WS-1 Shared design system hardening</h3><span class="pill now">now</span></div>
+          <div class="track-copy">Lock the reusable UI kit that both products consume: tokens, spacing, status pills, data tables, sidebars, form controls, hero shells, and truth-state callouts.</div>
+        </article>
+        <article class="track">
+          <div class="track-head"><h3>WS-2 STURM surface migration</h3><span class="pill now">now</span></div>
+          <div class="track-copy">Apply the new shell to <strong>landing</strong>, <strong>designer</strong>, <strong>OCR studio</strong>, and high-traffic workflow views with minimal regressions.</div>
+        </article>
+        <article class="track">
+          <div class="track-head"><h3>WS-3 Gateway control-plane migration</h3><span class="pill now">now</span></div>
+          <div class="track-copy">Align Gateway navigation, registry tables, health/state cards, and agent/containers surfaces with the same vocabulary as STURM.</div>
+        </article>
+        <article class="track">
+          <div class="track-head"><h3>WS-4 Sister surface adoption</h3><span class="pill next">next</span></div>
+          <div class="track-copy">Move related surfaces onto the shared shell only after the STURM and Gateway baseline proves stable. Keep per-product identity, but not per-product layout systems.</div>
+        </article>
+        <article class="track">
+          <div class="track-head"><h3>WS-5 Runtime truth and telemetry</h3><span class="pill next">next</span></div>
+          <div class="track-copy">Back every visible status chip with real APIs, real freshness timestamps, and explicit partial/seeded/live states across both products.</div>
+        </article>
+        <article class="track">
+          <div class="track-head"><h3>WS-6 QA, rollout, cleanup</h3><span class="pill later">later</span></div>
+          <div class="track-copy">Screenshot diffing, responsive checks, route audit, duplicate asset removal, and default-route cutover once new surfaces are proven.</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">task list</div>
+          <h2>Concrete integration tasks</h2>
+        </div>
+        <div class="small-note">Each task has a direct deliverable and a definition of done.</div>
+      </div>
+      <div class="deliverables">
+        <article class="todo-row">
+          <div class="todo-id">T-01</div>
+          <div class="todo-copy">
+            <h4>Freeze the shared UI contract</h4>
+            <p>Audit the currently duplicated UI assets across <code>src/ui/</code>, <code>src/ui/v6/</code>, and <code>src/ui/design-system/</code>. Decide which tokens and primitives are canonical, then retire the duplicates instead of letting STURM and Gateway drift.</p>
+            <ul>
+              <li>Pick the canonical token source for color, spacing, elevation, radius, badges, tables, and forms.</li>
+              <li>Normalize shared classes for truth-state badges, shell cards, split panes, nav groups, and monospace metadata chips.</li>
+              <li>Document which files are legacy, transitional, and canonical.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="stack-card"><div class="stack-label">deliverable</div><strong>Shared UI inventory</strong><span>One canonical CSS/component map for both STURM and Gateway.</span></div>
+            <div class="stack-card"><div class="stack-label">done when</div><strong>No duplicate primitives</strong><span>Both products consume the same badge, panel, nav, and table language.</span></div>
+          </div>
+        </article>
+
+        <article class="todo-row">
+          <div class="todo-id">T-02</div>
+          <div class="todo-copy">
+            <h4>Migrate the STURM top-level shell</h4>
+            <p>Promote the new design from isolated v6 pages into the main STURM experience. The first wave should cover the entry shell and the most-used operator surfaces.</p>
+            <ul>
+              <li>Map <code>src/ui/v6/index.html</code> onto the default STURM landing experience.</li>
+              <li>Bring <code>designer</code>, <code>OCR studio</code>, and workspace surfaces onto the shared navigation and panel primitives.</li>
+              <li>Keep existing APIs and flows stable while re-skinning the shell.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="stack-card"><div class="stack-label">deliverable</div><strong>Unified STURM shell</strong><span>Landing, designer, and OCR views all speak the same UI language.</span></div>
+            <div class="stack-card"><div class="stack-label">done when</div><strong>Operator surfaces feel consistent</strong><span>No abrupt jumps between legacy and new shell components inside STURM.</span></div>
+          </div>
+        </article>
+
+        <article class="todo-row">
+          <div class="todo-id">T-03</div>
+          <div class="todo-copy">
+            <h4>Migrate the Gateway control plane</h4>
+            <p>Use the new Gateway shell as the control-plane baseline, then wire every major view to the same shared truth-state vocabulary used by STURM.</p>
+            <ul>
+              <li>Adopt the new sidebar/header/panel layout from <code>src/ui/v6/gateway.html</code> and the companion <code>gateway-app.jsx</code> flow.</li>
+              <li>Normalize cards for agents, containers, chain state, runtime registry, health, and model connectivity.</li>
+              <li>Expose partial/seeded/live markers consistently so operators see real runtime posture.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="stack-card"><div class="stack-label">deliverable</div><strong>Gateway UI parity</strong><span>Control-plane views match STURM design quality while staying operationally truthful.</span></div>
+            <div class="stack-card"><div class="stack-label">done when</div><strong>Operators can cross-read both products</strong><span>Same mental model for status cards, tables, badges, and actions.</span></div>
+          </div>
+        </article>
+
+        <article class="todo-row">
+          <div class="todo-id">T-04</div>
+          <div class="todo-copy">
+            <h4>Create a subsidiary surface template</h4>
+            <p>After STURM and Gateway converge, package the common shell into a reusable template for sister surfaces. The goal is shared UX grammar with product-specific content, not cloned one-off sites.</p>
+            <ul>
+              <li>Define a standard shell for list/detail dashboards, task boards, registry pages, and cockpit views.</li>
+              <li>Keep product-specific accents optional while preserving shared layout, typography, and component rhythm.</li>
+              <li>Apply first to the highest-value sister surfaces next, not all at once.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="stack-card"><div class="stack-label">deliverable</div><strong>Surface starter kit</strong><span>Repeatable HTML/CSS/JS scaffold for related products.</span></div>
+            <div class="stack-card"><div class="stack-label">done when</div><strong>New surfaces stop reinventing shells</strong><span>Teams can launch sibling views from one proven baseline.</span></div>
+          </div>
+        </article>
+
+        <article class="todo-row">
+          <div class="todo-id">T-05</div>
+          <div class="todo-copy">
+            <h4>Wire every visible state to real data</h4>
+            <p>The new UX only holds if every headline KPI and health chip reflects runtime truth. This is where design and product integrity meet.</p>
+            <ul>
+              <li>Back panels with real APIs, or explicitly mark them seeded/partial when not yet live.</li>
+              <li>Add freshness timestamps and provenance labels where operators need trust.</li>
+              <li>Remove any leftover fantasy counts, dead counters, or decorative status chips with no backing source.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="stack-card"><div class="stack-label">deliverable</div><strong>Truthful runtime surfaces</strong><span>Status cards, registry tables, and live health views all explain their source.</span></div>
+            <div class="stack-card"><div class="stack-label">done when</div><strong>No ambiguous status UI</strong><span>Users can tell live, partial, seeded, and unavailable states at a glance.</span></div>
+          </div>
+        </article>
+
+        <article class="todo-row">
+          <div class="todo-id">T-06</div>
+          <div class="todo-copy">
+            <h4>Run QA, route audit, and rollout cleanup</h4>
+            <p>Close the integration with screenshot checks, responsive verification, route consolidation, and dead-asset cleanup before making the new shell the default everywhere.</p>
+            <ul>
+              <li>Smoke critical routes on desktop and mobile widths.</li>
+              <li>Check all static asset paths, redirects, and browser console noise.</li>
+              <li>Delete or archive legacy duplicate files after the replacement surfaces are proven.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <div class="stack-card"><div class="stack-label">deliverable</div><strong>Release-ready migration set</strong><span>Verified routes, responsive screens, and a smaller long-term UI surface area.</span></div>
+            <div class="stack-card"><div class="stack-label">done when</div><strong>Default route cutover is safe</strong><span>No missing assets, dead links, or broken operator workflows.</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">recommended rollout</div>
+          <h2>Execution sequence</h2>
+        </div>
+        <div class="small-note">Bias toward shipping the shell and truth wiring first.</div>
+      </div>
+      <div class="rollout-grid">
+        <article class="rollout-step">
+          <div class="eyebrow">phase 1</div>
+          <h3>Stabilize the shared kit</h3>
+          <ol>
+            <li>Lock the canonical CSS/token source.</li>
+            <li>Define shared cards, badges, tables, and navs.</li>
+            <li>Document which files remain transitional.</li>
+          </ol>
+        </article>
+        <article class="rollout-step">
+          <div class="eyebrow">phase 2</div>
+          <h3>Ship STURM + Gateway shells</h3>
+          <ol>
+            <li>Move STURM landing and key operator views first.</li>
+            <li>Move Gateway control-plane views next.</li>
+            <li>Keep runtime truth visible during the transition.</li>
+          </ol>
+        </article>
+        <article class="rollout-step">
+          <div class="eyebrow">phase 3</div>
+          <h3>Scale to sister surfaces</h3>
+          <ol>
+            <li>Package the shared shell as a starter template.</li>
+            <li>Roll it out to the highest-value sibling surfaces.</li>
+            <li>Retire duplicated legacy assets after proof.</li>
+          </ol>
+        </article>
+      </div>
+      <div class="footer">Live board file: <code>src/ui/ui/index.html</code> · Route: <code>/ui</code> · Design basis observed in <code>src/ui/v6/</code> and current Gateway/STURM design assets.</div>
+    </section>
+  </main>
+</body>
+</html>

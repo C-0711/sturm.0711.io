@@ -1836,6 +1836,7 @@ app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrec
 app.get('/ctx-demo.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-demo.html')));
 app.get('/ctx-doku', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-doku.html')));
 app.get('/ctx-doku.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-doku.html')));
+app.get('/ui', (_req, res) => res.sendFile(path.join(UI_DIR, 'ui', 'index.html')));
 app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.get('/fleet', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
 app.get('/api/fleet/data', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));

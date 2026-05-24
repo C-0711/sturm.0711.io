@@ -49,7 +49,7 @@ services:
       # Container-Registry + git-Anker. Auf h200v laufen API:3361 und
       # Postgres:5440 als separate Dienste; via host-gateway erreichbar.
       GITCHAIN_API_URL: ${GITCHAIN_API_URL:-http://host.docker.internal:3361}
-      GITCHAIN_DATABASE_URL: ${GITCHAIN_DATABASE_URL:-postgres://gitchain:gitchain@host.docker.internal:5440/gitchain}
+      GITCHAIN_DATABASE_URL: ${GITCHAIN_DATABASE_URL:-postgres://gitchain:gitchain2026@host.docker.internal:5440/gitchain}
       GITCHAIN_REPO_ROOT: ${GITCHAIN_REPO_ROOT:-/var/lib/gitchain/repos}
       # Lane-5 ELSTER-MCP (Einreichung). Wenn nicht gesetzt, antwortet der
       # Client deterministisch mit { erfolg: false, reason: 'mcp-unavailable' }.
