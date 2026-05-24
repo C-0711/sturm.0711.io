@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { getContainer, listContainers } from './ctx-store.ts';
 import { retrieveFromContainer } from './ctx-shared.ts';
 import { emitCtxEvent, extractClientIp, extractDeviceId } from './ctx-events.ts';
+import { readSignatureFile } from './sign-container.ts';
 import { buildPreamble, baseUrlFromReq, isSupportedSurface, type PreambleSurface } from './ctx-preamble.ts';
 
 export function createCtxRouter(opts: { ollamaUrl?: string; embedCpu?: boolean } = {}): Router {
@@ -140,6 +141,22 @@ export function createCtxRouter(opts: { ollamaUrl?: string; embedCpu?: boolean }
     });
 
     return res.json(preamble);
+  });
+
+  // ─── C2: signature endpoint ────────────────────────────────────────────
+  router.get('/:id/signature', async (req, res) => {
+    const rec = await getContainer(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'not_found', id: req.params.id });
+    const sig = await readSignatureFile(rec.outDir);
+    if (!sig) {
+      return res.status(404).json({
+        error: 'signature_not_found',
+        id: req.params.id,
+        hint: 'container was published before C2 — rebuild to materialise signature.json',
+      });
+    }
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    return res.json(sig);
   });
 
   router.post('/:id/events', async (req, res) => {
