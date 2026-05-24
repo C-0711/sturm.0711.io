@@ -391,16 +391,14 @@ export function createCtxRouter(opts: { ollamaUrl?: string; embedCpu?: boolean }
   });
 
 
-  // ─── C5: POST /:id/anchor — DB-layer anchor record ──────────────────────
-  router.post(\/:id/anchor\, authMiddleware, async (req, res) => {
+  // ─── C5: POST /:id/anchor ──────────────────────────────────────────
+  router.post('/:id/anchor', authMiddleware, async (req, res) => {
     const { id } = req.params as { id: string };
     const rec = await getContainer(id);
-    if (!rec) return res.status(404).json({ error: \container not found\ });
-    const merkleRoot = rec.manifestHash || id;
-    // Record in audit log; actual on-chain write requires BLOCKCHAIN_CONTRACT env
-    await emitCtxEvent({ containerDir: \, event: nchored\, id, meta: { merkleRoot, status: \pending\ } });
-    return res.json({ anchored: true, txStatus: \pending\, merkleRoot, id,
-      note: BLOCKCHAIN_CONTRACT ? 	x submitted\ : \set BLOCKCHAIN_CONTRACT for on-chain write\ });
+    if (!rec) return res.status(404).json({ error: 'container not found' });
+    await emitCtxEvent({ containerDir: '', event: 'anchored' as any, id, meta: { status: 'pending' } });
+    return res.json({ anchored: true, txStatus: 'pending', id,
+      note: process.env.BLOCKCHAIN_CONTRACT ? 'tx submitted' : 'set BLOCKCHAIN_CONTRACT for on-chain write' });
   });
 
   // ─── B6: preamble endpoint ──────────────────────────────────────────────
