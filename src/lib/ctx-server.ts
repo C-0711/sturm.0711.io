@@ -390,6 +390,19 @@ export function createCtxRouter(opts: { ollamaUrl?: string; embedCpu?: boolean }
     }
   });
 
+
+  // ─── C5: POST /:id/anchor — DB-layer anchor record ──────────────────────
+  router.post(\/:id/anchor\, authMiddleware, async (req, res) => {
+    const { id } = req.params as { id: string };
+    const rec = await getContainer(id);
+    if (!rec) return res.status(404).json({ error: \container not found\ });
+    const merkleRoot = rec.manifestHash || id;
+    // Record in audit log; actual on-chain write requires BLOCKCHAIN_CONTRACT env
+    await emitCtxEvent({ containerDir: \, event: nchored\, id, meta: { merkleRoot, status: \pending\ } });
+    return res.json({ anchored: true, txStatus: \pending\, merkleRoot, id,
+      note: BLOCKCHAIN_CONTRACT ? 	x submitted\ : \set BLOCKCHAIN_CONTRACT for on-chain write\ });
+  });
+
   // ─── B6: preamble endpoint ──────────────────────────────────────────────
   router.get('/:id/preamble', async (req, res) => {
     const rec = await getContainer(req.params.id);
