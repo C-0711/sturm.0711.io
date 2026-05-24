@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import multer from 'multer';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -75,6 +75,20 @@ const APPLICATIONS_DIR = path.join(ROOT, 'applications-data');
 const CANONICALS_DIR = path.join(__dirname, 'canonicals-seed');
 const PIPELINES_DIR = path.join(__dirname, 'pipelines-seed');
 const UI_DIR = path.join(__dirname, 'ui');
+const DS_VERSION = (() => {
+  try {
+    const raw = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8');
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.0';
+  } catch {
+    return '0.1.0';
+  }
+})();
+const DS_CSS_PRIMARY_PATH = path.join(UI_DIR, 'v6', 'sturm.css');
+const DS_CSS_FALLBACK_PATH = path.join(UI_DIR, 'design-system', 'sturm.css');
+const DS_LATEST_ROUTE = '/ds/sturm.css';
+const DS_VERSIONED_ROUTE = `/ds/sturm@${DS_VERSION}.css`;
+const DS_VERSIONED_LATEST_ROUTE = '/ds/sturm@latest.css';
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 fs.mkdirSync(RUNS_DIR, { recursive: true });
@@ -1817,8 +1831,41 @@ function safeSeg(seg: string): string {
   return /^[A-Za-z0-9._-]+$/.test(seg) ? seg : '';
 }
 
+function resolveDesignSystemCssPath(): string {
+  return fs.existsSync(DS_CSS_PRIMARY_PATH) ? DS_CSS_PRIMARY_PATH : DS_CSS_FALLBACK_PATH;
+}
+
+function resolveDesignSystemOrigin(origin: string | undefined): string | null {
+  if (!origin) return null;
+  return /^https:\/\/([A-Za-z0-9-]+\.)*0711\.io$/i.test(origin) ? origin : null;
+}
+
+function setDesignSystemHeaders(req: Request, res: Response, immutable: boolean): void {
+  const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+  const allowedOrigin = resolveDesignSystemOrigin(originHeader);
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
+}
+
+function sendDesignSystemCss(req: Request, res: Response, immutable: boolean): void {
+  setDesignSystemHeaders(req, res, immutable);
+  res.sendFile(resolveDesignSystemCssPath(), (err) => { if (err) res.status(404).end(); });
+}
+
 // ============ Static UI ============
 
+app.options([DS_LATEST_ROUTE, DS_VERSIONED_ROUTE, DS_VERSIONED_LATEST_ROUTE], (req, res) => {
+  setDesignSystemHeaders(req, res, req.path === DS_VERSIONED_ROUTE);
+  res.status(204).end();
+});
+app.get(DS_LATEST_ROUTE, (req, res) => sendDesignSystemCss(req, res, false));
+app.get(DS_VERSIONED_ROUTE, (req, res) => sendDesignSystemCss(req, res, true));
+app.get(DS_VERSIONED_LATEST_ROUTE, (req, res) => sendDesignSystemCss(req, res, false));
 app.use('/design-system', express.static(path.join(UI_DIR, 'design-system')));
 // Silenced favicon — kein favicon-File im Repo, deshalb 204 statt 404-Spam in
 // jeder UI-Console.
