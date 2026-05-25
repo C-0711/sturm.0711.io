@@ -26,12 +26,24 @@
       --ctx-mono:      'JetBrains Mono', 'Fira Code', monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
     body {
       background: var(--bg);
       color: var(--ink);
       font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 15px;
       line-height: 1.65;
+    }
+    /* ── canonical sidebar shell (matches anwendungen.html / ocr-studio.html) ── */
+    .sturm-app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+    .sturm-content {
+      min-width: 0;
+      overflow-y: auto;
+      max-height: 100vh;
     }
     /* ── HEADER ── */
     header {
@@ -334,6 +346,9 @@
   </style>
 </head>
 <body>
+<div class="sturm-app">
+  <aside id="sturm-nav-host"></aside>
+  <main class="sturm-content">
 
 <!-- ════════════════════════════════ HEADER ════════════════════════════════ -->
 <header>
@@ -1719,5 +1734,14 @@
   </p>
 </footer>
 
+  </main>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module">
+  import('/nav.js').then(({ renderSturmNav }) => {
+    renderSturmNav({ activeNav: null });
+  });
+</script>
 </body>
 </html>

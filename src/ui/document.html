@@ -1,17 +1,78 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
   <title>STURM · Dokument</title>
-  <link rel="stylesheet" href="/colors_and_type.css?v=20260426u" />
-  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <script>
+    (function() {
+      try { var t = localStorage.getItem('sturm-theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); }
+      catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/design-system/sturm.css" />
   <link rel="stylesheet" href="/neo-tokens.css?v=20260426u" />
   <link rel="stylesheet" href="/workspaces.css?v=20260426u" />
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg" />
   <script src="/theme-toggle.js?v=20260426u"></script>
+  <style>
+    /* ── Legacy --color-* shim → sturm.css canonical tokens ──
+       neo-tokens.css + workspaces.css were authored against --color-*
+       (defined in the retired colors_and_type.css). Re-export them
+       from sturm.css's --bg / --ink / --accent so the JS-rendered
+       doc-* / ws-* / btn-* components keep working under the canonical
+       palette. Matches the shim used in anwendungen.html. */
+    :root {
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-playfair: var(--font-inter);
+      --radius-full: 9999px;
+      --radius-xl: 12px;
+      --radius-2xl: 16px;
+      --radius-lg: 10px;
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg-2);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+    }
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--ink); overflow: hidden; }
+    .sturm-app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+      height: 100vh;
+    }
+    .sturm-content {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sturm-content > .ws-header { flex: 0 0 auto; }
+    .sturm-content > .doc-main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  </style>
 </head>
-<body class="ws-root">
+<body>
+  <div class="sturm-app">
+    <aside id="sturm-nav-host"></aside>
+    <main class="sturm-content">
   <header class="ws-header">
     <div class="brand">
       <a id="back-link" href="/workspaces.html" class="brand-link" title="Zum Workspace">←</a>
@@ -150,8 +211,15 @@
         <pre id="master-preview" class="json-out">—</pre>
       </div>
     </section>
-  </main>
+    </main>
+  </div>
 
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module">
+    import('/nav.js').then(({ renderSturmNav }) => {
+      renderSturmNav({ activeNav: 'anwendungen' });
+    });
+  </script>
   <script src="/document.js?v=20260426u" type="module"></script>
 </body>
 </html>

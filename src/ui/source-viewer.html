@@ -1,49 +1,75 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <title>Quelle anzeigen — Pro-Abrechnung</title>
+<script>
+  (function() {
+    try { var t = localStorage.getItem('sturm-theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); }
+    catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/design-system/sturm.css">
+<link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
 <style>
   * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
   body {
-    margin: 0;
-    font-family: ui-sans-serif, system-ui, "Inter", "Segoe UI", sans-serif;
-    background: #1a1d23;
-    color: #e8e8e8;
+    font-family: 'Geist', ui-sans-serif, system-ui, "Inter", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
     overflow: hidden;
+  }
+  .sturm-app {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
     height: 100vh;
   }
-  header {
-    height: 56px;
-    padding: 0 16px;
-    display: flex; align-items: center; gap: 16px;
-    background: #0f1216;
-    border-bottom: 1px solid #2a2e36;
+  .sturm-content {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  header h1 { font-size: 14px; font-weight: 600; margin: 0; flex-shrink: 0; }
-  header .crumb {
-    color: #8a92a0;
+  header.sv-header {
+    height: 56px;
+    padding: 0 24px;
+    display: flex; align-items: center; gap: 16px;
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    border-bottom: 1px solid var(--line-2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    flex: 0 0 auto;
+  }
+  header.sv-header h1 { font-size: 14px; font-weight: 600; margin: 0; flex-shrink: 0; color: var(--ink); }
+  header.sv-header .crumb {
+    color: var(--ink-2);
     font-size: 13px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  header .crumb b { color: #fdd663; font-weight: 600; }
+  header.sv-header .crumb b { color: var(--accent); font-weight: 600; }
   .snippet {
     margin-left: auto;
-    background: #2c2f3a;
-    color: #fdd663;
+    background: var(--bg-3);
+    color: var(--accent);
     padding: 6px 10px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm, 4px);
     font-size: 12px;
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
     max-width: 50%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  main {
-    height: calc(100vh - 56px);
+  .sv-main {
+    flex: 1 1 auto;
     overflow: auto;
     display: flex;
     justify-content: center;
@@ -51,7 +77,7 @@
   }
   .page-wrap {
     background: white;
-    border: 1px solid #2a2e36;
+    border: 1px solid var(--line-2);
     box-shadow: 0 8px 24px rgba(0,0,0,.4);
     position: relative;
     max-width: 1100px;
@@ -61,21 +87,21 @@
   .page-wrap .overlay {
     position: absolute;
     pointer-events: none;
-    background: rgba(253, 214, 99, .35);
-    border: 2px solid #fdd663;
+    background: color-mix(in oklab, var(--accent) 35%, transparent);
+    border: 2px solid var(--accent);
     border-radius: 2px;
-    box-shadow: 0 0 0 4px rgba(253, 214, 99, .15);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 15%, transparent);
     display: none;
   }
   .empty {
-    color: #8a92a0;
+    color: var(--ink-2);
     margin: 80px auto;
     text-align: center;
     font-size: 14px;
   }
-  .empty code { color: #fdd663; background: #2c2f3a; padding: 2px 6px; border-radius: 3px; }
+  .empty code { color: var(--accent); background: var(--bg-3); padding: 2px 6px; border-radius: 3px; }
   .err {
-    color: #f28b82;
+    color: var(--err, #f28b82);
     margin: 80px auto;
     text-align: center;
     font-size: 14px;
@@ -83,14 +109,26 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>Quelle</h1>
-  <div class="crumb" id="crumb"></div>
-  <div class="snippet" id="snippet" hidden></div>
-</header>
-<main id="main">
-  <div class="empty" id="msg">Lade Seite …</div>
-</main>
+<div class="sturm-app">
+  <aside id="sturm-nav-host"></aside>
+  <main class="sturm-content">
+    <header class="sv-header">
+      <h1>Quelle</h1>
+      <div class="crumb" id="crumb"></div>
+      <div class="snippet" id="snippet" hidden></div>
+    </header>
+    <div class="sv-main" id="main">
+      <div class="empty" id="msg">Kein Dokument ausgewählt — wähle einen Fall in der Anwendungen-Liste.</div>
+    </div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module">
+  import('/nav.js').then(({ renderSturmNav }) => {
+    renderSturmNav({ activeNav: 'anwendungen' });
+  });
+</script>
 
 <script>
   const qs = new URLSearchParams(location.search);
