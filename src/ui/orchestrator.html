@@ -5,18 +5,131 @@
   <title>STURM Steuerassistent</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="stylesheet" href="/design-system/sturm.css">
   <link rel="stylesheet" href="/design-system/sturm-app.css">
   <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    /* ── Canonical STURM sidebar shell (matches anwendungen.html / steuerfall.html) ── */
+    html, body { height: 100%; margin: 0; }
     body {
-      margin: 0;
       background: var(--color-bg);
       color: var(--color-text-primary);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+    .sturm-app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
       height: 100vh;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+    }
+    .orch-main {
+      min-width: 0;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
+    .sturm-sidebar {
+      background: var(--color-bg);
+      border-right: 1px solid var(--color-border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sturm-sidebar.is-collapsed { width: 48px; padding: 16px 6px; }
+    .sturm-sb-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 8px 16px;
+    }
+    .sturm-sb-brand { display: flex; align-items: center; gap: 10px; }
+    .sturm-mark {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: var(--color-accent);
+      color: var(--color-bg);
+      display: grid; place-items: center;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+    .sturm-brand-word {
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      font-size: 13px;
+      color: var(--color-text-primary);
+    }
+    .sturm-sb-toggle {
+      display: inline-grid;
+      place-items: center;
+      width: 28px; height: 28px;
+      border: 0;
+      background: transparent;
+      color: var(--color-text-tertiary);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+    }
+    .sturm-sb-toggle:hover { color: var(--color-text-primary); background: var(--color-bg-hover); }
+    .sturm-sb-toggle svg { width: 16px; height: 16px; stroke-width: 1.5; }
+    .sturm-sb-section {
+      margin-top: 24px;
+      padding: 8px 12px 6px;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+    }
+    .sturm-sb-nav { display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .sturm-sb-item:hover { color: var(--color-text-primary); background: var(--color-bg-hover); }
+    .sturm-sb-item.is-active { color: var(--color-text-primary); background: var(--color-bg-tertiary); }
+    .sturm-sb-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; opacity: 0.85; }
+    .sturm-sb-item-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+    .sturm-sb-foot {
+      margin-top: auto;
+      padding: 12px 8px 4px;
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sturm-avatar {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: var(--color-bg-tertiary);
+      display: grid; place-items: center;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+    .sturm-sb-user-name { font-size: 13px; color: var(--color-text-primary); }
+    .sturm-sb-user-plan { font-size: 11px; color: var(--color-text-tertiary); }
     .orch-header {
       display: flex;
       align-items: center;
@@ -250,21 +363,25 @@
   </style>
 </head>
 <body>
-  <header class="orch-header">
-    <div class="orch-title">
-      <span class="orch-title-dot" id="orchDot" title="bereit"></span>
-      <span>STURM-Steuerassistent</span>
-      <span style="color: var(--color-text-tertiary); font-weight: 400; font-size: 12px;">· steuerfall-est</span>
-    </div>
-    <div class="orch-case-picker">
-      <label for="caseSelect">Fall:</label>
-      <select id="caseSelect">
-        <option value="">— kein Fall ausgewaehlt —</option>
-      </select>
-    </div>
-  </header>
+  <div class="sturm-app">
+    <aside id="sturm-nav-host"></aside>
 
-  <main class="orch-chat" id="chatLog">
+    <div class="orch-main">
+      <header class="orch-header">
+        <div class="orch-title">
+          <span class="orch-title-dot" id="orchDot" title="bereit"></span>
+          <span>Steuerassistent</span>
+          <span style="color: var(--color-text-tertiary); font-weight: 400; font-size: 12px;">· steuerfall-est</span>
+        </div>
+        <div class="orch-case-picker">
+          <label for="caseSelect">Fall:</label>
+          <select id="caseSelect">
+            <option value="">— kein Fall ausgewaehlt —</option>
+          </select>
+        </div>
+      </header>
+
+      <main class="orch-chat" id="chatLog">
     <div class="orch-empty" id="emptyState">
       Frag mich etwas zu einem deiner Steuerfaelle. <kbd>Cmd</kbd>+<kbd>Enter</kbd> sendet.
       <div class="hint">
@@ -276,19 +393,27 @@
     </div>
   </main>
 
-  <div class="orch-input-row">
-    <div class="orch-input-wrap">
-      <textarea
-        class="orch-input"
-        id="userInput"
-        placeholder="Frag den STURM-Steuerassistent…"
-        rows="1"
-      ></textarea>
-      <button class="orch-send" id="sendBtn">Senden</button>
-      <button class="orch-abort" id="abortBtn" hidden>Abbrechen</button>
+      <div class="orch-input-row">
+        <div class="orch-input-wrap">
+          <textarea
+            class="orch-input"
+            id="userInput"
+            placeholder="Frag den Steuerassistent…"
+            rows="1"
+          ></textarea>
+          <button class="orch-send" id="sendBtn">Senden</button>
+          <button class="orch-abort" id="abortBtn" hidden>Abbrechen</button>
+        </div>
+        <div class="orch-status" id="statusLine"></div>
+      </div>
     </div>
-    <div class="orch-status" id="statusLine"></div>
   </div>
+
+  <script type="module">
+    import('/nav.js').then(({ renderSturmNav }) => {
+      renderSturmNav({ activeNav: 'assistant' });
+    });
+  </script>
 
   <script>
     (function () {

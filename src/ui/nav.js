@@ -38,6 +38,7 @@ const PRIMARY_NAV = [
   { id: 'pipeline',    label: 'Pipeline-Runner', href: '/pipeline.html',    icon: 'play' },
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
   { id: 'ocr-studio',  label: 'OCR Studio',      href: '/ocr-studio.html',  icon: 'sliders-horizontal' },
+  { id: 'assistant',   label: 'Assistant',       href: '/orchestrator.html', icon: 'sparkles' },
 ];
 
 function escapeHtml(s) {
@@ -46,7 +47,7 @@ function escapeHtml(s) {
 
 /**
  * @param {Object} opts
- * @param {string} opts.activeNav — id aus PRIMARY_NAV (workflows|anwendungen|pipeline|designer|studio-ocr)
+ * @param {string} opts.activeNav — id aus PRIMARY_NAV (workflows|anwendungen|pipeline|designer|ocr-studio|assistant)
  * @param {(host: HTMLElement) => Promise<void>|void} [opts.contextRenderer] — füllt #sturm-nav-context
  * @param {string} [opts.contextHeading] — Heading über der Context-Section
  * @param {string} [opts.hostId='sturm-nav-host'] — Element-ID, in das die Sidebar gerendert wird
@@ -121,7 +122,8 @@ function autoDetectActive() {
   if (p.startsWith('/anwendungen') || p.startsWith('/steuerfall')) return 'anwendungen';
   if (p.startsWith('/pipeline')) return 'pipeline';
   if (p.startsWith('/designer')) return 'designer';
-  if (p.startsWith("/ocr-studio")) return 'ocr-studio';
+  if (p.startsWith('/ocr-studio')) return 'ocr-studio';
+  if (p.startsWith('/orchestrator')) return 'assistant';
   return null;
 }
 
