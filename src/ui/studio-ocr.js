@@ -309,6 +309,13 @@ function loadFile(file) {
     toast('Datei abgelehnt: "' + (file?.name || '?') + '" ist kein PDF/PNG/JPG/WEBP (Typ: ' + (file?.type || 'unbekannt') + ').', 'error', 6000);
     return;
   }
+  // Round-7 #7 (auditor): if a PDF is suspiciously tiny, refuse with a friendly
+  // message instead of letting PDF.js render a stack-trace-flavoured "Failed to load PDF document".
+  if (file && /\.pdf$/i.test(file.name || '') && file.size > 0 && file.size < 1024) {
+    toast('Datei "' + (file.name || '?') + '" ist nur ' + file.size + ' Byte — kein gültiges PDF. Eingabe zurückgesetzt.', 'error', 6000);
+    if (typeof clearFileState === 'function') clearFileState();
+    return;
+  }
   currentFile = file;
   if (currentDocUrl) URL.revokeObjectURL(currentDocUrl);
   currentDocUrl = URL.createObjectURL(file);
@@ -1434,9 +1441,35 @@ async function loadTemplates() {
       const banner = document.createElement('div');
       banner.setAttribute('role','alert');
       banner.style.cssText = 'grid-column: 1 / -1; padding: 16px; border: 1px solid var(--color-warning, #d97706); border-radius: 8px; background: rgba(217, 119, 6, 0.08); color: var(--color-text-primary); margin-bottom: 12px;';
-      banner.innerHTML = `<strong>${is401 ? '🔒 Nicht authentifiziert' : '⚠️ Vorlagen konnten nicht geladen werden'}</strong>
-        <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 4px;">${is401 ? 'Die Studio-API benötigt einen gültigen Token (?token=… in der URL). Eingebaute Vorlagen unten funktionieren weiterhin.' : escapeHtml(msg)}</div>`;
+      if (is401) {
+        // Round-7: in-place token entry form. Saves to localStorage + reloads.
+        banner.innerHTML = `
+          <strong>🔒 Nicht authentifiziert</strong>
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; margin-bottom: 8px;">
+            Die Studio-API benötigt einen Bearer-Token. Token unten eintragen oder per URL setzen: <code>?token=…</code>
+          </div>
+          <form id="token-form" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+            <input id="token-input" type="password" placeholder="STURM_BEARER_TOKEN…" autocomplete="off"
+              style="flex: 1; min-width: 240px; padding: 6px 10px; border: 1px solid var(--color-border, #3a3836); border-radius: 4px; background: var(--color-bg, #1a1816); color: var(--color-text-primary); font-family: monospace; font-size: 12px;" />
+            <button type="submit" class="btn-primary" style="padding: 6px 14px;">Speichern & laden</button>
+          </form>
+          <div style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 6px;">Eingebaute Vorlagen unten funktionieren auch ohne Token.</div>
+        `;
+      } else {
+        banner.innerHTML = `<strong>⚠️ Vorlagen konnten nicht geladen werden</strong>
+          <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 4px;">${escapeHtml(msg)}</div>`;
+      }
       grid2.parentElement.insertBefore(banner, grid2);
+      if (is401) {
+        const form = document.getElementById('token-form');
+        form?.addEventListener('submit', (ev) => {
+          ev.preventDefault();
+          const v = document.getElementById('token-input')?.value?.trim();
+          if (!v) return;
+          try { localStorage.setItem('sturm-token', v); } catch {}
+          window.location.reload();
+        });
+      }
       // Round-5 #9: re-wire static cards (in case bootstrap missed them).
       try { document.querySelectorAll('button.empty-card[data-template-id]').forEach(btn => { if (!btn.__wired) { btn.__wired = true; btn.addEventListener('click', () => _onCardClick(btn.dataset.templateId)); } }); } catch {}
     }
