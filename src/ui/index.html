@@ -395,18 +395,7 @@
         </span>
       </span>
       <i data-lucide="arrow-right" class="arr" style="width:14px;height:14px;"></i>
-    </a>
-    <a class="menu-item" href="/status.html">
-      <span class="menu-item-l">
-        <span class="menu-item-glyph"><i data-lucide="activity" style="width:14px;height:14px;"></i></span>
-        <span>
-          <span class="menu-item-name">Status</span>
-          <div class="menu-item-sub">Runtime &amp; health</div>
-        </span>
-      </span>
-      <i data-lucide="arrow-right" class="arr" style="width:14px;height:14px;"></i>
-    </a>
-  </div>
+    </a>  </div>
 
   <main>
     <!-- ============ HERO ============ -->
@@ -565,11 +554,6 @@
         <a href="/ocr-studio.html">OCR Studio</a>
         <span class="sep">·</span>
         <a href="/docs/WORKFLOW_TEMPLATE.md">Docs</a>
-        <span class="sep">·</span>
-        <a href="/status.html">Status</a>
-        <button class="icon-btn" id="theme-btn-foot" aria-label="Toggle theme" style="margin-left: 4px;">
-          <i data-lucide="sun" id="theme-icon-foot"></i>
-        </button>
       </div>
     </div>
   </footer>
@@ -580,7 +564,7 @@
       function paintThemeIcons() {
         var theme = document.documentElement.getAttribute('data-theme') || 'dark';
         var iconName = theme === 'dark' ? 'sun' : 'moon';
-        ['theme-icon-head', 'theme-icon-foot'].forEach(function (id) {
+        ['theme-icon-head'].forEach(function (id) {
           var el = document.getElementById(id);
           if (!el || !el.parentNode) return;
           var fresh = document.createElement('i');
@@ -626,7 +610,6 @@
 
       // theme buttons
       document.getElementById('theme-btn-head').addEventListener('click', toggleTheme);
-      document.getElementById('theme-btn-foot').addEventListener('click', toggleTheme);
 
       // scrolled state on nav
       var navWrap = document.getElementById('nav-wrap');
