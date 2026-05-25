@@ -48,6 +48,51 @@
     .fall-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .fall-btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg-primary, #000); }
 
+    .fall-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .fall-dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      z-index: 20;
+      min-width: 160px;
+      background: var(--color-bg-card, #1a1a1a);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px color-mix(in oklab, oklch(0 0 0) 25%, transparent);
+      padding: 4px 0;
+      margin-top: 4px;
+      display: none;
+    }
+    .fall-dropdown-menu.open { display: block; }
+    .fall-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: 0;
+      color: var(--color-text-secondary);
+      font-size: 12.5px;
+      cursor: pointer;
+      text-align: left;
+      text-decoration: none;
+    }
+    .fall-dropdown-item:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+    .fall-dropdown-item:disabled, .fall-dropdown-item[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .fall-dropdown-item:disabled:hover, .fall-dropdown-item[disabled]:hover {
+      background: transparent;
+      color: var(--color-text-secondary);
+    }
+    .fall-dropdown-item i { width: 14px; height: 14px; flex-shrink: 0; }
+    #btn-overflow-toggle { font-size: 16px; font-weight: 600; letter-spacing: 1px; min-width: 38px; }
+
     .mcp-dots {
       display: flex; align-items: center; gap: 8px;
       padding: 6px 10px;
@@ -502,11 +547,25 @@
             </div>
             <div class="fall-actions">
               <div class="mcp-dots" id="mcp-dots" title="MCP-Health"></div>
-              <a class="fall-btn" id="btn-pro-abrechnung" target="_blank"><i data-lucide="file-text"></i><span>Pro-Abrechnung</span></a>
-              <a class="fall-btn" id="btn-dl-master" hidden download><i data-lucide="file-down"></i><span>master.json</span></a>
-              <a class="fall-btn" id="btn-dl-eric" hidden download><i data-lucide="file-code"></i><span>eric.xml</span></a>
-              <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
-              <button class="fall-btn primary" id="btn-export" disabled><i data-lucide="send"></i><span>An ELSTER</span></button>
+              <a class="fall-btn primary" id="btn-primary-action" href="#"><i data-lucide="file-text"></i><span>Pro-Abrechnung</span></a>
+              <div class="fall-dropdown" id="export-dropdown">
+                <button class="fall-btn" id="btn-export-toggle" aria-haspopup="true" aria-expanded="false">
+                  <i data-lucide="download"></i><span>Export</span><i data-lucide="chevron-down" style="width:12px;height:12px;margin-left:2px;"></i>
+                </button>
+                <div class="fall-dropdown-menu" id="export-menu">
+                  <a class="fall-dropdown-item" id="btn-dl-master" download><i data-lucide="file-json"></i><span>master.json</span></a>
+                  <a class="fall-dropdown-item" id="btn-dl-eric" download><i data-lucide="file-code"></i><span>eric.xml</span></a>
+                  <a class="fall-dropdown-item" id="btn-dl-pdf" href="#" target="_blank"><i data-lucide="file-text"></i><span>PDF (Pro-Abrechnung)</span></a>
+                </div>
+              </div>
+              <div class="fall-dropdown" id="overflow-dropdown">
+                <button class="fall-btn" id="btn-overflow-toggle" aria-haspopup="true" aria-expanded="false" title="Weitere Aktionen">⋯</button>
+                <div class="fall-dropdown-menu" id="overflow-menu">
+                  <a class="fall-dropdown-item" id="btn-overflow-pro" href="#" target="_blank"><i data-lucide="file-text"></i><span>Pro-Abrechnung</span></a>
+                  <button class="fall-dropdown-item" id="btn-overflow-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
+                  <button class="fall-dropdown-item" id="btn-overflow-export" disabled><i data-lucide="send"></i><span>An ELSTER senden</span></button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -706,26 +765,46 @@
       document.getElementById('case-meta').textContent =
         `${instance.caseId} · Mandant ${instance.mandantId || '—'} · ${instance.veranlagungsjahr ?? '—'} · ${instance.status}`;
       renderRuns();
-      // Buttons-Logik
+      // Action bar state logic
       const canSeal = instance.runs.length > 0 && instance.status === 'in_bearbeitung';
       const canExport = instance.status === 'versiegelt';
       const isSealed = instance.status === 'versiegelt' || instance.status === 'eingereicht';
-      document.getElementById('btn-seal').disabled = !canSeal;
-      document.getElementById('btn-export').disabled = !canExport;
-      // Download-Links erscheinen erst nach Versiegelung. URLs zeigen direkt
-      // auf den token-freien Application-Download-Endpoint.
+      const base = `/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/download`;
+      const proUrl = `/abrechnung.html?app=${encodeURIComponent(APP_ID)}&case=${encodeURIComponent(CASE_ID)}`;
+      // Primary action button — changes based on case state
+      const primaryBtn = document.getElementById('btn-primary-action');
+      if (isSealed && canExport) {
+        primaryBtn.innerHTML = '<i data-lucide="send"></i><span>An ELSTER senden</span>';
+        primaryBtn.href = '#';
+        primaryBtn.onclick = (e) => { e.preventDefault(); handleElsterExport(); };
+        primaryBtn.removeAttribute('target');
+      } else if (canSeal) {
+        primaryBtn.innerHTML = '<i data-lucide="lock"></i><span>Versiegeln</span>';
+        primaryBtn.href = '#';
+        primaryBtn.onclick = (e) => { e.preventDefault(); handleSeal(); };
+        primaryBtn.removeAttribute('target');
+      } else {
+        primaryBtn.innerHTML = '<i data-lucide="file-text"></i><span>Pro-Abrechnung</span>';
+        primaryBtn.href = proUrl;
+        primaryBtn.target = '_blank';
+        primaryBtn.onclick = null;
+      }
+      // Export dropdown — show only when sealed
+      const exportDropdown = document.getElementById('export-dropdown');
+      exportDropdown.style.display = isSealed ? 'inline-block' : 'none';
       const dlMaster = document.getElementById('btn-dl-master');
       const dlEric = document.getElementById('btn-dl-eric');
-      const base = `/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/download`;
-      dlMaster.hidden = !isSealed;
-      dlEric.hidden = !isSealed;
+      const dlPdf = document.getElementById('btn-dl-pdf');
       dlMaster.href = `${base}/master.json`;
       dlEric.href = `${base}/eric.xml`;
-      // Pro-Abrechnung: druckbarer Steuerberater-Stil mit allen Werten,
-      // §EStG-Citations, Belegzeilen und Rechenschritten. Funktioniert
-      // sobald die Aggregation BMF erfolgreich gerechnet hat.
-      const proLink = document.getElementById('btn-pro-abrechnung');
-      if (proLink) proLink.href = `/abrechnung.html?app=${encodeURIComponent(APP_ID)}&case=${encodeURIComponent(CASE_ID)}`;
+      dlPdf.href = proUrl;
+      // Overflow menu items
+      const overflowPro = document.getElementById('btn-overflow-pro');
+      const overflowSeal = document.getElementById('btn-overflow-seal');
+      const overflowExport = document.getElementById('btn-overflow-export');
+      overflowPro.href = proUrl;
+      overflowSeal.disabled = !canSeal;
+      overflowExport.disabled = !canExport;
       // Letzter Run → canonical_layer laden, falls vorhanden
       if (instance.runs.length > 0) {
         // Aggregate-View ist jetzt der canonical Pfad — zeigt den Fall
@@ -1512,7 +1591,7 @@
       panel.hidden = false;
     }
 
-    document.getElementById('btn-seal').addEventListener('click', async () => {
+    async function handleSeal() {
       showSealResult('<div style="color: var(--color-text-tertiary);">Versiegelung läuft…</div>', 'warn');
       const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/seal`, { method: 'POST' });
       const ct = res.headers.get('content-type') || '';
@@ -1595,9 +1674,9 @@
           </details>
         `, 'err');
       }
-    });
+    }
 
-    document.getElementById('btn-export').addEventListener('click', async () => {
+    async function handleElsterExport() {
       const res = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/export`, { method: 'POST' });
       const j = await res.json().catch(() => ({}));
       if (j.erfolg === false) {
@@ -1608,7 +1687,7 @@
       } else {
         alert(`Fehler: ${j.error || res.status}`);
       }
-    });
+    }
 
     // Sidebar einmal rendern, Context-Refresh wenn die Instance da ist.
     import('/nav.js?v=20260525b').then(({ renderSturmNav, contextRendererSteuerfall }) => {
@@ -1641,10 +1720,49 @@
         if (e.target.id === 'run-detail') closeRunDetail();
       });
       window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeRunDetail();
+        if (e.key === 'Escape') {
+          closeRunDetail();
+          closeAllDropdowns();
+        }
       });
       // Dedup-Toggle
       document.getElementById('layer-show-all').addEventListener('change', paintLayer);
+      // Dropdown toggle handlers
+      function closeAllDropdowns() {
+        document.querySelectorAll('.fall-dropdown-menu.open').forEach(m => m.classList.remove('open'));
+        document.querySelectorAll('.fall-dropdown button[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+      }
+      function setupDropdown(toggleId, menuId) {
+        const toggle = document.getElementById(toggleId);
+        const menu = document.getElementById(menuId);
+        if (!toggle || !menu) return;
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const isOpen = menu.classList.contains('open');
+          closeAllDropdowns();
+          if (!isOpen) {
+            menu.classList.add('open');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        });
+      }
+      setupDropdown('btn-export-toggle', 'export-menu');
+      setupDropdown('btn-overflow-toggle', 'overflow-menu');
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.fall-dropdown')) closeAllDropdowns();
+      });
+      // Overflow menu actions
+      document.getElementById('btn-overflow-seal')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeAllDropdowns();
+        handleSeal();
+      });
+      document.getElementById('btn-overflow-export')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeAllDropdowns();
+        handleElsterExport();
+      });
     });
     } // end else-Branch (APP_ID && CASE_ID gegeben)
   </script>
