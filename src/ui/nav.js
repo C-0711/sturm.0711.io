@@ -37,7 +37,7 @@ const PRIMARY_NAV = [
   { id: 'anwendungen', label: 'Anwendungen',     href: '/anwendungen.html', icon: 'boxes' },
   { id: 'pipeline',    label: 'Pipeline-Runner', href: '/pipeline.html',    icon: 'play' },
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
-  { id: 'studio-ocr',  label: 'OCR Studio',      href: '/studio-ocr.html',  icon: 'sliders-horizontal' },
+  { id: 'ocr-studio',  label: 'OCR Studio',      href: '/ocr-studio.html',  icon: 'sliders-horizontal' },
 ];
 
 function escapeHtml(s) {
@@ -121,7 +121,7 @@ function autoDetectActive() {
   if (p.startsWith('/anwendungen') || p.startsWith('/steuerfall')) return 'anwendungen';
   if (p.startsWith('/pipeline')) return 'pipeline';
   if (p.startsWith('/designer')) return 'designer';
-  if (p.startsWith('/studio-ocr')) return 'studio-ocr';
+  if (p.startsWith("/ocr-studio")) return 'ocr-studio';
   return null;
 }
 
