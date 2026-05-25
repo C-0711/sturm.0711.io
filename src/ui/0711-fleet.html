@@ -4,13 +4,144 @@
   <meta charset="utf-8">
   <title>0711 Fleet · STURM</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="stylesheet" href="/colors_and_type.css">
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('sturm-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.classList.toggle('dark', t === 'dark');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/design-system/sturm.css">
+  <link rel="stylesheet" href="/neo-tokens.css?v=20260525">
   <link rel="stylesheet" href="https://unpkg.com/reactflow@11.11.4/dist/style.css">
   <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
   <style>
-    html, body, #root { height: 100%; margin: 0; }
+    /* ── legacy --color-* → canonical sturm.css token shim ───────────── */
+    :root {
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg-2);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+      --color-success: var(--ok);
+      --color-danger: var(--err);
+      --color-warning: var(--warn);
+      --color-emerald: var(--ok);
+      --color-amber: var(--warn);
+      --color-red: var(--err);
+      --color-zinc: var(--ink-3);
+      --color-violet: var(--info);
+      --color-cyan: var(--info);
+      --color-blue: var(--info);
+      --color-purple: var(--info);
+      --shadow-sm: 0 1px 2px color-mix(in oklab, var(--ink) 8%, transparent);
+      --shadow-focus-accent: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+      --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+      --fleet-sb-w: 240px;
+    }
+
+    /* outer shell — canonical nav sidebar + fleet-app column */
+    html, body { height: 100%; margin: 0; }
     body { background: var(--color-bg); color: var(--color-text-primary); font-family: var(--font-inter); overflow: hidden; }
-    .top { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); padding: 8px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .fleet-shell {
+      display: grid;
+      grid-template-columns: var(--fleet-sb-w) 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+    .fleet-shell > #root { position: relative; height: 100vh; min-width: 0; }
+
+    /* ── canonical nav sidebar (matches anwendungen.html / designer.html) ── */
+    .sturm-sidebar {
+      background: var(--bg);
+      border-right: 1px solid var(--line-2);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sturm-sidebar.is-collapsed { width: 48px; padding: 16px 6px; }
+    .sturm-sb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px 16px; }
+    .sturm-sb-brand { display: flex; align-items: center; gap: 10px; }
+    .sturm-mark {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent);
+      display: grid; place-items: center;
+      font-family: 'Geist', sans-serif; font-weight: 600; font-size: 15px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+      flex-shrink: 0;
+    }
+    .sturm-brand-word { font-weight: 600; letter-spacing: 0.16em; font-size: 13px; color: var(--ink); }
+    .sturm-sb-toggle {
+      display: inline-grid; place-items: center;
+      width: 28px; height: 28px;
+      border: 0; background: transparent;
+      color: var(--ink-3);
+      border-radius: var(--radius-sm); cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+    }
+    .sturm-sb-toggle:hover { color: var(--ink); background: var(--bg-2); }
+    .sturm-sb-toggle svg { width: 16px; height: 16px; stroke-width: 1.5; }
+    .sturm-sb-section {
+      margin-top: 24px; padding: 8px 12px 6px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; color: var(--ink-3); text-transform: uppercase;
+    }
+    .sturm-sb-nav { display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: var(--radius-sm);
+      font-size: 13px; color: var(--ink-2);
+      background: transparent; border: 0; cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .sturm-sb-item:hover { color: var(--ink); background: var(--bg-2); }
+    .sturm-sb-item.is-active { color: var(--ink); background: var(--bg-3); }
+    .sturm-sb-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; opacity: 0.85; }
+    .sturm-sb-item-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+    .sturm-sb-foot {
+      margin-top: auto; padding: 12px 8px 4px;
+      border-top: 1px solid var(--line-2);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sturm-avatar {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: var(--bg-3);
+      display: grid; place-items: center;
+      font-size: 13px; color: var(--ink-2);
+    }
+    .sturm-sb-user-name { font-size: 13px; color: var(--ink); }
+    .sturm-sb-user-plan { font-size: 11px; color: var(--ink-3); }
+
+    .top { position: fixed; top: 0; left: var(--fleet-sb-w); right: 0; z-index: 50; background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border); padding: 8px 14px; display: flex; flex-direction: column; gap: 6px; }
     .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .stats { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-secondary); letter-spacing: 0.02em; }
     .stats b { color: var(--color-accent); font-weight: 600; }
@@ -58,7 +189,7 @@
     .drawer ul.edges li { font-family: var(--font-mono); font-size: 11px; padding: 4px 6px; border-radius: 4px; color: var(--color-text-secondary); cursor: pointer; }
     .drawer ul.edges li:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
     .drawer ul.edges li .kind { display: inline-block; min-width: 64px; color: var(--color-text-tertiary); }
-    .legend { position: fixed; bottom: 14px; left: 14px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); z-index: 30; display: grid; grid-template-columns: auto auto; gap: 4px 14px; }
+    .legend { position: fixed; bottom: 14px; left: calc(var(--fleet-sb-w) + 14px); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); z-index: 30; display: grid; grid-template-columns: auto auto; gap: 4px 14px; }
     .legend .sw { display: inline-block; width: 28px; height: 0; vertical-align: middle; margin-right: 6px; }
     .legend .l-http     { border-top: 2px solid var(--color-text-secondary); }
     .legend .l-mcp      { border-top: 2px dashed var(--color-amber); }
@@ -78,7 +209,16 @@
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div class="fleet-shell">
+    <aside id="sturm-nav-host"></aside>
+    <div id="root"></div>
+  </div>
+
+  <script type="module">
+    import('/nav.js').then(({ renderSturmNav }) => {
+      renderSturmNav({ activeNav: null, contextHeading: 'Fleet' });
+    });
+  </script>
 
   <script type="importmap">
   {

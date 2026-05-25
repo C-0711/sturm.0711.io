@@ -1,13 +1,180 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>STURM · OCR Studio</title>
-  <link rel="stylesheet" href="/design-system/colors_and_type.css" />
-  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('sturm-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.classList.toggle('dark', t === 'dark');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/design-system/sturm.css" />
   <link rel="stylesheet" href="/studio-ocr.css" />
   <link rel="stylesheet" href="/schema-builder.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* ── legacy --color-* → canonical sturm.css token shim. studio-ocr.css and
+          schema-builder.css were authored against --color-*; map them onto the
+          canonical sturm.css palette so the component CSS resolves correctly. */
+    :root {
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg-2);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+      --color-success: var(--ok);
+      --color-danger: var(--err);
+      --color-warning: var(--warn);
+      --accent-soft: var(--accent-soft);
+      --surface: var(--bg);
+      --surface-2: var(--bg-2);
+      --border: var(--line-2);
+      --text: var(--ink);
+      --text-muted: var(--ink-2);
+      --shadow-focus-accent: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+    }
+
+    /* ── outer shell: canonical sidebar + existing studio layout ─────── */
+    html, body { height: 100%; margin: 0; }
+    body.studio {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .rsr-main {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    /* ── canonical sidebar styling (matches anwendungen.html / designer.html) ── */
+    .sturm-sidebar {
+      background: var(--bg);
+      border-right: 1px solid var(--line-2);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sturm-sidebar.is-collapsed { width: 48px; padding: 16px 6px; }
+    .sturm-sb-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 8px 16px;
+    }
+    .sturm-sb-brand { display: flex; align-items: center; gap: 10px; }
+    .sturm-mark {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent);
+      display: grid; place-items: center;
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+      flex-shrink: 0;
+    }
+    .sturm-brand-word {
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .sturm-sb-toggle {
+      display: inline-grid;
+      place-items: center;
+      width: 28px; height: 28px;
+      border: 0;
+      background: transparent;
+      color: var(--ink-3);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+    }
+    .sturm-sb-toggle:hover { color: var(--ink); background: var(--bg-2); }
+    .sturm-sb-toggle svg { width: 16px; height: 16px; stroke-width: 1.5; }
+    .sturm-sb-section {
+      margin-top: 24px;
+      padding: 8px 12px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+    }
+    .sturm-sb-nav { display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--ink-2);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .sturm-sb-item:hover { color: var(--ink); background: var(--bg-2); }
+    .sturm-sb-item.is-active { color: var(--ink); background: var(--bg-3); }
+    .sturm-sb-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; opacity: 0.85; }
+    .sturm-sb-item-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+    .sturm-sb-foot {
+      margin-top: auto;
+      padding: 12px 8px 4px;
+      border-top: 1px solid var(--line-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sturm-avatar {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: var(--bg-3);
+      display: grid; place-items: center;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .sturm-sb-user-name { font-size: 13px; color: var(--ink); }
+    .sturm-sb-user-plan { font-size: 11px; color: var(--ink-3); }
+  </style>
 
   <!-- React + Babel for the schema builder (mounted only inside the schema section). -->
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
@@ -15,6 +182,8 @@
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 </head>
 <body class="studio">
+  <aside id="sturm-nav-host"></aside>
+  <div class="rsr-main">
   <header class="studio-header">
     <div class="brand">
       <a href="/" class="brand-link"><img src="/design-system/assets/logo-mark.svg" alt="STURM" /></a>
@@ -204,6 +373,13 @@
       <button id="variants-run" type="button" class="btn-primary">Run all</button>
     </div>
   </aside>
+  </div><!-- /.rsr-main -->
+
+  <script type="module">
+    import('/nav.js').then(({ renderSturmNav }) => {
+      renderSturmNav({ activeNav: 'ocr-studio' });
+    });
+  </script>
 
   <!-- Schema builder loads first so window.__schemaBuilder is ready when studio-ocr.js queries it. -->
   <script type="text/babel" data-presets="react" src="/schema-builder.jsx"></script>

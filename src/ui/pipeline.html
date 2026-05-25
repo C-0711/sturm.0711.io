@@ -1,15 +1,75 @@
 <!DOCTYPE html>
-<html lang="de" class="dark">
+<html lang="de" class="dark" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <title>STURM · Pipeline</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('sturm-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.classList.toggle('dark', t === 'dark');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- sturm-app.css retained: the compiled pipeline.bundle.js uses 200+ .sturm-*
+       layout/component classes defined there. sturm.css is layered on top to
+       supply canonical design tokens; an inline --color-* shim below maps the
+       legacy token names that the bundle reads to the canonical sturm.css
+       palette. -->
   <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="stylesheet" href="/design-system/sturm.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css">
   <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    /* ── legacy --color-* → canonical sturm.css token shim ───────────── */
+    :root {
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-playfair: var(--font-inter);
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg-2);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+      --color-success: var(--ok);
+      --color-danger: var(--err);
+      --color-warning: var(--warn);
+      --shadow-focus-accent: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+    }
+
+    /* ── outer shell that hosts the canonical nav sidebar next to the
+          bundle-rendered pipeline app ───────────────────────────────── */
+    html, body { height: 100%; margin: 0; }
+    body { overflow: hidden; background: var(--bg); color: var(--ink); }
+    .pipeline-shell {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+    .pipeline-shell > #root {
+      min-width: 0;
+      overflow: hidden;
+    }
+
     /* Tune-button on mistral-ocr stage chips */
     .sturm-stagebar-tune {
       display: inline-flex; align-items: center; gap: 4px;
@@ -167,7 +227,10 @@
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div class="pipeline-shell">
+    <aside id="sturm-nav-host"></aside>
+    <div id="root"></div>
+  </div>
 
 
   <!-- ============ Auth: bearer-token bootstrap (?token=… → localStorage) ============
@@ -186,6 +249,15 @@
         }
       } catch (e) { console.warn('[pipeline] token bootstrap failed:', e); }
     })();
+  </script>
+  <script type="module">
+    import('/nav.js').then(({ renderSturmNav, contextRendererWorkflows }) => {
+      renderSturmNav({
+        activeNav: 'pipeline',
+        contextHeading: 'Workflows',
+        contextRenderer: contextRendererWorkflows,
+      });
+    });
   </script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
