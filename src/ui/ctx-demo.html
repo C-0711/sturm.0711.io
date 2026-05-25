@@ -1,18 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <title>0711 · Context Container — Drop-in</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <script>
+    (function() {
+      try { var t = localStorage.getItem('sturm-theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); }
+      catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/design-system/sturm.css">
   <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
   <style>
+    /* ── Legacy --color-* shim → sturm.css tokens ──
+       This page's inline styles were authored against the retired
+       colors_and_type.css (--color-*). Re-export those names from
+       sturm.css's --bg / --ink / --accent so we don't have to rewrite
+       864 lines of inline CSS. */
+    :root {
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg-2);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+    }
+    html, body { height: 100%; margin: 0; }
     body {
-      margin: 0;
       font-family: var(--font-inter, -apple-system, sans-serif);
       background: var(--color-bg);
       color: var(--color-text-primary);
       line-height: 1.5;
+    }
+    .sturm-app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+    .sturm-content {
+      min-width: 0;
+      overflow-y: auto;
+      max-height: 100vh;
     }
     .wrap { max-width: 980px; margin: 0 auto; padding: 36px 24px 96px; }
 
@@ -246,6 +289,9 @@
   </style>
 </head>
 <body>
+<div class="sturm-app">
+  <aside id="sturm-nav-host"></aside>
+  <main class="sturm-content">
 <div class="wrap">
 
 <header>
@@ -374,6 +420,15 @@
 </section>
 
 </div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module">
+  import('/nav.js').then(({ renderSturmNav }) => {
+    renderSturmNav({ activeNav: null });
+  });
+</script>
 
 <script>
 const stageOrder = ['ingest', 'parse', 'atomize', 'index', 'publish'];
