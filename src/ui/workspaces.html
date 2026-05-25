@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>STURM · Workspaces</title>
+  <link rel="stylesheet" href="/colors_and_type.css?v=20260428j" />
+  <link rel="stylesheet" href="/design-system/sturm-app.css" />
+  <link rel="stylesheet" href="/neo-tokens.css?v=20260428j" />
+  <link rel="stylesheet" href="/workspaces.css?v=20260428j" />
+  <script src="/theme-toggle.js?v=20260428j"></script>
+</head>
+<body class="ws-root">
+  <header class="ws-header">
+    <div class="brand">
+      <a href="/" class="brand-link"><img src="/design-system/assets/logo-mark.svg" alt="STURM" /></a>
+      <h1>Workspaces</h1>
+    </div>
+    <nav class="ws-nav">
+      <a href="/studio-ocr.html" class="link-secondary">Playground →</a>
+      <button type="button" class="theme-toggle" data-theme-toggle title="Theme wechseln">
+        <span data-theme-icon aria-hidden="true">☾</span>
+        <span data-theme-label class="sr-only">Light</span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="ws-main">
+    <section class="ws-create">
+      <div class="ws-create-row">
+        <div class="ws-create-block">
+          <h2>Neuer Workspace</h2>
+          <form id="create-form" class="ws-form">
+            <input id="ws-name" type="text" placeholder="Name (z.B. Steuern 2024)" required maxlength="80"
+                   oninvalid="this.setCustomValidity('Bitte einen Namen für den Workspace eingeben.')"
+                   oninput="this.setCustomValidity('')" />
+            <button type="submit" class="btn-primary">Anlegen</button>
+            <span id="create-error" class="error-text" role="alert"></span>
+          </form>
+        </div>
+        <div class="ws-create-block">
+          <h2>Aus cb-chat importieren</h2>
+          <form id="cbchat-import-form" class="ws-form">
+            <button type="button" id="cbchat-import-btn" class="btn-secondary">Fall auswählen…</button>
+            <span id="cbchat-import-status" class="muted" role="status"></span>
+          </form>
+          <p class="ws-hint" style="font-size:11px">Lädt alle Dokumente eines cb-chat Falls in einen neuen Workspace. Cookie wird einmalig im Modal abgefragt, nicht gespeichert.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modal: cookie eingeben → Liste laden → Fall picken → Import starten -->
+    <div id="cbchat-modal" class="ws-modal" hidden>
+      <div class="ws-modal-card">
+        <h3>cb-chat Import</h3>
+        <p class="muted" style="font-size:12px">
+          Öffne cb-chat in einem Tab, log dich ein, dann DevTools → Network → eine /api/-Anfrage → Cookie-Wert kopieren. Wird nur an STURM weitergeleitet, nicht gespeichert.
+        </p>
+
+        <!-- Schritt 1: Cookie -->
+        <label>Cookie:<br><textarea id="cbchat-modal-cookie" rows="3" placeholder="connect.sid=…; other=…"></textarea></label>
+        <div class="ws-modal-actions" style="justify-content:flex-start;margin:6px 0">
+          <button type="button" id="cbchat-modal-load" class="btn-ghost-sm">Fälle laden</button>
+        </div>
+
+        <!-- Schritt 2: Dropdown der Fälle (erst sichtbar nach Laden) -->
+        <label id="cbchat-modal-picker-wrap" hidden>
+          Fall:<br>
+          <select id="cbchat-modal-picker" size="8" style="width:100%;font-family:inherit;font-size:12px"></select>
+        </label>
+
+        <!-- Schritt 3: Workspace-Name (Default aus Pick) + Start -->
+        <label>Workspace-Name (optional):<br><input id="cbchat-modal-name" type="text" placeholder="cb-chat …" /></label>
+        <input id="cbchat-modal-fallId" type="hidden" />
+
+        <div class="ws-modal-actions">
+          <button type="button" id="cbchat-modal-cancel" class="btn-ghost-sm">Abbrechen</button>
+          <button type="button" id="cbchat-modal-go" class="btn-primary" disabled>Import starten</button>
+        </div>
+        <div id="cbchat-modal-status" class="muted" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <section class="ws-list">
+      <h2>Vorhanden</h2>
+      <div id="ws-grid" class="ws-grid">
+        <p class="muted">Lade…</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/workspaces.js?v=20260428j" type="module"></script>
+</body>
+</html>
