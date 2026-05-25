@@ -1,14 +1,300 @@
 <!DOCTYPE html>
-<html lang="de" class="dark">
+<html lang="de" class="dark" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <title>Anwendungen · STURM</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="stylesheet" href="/design-system/colors_and_type.css">
-  <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/design-system/sturm.css">
   <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    /* ── STURM compat shim ──────────────────────────────────────────
+       This page (and its child nav.js + nav.js context HTML + this file's
+       JS-templated HTML) was authored against the legacy Neo design system
+       (--color-*) plus the legacy sturm-app.css layout (.sturm-app, .sturm-
+       sb-*). The JS is the live business app and may NOT be touched as part
+       of the Phase F reskin. Therefore we resolve the legacy tokens through
+       sturm.css canonical tokens and restyle the legacy wrapper / sidebar
+       classes here so the canonical CSS is the single source of truth.
+       Token map kept compact; nothing here defines new design.            */
+
+    :root {
+      /* font + motion aliases */
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-playfair: var(--font-inter);
+      --mono: var(--font-mono);
+      --radius-md: var(--radius);
+      --duration-fast: 150ms;
+      --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+      --shadow-focus-accent: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+      /* legacy --color-* → sturm.css tokens */
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+    }
+    /* The existing JS toggles <html class="dark">; mirror that to the
+       canonical data-theme attribute so sturm.css's [data-theme="light"]
+       block resolves correctly in light mode. */
+    html:not(.dark) { /* light overrides — mirror sturm.css [data-theme="light"] */
+      --bg: oklch(0.985 0.004 80);
+      --bg-2: oklch(0.965 0.005 80);
+      --bg-3: oklch(0.93 0.006 80);
+      --bg-4: oklch(0.88 0.008 80);
+      --ink: oklch(0.18 0.01 80);
+      --ink-2: oklch(0.42 0.01 80);
+      --ink-3: oklch(0.6 0.01 80);
+      --ink-4: oklch(0.72 0.005 80);
+      --line: oklch(0.84 0.008 80);
+      --line-2: oklch(0.9 0.006 80);
+      --accent: oklch(0.56 0.13 65);
+      --accent-deep: oklch(0.48 0.14 60);
+      --accent-soft: oklch(0.56 0.13 65 / 0.1);
+      --on-accent: oklch(0.99 0.005 80);
+      --ok: oklch(0.55 0.16 145);
+      --warn: oklch(0.62 0.15 65);
+      --err: oklch(0.55 0.18 25);
+      --info: oklch(0.5 0.13 230);
+      color-scheme: light;
+    }
+
+    /* ── Shell wrappers (static body classes used only by this page) ─ */
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    .sturm-app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+      height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .sturm-main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sturm-topbar {
+      height: 56px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line-2);
+      background: color-mix(in oklab, var(--bg) 88%, transparent);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .sturm-topbar-l, .sturm-topbar-r {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .sturm-topbar-l { min-width: 0; flex: 1; }
+    .sturm-topbar-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .sturm-icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 34px; height: 34px;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--ink-2);
+      cursor: pointer;
+      transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+    }
+    .sturm-icon-btn:hover { color: var(--ink); border-color: var(--ink-3); background: var(--bg-2); }
+    .sturm-icon-btn svg { width: 16px; height: 16px; stroke-width: 1.5; }
+
+    /* page-head reskin of the welcome block (DESIGN-SYSTEM.md §3.1 +
+       §9.3 — anwendungen lives inside .shell with a page-head heading) */
+    .sturm-welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 16px;
+      margin: 32px auto 28px;
+      padding: 0 24px;
+      max-width: 720px;
+    }
+    .sturm-welcome-glyph {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+    }
+    .sturm-welcome-title {
+      font-family: 'Geist', sans-serif;
+      font-weight: 300;
+      font-size: 36px;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin: 0;
+      color: var(--ink);
+    }
+    .sturm-welcome-sub {
+      color: var(--ink-2);
+      font-size: 15px;
+      max-width: 56ch;
+      line-height: 1.55;
+      margin: 0;
+      text-wrap: pretty;
+    }
+
+    /* ── nav.js-produced sidebar (kept identical class names) ──────── */
+    .sturm-sidebar {
+      background: var(--bg);
+      border-right: 1px solid var(--line-2);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sturm-sidebar.is-collapsed { width: 48px; padding: 16px 6px; }
+    .sturm-sb-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 8px 16px;
+    }
+    .sturm-sb-brand { display: flex; align-items: center; gap: 10px; }
+    .sturm-mark {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent);
+      display: grid; place-items: center;
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+      flex-shrink: 0;
+    }
+    .sturm-brand-word {
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .sturm-sb-toggle {
+      display: inline-grid;
+      place-items: center;
+      width: 28px; height: 28px;
+      border: 0;
+      background: transparent;
+      color: var(--ink-3);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+    }
+    .sturm-sb-toggle:hover { color: var(--ink); background: var(--bg-2); }
+    .sturm-sb-toggle svg { width: 16px; height: 16px; stroke-width: 1.5; }
+    .sturm-sb-section {
+      margin-top: 24px;
+      padding: 8px 12px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sturm-sb-nav { display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--ink-2);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .sturm-sb-item:hover { color: var(--ink); background: var(--bg-2); }
+    .sturm-sb-item.is-active { color: var(--ink); background: var(--bg-3); }
+    .sturm-sb-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; opacity: 0.85; }
+    .sturm-sb-item-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .sturm-sb-item-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+    .sturm-sb-item-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sturm-sb-foot {
+      margin-top: auto;
+      padding: 12px 8px 4px;
+      border-top: 1px solid var(--line-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sturm-avatar {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: var(--bg-3);
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .sturm-sb-user-name { font-size: 13px; color: var(--ink); }
+    .sturm-sb-user-plan { font-size: 11px; color: var(--ink-3); }
+
+    /* ── page-local rules below (unchanged shape; tokens now resolve
+          via the alias shim above) ────────────────────────────────── */
+
     .app-section { width: 100%; max-width: 960px; padding: 0 24px; }
     .app-section + .app-section { margin-top: 18px; }
 
@@ -102,11 +388,11 @@
     }
     .tools-chip-counts .ct { display: inline-flex; align-items: center; gap: 3px; }
     .tools-dot { font-size: 13px; line-height: 1; }
-    .tools-dot.green { color: #22c55e; }
-    .tools-dot.amber { color: #f59e0b; }
-    .tools-dot.red   { color: #ef4444; }
-    .tools-dot.grey  { color: #9ca3af; }
-    .tools-warn { color: #f59e0b; font-size: 13px; margin-left: 2px; }
+    .tools-dot.green { color: var(--ok); }
+    .tools-dot.amber { color: var(--warn); }
+    .tools-dot.red   { color: var(--err); }
+    .tools-dot.grey  { color: var(--ink-3); }
+    .tools-warn { color: var(--warn); font-size: 13px; margin-left: 2px; }
 
     .tools-body {
       display: none;
@@ -171,7 +457,11 @@
       justify-content: center;
       transition: background .1s, color .1s, border-color .1s;
     }
-    .case-row-del:hover { background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+    .case-row-del:hover {
+      background: color-mix(in oklab, var(--err) 12%, transparent);
+      color: var(--err);
+      border-color: color-mix(in oklab, var(--err) 30%, transparent);
+    }
     .case-row-del i { width: 14px; height: 14px; }
     .case-title {
       font-size: 13.5px;
@@ -274,14 +564,14 @@
       white-space: nowrap;
     }
     .case-stage-chip.done {
-      color: #22c55e;
-      border-color: rgba(34, 197, 94, 0.45);
-      background: rgba(34, 197, 94, 0.06);
+      color: var(--ok);
+      border-color: color-mix(in oklab, var(--ok) 45%, transparent);
+      background: color-mix(in oklab, var(--ok) 6%, transparent);
     }
     .case-stage-chip.running {
-      color: #f59e0b;
-      border-color: rgba(245, 158, 11, 0.55);
-      background: rgba(245, 158, 11, 0.08);
+      color: var(--warn);
+      border-color: color-mix(in oklab, var(--warn) 55%, transparent);
+      background: color-mix(in oklab, var(--warn) 8%, transparent);
       animation: stagePulse 1.1s ease-in-out infinite;
     }
     @keyframes stagePulse {
@@ -290,11 +580,11 @@
     }
     .case-stage-chip-mark { font-size: 9px; }
 
-    .case-status.in_bearbeitung { color: var(--color-text-primary); border-color: var(--color-accent); }
-    .case-status.review { color: #d97706; border-color: #d97706; }
-    .case-status.versiegelt { color: #059669; border-color: #059669; }
-    .case-status.eingereicht { color: #2563eb; border-color: #2563eb; }
-    .case-status.archiviert { color: var(--color-text-tertiary); border-color: var(--color-border); opacity: 0.7; }
+    .case-status.in_bearbeitung { color: var(--ink); border-color: var(--accent); }
+    .case-status.review { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 55%, var(--line-2)); }
+    .case-status.versiegelt { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 55%, var(--line-2)); }
+    .case-status.eingereicht { color: var(--info); border-color: color-mix(in oklab, var(--info) 55%, var(--line-2)); }
+    .case-status.archiviert { color: var(--ink-3); border-color: var(--line-2); opacity: 0.7; }
 
     /* Filter chips */
     .case-filter {
@@ -354,7 +644,7 @@
     /* Modal */
     .modal-backdrop {
       position: fixed; inset: 0;
-      background: rgba(0,0,0,0.45);
+      background: color-mix(in oklab, oklch(0 0 0) 45%, transparent);
       display: none;
       align-items: center;
       justify-content: center;
@@ -414,7 +704,7 @@
     }
     .modal-btn:hover { filter: brightness(1.1); }
     .modal-err {
-      color: #ef4444;
+      color: var(--err);
       font-size: 12px;
       margin-top: 8px;
       min-height: 1em;
