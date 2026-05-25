@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
   <title>STURM · Workspaces</title>
-  <link rel="stylesheet" href="/colors_and_type.css?v=20260428j" />
-  <link rel="stylesheet" href="/design-system/sturm-app.css" />
-  <link rel="stylesheet" href="/neo-tokens.css?v=20260428j" />
+  <link rel="stylesheet" href="/design-system/sturm.css" />
+  <link rel="stylesheet" href="/neo-tokens.css?v=20260525" />
   <link rel="stylesheet" href="/workspaces.css?v=20260428j" />
+  <script src="https://unpkg.com/lucide@latest"></script>
   <script src="/theme-toggle.js?v=20260428j"></script>
 </head>
 <body class="ws-root">
+  <div class="sturm-app">
+    <aside id="sturm-nav-host"></aside>
+    <div class="sturm-content">
   <header class="ws-header">
     <div class="brand">
       <a href="/" class="brand-link"><img src="/design-system/assets/logo-mark.svg" alt="STURM" /></a>
@@ -90,6 +93,14 @@
     </section>
   </main>
 
+    </div>
+  </div>
+
+  <script type="module">
+    import('/nav.js').then(({ renderSturmNav }) => {
+      renderSturmNav({ activeNav: null });
+    });
+  </script>
   <script src="/workspaces.js?v=20260428j" type="module"></script>
 </body>
 </html>
