@@ -189,6 +189,48 @@
     .drawer ul.edges li { font-family: var(--font-mono); font-size: 11px; padding: 4px 6px; border-radius: 4px; color: var(--color-text-secondary); cursor: pointer; }
     .drawer ul.edges li:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
     .drawer ul.edges li .kind { display: inline-block; min-width: 64px; color: var(--color-text-tertiary); }
+    /* ── fleet machines grid ─────────────────────────────────────────────────── */
+    .machines-bar {
+      position: fixed; top: 96px; left: var(--fleet-sb-w); right: 0; z-index: 45;
+      background: color-mix(in oklab, var(--color-bg-secondary) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--color-border);
+      padding: 10px 14px;
+      display: flex; gap: 10px; flex-wrap: wrap;
+      transition: transform 0.25s var(--ease-default), opacity 0.25s;
+    }
+    .machines-bar.collapsed { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+    .machine-card {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      min-width: 150px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .machine-card:hover { border-color: var(--color-accent); background: var(--color-bg-hover); }
+    .machine-led {
+      width: 10px; height: 10px; border-radius: 50%;
+      box-shadow: 0 0 0 2px var(--color-bg-secondary);
+      flex-shrink: 0;
+    }
+    .machine-led.online { background: var(--color-emerald); box-shadow: 0 0 6px var(--color-emerald); }
+    .machine-led.offline { background: var(--color-red); }
+    .machine-led.unknown { background: var(--color-zinc); }
+    .machine-info { display: flex; flex-direction: column; gap: 2px; }
+    .machine-name { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--color-text-primary); letter-spacing: 0.02em; }
+    .machine-role { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); }
+    .machine-ip { font-family: var(--font-mono); font-size: 9px; color: var(--color-text-tertiary); opacity: 0.7; }
+    .machines-toggle {
+      position: fixed; top: 104px; right: 374px; z-index: 46;
+      background: var(--color-bg-tertiary); border: 1px solid var(--color-border);
+      color: var(--color-text-secondary); padding: 4px 8px; border-radius: 4px;
+      font-family: var(--font-mono); font-size: 10px; cursor: pointer;
+    }
+    .machines-toggle:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+    .flow-wrap.with-machines { top: 176px; }
+
     .legend { position: fixed; bottom: 14px; left: calc(var(--fleet-sb-w) + 14px); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-secondary); z-index: 30; display: grid; grid-template-columns: auto auto; gap: 4px 14px; }
     .legend .sw { display: inline-block; width: 28px; height: 0; vertical-align: middle; margin-right: 6px; }
     .legend .l-http     { border-top: 2px solid var(--color-text-secondary); }
@@ -238,6 +280,29 @@
 
     const h = React.createElement;
     const LS_KEY = '0711-fleet-prefs';
+
+    // ---------- fleet machines (physical servers) ----------
+    const FLEET_MACHINES = [
+      { id: 'bridge', name: 'BRIDGE', role: 'Reverse tunnel host', ip: '62.210.150.229', status: 'online' },
+      { id: 'shipyard-1', name: 'SHIPYARD-1', role: 'Build server', ip: '10.0.0.11', status: 'online' },
+      { id: 'shipyard-2', name: 'SHIPYARD-2', role: 'Build server', ip: '10.0.0.12', status: 'online' },
+      { id: 'the-pope', name: 'THE-POPE', role: 'Mac Mini M1', ip: '10.0.0.20', status: 'online' },
+      { id: 'engine', name: 'ENGINE', role: 'Build server', ip: '10.0.0.30', status: 'online' },
+      { id: 'reactor', name: 'REACTOR', role: 'H200V GPU Server', ip: '10.0.0.100', status: 'online' },
+    ];
+
+    function MachinesBar({ collapsed, onToggle }) {
+      return h('div', { className: 'machines-bar' + (collapsed ? ' collapsed' : '') },
+        FLEET_MACHINES.map(m => h('div', { className: 'machine-card', key: m.id },
+          h('span', { className: 'machine-led ' + m.status }),
+          h('div', { className: 'machine-info' },
+            h('div', { className: 'machine-name' }, m.name),
+            h('div', { className: 'machine-role' }, m.role),
+            h('div', { className: 'machine-ip' }, m.ip),
+          ),
+        ))
+      );
+    }
 
     // ---------- edge styling per kind ----------
     const EDGE_KINDS = ['http','mcp','db','llm','gitchain','proxy','depends-on'];
@@ -382,6 +447,7 @@
       const [kindVis, setKindVis] = useState(Object.fromEntries(EDGE_KINDS.map(k => [k, true])));
       const [pathsOnly, setPathsOnly] = useState(false);
       const [selected, setSelected] = useState(null);
+      const [machinesExpanded, setMachinesExpanded] = useState(true);
 
       // load prefs
       useEffect(() => {
@@ -570,7 +636,13 @@
           ),
         ),
 
-        h('div', { className: 'flow-wrap' },
+        h(MachinesBar, { collapsed: !machinesExpanded }),
+        h('button', {
+          className: 'machines-toggle',
+          onClick: () => setMachinesExpanded(v => !v),
+        }, machinesExpanded ? '▲ Hide Machines' : '▼ Show Machines'),
+
+        h('div', { className: 'flow-wrap' + (machinesExpanded ? ' with-machines' : '') },
           h(FlowCanvas, {
             nodes: filteredNodes,
             edges: filteredEdges,
