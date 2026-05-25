@@ -38,7 +38,7 @@ const PRIMARY_NAV = [
   { id: 'pipeline',    label: 'Pipeline-Runner', href: '/pipeline.html',    icon: 'play' },
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
   { id: 'ocr-studio',  label: 'OCR Studio',      href: '/studio-ocr.html',  icon: 'sliders-horizontal' },
-  { id: 'assistant',   label: 'Assistant',       href: '/orchestrator.html', icon: 'sparkles' },
+  { id: 'assistant',   label: 'Assistant',       href: '/assistant.html', icon: 'sparkles' },
   { id: 'fleet',       label: 'Fleet',           href: '/0711-fleet.html',  icon: 'network' },
 ];
 
@@ -138,11 +138,11 @@ export async function renderSturmNav(opts = {}) {
 function autoDetectActive() {
   const p = location.pathname;
   if (p === '/' || p === '/index.html') return 'workflows';
-  if (p.startsWith('/anwendungen') || p.startsWith('/steuerfall')) return 'anwendungen';
+  if (p.startsWith('/anwendungen') || p.startsWith('/cases') || p.startsWith('/steuerfall')) return 'anwendungen';
   if (p.startsWith('/pipeline')) return 'pipeline';
   if (p.startsWith('/designer')) return 'designer';
   if (p.startsWith('/ocr-studio')) return 'ocr-studio';
-  if (p.startsWith('/orchestrator')) return 'assistant';
+  if (p.startsWith('/orchestrator') || p.startsWith('/assistant')) return 'assistant';
   return null;
 }
 

@@ -30,7 +30,7 @@ const NAV = [
   { id: 'runner', label: 'Pipeline-Runner', icon: I.play, href: 'pipeline.html' },
   { id: 'designer', label: 'Designer', icon: I.pen, href: 'designer.html' },
   { id: 'ocr', label: 'OCR Studio', icon: I.sliders, href: 'studio-ocr.html' },
-  { id: 'assistant', label: 'Assistant', icon: I.spark || I.pen, href: 'orchestrator.html' },
+  { id: 'assistant', label: 'Assistant', icon: I.spark || I.pen, href: 'assistant.html' },
   { id: 'fleet', label: 'Fleet', icon: I.layers, href: '0711-fleet.html' },
 ];
 
