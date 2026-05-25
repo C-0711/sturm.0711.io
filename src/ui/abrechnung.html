@@ -1,11 +1,19 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
   <meta charset="utf-8">
   <title>Pro-Abrechnung — STURM</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    /* Print view: always light, regardless of saved sturm-theme. */
+    document.documentElement.setAttribute('data-theme', 'light');
+  </script>
+  <link rel="stylesheet" href="/design-system/sturm.css">
   <style>
-    /* A4-printable, lots of whitespace, Steuerberater-formal. */
+    /* A4-printable, lots of whitespace, Steuerberater-formal.
+       The page keeps its own --ink/--paper/--rule palette (warm cream paper);
+       sturm.css is loaded only to keep this print artifact aligned with the
+       canonical design system tokens for any shared primitives. */
     :root {
       --ink: #14110b;
       --ink-soft: #4c4534;
