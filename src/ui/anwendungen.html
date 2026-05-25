@@ -445,7 +445,7 @@
     .case-row:hover { border-color: var(--color-accent); background: var(--color-bg-hover); }
     .case-row + .case-row { margin-top: 8px; }
     .case-row-link { color: inherit; text-decoration: none; display: contents; }
-    .case-row-del {
+    .case-row-overflow {
       background: transparent;
       border: 1px solid transparent;
       width: 26px; height: 26px;
@@ -456,13 +456,48 @@
       align-items: center;
       justify-content: center;
       transition: background .1s, color .1s, border-color .1s;
+      position: relative;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
     }
-    .case-row-del:hover {
-      background: color-mix(in oklab, var(--err) 12%, transparent);
-      color: var(--err);
-      border-color: color-mix(in oklab, var(--err) 30%, transparent);
+    .case-row-overflow:hover {
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
+      border-color: var(--color-border);
     }
-    .case-row-del i { width: 14px; height: 14px; }
+    .case-row-overflow:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+    .case-overflow-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      z-index: 20;
+      min-width: 180px;
+      background: var(--color-bg-card, #1a1a1a);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px color-mix(in oklab, oklch(0 0 0) 25%, transparent);
+      padding: 4px 0;
+      display: none;
+    }
+    .case-overflow-menu.open { display: block; }
+    .case-overflow-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: 0;
+      color: var(--color-text-secondary);
+      font-size: 12.5px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .case-overflow-item:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+    .case-overflow-item.danger { color: var(--err); }
+    .case-overflow-item.danger:hover { background: color-mix(in oklab, var(--err) 10%, transparent); }
+    .case-overflow-item i { width: 14px; height: 14px; }
     .case-title {
       font-size: 13.5px;
       font-weight: 500;
@@ -1138,8 +1173,8 @@
     function renderCaseRow(appId, c) {
       const safeId = encodeURIComponent(c.caseId);
       const safeApp = encodeURIComponent(appId);
-      const trashIcon = c.status === 'in_bearbeitung' ? 'trash-2' : 'archive';
-      const title = c.status === 'in_bearbeitung' ? 'Fall löschen' : 'Fall archivieren';
+      const deleteLabel = c.status === 'in_bearbeitung' ? 'Fall löschen' : 'Fall archivieren';
+      const deleteIcon = c.status === 'in_bearbeitung' ? 'trash-2' : 'archive';
       return `
         <div class="case-row" data-case="${escapeHtml(c.caseId)}">
           <div class="case-row-head">
@@ -1152,13 +1187,33 @@
               <span class="case-meta">${fmtDate(c.createdAt)}</span>
               <span class="case-status ${escapeHtml(c.status)}">${escapeHtml(statusLabel(c.status))}</span>
             </a>
-            <button class="case-row-del" data-action="del-case"
-                    data-app="${escapeHtml(appId)}"
-                    data-case="${escapeHtml(c.caseId)}"
-                    data-status="${escapeHtml(c.status)}"
-                    title="${title}">
-              <i data-lucide="${trashIcon}"></i>
-            </button>
+            <div style="position: relative;">
+              <button class="case-row-overflow" data-action="toggle-overflow"
+                      data-app="${escapeHtml(appId)}"
+                      data-case="${escapeHtml(c.caseId)}"
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                      title="Aktionen">⋯</button>
+              <div class="case-overflow-menu" data-menu-for="${escapeHtml(c.caseId)}">
+                <button class="case-overflow-item" data-action="seal-case"
+                        data-app="${escapeHtml(appId)}"
+                        data-case="${escapeHtml(c.caseId)}"
+                        ${c.status !== 'in_bearbeitung' ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                  <i data-lucide="lock"></i><span>Versiegeln</span>
+                </button>
+                <button class="case-overflow-item" data-action="recompute-quality"
+                        data-app="${escapeHtml(appId)}"
+                        data-case="${escapeHtml(c.caseId)}">
+                  <i data-lucide="refresh-cw"></i><span>Qualität neu berechnen</span>
+                </button>
+                <button class="case-overflow-item danger" data-action="del-case"
+                        data-app="${escapeHtml(appId)}"
+                        data-case="${escapeHtml(c.caseId)}"
+                        data-status="${escapeHtml(c.status)}">
+                  <i data-lucide="${deleteIcon}"></i><span>${escapeHtml(deleteLabel)}</span>
+                </button>
+              </div>
+            </div>
           </div>
           ${renderCaseDocs(appId, c)}
         </div>
@@ -1350,14 +1405,68 @@
           openCreateModal(btn.dataset.app);
         });
       });
-      host.querySelectorAll('[data-action="del-case"]').forEach(btn => {
+      // Overflow menu toggle handlers
+      host.querySelectorAll('[data-action="toggle-overflow"]').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          const caseId = btn.dataset.case;
+          const menu = host.querySelector(`[data-menu-for="${CSS.escape(caseId)}"]`);
+          const isOpen = menu?.classList.contains('open');
+          // Close all other menus first
+          host.querySelectorAll('.case-overflow-menu.open').forEach(m => m.classList.remove('open'));
+          host.querySelectorAll('[data-action="toggle-overflow"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+          if (!isOpen && menu) {
+            menu.classList.add('open');
+            btn.setAttribute('aria-expanded', 'true');
+          }
+        });
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            const caseId = btn.dataset.case;
+            const menu = host.querySelector(`[data-menu-for="${CSS.escape(caseId)}"]`);
+            menu?.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      });
+      // Close menus on click outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.case-row-overflow') && !e.target.closest('.case-overflow-menu')) {
+          host.querySelectorAll('.case-overflow-menu.open').forEach(m => m.classList.remove('open'));
+          host.querySelectorAll('[data-action="toggle-overflow"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+        }
+      }, { capture: true });
+      // Menu item handlers
+      host.querySelectorAll('.case-overflow-item[data-action="del-case"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          host.querySelectorAll('.case-overflow-menu.open').forEach(m => m.classList.remove('open'));
           handleDelete(btn.dataset.app, btn.dataset.case, btn.dataset.status);
         });
       });
-      host.querySelectorAll('[data-action="recompute-quality"]').forEach(btn => {
+      host.querySelectorAll('.case-overflow-item[data-action="recompute-quality"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          host.querySelectorAll('.case-overflow-menu.open').forEach(m => m.classList.remove('open'));
+          await handleRecomputeQualityFromOverflow(btn.dataset.app, btn.dataset.case);
+        });
+      });
+      host.querySelectorAll('.case-overflow-item[data-action="seal-case"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (btn.disabled) return;
+          host.querySelectorAll('.case-overflow-menu.open').forEach(m => m.classList.remove('open'));
+          // Navigate to steuerfall page to seal (full seal workflow)
+          const url = `/steuerfall.html?app=${encodeURIComponent(btn.dataset.app)}&case=${encodeURIComponent(btn.dataset.case)}`;
+          window.location.href = url;
+        });
+      });
+      // Keep old inline recompute button handler for backward compat
+      host.querySelectorAll('button.case-recompute[data-action="recompute-quality"]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -1498,8 +1607,6 @@
           return;
         }
         const j = await res.json();
-        // Frischer instance-Snapshot direkt aus der Response nutzen — der
-        // Server liefert das vollständige Objekt inkl. updated documents[].
         const arr = casesByApp.get(appId) || [];
         const idx = arr.findIndex(c => c.caseId === caseId);
         if (idx >= 0 && j.instance) arr[idx] = j.instance;
@@ -1509,6 +1616,26 @@
         alert(`Fehler: ${e?.message || e}`);
         btn.disabled = false;
         btn.textContent = original;
+      }
+    }
+
+    async function handleRecomputeQualityFromOverflow(appId, caseId) {
+      if (!appId || !caseId) return;
+      try {
+        const res = await fetch(`/api/applications/${encodeURIComponent(appId)}/instances/${encodeURIComponent(caseId)}/recompute-quality`);
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          alert(`Fehler: ${j.error || res.status}`);
+          return;
+        }
+        const j = await res.json();
+        const arr = casesByApp.get(appId) || [];
+        const idx = arr.findIndex(c => c.caseId === caseId);
+        if (idx >= 0 && j.instance) arr[idx] = j.instance;
+        const apps = window.__loadedApps || [];
+        paintSections(document.getElementById('app-list'), apps);
+      } catch (e) {
+        alert(`Fehler: ${e?.message || e}`);
       }
     }
 
