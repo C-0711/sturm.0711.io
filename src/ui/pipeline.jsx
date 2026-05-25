@@ -1079,7 +1079,17 @@ function SidebarUpload({ workflow, file, onFile, onStart, running }) {
     <>
       <div
         className={`sturm-sb-upload ${dragover ? 'is-dragover' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-label="Datei wählen oder ablegen"
         onClick={() => inputRef.current?.click()}
+        onKeyDown={e => {
+          // Bug #6 fix: keyboard-activate the dropzone with Enter or Space
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         onDragOver={e => { e.preventDefault(); setDragover(true); }}
         onDragLeave={() => setDragover(false)}
         onDrop={onDrop}
@@ -3348,10 +3358,15 @@ function App() {
         ]);
         setWorkflows(listResp || []);
         if (!wfResp) {
+          // Bug #3 fix (QA report 2026-05-25): do NOT silently fall back to the first
+          // workflow when the requested ID is unknown. That used to render Hello OCR
+          // under a 'not found' banner and confused users about what they were looking
+          // at. Now we leave the workflow null so the canvas shows the empty state and
+          // the topbar shows 'Lädt …' / loadError.
           setLoadError(`Workflow "${wfIdFromUrl}" nicht gefunden.`);
-          // Falls ein anderer existiert, den ersten laden
-          if (listResp?.[0]) setWorkflow(listResp[0]);
+          setWorkflow(null);
         } else {
+          setLoadError(null);
           setWorkflow(wfResp);
         }
       } catch (e) {
@@ -3596,7 +3611,7 @@ function App() {
                     <button
                       type="button"
                       onClick={resetLayout}
-                      title="Eigene Node-Positionen verwerfen und automatisches Layout wiederherstellen"
+                      title="Layout zurücksetzen" aria-label="Auto-Layout wiederherstellen"
                       style={{
                         position: 'absolute', top: 10, right: 10, zIndex: 5,
                         height: 26, padding: '0 10px',

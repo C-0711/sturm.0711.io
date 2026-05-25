@@ -24,7 +24,16 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
   flex-direction: column;
   flex-shrink: 0;
   padding: 10px;
+  /* Bug #2 fix: ensure sidebar contents are reachable even when total nav height
+     exceeds viewport. Without overflow-y:auto + min-height:0 the workflow list
+     and Werkzeuge section sit below the fold and cannot be scrolled to. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+.sturm-sidebar::-webkit-scrollbar { width: 8px; }
+.sturm-sidebar::-webkit-scrollbar-thumb { background: var(--color-bg-tertiary); border-radius: 4px; }
+.sturm-sidebar::-webkit-scrollbar-thumb:hover { background: var(--color-border); }
 .sturm-sidebar.is-collapsed { width: 48px; padding: 10px 6px; }
 
 .sturm-sb-head {
