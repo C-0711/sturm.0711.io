@@ -37,7 +37,7 @@ const PRIMARY_NAV = [
   { id: 'anwendungen', label: 'Anwendungen',     href: '/anwendungen.html', icon: 'boxes' },
   { id: 'pipeline',    label: 'Pipeline-Runner', href: '/pipeline.html',    icon: 'play' },
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
-  { id: 'ocr-studio',  label: 'OCR Studio',      href: '/ocr-studio.html',  icon: 'sliders-horizontal' },
+  { id: 'ocr-studio',  label: 'OCR Studio',      href: '/studio-ocr.html',  icon: 'sliders-horizontal' },
   { id: 'assistant',   label: 'Assistant',       href: '/orchestrator.html', icon: 'sparkles' },
 ];
 
