@@ -78,7 +78,7 @@ export async function renderSturmNav(opts = {}) {
           <span class="sturm-mark">S</span>
           <span class="sturm-brand-word">STURM</span>
         </a>
-        <button class="sturm-sb-toggle" aria-label="Sidebar umschalten" onclick="document.getElementById('${hostId}').classList.toggle('is-collapsed')">
+        <button class="sturm-sb-toggle" aria-label="Sidebar umschalten" id="${hostId}-toggle">
           <i data-lucide="panel-left"></i>
         </button>
       </div>
@@ -113,6 +113,15 @@ export async function renderSturmNav(opts = {}) {
 
   // Lucide nach DOM-Replacement neu initialisieren
   window.lucide && window.lucide.createIcons();
+  // Round-5 #3: wire the sidebar toggle button via real addEventListener (more robust
+  // than inline onclick — fires for synthetic clicks too).
+  const toggleBtn = document.getElementById(hostId + '-toggle');
+  const hostEl = document.getElementById(hostId);
+  if (toggleBtn && hostEl) {
+    toggleBtn.addEventListener('click', () => {
+      hostEl.classList.toggle('is-collapsed');
+    });
+  }
 
   // Context-Section füllen (lazy)
   const ctxHost = document.getElementById('sturm-nav-context');

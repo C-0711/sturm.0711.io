@@ -35,6 +35,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 .sturm-sidebar::-webkit-scrollbar-thumb { background: var(--color-bg-tertiary); border-radius: 4px; }
 .sturm-sidebar::-webkit-scrollbar-thumb:hover { background: var(--color-border); }
 .sturm-sidebar.is-collapsed { width: 48px; padding: 10px 6px; }
+/* Round-5 #3: smooth collapse transition so the toggle is visually obvious. */
+.sturm-sidebar { transition: width 180ms ease, padding 180ms ease; }
 
 .sturm-sb-head {
   display: flex;

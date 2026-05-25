@@ -330,7 +330,8 @@ code { background: var(--surface-elevated, #161b22); padding: 1px 4px; border-ra
 .error-text { color: #f85149; font-size: 11px; min-height: 13px; }
 
 .btn-primary {
-  background: var(--accent, #58a6ff); color: #0e1117; border: 0;
+  /* Round-5 #7: text color uses --on-accent design token so light/dark themes both meet WCAG AA. */
+  background: var(--accent, #58a6ff); color: var(--on-accent, #0e1117); border: 0;
   padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer;
 }
 .btn-primary:hover:not(:disabled) { background: #79b8ff; }

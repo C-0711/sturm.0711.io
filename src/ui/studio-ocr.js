@@ -168,6 +168,13 @@ function runStageEntryHook(stage, _prev) {
 
 function openSheet(name) {
   if (!SHEETS.includes(name)) return;
+  // Round-5 #5/#8: in 'empty' stage the document area is showing template cards;
+  // popping a sheet over them creates the floating-overlay collision the audit saw.
+  // Require at least 'drafting' (schema loaded) or 'reading' (file analysed) before sheets open.
+  if (currentStage === 'empty') {
+    toast('Erst Vorlage wählen oder Datei laden, dann Werkzeuge öffnen.', 'warn');
+    return;
+  }
   currentSheet = name;
   document.body.dataset.activeSheet = name;
   // Sync run-tab visibility for sheets that overlay .pane-run
@@ -247,9 +254,24 @@ new MutationObserver(syncVariantsTabReveal).observe(
 );
 
 // ============ File picker / loadFile ========================================
+// Round-5 #2: MIME + extension whitelist enforced client-side BEFORE loadFile.
+const ALLOWED_MIME = new Set(['application/pdf','image/png','image/jpeg','image/jpg','image/webp']);
+const ALLOWED_EXT = /\.(pdf|png|jpe?g|webp)$/i;
+function isAllowedFile(file) {
+  if (!file) return false;
+  const mimeOk = !file.type || ALLOWED_MIME.has(file.type);
+  const extOk = ALLOWED_EXT.test(file.name || '');
+  return mimeOk && extOk;
+}
 els.fileInput.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
-  if (file) loadFile(file);
+  if (!file) return;
+  if (!isAllowedFile(file)) {
+    toast('Datei abgelehnt: "' + (file.name || '?') + '" ist kein PDF/PNG/JPG/WEBP (Typ: ' + (file.type || 'unbekannt') + ').', 'error', 6000);
+    e.target.value = '';
+    return;
+  }
+  loadFile(file);
 });
 
 function loadFile(file) {
@@ -257,6 +279,8 @@ function loadFile(file) {
   if (currentDocUrl) URL.revokeObjectURL(currentDocUrl);
   currentDocUrl = URL.createObjectURL(file);
   els.filePickerLabel.textContent = file.name;
+  // Round-5 #12: badge truncates; surface full name on hover.
+  if (els.filePickerLabel) els.filePickerLabel.setAttribute('title', file.name);
   els.docMeta.textContent = `${file.name} · ${formatBytes(file.size)} · ${file.type || 'unknown'}`;
   withTransition(() => {
     els.docViewer.innerHTML = '';
@@ -1364,8 +1388,20 @@ async function loadTemplates() {
     }
   } catch (e) {
     console.warn('[studio] failed to load templates:', e);
-    const grid = document.getElementById('empty-cards');
-    if (grid) grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--color-text-tertiary); padding: 24px;">Konnte Vorlagen nicht laden: ${escapeHtml(String(e.message || e))}</div>`;
+    const grid2 = document.querySelector('.empty-cards');
+    if (grid2) {
+      const msg = String(e.message || e);
+      const is401 = msg.includes('401');
+      // Insert banner ABOVE the cards so existing static cards stay clickable.
+      const banner = document.createElement('div');
+      banner.setAttribute('role','alert');
+      banner.style.cssText = 'grid-column: 1 / -1; padding: 16px; border: 1px solid var(--color-warning, #d97706); border-radius: 8px; background: rgba(217, 119, 6, 0.08); color: var(--color-text-primary); margin-bottom: 12px;';
+      banner.innerHTML = `<strong>${is401 ? '🔒 Nicht authentifiziert' : '⚠️ Vorlagen konnten nicht geladen werden'}</strong>
+        <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 4px;">${is401 ? 'Die Studio-API benötigt einen gültigen Token (?token=… in der URL). Eingebaute Vorlagen unten funktionieren weiterhin.' : escapeHtml(msg)}</div>`;
+      grid2.parentElement.insertBefore(banner, grid2);
+      // Round-5 #9: re-wire static cards (in case bootstrap missed them).
+      try { document.querySelectorAll('button.empty-card[data-template-id]').forEach(btn => { if (!btn.__wired) { btn.__wired = true; btn.addEventListener('click', () => _onCardClick(btn.dataset.templateId)); } }); } catch {}
+    }
     return;
   }
   _renderEmptyCards();
@@ -1429,9 +1465,14 @@ function renderVariantsRail() {
   variants.forEach((v, i) => {
     const li = document.createElement('li');
     if (i === activeVariantIdx) li.classList.add('active');
-    li.innerHTML = `<div><div class="vname">${escapeHtml(v.name)}</div><div class="vmeta">${escapeHtml(v.id)}</div></div>`;
+    // Round-5 #11: hide internal variant id; surface only on hover via title.
+    // Round-5 #15: per-variant aria-label on remove button for screen-reader clarity.
+    li.innerHTML = `<div><div class="vname" title="id: ${escapeHtml(v.id)}">${escapeHtml(v.name)}</div></div>`;
     const rm = document.createElement('button');
-    rm.className = 'vremove'; rm.title = 'Entfernen'; rm.textContent = '×';
+    rm.className = 'vremove';
+    rm.title = `${v.name} entfernen`;
+    rm.setAttribute('aria-label', `${v.name} entfernen`);
+    rm.textContent = '×';
     rm.addEventListener('click', (e) => {
       e.stopPropagation();
       variants.splice(i, 1);
@@ -1535,7 +1576,7 @@ const cmdkList = $('cmdk-list');
 const cmdkOpen = $('cmdk-open');
 
 const COMMANDS = [
-  { id: 'run', label: 'Run preview', keywords: ['preview','ocr','run'], action: () => $('run-btn')?.click() },
+  { id: 'run', label: 'Run preview', keywords: ['preview','ocr','run'], action: () => { if (!currentFile) { toast('Bitte zuerst eine Datei wählen.', 'error'); return; } $('run-btn')?.click(); } },
   { id: 'gen', label: 'Generate schema from document', keywords: ['schema','generate','✨'], action: () => $('schema-generate-btn')?.click() },
   { id: 'save', label: 'Save schema as…', keywords: ['save','schema','repo'], action: () => $('save-schema-btn')?.click() },
   { id: 'tpl', label: 'Load template…', keywords: ['template','vorlage'], action: () => { activateRunTab('parameters'); $('cfg-template')?.focus(); } },
@@ -1652,6 +1693,12 @@ window.addEventListener('keydown', (e) => {
   if (isEditingTarget(e.target)) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+  // Round-5 #10: close help popover when a shortcut fires so it doesn't cover the resulting toast.
+  const helpPop = document.getElementById('kbd-help-popover');
+  if (helpPop && (helpPop.matches(':popover-open') || helpPop.classList.contains('is-open'))) {
+    if (helpPop.hidePopover) helpPop.hidePopover();
+    helpPop.classList.remove('is-open');
+  }
   switch (e.key.toLowerCase()) {
     case 'g': $('schema-generate-btn')?.click(); e.preventDefault(); break;
     case 'r': $('run-btn')?.click(); e.preventDefault(); break;
@@ -1729,6 +1776,23 @@ function flashWorkspaceSaved(text) {
 }
 
 // ============ Bootstrap =====================================================
+// Round-5 #4: wire any STATIC empty-card buttons present in studio-ocr.html.
+// (Without this, templates that 401 leave the static cards clickless.)
+function _wireStaticEmptyCards() {
+  document.querySelectorAll('button.empty-card[data-template-id]').forEach(btn => {
+    if (btn.dataset.wired === '1') return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', () => {
+      console.log('[studio] static-card click:', btn.dataset.templateId);
+      _onCardClick(btn.dataset.templateId);
+    });
+  });
+}
+_wireStaticEmptyCards();
+// Re-run after DOMContentLoaded just in case timing is off:
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _wireStaticEmptyCards);
+}
 loadTemplates();
 init();
 updateCostMeter();
@@ -1812,7 +1876,7 @@ function wireSchemaGenerator() {
   };
 
   btn.addEventListener('click', async () => {
-    console.log('[studio] schema-generate-btn click fired; currentFile=', currentFile && currentFile.name);
+    
     if (!currentFile) { toast('Bitte zuerst eine Datei wählen.', 'error'); return; }
     if (activeAbort) activeAbort.abort();
     activeAbort = new AbortController();
@@ -1917,7 +1981,7 @@ function wireSchemaGenerator() {
     }
   }
   btn.__sturmSchemaGenWired = true;
-  console.log('[studio] schema-generate-btn handler attached to', btn);
+  
   return true;
 }
 
