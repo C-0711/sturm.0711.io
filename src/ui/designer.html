@@ -212,42 +212,17 @@
     .menu-item.primary .icon, .menu-item.primary { color: var(--accent); }
     .menu-divider { height: 1px; background: var(--line-2); margin: 6px 8px; }
 
-    .menu-theme {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 14px 10px;
-      margin-top: 4px;
-      border-top: 1px solid var(--line-2);
-    }
-    .menu-theme-label {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      color: var(--ink-3);
-      text-transform: uppercase;
-    }
-    .theme-seg {
-      display: inline-flex;
-      background: var(--bg-3);
-      border: 1px solid var(--line-2);
-      border-radius: 999px;
-      padding: 2px;
-    }
-    .theme-seg button {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 11px;
-      font-size: 12px;
-      color: var(--ink-3);
+    .theme-btn {
+      width: 34px; height: 34px;
       background: transparent;
-      border: 0;
-      border-radius: 999px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--ink-2);
+      display: grid; place-items: center;
       cursor: pointer;
-      transition: background 150ms ease, color 150ms ease;
+      transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
     }
-    .theme-seg button.on {
-      background: var(--bg);
-      color: var(--ink);
-      box-shadow: 0 1px 2px oklch(0 0 0 / 0.1), 0 0 0 1px var(--line-2);
-    }
+    .theme-btn:hover { border-color: var(--ink-3); background: var(--bg-2); color: var(--ink); }
 
     /* ============ BODY ============ */
     .dz-body {
@@ -489,21 +464,6 @@
       flex-shrink: 0;
       background: var(--bg);
     }
-    .chat-suggestions {
-      display: flex; gap: 6px; flex-wrap: wrap;
-      margin-bottom: 10px;
-    }
-    .chat-chip {
-      font-size: 11.5px;
-      padding: 5px 10px;
-      background: var(--bg-2);
-      border: 1px solid var(--line-2);
-      border-radius: 999px;
-      color: var(--ink-2);
-      cursor: pointer;
-      transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
-    }
-    .chat-chip:hover { color: var(--ink); border-color: var(--line); background: var(--bg-3); }
     .chat-input {
       background: var(--bg-2);
       border: 1px solid var(--line-2);
@@ -636,32 +596,6 @@
     }
     .dz-status strong { color: var(--ink-2); font-weight: 500; }
 
-    /* inspector handle */
-    .inspector-handle {
-      position: absolute;
-      right: 0; top: 50%;
-      transform: translateY(-50%);
-      width: 28px;
-      padding: 16px 6px;
-      background: var(--bg-2);
-      border: 1px solid var(--line-2);
-      border-right: 0;
-      border-radius: 8px 0 0 8px;
-      color: var(--ink-3);
-      cursor: pointer;
-      z-index: 3;
-      writing-mode: vertical-rl;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      display: flex; align-items: center; justify-content: center;
-      gap: 8px;
-      transition: color 150ms ease, background 150ms ease;
-    }
-    .inspector-handle:hover { color: var(--ink); background: var(--bg-3); }
-    .inspector-open .inspector-handle { display: none; }
-
     /* node */
     .node {
       position: absolute;
@@ -785,10 +719,11 @@ const I = {
   save: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h8l2 2v8H2V2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><path d="M4 2v3h5V2M4 12V8h6v4" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
   newDoc: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 1.5h5l3 3v8H3v-11z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><path d="M8 1.5v3h3M7 7v3M5.5 8.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
   external: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5 2H2v9h9V8M7.5 2H11v3.5M11 2L6 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  inspector: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="9" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M9 2.5v9" stroke="currentColor" strokeWidth="1.2"/></svg>,
 };
 
 /* ============ TopBar ============ */
-function TopBar({ wfName, setWfName, wfId, setWfId, dirty, onBurger, burgerOpen, onSave }) {
+function TopBar({ wfName, setWfName, wfId, setWfId, dirty, onBurger, burgerOpen, onSave, theme, setTheme }) {
   const [metaOpen, setMetaOpen] = useState(false);
   const wrapRef = useRef(null);
   useEffect(() => {
@@ -801,7 +736,6 @@ function TopBar({ wfName, setWfName, wfId, setWfId, dirty, onBurger, burgerOpen,
   return (
     <header className="dz-top">
       <div className="dz-top-l">
-        <a href="app.html" className="brand-tile" aria-label="Back to app">S</a>
         <div className="meta-pop-wrap" ref={wrapRef}>
           <div className="dz-wf-title-wrap">
             <input
@@ -849,6 +783,17 @@ function TopBar({ wfName, setWfName, wfId, setWfId, dirty, onBurger, burgerOpen,
         <button className="btn btn-ghost"><I.play /> Test</button>
         <button className="btn btn-primary" onClick={onSave}>{dirty ? 'Save' : 'Saved'}</button>
         <button
+          className="theme-btn"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label="Toggle theme"
+        >
+          {theme === 'dark'
+            ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.6" stroke="currentColor" strokeWidth="1.2"/><path d="M7 1v1.6M7 11.4V13M1 7h1.6M11.4 7H13M2.6 2.6l1.1 1.1M10.3 10.3l1.1 1.1M2.6 11.4l1.1-1.1M10.3 3.7l1.1-1.1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+            : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 8.5A4.5 4.5 0 015.5 3 4.5 4.5 0 1011 8.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+          }
+        </button>
+        <button
           className={`burger${burgerOpen ? ' open' : ''}`}
           onClick={onBurger}
           aria-label={burgerOpen ? 'Close menu' : 'Open menu'}
@@ -862,7 +807,7 @@ function TopBar({ wfName, setWfName, wfId, setWfId, dirty, onBurger, burgerOpen,
   );
 }
 
-function Menu({ open, onClose, theme, setTheme }) {
+function Menu({ open, onClose }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -876,29 +821,10 @@ function Menu({ open, onClose, theme, setTheme }) {
         <div className="menu-group-label">Workflow</div>
         <button className="menu-item"><span className="icon"><I.newDoc /></span><span>New</span><span className="kbd">⌘N</span></button>
         <button className="menu-item"><span className="icon"><I.load /></span><span>Load…</span><span className="kbd">⌘O</span></button>
-        <button className="menu-item"><span className="icon"><I.save /></span><span>Save</span><span className="kbd">⌘S</span></button>
         <div className="menu-divider" />
         <div className="menu-group-label">Canvas</div>
         <button className="menu-item primary"><span className="icon"><I.spark /></span><span>Auto-layout</span><span className="kbd">⌘L</span></button>
-        <button className="menu-item"><span className="icon"><I.play /></span><span>Test workflow</span><span className="kbd">⌘↵</span></button>
         <a className="menu-item" href="ocr-studio.html"><span className="icon"><I.external /></span><span>Open Run-UI</span></a>
-        <div className="menu-divider" />
-        <div className="menu-group-label">Navigate</div>
-        <a className="menu-item" href="app.html"><span className="icon"><I.fold /></span><span>Back to app</span></a>
-        <a className="menu-item" href="index.html"><span className="icon"><I.fold /></span><span>Landing</span></a>
-        <div className="menu-theme">
-          <span className="menu-theme-label">Theme</span>
-          <div className="theme-seg">
-            <button className={theme === 'light' ? 'on' : ''} onClick={() => setTheme('light')} aria-label="Light mode">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.2"/><path d="M6 1v1.5M6 9.5V11M1 6h1.5M9.5 6H11M2.5 2.5l1 1M8.5 8.5l1 1M2.5 9.5l1-1M8.5 3.5l1-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-              Day
-            </button>
-            <button className={theme === 'dark' ? 'on' : ''} onClick={() => setTheme('dark')} aria-label="Dark mode">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9.5 7.5A4 4 0 015.5 2.5 4 4 0 109.5 7.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
-              Night
-            </button>
-          </div>
-        </div>
       </div>
     </React.Fragment>
   );
@@ -907,13 +833,6 @@ function Menu({ open, onClose, theme, setTheme }) {
 /* ============ Chat ============ */
 const INITIAL_MESSAGES = [
   { id: 1, role: 'assistant', text: <React.Fragment><p>Hi — I'm your workflow assistant. Tell me what kind of document you're processing and I'll wire up the stages.</p><p>You can also drop a sample doc, paste a screenshot, or hold the <span className="em">mic</span> and describe what you want.</p></React.Fragment> },
-];
-
-const QUICK_CHIPS = [
-  'Build an ELSTER workflow',
-  'OCR a tax certificate',
-  'Add a validator',
-  'Auto-layout',
 ];
 
 function Chat({ onInsert }) {
@@ -1016,11 +935,6 @@ function Chat({ onInsert }) {
       </div>
 
       <div className="chat-input-wrap">
-        <div className="chat-suggestions">
-          {QUICK_CHIPS.map(c => (
-            <button key={c} className="chat-chip" onClick={() => send(c)}>{c}</button>
-          ))}
-        </div>
         <div className="chat-input">
           <textarea
             ref={textRef}
@@ -1049,11 +963,11 @@ function Canvas({ inspectorOpen, onToggleInspector, selected, onSelect }) {
       <div className="dz-canvas-tools">
         <button title="Add node"><I.plus /></button>
         <span className="sep" />
-        <button title="Auto-layout"><I.layout /></button>
-        <span className="sep" />
         <button title="Zoom in"><I.zoomIn /></button>
         <button title="Zoom out"><I.zoomOut /></button>
         <button title="Fit"><I.fit /></button>
+        <span className="sep" />
+        <button title="Inspector" onClick={onToggleInspector} aria-pressed={inspectorOpen}><I.inspector /></button>
       </div>
 
       <div
@@ -1076,12 +990,6 @@ function Canvas({ inspectorOpen, onToggleInspector, selected, onSelect }) {
       </div>
 
       <div className="minimap"><div className="minimap-vp" /></div>
-
-      {!inspectorOpen && (
-        <button className="inspector-handle" onClick={onToggleInspector}>
-          Inspector
-        </button>
-      )}
     </div>
   );
 }
@@ -1157,13 +1065,14 @@ function App() {
         dirty={dirty}
         onBurger={() => setBurgerOpen(v => !v)} burgerOpen={burgerOpen}
         onSave={() => setDirty(false)}
+        theme={theme} setTheme={setTheme}
       />
       <div className={`dz-body${inspectorOpen ? ' inspector-open' : ''}`}>
         <Chat onInsert={() => { setDirty(true); }} />
         <Canvas inspectorOpen={inspectorOpen} onToggleInspector={() => setInspectorOpen(v => !v)} selected={selected} onSelect={onSelect} />
         <Inspector open={inspectorOpen} onClose={() => setInspectorOpen(false)} selected={selected} />
       </div>
-      <Menu open={burgerOpen} onClose={() => setBurgerOpen(false)} theme={theme} setTheme={setTheme} />
+      <Menu open={burgerOpen} onClose={() => setBurgerOpen(false)} />
     </div>
   );
 }
