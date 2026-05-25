@@ -32,9 +32,40 @@ const TRUTH = {
   unavailable: { label: 'UNAVAILABLE', desc: 'no data — endpoint down or not yet implemented' },
 };
 
-const Truth = ({ s }) => (
-  <span className={`truth ${s}`} title={TRUTH[s].desc}>{TRUTH[s].label}</span>
-);
+const Truth = ({ s }) => {
+  const meta = TRUTH[s] || { label: String(s || 'UNKNOWN').toUpperCase(), desc: 'unknown truth state — defaulting to unavailable styling' };
+  const cls = TRUTH[s] ? s : 'unavailable';
+  return <span className={`truth ${cls}`} title={meta.desc}>{meta.label}</span>;
+};
+
+/* ==================== LIVE TRUTH HOOK (K4) ==================== */
+/* Drive truth pills from real /api/<service>/health endpoints.
+   Fail-closed: any fetch error or non-2xx → 'unavailable' (never silent-mock live).
+   API contract: { truth: 'live'|'mixed'|'seeded'|'inferred'|'unavailable'|'unknown', data, source, observedAt } */
+function useTruthFromEndpoint(url, { intervalMs = 30000 } = {}) {
+  const [state, setState] = useState({ truth: 'unknown', data: null, observedAt: null, source: null });
+  useEffect(() => {
+    let cancelled = false;
+    const VALID = new Set(['live','mixed','seeded','inferred','unavailable','unknown']);
+    const tick = async () => {
+      try {
+        const r = await fetch(url, { headers: { 'accept': 'application/json' }, cache: 'no-store' });
+        if (!r.ok) throw new Error('http ' + r.status);
+        const j = await r.json();
+        const t = (j && typeof j.truth === 'string' && VALID.has(j.truth)) ? j.truth : 'unknown';
+        if (!cancelled) setState({ truth: t, data: (j && j.data) || null, observedAt: (j && j.observedAt) || null, source: (j && j.source) || null });
+      } catch (e) {
+        if (!cancelled) setState({ truth: 'unavailable', data: null, observedAt: new Date().toISOString(), source: 'fetch.error' });
+      }
+    };
+    tick();
+    const id = setInterval(tick, intervalMs);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [url, intervalMs]);
+  return state;
+}
+
+const useKlavisTruth = () => useTruthFromEndpoint('/api/klavis/health', { intervalMs: 30000 });
 
 /* ==================== MOCKED DATA ==================== */
 const SOURCES = {
@@ -269,6 +300,7 @@ function Overview({ onNav }) {
   const liveTruth = Object.values(MATRIX).flatMap(row => Object.values(row)).filter(c => c.truth === 'live').length;
   const totalCells = Object.values(MATRIX).flatMap(row => Object.values(row)).length;
   const livePct = Math.round(100 * liveTruth / totalCells);
+  const klavisHealth = useKlavisTruth();
   return (
     <div className="stack-16">
       <div className="row-4">
@@ -315,7 +347,7 @@ function Overview({ onNav }) {
           <div className="klavis-card-title">
             <span className="tile">K</span>
             <span>Klavis · LLM bridge</span>
-            <Truth s="live" />
+            <Truth s={klavisHealth.truth} />
           </div>
           <button className="btn btn-ghost btn-sm" onClick={() => onNav('klavis')}>Open drilldown <I.external /></button>
         </div>
@@ -388,19 +420,23 @@ function Overview({ onNav }) {
 
       <div className="row-2">
         <div className="panel">
-          <div className="panel-head"><h2 className="panel-h">Top runtime services</h2><span className="panel-spacer" /><Truth s="live" /></div>
+          <div className="panel-head"><h2 className="panel-h">Top runtime services</h2><span className="panel-spacer" /><Truth s={klavisHealth.truth === 'unavailable' ? 'mixed' : 'live'} /></div>
           <div className="panel-body flush">
-            {CONTAINERS.slice(0, 6).map(c => (
+            {CONTAINERS.slice(0, 6).map(c => {
+              const rowTruth = c.name === 'klavis' ? klavisHealth.truth : c.truth;
+              const rowHealth = c.name === 'klavis' && klavisHealth.truth === 'unavailable' ? 'err' : c.health;
+              return (
               <div className="alert-row" key={c.name}>
-                <span className={`s-dot ${c.health}`} />
+                <span className={`s-dot ${rowHealth}`} />
                 <div>
                   <div className="name">{c.name}</div>
                   <div className="desc">{c.role} · {c.host}:{c.port}</div>
                 </div>
-                <Truth s={c.truth} />
-                <span className="when">{c.health.toUpperCase()}</span>
+                <Truth s={rowTruth} />
+                <span className="when">{rowHealth.toUpperCase()}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         <div className="panel">
@@ -1790,15 +1826,17 @@ function MultiLLMWorkspace({ initialContainer }) {
   );
 }
 function Klavis() {
+  const klavisHealth = useKlavisTruth();
+  const liveSource = { ...SOURCES.klavis, truth: klavisHealth.truth };
   return (
     <div className="stack-16">
-      <TruthBar source={SOURCES.klavis} hint="Klavis exposes /quantum-klavis · probe loop every 60s" />
+      <TruthBar source={liveSource} hint={klavisHealth.observedAt ? ('live probe · /api/klavis/health · observed ' + klavisHealth.observedAt) : 'Klavis exposes /quantum-klavis · probe loop every 60s'} />
       <div className="klavis-card">
         <div className="klavis-card-head">
           <div className="klavis-card-title">
             <span className="tile">K</span>
             <span>Klavis · LLM bridge</span>
-            <Truth s="live" />
+            <Truth s={klavisHealth.truth} />
           </div>
           <a className="btn btn-ghost btn-sm" href="#" onClick={e => e.preventDefault()}>Open /quantum-klavis <I.external /></a>
         </div>
