@@ -15,8 +15,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="sturm.css" />
-  <style>
+  <link rel="stylesheet" href="/v6/sturm.css" />
+  
+    /* doc-preview tokens — light paper context, intentionally not theme-aware */
+    :root {
+      --doc-paper: oklch(0.96 0.01 75);
+      --doc-ink:   oklch(0.22 0.01 80);
+      --doc-ink-sub: oklch(0.3 0.01 80);
+      --doc-stamp: oklch(0.35 0.01 80);
+      --doc-rule:  oklch(0 0 0 / 0.15);
+    }
     .ocr-shell {
       display: flex;
       flex-direction: column;
@@ -106,8 +114,8 @@
     .doc-placeholder {
       width: min(72%, 520px);
       aspect-ratio: 1 / 1.4;
-      background: oklch(0.96 0.01 75);
-      color: oklch(0.22 0.01 80);
+      background: var(--doc-paper, oklch(0.96 0.01 75));
+      color: var(--doc-ink, oklch(0.22 0.01 80));
       box-shadow: 0 24px 64px oklch(0 0 0 / 0.35), 0 0 0 1px oklch(0 0 0 / 0.2);
       padding: 36px 28px;
       font-family: 'Geist', sans-serif;
@@ -124,16 +132,16 @@
       pointer-events: none;
     }
     .doc-h { font-size: 16px; font-weight: 600; text-align: center; margin: 28px 0 14px; letter-spacing: -0.01em; }
-    .doc-rule { border-top: 1px solid oklch(0 0 0 / 0.15); margin: 6px 0; }
+    .doc-rule { border-top: 1px solid var(--doc-rule, oklch(0 0 0 / 0.15)); margin: 6px 0; }
     .doc-row { display: flex; justify-content: space-between; font-size: 10.5px; padding: 1px 0; }
     .doc-row .l { max-width: 70%; }
     .doc-row .r { font-variant-numeric: tabular-nums; }
-    .doc-from { font-size: 10.5px; text-align: right; line-height: 1.45; color: oklch(0.3 0.01 80); }
+    .doc-from { font-size: 10.5px; text-align: right; line-height: 1.45; color: var(--doc-ink-sub, oklch(0.3 0.01 80)); }
     .doc-to { font-size: 10.5px; line-height: 1.45; margin-top: 18px; }
-    .doc-stamp { position: absolute; top: 20px; left: 24px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: oklch(0.35 0.01 80); }
+    .doc-stamp { position: absolute; top: 20px; left: 24px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--doc-stamp, oklch(0.35 0.01 80)); }
     .doc-foot {
       position: absolute; bottom: 16px; right: 24px;
-      font-size: 9.5px; color: oklch(0.35 0.01 80);
+      font-size: 9.5px; color: var(--doc-stamp, oklch(0.35 0.01 80));
     }
 
     /* schema panel */
@@ -252,8 +260,9 @@ function App() {
     <div className="ocr-shell">
       <header className="ocr-top">
         <div className="ocr-top-l">
-          <a href="app.html" className="brand-tile" aria-label="Home">S</a>
-          <h1 className="ocr-top-title">OCR Studio</h1>
+          <a href="/v6/app.html" className="brand-tile" aria-label="Home">S</a>
+          <span className="topbar-sep">/</span>
+          <span className="topbar-crumb" style={{fontSize:"14px",fontWeight:500}}>OCR Studio</span>
           <span className="brand-pill">MVP</span>
         </div>
         <div className="ocr-top-spacer" />
@@ -309,7 +318,7 @@ function App() {
                 <div className="doc-row"><span className="l">Capital gains tax · line 37 KAP</span><span className="r">0.00</span></div>
                 <div className="doc-row"><span className="l">Solidarity surcharge · line 38 KAP</span><span className="r">0.00</span></div>
                 <div className="doc-rule" />
-                <div style={{fontSize: 10, marginTop: 10, color: 'oklch(0.35 0.01 80)'}}>
+                <div style={{fontSize: 10, marginTop: 10, color: 'var(--doc-stamp, oklch(0.35 0.01 80))'}}>
                   Not signed — machine generated (as of 31.01. of the following year).
                 </div>
                 <div className="doc-foot">Page 1 of 1</div>
