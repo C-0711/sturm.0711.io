@@ -1,0 +1,181 @@
+/* /design-system/sidebar.css — canonical sidebar styles, extracted from anwendungen.html
+ * Loaded by nav.js automatically. Single source of truth for .sturm-app + .sturm-sb-* + .sturm-content.
+ */
+
+/* ── STURM compat shim ──────────────────────────────────────────
+       This page (and its child nav.js + nav.js context HTML + this file's
+       JS-templated HTML) was authored against the legacy Neo design system
+       (--color-*) plus the legacy sturm-app.css layout (.sturm-app, .sturm-
+       sb-*). The JS is the live business app and may NOT be touched as part
+       of the Phase F reskin. Therefore we resolve the legacy tokens through
+       sturm.css canonical tokens and restyle the legacy wrapper / sidebar
+       classes here so the canonical CSS is the single source of truth.
+       Token map kept compact; nothing here defines new design.            */
+
+    :root {
+      /* font + motion aliases */
+      --font-inter: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-playfair: var(--font-inter);
+      --mono: var(--font-mono);
+      --radius-md: var(--radius);
+      --duration-fast: 150ms;
+      --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+      --shadow-focus-accent: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+      /* legacy --color-* → sturm.css tokens */
+      --color-bg: var(--bg);
+      --color-bg-primary: var(--bg);
+      --color-bg-secondary: var(--bg);
+      --color-bg-tertiary: var(--bg-3);
+      --color-bg-card: var(--bg-2);
+      --color-bg-hover: var(--bg-3);
+      --color-bg-active: var(--bg-3);
+      --color-text-primary: var(--ink);
+      --color-text-secondary: var(--ink-2);
+      --color-text-tertiary: var(--ink-3);
+      --color-border: var(--line-2);
+      --color-border-light: var(--line-2);
+      --color-accent: var(--accent);
+      --color-accent-hover: var(--accent-deep);
+      --color-accent-light: var(--on-accent);
+    }
+
+.sturm-app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+      height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+/* ── nav.js-produced sidebar (kept identical class names) ──────── */
+    .sturm-sidebar {
+      background: var(--bg);
+      border-right: 1px solid var(--line-2);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+.sturm-sidebar.is-collapsed { width: 48px; padding: 16px 6px; }
+
+.sturm-sb-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 8px 16px;
+    }
+
+.sturm-sb-brand { display: flex; align-items: center; gap: 10px; }
+
+.sturm-mark {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent);
+      display: grid; place-items: center;
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+      flex-shrink: 0;
+    }
+
+.sturm-brand-word {
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+.sturm-sb-toggle {
+      display: inline-grid;
+      place-items: center;
+      width: 28px; height: 28px;
+      border: 0;
+      background: transparent;
+      color: var(--ink-3);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease;
+    }
+
+.sturm-sb-toggle:hover { color: var(--ink); background: var(--bg-2); }
+
+.sturm-sb-toggle svg { width: 16px; height: 16px; stroke-width: 1.5; }
+
+.sturm-sb-section {
+      margin-top: 24px;
+      padding: 8px 12px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+.sturm-sb-nav { display: flex; flex-direction: column; gap: 2px; }
+
+.sturm-sb-nav-scroll { flex: 1; overflow-y: auto; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+
+.sturm-sb-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--ink-2);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+
+.sturm-sb-item:hover { color: var(--ink); background: var(--bg-2); }
+
+.sturm-sb-item.is-active { color: var(--ink); background: var(--bg-3); }
+
+.sturm-sb-item svg { width: 16px; height: 16px; stroke-width: 1.5; flex-shrink: 0; opacity: 0.85; }
+
+.sturm-sb-item-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+
+.sturm-sb-item-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+
+.sturm-sb-item-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+.sturm-sb-foot {
+      margin-top: auto;
+      padding: 12px 8px 4px;
+      border-top: 1px solid var(--line-2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+.sturm-sb-user-name { font-size: 13px; color: var(--ink); }
+
+.sturm-sb-user-plan { font-size: 11px; color: var(--ink-3); }

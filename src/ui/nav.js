@@ -54,6 +54,15 @@ function escapeHtml(s) {
  */
 export async function renderSturmNav(opts = {}) {
   const hostId = opts.hostId || 'sturm-nav-host';
+  // Auto-inject canonical sidebar stylesheet (idempotent — only once per page)
+  if (!document.getElementById("sturm-sidebar-css")) {
+    const link = document.createElement("link");
+    link.id = "sturm-sidebar-css";
+    link.rel = "stylesheet";
+    link.href = "/design-system/sidebar.css";
+    document.head.appendChild(link);
+  }
+
   const host = document.getElementById(hostId);
   if (!host) {
     console.warn(`[nav] host #${hostId} not found`);
