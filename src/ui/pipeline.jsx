@@ -348,8 +348,16 @@ function fmtDur(ms) {
 }
 
 function workflowVersionLabel(id) {
-  const m = String(id || '').match(/-(v\d+)$/i);
-  return m ? m[1].toUpperCase() : '';
+  // Bug #8 fix: extract version from anywhere in the id, not just suffix.
+  // 'elster-v3-multi' -> 'V3·MULTI', 'elster-v3' -> 'V3', 'hello-ocr' -> '' (no version-tag in id).
+  const s = String(id || '');
+  const vm = s.match(/-(v\d+(?:[._]\d+)*)(?:-|$)/i);
+  if (!vm) return '';
+  let label = vm[1].toUpperCase();
+  // Tail modifiers after the version like '-multi', '-rag' etc.
+  const tail = s.slice(vm.index + vm[0].length).replace(/^-/, '').toUpperCase();
+  if (tail && tail.length <= 12) label += '·' + tail;
+  return label;
 }
 
 function compactWorkflowName(workflow) {
@@ -1123,12 +1131,41 @@ function SidebarUpload({ workflow, file, onFile, onStart, running }) {
 }
 
 function Sidebar({ collapsed, onToggle, workflows, activeId, workflow, file, onFile, onStart, running }) {
+  // Bug #5 fix: when sidebar is collapsed, keep an upload+start affordance reachable
+  // as icon-only buttons so the user does not have to expand to start a run.
+  const collapsedInputRef = React.useRef(null);
   if (collapsed) {
     return (
       <aside className="sturm-sidebar is-collapsed">
-        <button className="sturm-sb-toggle" onClick={onToggle} aria-label="Sidebar öffnen">
+        <button className="sturm-sb-toggle" onClick={onToggle} aria-label="Sidebar öffnen" title="Sidebar öffnen">
           <i data-lucide="panel-left"></i>
         </button>
+        <button
+          className="sturm-sb-toggle"
+          style={{ marginTop: 8 }}
+          onClick={() => collapsedInputRef.current?.click()}
+          aria-label="Datei wählen"
+          title={file ? `Datei: ${file.name}` : 'Datei wählen'}
+        >
+          <i data-lucide={file ? 'file-check-2' : 'upload'}></i>
+        </button>
+        <button
+          className="sturm-sb-toggle"
+          style={{ marginTop: 4, color: file && workflow && !running ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+          onClick={onStart}
+          disabled={!file || !workflow || running}
+          aria-label="Workflow starten"
+          title={!workflow ? 'Workflow auswählen' : !file ? 'Datei wählen' : running ? 'läuft …' : 'Workflow starten'}
+        >
+          <i data-lucide={running ? 'loader' : 'play'}></i>
+        </button>
+        <input
+          ref={collapsedInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          accept={(workflow?.input?.accept || []).join(',')}
+          onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+        />
       </aside>
     );
   }
@@ -1221,6 +1258,16 @@ function Sidebar({ collapsed, onToggle, workflows, activeId, workflow, file, onF
 
 function TopBar({ workflow, status, runId, collapsedSidebar, onOpenSidebar, theme, onToggleTheme }) {
   const statusLabel = { idle: 'bereit', running: 'läuft', ok: 'fertig', error: 'fehler' }[status];
+  // Bug #12 fix: tooltip on the status pill carries workflow id + run id when available
+  const statusTooltip = (() => {
+    const parts = [];
+    parts.push({ idle: 'Bereit zum Start', running: 'Workflow läuft …', ok: 'Lauf abgeschlossen', error: 'Lauf fehlgeschlagen' }[status] || status);
+    if (workflow?.id) parts.push(`Workflow: ${workflow.id}`);
+    if (runId) parts.push(`Run: ${runId}`);
+    parts.push('');
+    parts.push('Node-Status: WARTET → LÄUFT → FERTIG/FEHLER (übersprungen mgl.)');
+    return parts.join('\n');
+  })();
   return (
     <header className="sturm-topbar">
       <div className="sturm-topbar-l">
@@ -1233,13 +1280,30 @@ function TopBar({ workflow, status, runId, collapsedSidebar, onOpenSidebar, them
           <strong className="sturm-topbar-workflow" title={workflow?.name || ''}>{workflow?.name || 'Lädt …'}</strong>
           {workflow && <>
             <span className="sturm-topbar-sep">·</span>
-            <span className="sturm-wf-chip" title={workflow.id}><span>{workflow.id}</span></span>
+            <button
+              type="button"
+              className="sturm-wf-chip"
+              title={`Workflow-ID kopieren: ${workflow.id}`}
+              onClick={async (e) => {
+                try {
+                  await navigator.clipboard.writeText(workflow.id);
+                  const el = e.currentTarget;
+                  const prev = el.querySelector('span').textContent;
+                  el.querySelector('span').textContent = '✓ kopiert';
+                  setTimeout(() => { try { el.querySelector('span').textContent = prev; } catch {} }, 1200);
+                } catch { /* clipboard blocked, ignore */ }
+              }}
+              style={{ cursor: 'pointer', background: 'transparent', font: 'inherit' }}
+            ><span>{workflow.id}</span></button>
           </>}
           {runId && <span className="sturm-run-id">{runId}</span>}
         </span>
       </div>
       <div className="sturm-topbar-r">
-        <span className={`sturm-status ${status === 'running' ? 'is-running' : status === 'ok' ? 'is-ok' : status === 'error' ? 'is-error' : ''}`}>
+        <span
+          className={`sturm-status ${status === 'running' ? 'is-running' : status === 'ok' ? 'is-ok' : status === 'error' ? 'is-error' : ''}`}
+          title={statusTooltip}
+        >
           {statusLabel}
         </span>
         <button className="sturm-icon-btn" onClick={onToggleTheme} aria-label="Theme umschalten">
@@ -2855,7 +2919,7 @@ async function streamRun(workflowId, file, onEvent) {
   }
 }
 
-function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick, onNodeDragStop, drawerCollapsed }) {
+function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick, onNodeDragStop, drawerCollapsed, hideMinimap }) {
   const flowRef = useRef(null);
 
   useEffect(() => {
@@ -2886,8 +2950,15 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
       proOptions={{ hideAttribution: false }}
     >
       <RF.Background color="var(--color-border-light)" gap={22} size={1} />
-      <RF.Controls />
-      <RF.MiniMap
+      <RF.Controls
+        showInteractive={true}
+        // Bug #9 fix: German aria-labels for ReactFlow controls (props supported since RF 11.10)
+        zoomInLabel="Vergrößern"
+        zoomOutLabel="Verkleinern"
+        fitViewLabel="Einpassen"
+        interactiveLabel="Interaktion umschalten"
+      />
+      {!hideMinimap && <RF.MiniMap
         nodeColor={(n) => {
           const s = n.data?.state;
           if (s === 'running') return 'var(--color-accent)';
@@ -2897,7 +2968,7 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
         }}
         maskColor="rgba(26, 24, 22, 0.6)"
         style={{ background: 'var(--color-bg-secondary)' }}
-      />
+      />}
     </RF.ReactFlow>
   );
 }
@@ -3601,6 +3672,7 @@ function App() {
                     edges={edges}
                     nodeTypes={nodeTypes}
                     drawerCollapsed={drawerCollapsed}
+                    hideMinimap={!!selectedStage}
                     onNodeClick={(_e, n) => {
                       setSelectedStage(n.id);
                       setDrawerCollapsed(false);
@@ -3644,7 +3716,20 @@ function App() {
             </>
           ) : (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-              {loadError ? loadError : 'Workflow wird geladen …'}
+              {loadError ? (
+                <div style={{ textAlign: 'center' }}>{loadError}</div>
+              ) : (
+                // Bug #19 fix: actual loading skeleton instead of just plain text
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    border: '2px solid var(--color-border-light)',
+                    borderTopColor: 'var(--color-accent)',
+                    animation: 'sturm-spin 0.8s linear infinite'
+                  }} />
+                  <div style={{ fontSize: 12 }}>Workflow wird geladen …</div>
+                </div>
+              )}
             </div>
           )}
         </div>

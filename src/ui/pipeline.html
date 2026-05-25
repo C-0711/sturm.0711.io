@@ -288,6 +288,10 @@
     .sturm-app .sturm-sb-brand { display: none; }
     .sturm-app .sturm-sb-head { justify-content: flex-end; padding-bottom: 6px; }
 
+
+    /* Bug #17 transition + #19 spinner keyframe */
+    @keyframes sturm-spin { to { transform: rotate(360deg); } }
+    .sturm-canvas { transition: opacity 180ms ease; }
   </style>
 </head>
 <body>

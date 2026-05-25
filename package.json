@@ -1,7 +1,7 @@
 {
   "name": "0711-sturm",
   "version": "0.1.0",
-  "description": "Workflow-Engine für LLM/OCR-Pipelines",
+  "description": "Workflow-Engine f\u00fcr LLM/OCR-Pipelines",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,9 +21,10 @@
     "verify:tools": "node scripts/verify-tools.mjs",
     "lint:no-env": "node scripts/lint-no-env.mjs",
     "test": "npm run test:codec && npm run test:schema && npm run test:gitchain && npm run test:pentacam-kc && npm run test:myopia && npm run test:applications && npm run test:seal && npm run test:ensemble && npm run test:aggregation",
-    "build:ui": "npm run build:ui:pipeline && npm run build:ui:designer",
+    "build:ui": "npm run build:ui:pipeline && npm run build:ui:designer && npm run build:ui:app",
     "build:ui:pipeline": "esbuild src/ui/pipeline.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/pipeline.bundle.js",
-    "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js"
+    "build:ui:designer": "esbuild src/ui/designer.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/designer.bundle.js",
+    "build:ui:app": "esbuild src/ui/app.jsx --bundle=false --loader:.jsx=jsx --jsx=transform --target=es2020 --minify --outfile=src/ui/app.bundle.js"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",
