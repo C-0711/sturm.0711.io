@@ -39,6 +39,7 @@ const PRIMARY_NAV = [
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
   { id: 'ocr-studio',  label: 'OCR Studio',      href: '/studio-ocr.html',  icon: 'sliders-horizontal' },
   { id: 'assistant',   label: 'Assistant',       href: '/orchestrator.html', icon: 'sparkles' },
+  { id: 'fleet',       label: 'Fleet',           href: '/0711-fleet.html',  icon: 'network' },
 ];
 
 function escapeHtml(s) {
@@ -47,7 +48,7 @@ function escapeHtml(s) {
 
 /**
  * @param {Object} opts
- * @param {string} opts.activeNav — id aus PRIMARY_NAV (workflows|anwendungen|pipeline|designer|ocr-studio|assistant)
+ * @param {string} opts.activeNav — id aus PRIMARY_NAV (workflows|anwendungen|pipeline|designer|ocr-studio|assistant|fleet)
  * @param {(host: HTMLElement) => Promise<void>|void} [opts.contextRenderer] — füllt #sturm-nav-context
  * @param {string} [opts.contextHeading] — Heading über der Context-Section
  * @param {string} [opts.hostId='sturm-nav-host'] — Element-ID, in das die Sidebar gerendert wird

@@ -1,13 +1,14 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark light" />
   <title>STURM · OCR Studio</title>
+  <link rel="stylesheet" href="/design-system/sturm.css" />
   <link rel="stylesheet" href="/colors_and_type.css" />
   <link rel="stylesheet" href="/design-system/sturm-app.css" />
-  <link rel="stylesheet" href="/studio-ocr.css" />
+  <link rel="stylesheet" href="/studio-ocr.css?v=20260525b" />
   <link rel="stylesheet" href="/schema-builder.css" />
   <link rel="stylesheet" href="/neo-tokens.css" />
   <!-- Stages cascade — must load AFTER neo-tokens so [data-stage] hides win. -->
@@ -22,6 +23,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="studio" data-stage="empty">
+  <aside id="sturm-nav-host"></aside>
+  <div class="studio-main">
   <header class="studio-header">
     <div class="brand">
       <a href="/" class="brand-link"><img src="/design-system/assets/logo-mark.svg" alt="STURM" /></a>
@@ -357,6 +360,15 @@
       <dt><kbd>Esc</kbd></dt><dd>Sheet/Highlights schließen</dd>
     </dl>
   </div>
+
+  </div><!-- /.studio-main -->
+
+  <!-- Canonical sidebar — populated by nav.js -->
+  <script type="module">
+    import('/nav.js?v=20260525b').then(({ renderSturmNav }) => {
+      renderSturmNav({ activeNav: 'ocr-studio' });
+    });
+  </script>
 
   <!-- Schema builder loads first so window.__schemaBuilder is ready when studio-ocr.js queries it. -->
   <script type="text/babel" data-presets="react" src="/schema-builder.jsx"></script>
