@@ -16,9 +16,9 @@
   <script src="/theme-toggle.js"></script>
 
   <!-- React + Babel for the schema builder (mounted only inside the schema section). -->
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <!-- Production React UMD (no babel runtime, no dev build) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <!-- Lucide for the right-rail icons. JS falls back to single-letter labels if unavailable. -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -371,7 +371,7 @@
   </script>
 
   <!-- Schema builder loads first so window.__schemaBuilder is ready when studio-ocr.js queries it. -->
-  <script type="text/babel" data-presets="react" src="/schema-builder.jsx"></script>
+  <script src="/schema-builder.bundle.js?v=20260525r4"></script>
   <script type="module" src="/studio-ocr.js"></script>
 </body>
 </html>
