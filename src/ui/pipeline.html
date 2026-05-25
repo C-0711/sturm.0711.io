@@ -227,10 +227,7 @@
   </style>
 </head>
 <body>
-  <div class="pipeline-shell">
-    <aside id="sturm-nav-host"></aside>
-    <div id="root"></div>
-  </div>
+  <div id="root"></div>
 
 
   <!-- ============ Auth: bearer-token bootstrap (?token=… → localStorage) ============
@@ -249,15 +246,6 @@
         }
       } catch (e) { console.warn('[pipeline] token bootstrap failed:', e); }
     })();
-  </script>
-  <script type="module">
-    import('/nav.js?v=20260525a').then(({ renderSturmNav, contextRendererWorkflows }) => {
-      renderSturmNav({
-        activeNav: 'pipeline',
-        contextHeading: 'Workflows',
-        contextRenderer: contextRendererWorkflows,
-      });
-    });
   </script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
