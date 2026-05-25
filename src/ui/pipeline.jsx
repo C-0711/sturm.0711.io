@@ -1122,7 +1122,13 @@ function SidebarUpload({ workflow, file, onFile, onStart, running }) {
           onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }}
         />
       </div>
-      <button className="sturm-sb-upload-start" disabled={!file || running || !workflow} onClick={onStart}>
+      <button
+        className="sturm-sb-upload-start"
+        disabled={!file || running || !workflow}
+        onClick={onStart}
+        title={!workflow ? 'Wähle zuerst einen Workflow aus.' : !file ? 'Lade zuerst eine Datei hoch.' : running ? 'Lauf bereits aktiv …' : 'Workflow mit hochgeladener Datei starten'}
+        aria-label={!file && workflow ? 'Workflow starten (Datei erforderlich)' : 'Workflow starten'}
+      >
         <i data-lucide={running ? 'loader' : 'play'}></i>
         <span>{running ? 'läuft …' : 'Workflow starten'}</span>
       </button>
@@ -1465,7 +1471,7 @@ function Drawer({ events, issues, setIssues, workflowId, workflow, stageStates, 
           </button>
         </div>
         <button className="sturm-icon-btn" onClick={() => onToggleCollapsed(!collapsed)} aria-label={collapsed ? 'Drawer öffnen' : 'Drawer einklappen'}>
-          <i data-lucide={collapsed ? 'chevron-left' : 'chevron-right'}></i>
+          <i data-lucide={collapsed ? 'panel-right-open' : 'panel-right-close'}></i>
         </button>
       </div>
 
@@ -2922,6 +2928,29 @@ async function streamRun(workflowId, file, onEvent) {
 function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick, onNodeDragStop, drawerCollapsed, hideMinimap }) {
   const flowRef = useRef(null);
 
+  // Round-4 fix #9: translate ReactFlow Controls aria-labels post-mount.
+  // (RF 11.x does not expose i18n props on <Controls>; DOM-mutation is the supported workaround.)
+  useEffect(() => {
+    const map = {
+      'zoom in': 'Vergrößern',
+      'zoom out': 'Verkleinern',
+      'fit view': 'Einpassen',
+      'toggle interactivity': 'Interaktion umschalten',
+    };
+    const translate = () => {
+      document.querySelectorAll('.react-flow__controls button').forEach(btn => {
+        const en = (btn.getAttribute('aria-label') || '').toLowerCase().trim();
+        if (map[en]) {
+          btn.setAttribute('aria-label', map[en]);
+          btn.setAttribute('title', map[en]);
+        }
+      });
+    };
+    translate();
+    const timers = [setTimeout(translate, 50), setTimeout(translate, 200), setTimeout(translate, 800)];
+    return () => timers.forEach(clearTimeout);
+  }, [workflowId]);
+
   useEffect(() => {
     if (!flowRef.current || nodes.length === 0) return;
     const scheduleFit = () => {
@@ -2930,7 +2959,11 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
       // sonst werden ocr (links) + phase6/7 (rechts) abgeschnitten.
       flowRef.current?.fitView({ padding: 0.12, duration: 220, minZoom: 0.18, maxZoom: 1.4 });
     };
+    // Round-4 #14: fit twice — once immediately, once after drawer transition (~250ms) so
+    // nodes near the right rail don't stay clipped after the drawer opens/closes.
     requestAnimationFrame(() => requestAnimationFrame(scheduleFit));
+    const t = setTimeout(scheduleFit, 260);
+    return () => clearTimeout(t);
   }, [workflowId, drawerCollapsed, nodes.length, edges.length]);
 
   return (
@@ -2950,14 +2983,7 @@ function FlowViewportManager({ workflowId, nodes, edges, nodeTypes, onNodeClick,
       proOptions={{ hideAttribution: false }}
     >
       <RF.Background color="var(--color-border-light)" gap={22} size={1} />
-      <RF.Controls
-        showInteractive={true}
-        // Bug #9 fix: German aria-labels for ReactFlow controls (props supported since RF 11.10)
-        zoomInLabel="Vergrößern"
-        zoomOutLabel="Verkleinern"
-        fitViewLabel="Einpassen"
-        interactiveLabel="Interaktion umschalten"
-      />
+      <RF.Controls showInteractive={true} />
       {!hideMinimap && <RF.MiniMap
         nodeColor={(n) => {
           const s = n.data?.state;
@@ -3178,15 +3204,27 @@ function App() {
   // Issues pro Workflow persistieren
   useEffect(() => {
     if (!workflow) return;
-    try {
-      const saved = JSON.parse(localStorage.getItem(`sturm-issues:${workflow.id}`) || '[]');
-      setIssues(saved);
-    } catch { setIssues([]); }
+    const reloadIssues = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(`sturm-issues:${workflow.id}`) || '[]');
+        setIssues(saved);
+      } catch { setIssues([]); }
+    };
+    reloadIssues();
+    // Round-4 #7: react to external localStorage mutations (other tabs, DevTools).
+    const onStorage = (e) => { if (!e.key || e.key === `sturm-issues:${workflow.id}`) reloadIssues(); };
+    const onFocus = () => reloadIssues();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
     // Position-Overrides pro Workflow laden (separater Key so Issues & Layout unabhängig sind)
     try {
       const layoutSaved = JSON.parse(localStorage.getItem(`sturm-layout:${workflow.id}`) || '{}');
       setNodePosOverrides(layoutSaved && typeof layoutSaved === 'object' ? layoutSaved : {});
     } catch { setNodePosOverrides({}); }
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [workflow?.id]);
   useEffect(() => {
     if (!workflow) return;

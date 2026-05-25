@@ -1023,8 +1023,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; }
 .sturm-issue.is-done .sturm-issue-title { text-decoration: line-through; color: var(--color-text-tertiary); }
 
 .sturm-issue-body { flex: 1; min-width: 0; }
-.sturm-issue-title { font-size: 13px; color: var(--color-text-primary); line-height: 1.4; }
-.sturm-issue-tag { font-size: 11px; color: var(--color-text-tertiary); margin-top: 3px; }
+.sturm-issue-title { font-size: 13px; color: var(--color-text-primary); line-height: 1.4; word-break: break-word; overflow-wrap: anywhere; }
+.sturm-issue-tag { font-size: 11px; color: var(--color-text-tertiary); margin-top: 3px; word-break: break-word; }
 
 .sturm-issue-add {
   display: flex; gap: 6px; padding: 10px 6px;

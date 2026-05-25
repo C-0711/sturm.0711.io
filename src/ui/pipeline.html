@@ -281,13 +281,39 @@
       z-index: 60;
     }
     .sturm-iconrail a.rail-item:hover::after { opacity: 1; }
-    /* Push the rest of the app shell to the right */
-    body { padding-left: 56px; }
+    /* Round-4 fix #3: Push the app shell right using MARGIN on .sturm-app, NOT padding on body.
+       padding-left on body+height:100% body caused the sidebar to not be height-constrained,
+       so its overflow-y:auto never engaged — bottom workflows were unreachable. */
+    .sturm-app { margin-left: 56px; }
+
+    /* Round-4 fix #5: Push rail tooltips further right + below the icon so they don't
+       overlap the workflow list. (Old: left:52px + translateY(-50%) sat over the sidebar.) */
+    .sturm-iconrail a.rail-item::after {
+      left: 60px;
+      top: auto; bottom: -4px;
+      transform: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+
+    /* Round-4 fix #4: responsive collapse — on narrow viewports, hide the icon-rail labels;
+       under 720px the rail becomes a thin bar that overlays. Optional auto-collapse the
+       workflow sidebar at the same breakpoint. */
+    @media (max-width: 900px) {
+      .sturm-iconrail { width: 48px; }
+      .sturm-app { margin-left: 48px; }
+      .sturm-iconrail a.rail-item::after { left: 52px; }
+    }
+    @media (max-width: 720px) {
+      .sturm-iconrail a.rail-item::after { display: none; } /* tooltips off on touch-ish */
+      /* Stack: the workflow sidebar overlays the canvas when too narrow */
+      .sturm-app .sturm-sidebar { position: fixed; left: 48px; top: 0; bottom: 0; z-index: 50;
+                                   box-shadow: 2px 0 8px rgba(0,0,0,0.15); }
+      .sturm-app .sturm-canvas-host, .sturm-app > main { width: 100%; }
+    }
 
     /* Option-A polish: hide JSX-sidebar brand since canonical rail owns the brand+home anchor */
     .sturm-app .sturm-sb-brand { display: none; }
     .sturm-app .sturm-sb-head { justify-content: flex-end; padding-bottom: 6px; }
-
 
     /* Bug #17 transition + #19 spinner keyframe */
     @keyframes sturm-spin { to { transform: rotate(360deg); } }
@@ -298,7 +324,7 @@
   <!-- ===== Canonical STURM icon-rail (Option A) ===== -->
   <aside class="sturm-iconrail" aria-label="STURM Hauptnavigation">
     <a href="/" class="sturm-iconrail-brand" aria-label="STURM Home" title="STURM Home">S</a>
-    <a href="/" class="rail-item" data-label="Workflows" aria-label="Workflows"><i data-lucide="layout-grid"></i></a>
+    <a href="/app.html" class="rail-item" data-label="Workflows" aria-label="Workflows"><i data-lucide="layout-grid"></i></a>
     <a href="/anwendungen.html" class="rail-item" data-label="Anwendungen" aria-label="Anwendungen"><i data-lucide="boxes"></i></a>
     <a href="/pipeline.html" class="rail-item is-active" data-label="Pipeline-Runner" aria-label="Pipeline-Runner"><i data-lucide="play"></i></a>
     <a href="/designer.html" class="rail-item" data-label="Designer" aria-label="Designer"><i data-lucide="pen-tool"></i></a>

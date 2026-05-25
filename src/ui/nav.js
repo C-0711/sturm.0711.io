@@ -33,7 +33,7 @@
 })();
 
 const PRIMARY_NAV = [
-  { id: 'workflows',  label: 'Workflows',       href: '/',                 icon: 'layout-grid' },
+  { id: 'workflows',  label: 'Workflows',       href: '/app.html',                 icon: 'layout-grid' },
   { id: 'anwendungen', label: 'Anwendungen',     href: '/anwendungen.html', icon: 'boxes' },
   { id: 'pipeline',    label: 'Pipeline-Runner', href: '/pipeline.html',    icon: 'play' },
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
