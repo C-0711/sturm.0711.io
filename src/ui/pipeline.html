@@ -224,9 +224,84 @@
     .sturm-disputed-values { display: flex; flex-direction: column; gap: 3px; }
     .sturm-disputed-val { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; }
     .sturm-disputed-v { font-family: ui-monospace, monospace; word-break: break-all; }
+
+    /* ===== Canonical STURM icon-rail (Option A: rail + app-sidebar) ===== */
+    .sturm-iconrail {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 56px;
+      background: var(--bg-2, var(--color-bg-secondary));
+      border-right: 1px solid var(--line-2, var(--color-border));
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0; gap: 2px;
+      z-index: 50;
+      font-family: var(--font-inter);
+    }
+    .sturm-iconrail-brand {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--accent, var(--color-accent));
+      color: var(--bg, #fff);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 14px; text-decoration: none;
+      margin-bottom: 8px;
+    }
+    .sturm-iconrail a.rail-item {
+      width: 40px; height: 40px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ink-2, var(--color-text-secondary));
+      text-decoration: none;
+      transition: background 120ms ease, color 120ms ease;
+      position: relative;
+    }
+    .sturm-iconrail a.rail-item:hover {
+      background: var(--bg-3, var(--color-bg-tertiary));
+      color: var(--ink, var(--color-text-primary));
+    }
+    .sturm-iconrail a.rail-item.is-active {
+      background: var(--bg-3, var(--color-bg-tertiary));
+      color: var(--accent, var(--color-accent));
+    }
+    .sturm-iconrail a.rail-item.is-active::before {
+      content: ''; position: absolute; left: -1px; top: 8px; bottom: 8px;
+      width: 2px; background: var(--accent, var(--color-accent)); border-radius: 0 2px 2px 0;
+    }
+    .sturm-iconrail a.rail-item i, .sturm-iconrail a.rail-item svg {
+      width: 18px; height: 18px; stroke-width: 1.6;
+    }
+    /* Tooltip-on-hover (CSS only, no JS) */
+    .sturm-iconrail a.rail-item::after {
+      content: attr(data-label);
+      position: absolute; left: 52px; top: 50%; transform: translateY(-50%);
+      background: var(--bg, var(--color-bg)); color: var(--ink, var(--color-text-primary));
+      border: 1px solid var(--line-2, var(--color-border));
+      padding: 4px 8px; border-radius: 6px;
+      font-size: 12px; white-space: nowrap;
+      opacity: 0; pointer-events: none;
+      transition: opacity 120ms ease;
+      z-index: 60;
+    }
+    .sturm-iconrail a.rail-item:hover::after { opacity: 1; }
+    /* Push the rest of the app shell to the right */
+    body { padding-left: 56px; }
+
+    /* Option-A polish: hide JSX-sidebar brand since canonical rail owns the brand+home anchor */
+    .sturm-app .sturm-sb-brand { display: none; }
+    .sturm-app .sturm-sb-head { justify-content: flex-end; padding-bottom: 6px; }
+
   </style>
 </head>
 <body>
+  <!-- ===== Canonical STURM icon-rail (Option A) ===== -->
+  <aside class="sturm-iconrail" aria-label="STURM Hauptnavigation">
+    <a href="/" class="sturm-iconrail-brand" aria-label="STURM Home" title="STURM Home">S</a>
+    <a href="/" class="rail-item" data-label="Workflows" aria-label="Workflows"><i data-lucide="layout-grid"></i></a>
+    <a href="/anwendungen.html" class="rail-item" data-label="Anwendungen" aria-label="Anwendungen"><i data-lucide="boxes"></i></a>
+    <a href="/pipeline.html" class="rail-item is-active" data-label="Pipeline-Runner" aria-label="Pipeline-Runner"><i data-lucide="play"></i></a>
+    <a href="/designer.html" class="rail-item" data-label="Designer" aria-label="Designer"><i data-lucide="pen-tool"></i></a>
+    <a href="/studio-ocr.html" class="rail-item" data-label="OCR Studio" aria-label="OCR Studio"><i data-lucide="sliders-horizontal"></i></a>
+    <a href="/orchestrator.html" class="rail-item" data-label="Assistant" aria-label="Assistant"><i data-lucide="sparkles"></i></a>
+    <a href="/0711-fleet.html" class="rail-item" data-label="Fleet" aria-label="Fleet"><i data-lucide="network"></i></a>
+  </aside>
   <div id="root"></div>
 
 
