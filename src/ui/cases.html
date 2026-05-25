@@ -1354,7 +1354,9 @@
         { id: 'eingereicht', label: 'Eingereicht' },
         { id: 'archiviert', label: 'Archiviert' },
       ];
-      const chips = labels.map(l => `
+      const chips = labels
+        .filter(l => l.id === '*' || counts[l.id] > 0)
+        .map(l => `
         <button class="case-filter-chip ${filterState.status === l.id ? 'active' : ''}" data-filter-status="${escapeHtml(l.id)}">
           <span>${escapeHtml(l.label)}</span>
           <span class="case-filter-chip-count">${counts[l.id] || 0}</span>
