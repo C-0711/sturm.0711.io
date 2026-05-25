@@ -164,7 +164,10 @@
   const APP = params.get('app') || 'steuerfall-est';
   const CASE = params.get('case');
   if (!CASE) {
-    document.getElementById('loading').innerHTML = 'Aufruf mit <code>?app=steuerfall-est&case=…</code> nötig. <a href="/anwendungen.html">Zu den Anwendungen</a>';
+    // Dead-end without params — redirect zurück zu Anwendungen.
+    // Print-view (light theme) only macht Sinn mit konkretem Fall.
+    console.info('[abrechnung] no case param; redirecting to /anwendungen.html');
+    location.replace('/anwendungen.html');
     return;
   }
   document.getElementById('back-link').href = `/steuerfall.html?app=${encodeURIComponent(APP)}&case=${encodeURIComponent(CASE)}`;

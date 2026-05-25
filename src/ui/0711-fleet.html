@@ -220,25 +220,21 @@
     });
   </script>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "react": "https://cdn.jsdelivr.net/npm/react@18.3.1/+esm",
-      "react-dom": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/+esm",
-      "react-dom/client": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/+esm",
-      "reactflow": "https://cdn.jsdelivr.net/npm/reactflow@11.11.4/+esm"
-    }
-  }
-  </script>
+  <!-- UMD globals (matches pipeline.html pattern — guarantees single React instance) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
 
-  <script type="module">
-    import React, { useState, useEffect, useMemo, useCallback } from 'react';
-    import { createRoot } from 'react-dom/client';
-    import ReactFlow, {
+  <script>
+    const React = window.React;
+    const { useState, useEffect, useMemo, useCallback } = window.React;
+    const { createRoot } = window.ReactDOM;
+    const ReactFlow = window.ReactFlow.default || window.ReactFlow.ReactFlow;
+    const {
       Background, Controls, MiniMap,
       useNodesState, useEdgesState,
       MarkerType, Handle, Position
-    } from 'reactflow';
+    } = window.ReactFlow;
 
     const h = React.createElement;
     const LS_KEY = '0711-fleet-prefs';

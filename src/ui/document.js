@@ -8,11 +8,12 @@ const params = new URLSearchParams(location.search);
 const wsId = params.get('ws');
 const uuid = params.get('uuid');
 if (!wsId || !uuid) {
-  // Graceful empty-state — kein pageerror in der Console, einfach Hinweis +
-  // Link. Caller (document.html) checkt typeof wsId; alle async-init's sind
-  // ohnehin nach diesem if-Block.
-  document.body.innerHTML = '<p style="padding:40px;font-family:system-ui">?ws=&lt;id&gt;&amp;uuid=&lt;uuid&gt; fehlt. <a href="/workspaces.html">Zurück</a></p>';
-  console.info('[document] missing params; showing redirect');
+  // Graceful empty-state — replace ONLY <main class="sturm-content">, preserve sidebar shell.
+  // Falls die canonical Sidebar fehlen sollte (legacy fallback), nutze das body. nav.js wird
+  // unterhalb anyway gar nicht initialisiert, weil __sturmDocumentNoParams das verhindert.
+  const target = document.querySelector('main.sturm-content') || document.body;
+  target.innerHTML = '<div style="padding:40px;max-width:640px"><h2 style="margin:0 0 12px;font-size:20px;color:var(--ink,#e8e6e3)">Kein Dokument gewählt</h2><p style="margin:0 0 16px;color:var(--ink-muted,#a8a6a3);line-height:1.5">Diese Seite benötigt die Parameter <code style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent,#d4a574)">?ws=&lt;id&gt;&amp;uuid=&lt;uuid&gt;</code> in der URL.</p><p style="margin:0"><a href="/workspaces.html" style="color:var(--accent,#d4a574);text-decoration:none">← Zurück zu den Workspaces</a></p></div>';
+  console.info('[document] missing params; showing empty-state');
   // Stop further script execution by short-circuiting all DOM bindings below.
   // We use a sentinel that all initializer functions check.
   window.__sturmDocumentNoParams = true;
