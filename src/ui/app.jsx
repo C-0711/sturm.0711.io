@@ -26,7 +26,7 @@ const I = {
 /* ==================== Data ==================== */
 const NAV = [
   { id: 'workflows', label: 'Workflows', icon: I.grid },
-  { id: 'apps', label: 'Anwendungen', icon: I.layers, href: 'anwendungen.html' },
+  { id: 'apps', label: 'Fälle', icon: I.layers, href: 'cases.html' },
   { id: 'runner', label: 'Pipeline-Runner', icon: I.play, href: 'pipeline.html' },
   { id: 'designer', label: 'Designer', icon: I.pen, href: 'designer.html' },
   { id: 'ocr', label: 'OCR Studio', icon: I.sliders, href: 'studio-ocr.html' },

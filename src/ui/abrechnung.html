@@ -147,7 +147,7 @@
 <body>
 
 <nav class="toolbar">
-  <a id="back-link" href="/anwendungen.html">← zurück zur Anwendung</a>
+  <a id="back-link" href="/cases.html">← zurück zur Anwendung</a>
   <div>
     <button onclick="window.print()">Drucken / PDF speichern</button>
     <a id="json-link" href="#" target="_blank">JSON-Audit</a>
@@ -166,8 +166,8 @@
   if (!CASE) {
     // Dead-end without params — redirect zurück zu Anwendungen.
     // Print-view (light theme) only macht Sinn mit konkretem Fall.
-    console.info('[abrechnung] no case param; redirecting to /anwendungen.html');
-    location.replace('/anwendungen.html');
+    console.info('[abrechnung] no case param; redirecting to /cases.html');
+    location.replace('/cases.html');
     return;
   }
   document.getElementById('back-link').href = `/steuerfall.html?app=${encodeURIComponent(APP)}&case=${encodeURIComponent(CASE)}`;

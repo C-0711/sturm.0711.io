@@ -34,7 +34,7 @@
 
 const PRIMARY_NAV = [
   { id: 'workflows',  label: 'Workflows',       href: '/app.html',                 icon: 'layout-grid' },
-  { id: 'anwendungen', label: 'Anwendungen',     href: '/anwendungen.html', icon: 'boxes' },
+  { id: 'anwendungen', label: 'Fälle',     href: '/cases.html', icon: 'boxes' },
   { id: 'pipeline',    label: 'Pipeline-Runner', href: '/pipeline.html',    icon: 'play' },
   { id: 'designer',    label: 'Designer',        href: '/designer.html',    icon: 'pen-tool' },
   { id: 'ocr-studio',  label: 'OCR Studio',      href: '/studio-ocr.html',  icon: 'sliders-horizontal' },
@@ -163,7 +163,7 @@ export async function contextRendererAnwendungen(host) {
       const inBearb = cases.filter(c => c.status === 'in_bearbeitung').length;
       const sealed = cases.filter(c => c.status === 'versiegelt' || c.status === 'eingereicht').length;
       return `
-        <a class="sturm-sb-item" href="/anwendungen.html#${encodeURIComponent(app.id)}" style="text-decoration:none;">
+        <a class="sturm-sb-item" href="/cases.html#${encodeURIComponent(app.id)}" style="text-decoration:none;">
           <i data-lucide="box"></i>
           <span class="sturm-sb-item-main">
             <span class="sturm-sb-item-label">${escapeHtml(app.name)}</span>
@@ -231,7 +231,7 @@ export function contextRendererSteuerfall(host, ctx) {
     host.innerHTML = '';
     return;
   }
-  const back = `<a class="sturm-sb-item" href="/anwendungen.html" style="text-decoration:none;">
+  const back = `<a class="sturm-sb-item" href="/cases.html" style="text-decoration:none;">
       <i data-lucide="arrow-left"></i>
       <span class="sturm-sb-item-main"><span class="sturm-sb-item-label">← Alle Fälle</span></span>
     </a>`;
