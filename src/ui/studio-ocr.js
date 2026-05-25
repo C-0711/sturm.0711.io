@@ -167,6 +167,9 @@ function runStageEntryHook(stage, _prev) {
 }
 
 function openSheet(name) {
+  // Round-6 #4: if the requested sheet is already open, do nothing (no stacking).
+  if (typeof currentSheet !== "undefined" && currentSheet === sheetName) return;
+
   if (!SHEETS.includes(name)) return;
   // Round-5 #5/#8: in 'empty' stage the document area is showing template cards;
   // popping a sheet over them creates the floating-overlay collision the audit saw.
@@ -215,10 +218,18 @@ const tuning = {
 // ============ Result inner-tabs (Annotation/Markdown/...) ===================
 function activateResultTab(tabName) {
   document.querySelectorAll('.run-tab-body[data-runbody="result"] .tab').forEach((t) => {
-    t.classList.toggle('active', t.dataset.tab === tabName);
+    const isActive = t.dataset.tab === tabName;
+    t.classList.toggle('active', isActive);
+    // Round-6 #11: proper ARIA tabs
+    t.setAttribute('role', 'tab');
+    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    t.setAttribute('tabindex', isActive ? '0' : '-1');
   });
   document.querySelectorAll('.run-tab-body[data-runbody="result"] .tab-panel').forEach((p) => {
-    p.classList.toggle('hidden', p.dataset.panel !== tabName);
+    const isActive = p.dataset.panel === tabName;
+    p.classList.toggle('hidden', !isActive);
+    p.setAttribute('role', 'tabpanel');
+    if (isActive) p.removeAttribute('aria-hidden'); else p.setAttribute('aria-hidden', 'true');
   });
 }
 
@@ -268,13 +279,36 @@ els.fileInput.addEventListener('change', (e) => {
   if (!file) return;
   if (!isAllowedFile(file)) {
     toast('Datei abgelehnt: "' + (file.name || '?') + '" ist kein PDF/PNG/JPG/WEBP (Typ: ' + (file.type || 'unbekannt') + ').', 'error', 6000);
-    e.target.value = '';
+    clearFileState();
     return;
   }
   loadFile(file);
 });
 
+
+// Round-6 #6: single source of truth for clearing file state. Both the file input
+// AND the document chip / preview must reset together.
+function clearFileState() {
+  if (currentDocUrl) { try { URL.revokeObjectURL(currentDocUrl); } catch {} }
+  currentFile = null;
+  currentDocUrl = null;
+  if (els.fileInput) els.fileInput.value = '';
+  if (els.filePickerLabel) {
+    els.filePickerLabel.textContent = 'Datei wählen…';
+    els.filePickerLabel.removeAttribute('title');
+  }
+  if (els.docMeta) els.docMeta.textContent = 'Keine Datei ausgewählt.';
+  if (els.docViewer) els.docViewer.innerHTML = '';
+  try { setStage('empty'); } catch {}
+}
+
 function loadFile(file) {
+  // Round-6 #2: defense-in-depth — also reject here in case loadFile is called from
+  // drag-drop / paste / programmatic paths that skipped the change-event check.
+  if (!isAllowedFile(file)) {
+    toast('Datei abgelehnt: "' + (file?.name || '?') + '" ist kein PDF/PNG/JPG/WEBP (Typ: ' + (file?.type || 'unbekannt') + ').', 'error', 6000);
+    return;
+  }
   currentFile = file;
   if (currentDocUrl) URL.revokeObjectURL(currentDocUrl);
   currentDocUrl = URL.createObjectURL(file);
@@ -358,7 +392,7 @@ function autoClassify(file) {
       if (e.name === 'AbortError') return;
       panel.classList.remove('auto-classify-pending');
       panel.classList.add('auto-classify-error');
-      panel.innerHTML = `<div class="ac-error">Klassifikation fehlgeschlagen: ${escapeHtml(e.message)}</div>`;
+      panel.innerHTML = `<div class="ac-error">Klassifikation fehlgeschlagen: ${escapeHtml(_friendlyError(e))}</div>`;
     });
 }
 
@@ -1387,7 +1421,11 @@ async function loadTemplates() {
       sel.addEventListener('change', () => applyTemplateById(sel.value));
     }
   } catch (e) {
-    console.warn('[studio] failed to load templates:', e);
+    // Round-6 #15: dedupe — only warn the first time per page-mount.
+    if (!window.__sturmTplWarned) {
+      window.__sturmTplWarned = true;
+      console.warn('[studio] failed to load templates:', e);
+    }
     const grid2 = document.querySelector('.empty-cards');
     if (grid2) {
       const msg = String(e.message || e);
@@ -1467,7 +1505,7 @@ function renderVariantsRail() {
     if (i === activeVariantIdx) li.classList.add('active');
     // Round-5 #11: hide internal variant id; surface only on hover via title.
     // Round-5 #15: per-variant aria-label on remove button for screen-reader clarity.
-    li.innerHTML = `<div><div class="vname" title="id: ${escapeHtml(v.id)}">${escapeHtml(v.name)}</div></div>`;
+    li.innerHTML = `<div><div class="vname" title="${escapeHtml(v.name)} (id: ${escapeHtml(v.id)})" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">${escapeHtml(v.name)}</div></div>`;
     const rm = document.createElement('button');
     rm.className = 'vremove';
     rm.title = `${v.name} entfernen`;
@@ -1775,6 +1813,43 @@ function flashWorkspaceSaved(text) {
   setTimeout(() => flash.remove(), 2400);
 }
 
+
+// Round-6 #1: friendly error message wrapper. Strips raw HTTP/JSON from user-facing
+// toasts/banners. Server detail still logged to console for debugging.
+function _friendlyError(e) {
+  const raw = String(e && e.message || e || '');
+  try { console.error('[studio] underlying error:', raw); } catch {}
+  if (/HTTP 401|unauthorized|bearer token/i.test(raw)) return 'Sitzung abgelaufen oder Token fehlt. Bitte erneut anmelden (Token in URL ?token=…).';
+  if (/HTTP 403|forbidden/i.test(raw)) return 'Keine Berechtigung für diese Aktion.';
+  if (/HTTP 404|not found/i.test(raw)) return 'Endpunkt nicht verfügbar (HTTP 404).';
+  if (/HTTP 5\d\d|internal server/i.test(raw)) return 'Serverfehler – bitte später erneut versuchen.';
+  if (/Failed to fetch|NetworkError|TypeError.*fetch/i.test(raw)) return 'Netzwerkfehler – Verbindung prüfen.';
+  // Strip leading "HTTP NNN: " prefix and any embedded JSON
+  const stripped = raw.replace(/HTTP \d+:\s*/i, '').replace(/\{[^}]*\}/g, '').trim();
+  return stripped.slice(0, 200) || 'Unbekannter Fehler.';
+}
+
+
+// Round-6 #10: global Escape — close help popover first, then top-most sheet.
+window.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape') return;
+  // Close help popover if visible
+  const hp = document.getElementById('help-popover');
+  if (hp && !hp.classList.contains('hidden')) {
+    hp.classList.add('hidden');
+    ev.preventDefault();
+    return;
+  }
+  // Close right-rail sheet
+  try {
+    if (typeof closeSheet === 'function' && typeof currentSheet !== 'undefined' && currentSheet) {
+      closeSheet();
+      ev.preventDefault();
+      return;
+    }
+  } catch {}
+}, true);
+
 // ============ Bootstrap =====================================================
 // Round-5 #4: wire any STATIC empty-card buttons present in studio-ocr.html.
 // (Without this, templates that 401 leave the static cards clickless.)
@@ -1927,7 +2002,7 @@ function wireSchemaGenerator() {
       }
       await consumeSse(resp.body, handleEvent);
     } catch (e) {
-      if (e.name !== 'AbortError') toast(`Schema-Generierung fehlgeschlagen: ${escapeHtml(e.message)}`, 'error', 8000);
+      if (e.name !== 'AbortError') toast('Schema-Generierung fehlgeschlagen: ' + _friendlyError(e), 'error', 8000);
       if (card.el && card.el.classList.contains('sg-pending')) {
         card.el.classList.remove('sg-pending'); card.el.classList.add('sg-error');
         const s = card.el.querySelector('.sg-state');
@@ -1936,6 +2011,9 @@ function wireSchemaGenerator() {
     } finally {
       btn.disabled = false;
       if (draftPrimary) draftPrimary.disabled = false;
+      // Round-6 #18: Cancel button is only meaningful while in-flight; hide it after.
+      const cancelBtn = document.getElementById('sg-cancel');
+      if (cancelBtn) cancelBtn.style.display = 'none';
       // Hold the success/error label briefly, then restore.
       setTimeout(restoreBtnText, 2500);
     }

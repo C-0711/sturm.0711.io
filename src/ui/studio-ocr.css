@@ -627,9 +627,10 @@ mark.sturm-field-flash.is-pinned { animation: none; background: oklch(85% 0.18 8
 
 /* ─────────── Cost meter (2.1) ─────────── */
 .cost-meter {
+  /* Round-6 #14: moved up so it doesn't cover panel footer buttons (Save schema). */
   position: absolute;
   right: 14px;
-  bottom: 14px;
+  bottom: 56px;
   background: var(--surface-elevated, #161b22);
   border: 1px solid var(--border-strong, #30363d);
   border-radius: 999px;

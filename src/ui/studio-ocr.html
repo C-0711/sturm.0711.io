@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/design-system/sturm.css" />
   <link rel="stylesheet" href="/colors_and_type.css" />
   <link rel="stylesheet" href="/design-system/sturm-app.css" />
-  <link rel="stylesheet" href="/studio-ocr.css?v=20260525b" />
+  <link rel="stylesheet" href="/studio-ocr.css?v=20260525r6b" />
   <link rel="stylesheet" href="/schema-builder.css" />
   <link rel="stylesheet" href="/neo-tokens.css" />
   <!-- Stages cascade — must load AFTER neo-tokens so [data-stage] hides win. -->
@@ -142,7 +142,7 @@
           </label>
           <label class="field">
             <span>Schema-Name</span>
-            <input id="cfg-schema-name" type="text" placeholder="extraction" />
+            <input id="cfg-schema-name" type="text" placeholder="extraction" maxlength="64" />
           </label>
           <details class="field-details">
             <summary>Erweitert: Annotation-Prompt</summary>
@@ -372,6 +372,6 @@
 
   <!-- Schema builder loads first so window.__schemaBuilder is ready when studio-ocr.js queries it. -->
   <script src="/schema-builder.bundle.js?v=20260525r4"></script>
-  <script type="module" src="/studio-ocr.js?v=20260525r5c"></script>
+  <script type="module" src="/studio-ocr.js?v=20260525r6b"></script>
 </body>
 </html>

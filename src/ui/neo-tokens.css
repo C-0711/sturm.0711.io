@@ -58,8 +58,8 @@
   --text-dim:             var(--color-text-tertiary);
   --border:               var(--color-border);
   --border-strong:        var(--color-border);
-  --accent:               var(--color-accent);
-  --accent-soft:          var(--color-accent-light);
+  /* Round-6: removed --accent: var(--color-accent) -- it created a cycle with sidebar.css
+     which sets --color-accent: var(--accent). sturm.css is the source of truth for --accent. */
   --font-sans:            var(--font-inter);
 }
 
