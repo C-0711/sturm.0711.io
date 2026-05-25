@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STURM — Designer</title>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('sturm-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/design-system/sturm.css" />
+  <style>
+    .dz-shell { display: flex; flex-direction: column; min-height: 100vh; max-height: 100vh; }
+
+    /* ============ TOPBAR ============ */
+    .dz-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line-2);
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 40;
+      flex-shrink: 0;
+    }
+    .dz-top-l {
+      display: flex; align-items: center; gap: 10px;
+      min-width: 0;
+    }
+    .dz-wf-title-wrap {
+      display: flex; align-items: center; gap: 8px;
+      padding-left: 4px;
+      min-width: 0;
+    }
+    .dz-wf-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 4px 8px;
+      letter-spacing: -0.005em;
+      transition: border-color 150ms ease, background 150ms ease;
+      min-width: 0;
+      width: auto;
+      max-width: 280px;
+    }
+    .dz-wf-title:hover { border-color: var(--line-2); background: var(--bg-2); }
+    .dz-wf-title:focus { outline: 0; border-color: var(--line); background: var(--bg-2); }
+    .dz-wf-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      padding: 2px 6px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: color 150ms ease, border-color 150ms ease;
+    }
+    .dz-wf-id:hover { color: var(--ink-2); border-color: var(--line); }
+    .dz-save-state {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      padding: 4px 10px 4px 8px;
+    }
+    .dz-save-state .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ok);
+    }
+    .dz-save-state.dirty .dot { background: var(--warn); }
+    .dz-save-state.dirty { color: var(--warn); }
+
+    .dz-top-spacer { flex: 1; }
+    .dz-top-r { display: flex; align-items: center; gap: 8px; }
+
+    /* meta popover */
+    .meta-pop-wrap { position: relative; }
+    .meta-pop {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      width: 360px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 16px 48px oklch(0 0 0 / 0.4);
+      padding: 16px;
+      z-index: 30;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .meta-pop-field { display: flex; flex-direction: column; gap: 4px; }
+    .meta-pop-field label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .meta-pop-field input, .meta-pop-field textarea, .meta-pop-field select {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      border-radius: 6px;
+      color: var(--ink);
+      font-size: 13px;
+      font-family: inherit;
+      resize: none;
+    }
+    .meta-pop-field input.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .meta-pop-field input:focus, .meta-pop-field textarea:focus, .meta-pop-field select:focus { outline: 0; border-color: var(--line); }
+
+    /* burger / menu */
+    .burger {
+      position: relative;
+      width: 34px; height: 34px;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--ink);
+      transition: border-color 150ms ease, background 150ms ease;
+    }
+    .burger:hover { border-color: var(--ink-3); background: var(--bg-2); }
+    .burger .bar {
+      position: absolute;
+      left: 9px; right: 9px;
+      height: 1.5px;
+      background: currentColor;
+      border-radius: 1px;
+      transition: transform 220ms cubic-bezier(.4,1.4,.5,1), top 220ms ease, opacity 160ms ease;
+    }
+    .burger .bar.b1 { top: 11px; }
+    .burger .bar.b2 { top: 16px; }
+    .burger .bar.b3 { top: 21px; }
+    .burger.open .bar.b1 { top: 16px; transform: rotate(45deg); }
+    .burger.open .bar.b2 { opacity: 0; }
+    .burger.open .bar.b3 { top: 16px; transform: rotate(-45deg); }
+
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+    .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .menu-panel {
+      position: fixed;
+      top: 56px;
+      right: 16px;
+      width: 320px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
+      padding: 8px;
+      z-index: 60;
+      transform: translateY(-6px) scale(0.98);
+      transform-origin: top right;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 200ms cubic-bezier(.2,.7,.2,1), opacity 160ms ease;
+    }
+    .menu-panel.open { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+    .menu-group-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      padding: 12px 12px 4px;
+    }
+    .menu-item {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%;
+      padding: 9px 12px;
+      background: transparent; border: 0;
+      border-radius: var(--radius-sm);
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 14px;
+      transition: background 120ms ease;
+      text-decoration: none;
+    }
+    .menu-item:hover { background: var(--bg-3); }
+    .menu-item .icon { color: var(--ink-3); flex-shrink: 0; }
+    .menu-item .kbd {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--ink-3);
+      padding: 2px 5px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      border-radius: 4px;
+    }
+    .menu-item.primary .icon, .menu-item.primary { color: var(--accent); }
+    .menu-divider { height: 1px; background: var(--line-2); margin: 6px 8px; }
+
+    .menu-theme {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px 10px;
+      margin-top: 4px;
+      border-top: 1px solid var(--line-2);
+    }
+    .menu-theme-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+    }
+    .theme-seg {
+      display: inline-flex;
+      background: var(--bg-3);
+      border: 1px solid var(--line-2);
+      border-radius: 999px;
+      padding: 2px;
+    }
+    .theme-seg button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px;
+      font-size: 12px;
+      color: var(--ink-3);
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 150ms ease, color 150ms ease;
+    }
+    .theme-seg button.on {
+      background: var(--bg);
+      color: var(--ink);
+      box-shadow: 0 1px 2px oklch(0 0 0 / 0.1), 0 0 0 1px var(--line-2);
+    }
+
+    /* ============ BODY ============ */
+    .dz-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: var(--chat-w, 360px) 1fr var(--inspector-w, 0px);
+      min-height: 0;
+      transition: grid-template-columns 220ms cubic-bezier(.4,.7,.3,1);
+    }
+    .dz-body.inspector-open { --inspector-w: 320px; }
+    .dz-body.chat-collapsed { --chat-w: 56px; }
+
+    /* ============ CHAT PANEL ============ */
+    .chat {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line-2);
+      min-height: 0;
+      background: var(--bg);
+      position: relative;
+    }
+    .chat-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line-2);
+      flex-shrink: 0;
+    }
+    .chat-head-title {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: -0.005em;
+    }
+    .chat-head-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--ink-3);
+      margin-left: auto;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .chat-head-sub .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ok);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 60%, transparent); }
+      50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--ok) 0%, transparent); }
+    }
+
+    .chat-icon-btn {
+      width: 28px; height: 28px;
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      color: var(--ink-3);
+      cursor: pointer;
+      display: grid; place-items: center;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .chat-icon-btn:hover { background: var(--bg-3); color: var(--ink); }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 0;
+    }
+    .msg {
+      display: flex;
+      gap: 10px;
+      animation: in 280ms cubic-bezier(.3,.7,.3,1);
+    }
+    @keyframes in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .msg.user { flex-direction: row-reverse; }
+    .msg-avatar {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      display: grid; place-items: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .msg-avatar.assistant {
+      background:
+        linear-gradient(180deg,
+          oklch(0.2 0.01 60) 0%,
+          oklch(0.2 0.01 60) 33.33%,
+          oklch(0.55 0.2 25) 33.33%,
+          oklch(0.55 0.2 25) 66.66%,
+          oklch(0.82 0.17 85) 66.66%,
+          oklch(0.82 0.17 85) 100%);
+      color: oklch(0.99 0 0);
+      text-shadow: 0 1px 2px oklch(0 0 0 / 0.6), 0 0 4px oklch(0 0 0 / 0.4);
+      box-shadow: 0 0 0 1px oklch(0 0 0 / 0.2) inset;
+    }
+    .msg-avatar.user {
+      background: var(--bg-3);
+      color: var(--ink-2);
+      border: 1px solid var(--line-2);
+    }
+    .msg-body {
+      max-width: calc(100% - 38px);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .msg.user .msg-body { align-items: flex-end; }
+    .msg-text {
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--ink);
+      padding: 10px 13px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 12px;
+      border-top-left-radius: 4px;
+    }
+    .msg.user .msg-text {
+      background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
+      border-color: color-mix(in oklab, var(--accent) 20%, var(--line-2));
+      border-radius: 12px;
+      border-top-right-radius: 4px;
+    }
+    .msg-text p { margin: 0; }
+    .msg-text p + p { margin-top: 8px; }
+    .msg-text code, .msg-text .em {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      padding: 1px 5px;
+      background: var(--bg-3);
+      border: 1px solid var(--line-2);
+      border-radius: 4px;
+      color: var(--ink);
+    }
+
+    .msg-diff {
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+      border-radius: 10px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .msg-diff-h {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .msg-diff-h .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+    .msg-diff-line {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-2);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .msg-diff-line .sign {
+      display: inline-grid; place-items: center;
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      font-size: 10px;
+      color: var(--bg);
+    }
+    .msg-diff-line .sign.add { background: var(--ok); }
+    .msg-diff-line .sign.con { background: var(--accent); }
+    .msg-diff-actions {
+      display: flex; gap: 6px; margin-top: 4px;
+    }
+    .msg-diff-btn {
+      font-size: 11px;
+      padding: 5px 10px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 5px;
+      color: var(--ink-2);
+      cursor: pointer;
+      transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+    }
+    .msg-diff-btn:hover { color: var(--ink); border-color: var(--line); background: var(--bg-3); }
+    .msg-diff-btn.primary {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+    .msg-diff-btn.primary:hover { background: oklch(0.86 0.06 85); }
+
+    .msg-attach {
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      max-width: 100%;
+    }
+    .msg-attach .thumb {
+      width: 28px; height: 28px;
+      background: var(--bg-3);
+      border-radius: 4px;
+      display: grid; place-items: center;
+      color: var(--ink-2);
+      flex-shrink: 0;
+    }
+
+    .msg-thinking {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 13px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 12px;
+      border-top-left-radius: 4px;
+      font-size: 12.5px;
+      color: var(--ink-3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .msg-thinking .dots { display: inline-flex; gap: 3px; }
+    .msg-thinking .dots span {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--ink-3);
+      animation: th 1.2s ease-in-out infinite;
+    }
+    .msg-thinking .dots span:nth-child(2) { animation-delay: 0.15s; }
+    .msg-thinking .dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes th { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+
+    /* chat input */
+    .chat-input-wrap {
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--line-2);
+      flex-shrink: 0;
+      background: var(--bg);
+    }
+    .chat-suggestions {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .chat-chip {
+      font-size: 11.5px;
+      padding: 5px 10px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 999px;
+      color: var(--ink-2);
+      cursor: pointer;
+      transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+    }
+    .chat-chip:hover { color: var(--ink); border-color: var(--line); background: var(--bg-3); }
+    .chat-input {
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 12px;
+      transition: border-color 150ms ease;
+      padding: 4px 4px 4px 12px;
+      display: flex; flex-direction: column;
+    }
+    .chat-input:focus-within { border-color: var(--line); }
+    .chat-input textarea {
+      width: 100%;
+      background: transparent;
+      border: 0; outline: 0;
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.5;
+      font-family: inherit;
+      padding: 8px 4px 6px;
+      resize: none;
+      min-height: 22px;
+      max-height: 140px;
+    }
+    .chat-input textarea::placeholder { color: var(--ink-3); }
+    .chat-input-row {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 4px 4px 0;
+    }
+    .chat-input-row .spacer { flex: 1; }
+    .chat-send {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      color: var(--bg);
+      border: 0;
+      border-radius: 8px;
+      display: grid; place-items: center;
+      cursor: pointer;
+      transition: background 150ms ease, transform 120ms ease;
+    }
+    .chat-send:hover { background: oklch(0.86 0.06 85); }
+    .chat-send:active { transform: scale(0.95); }
+    .chat-send:disabled { background: var(--bg-3); color: var(--ink-4); cursor: not-allowed; }
+
+    .chat-mic.recording { color: var(--err); }
+    .chat-mic.recording::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 1px solid var(--err);
+      border-radius: 5px;
+      animation: ring 1.4s ease-out infinite;
+    }
+    .chat-mic { position: relative; }
+    @keyframes ring { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+
+    /* collapsed chat */
+    .dz-body.chat-collapsed .chat > *:not(.chat-collapsed-rail) { display: none; }
+    .chat-collapsed-rail {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 0;
+      gap: 12px;
+      height: 100%;
+    }
+    .dz-body.chat-collapsed .chat-collapsed-rail { display: flex; }
+
+    /* ============ CANVAS ============ */
+    .dz-canvas {
+      position: relative;
+      overflow: hidden;
+      background-color: var(--bg);
+      background-image: radial-gradient(circle at center, oklch(0.3 0.005 80) 1px, transparent 1px);
+      background-size: 24px 24px;
+      min-width: 0;
+    }
+    .dz-canvas-tools {
+      position: absolute;
+      top: 16px; left: 16px;
+      display: flex;
+      gap: 4px;
+      background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      z-index: 2;
+    }
+    .dz-canvas-tools button {
+      width: 28px; height: 28px;
+      background: transparent; border: 0;
+      color: var(--ink-2);
+      border-radius: 4px;
+      display: grid; place-items: center;
+      cursor: pointer;
+    }
+    .dz-canvas-tools button:hover { background: var(--bg-3); color: var(--ink); }
+    .dz-canvas-tools .sep { width: 1px; background: var(--line-2); margin: 4px 2px; }
+
+    .minimap {
+      position: absolute;
+      right: 16px; bottom: 16px;
+      width: 160px; height: 100px;
+      background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-sm);
+      z-index: 2;
+    }
+    .minimap-vp {
+      position: absolute;
+      left: 52px; top: 28px;
+      width: 50px; height: 32px;
+      background: oklch(0.35 0.005 80);
+      border-radius: 3px;
+    }
+    .dz-status {
+      position: absolute;
+      left: 16px; bottom: 16px;
+      display: flex;
+      gap: 16px;
+      padding: 6px 12px;
+      background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      z-index: 2;
+    }
+    .dz-status strong { color: var(--ink-2); font-weight: 500; }
+
+    /* inspector handle */
+    .inspector-handle {
+      position: absolute;
+      right: 0; top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      padding: 16px 6px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-right: 0;
+      border-radius: 8px 0 0 8px;
+      color: var(--ink-3);
+      cursor: pointer;
+      z-index: 3;
+      writing-mode: vertical-rl;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px;
+      transition: color 150ms ease, background 150ms ease;
+    }
+    .inspector-handle:hover { color: var(--ink); background: var(--bg-3); }
+    .inspector-open .inspector-handle { display: none; }
+
+    /* node */
+    .node {
+      position: absolute;
+      width: 220px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .node:hover { border-color: var(--accent); }
+    .node.selected {
+      border-color: color-mix(in oklab, var(--accent) 60%, var(--line));
+      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 10%, transparent);
+    }
+    .node-h {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px;
+      color: var(--ink);
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .node-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--ink-3);
+      margin-bottom: 12px;
+    }
+    .node-port {
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-2);
+      padding: 3px 0;
+      position: relative;
+    }
+    .node-port .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 1.5px solid var(--accent);
+      position: absolute;
+      right: -19px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    /* inspector */
+    .inspector {
+      background: var(--bg);
+      border-left: 1px solid var(--line-2);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .inspector-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line-2);
+    }
+    .inspector-title {
+      font-size: 13px; font-weight: 500;
+    }
+    .inspector-body {
+      padding: 18px 16px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .insp-field { display: flex; flex-direction: column; gap: 5px; }
+    .insp-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+    .insp-input {
+      width: 100%;
+      padding: 7px 10px;
+      background: var(--bg-2);
+      border: 1px solid var(--line-2);
+      border-radius: 6px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .insp-input.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+    @media (max-width: 960px) {
+      .dz-body { grid-template-columns: 1fr; }
+      .chat { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* icons */
+const I = {
+  doc: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 1.5h6l2 2v9H3v-11z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><path d="M9 1.5v2h2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
+  play: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 2l7 4.5-7 4.5V2z" fill="currentColor"/></svg>,
+  plus: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 2.5v8M2.5 6.5h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>,
+  fold: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l3 4-3 4M8 3l3 4-3 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  unfold: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M6 3L3 7l3 4M11 3L8 7l3 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  zoomIn: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 3v8M3 7h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
+  zoomOut: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
+  fit: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3h3M11 3h-3v3M11 11H8v-3M3 11h3v-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>,
+  layout: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2" width="4" height="3" rx="0.7" stroke="currentColor" strokeWidth="1.2"/><rect x="8.5" y="2" width="4" height="3" rx="0.7" stroke="currentColor" strokeWidth="1.2"/><rect x="5" y="9" width="4" height="3" rx="0.7" stroke="currentColor" strokeWidth="1.2"/><path d="M3.5 5v1.5h6V5M11 5v1.5H7" stroke="currentColor" strokeWidth="1.2"/></svg>,
+  attach: () => <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M10 4l-5 5a2 2 0 002.8 2.8l5.7-5.7a3.5 3.5 0 00-5-5L2.8 6.9a5 5 0 007 7L13 11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  mic: () => <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="5.5" y="2" width="4" height="7" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M3 7a4.5 4.5 0 009 0M7.5 11.5v1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>,
+  send: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h8m0 0L7 4m3 3L7 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  spark: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5v3M7 9.5v3M1.5 7h3M9.5 7h3M3 3l2 2M9 9l2 2M3 11l2-2M9 5l2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>,
+  load: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 5.5V11a1 1 0 001 1h8a1 1 0 001-1V5.5M2 5.5h10M2 5.5V3.5a1 1 0 011-1h2L7 4.5h4a1 1 0 011 1" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
+  save: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h8l2 2v8H2V2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><path d="M4 2v3h5V2M4 12V8h6v4" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
+  newDoc: () => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 1.5h5l3 3v8H3v-11z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><path d="M8 1.5v3h3M7 7v3M5.5 8.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
+  external: () => <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M5 2H2v9h9V8M7.5 2H11v3.5M11 2L6 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+};
+
+/* ============ TopBar ============ */
+function TopBar({ wfName, setWfName, wfId, setWfId, dirty, onBurger, burgerOpen, onSave }) {
+  const [metaOpen, setMetaOpen] = useState(false);
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!metaOpen) return;
+    const onDoc = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setMetaOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [metaOpen]);
+
+  return (
+    <header className="dz-top">
+      <div className="dz-top-l">
+        <a href="app.html" className="brand-tile" aria-label="Back to app">S</a>
+        <span className="topbar-sep">/</span>
+        <span className="topbar-crumb">Designer</span>
+        <span className="topbar-sep">/</span>
+        <div className="meta-pop-wrap" ref={wrapRef}>
+          <div className="dz-wf-title-wrap">
+            <input
+              className="dz-wf-title"
+              value={wfName}
+              onChange={(e) => setWfName(e.target.value)}
+              style={{ width: `${Math.max(wfName.length, 8) + 2}ch` }}
+            />
+            <button className="dz-wf-id" onClick={() => setMetaOpen(v => !v)} title="Edit properties">
+              {wfId}
+            </button>
+            <span className={`dz-save-state${dirty ? ' dirty' : ''}`}>
+              <span className="dot" />
+              {dirty ? 'Unsaved' : 'Saved'}
+            </span>
+          </div>
+          {metaOpen && (
+            <div className="meta-pop">
+              <div className="meta-pop-field">
+                <label>Workflow ID (snake_case)</label>
+                <input className="mono" value={wfId} onChange={(e) => setWfId(e.target.value)} />
+              </div>
+              <div className="meta-pop-field">
+                <label>Display name</label>
+                <input value={wfName} onChange={(e) => setWfName(e.target.value)} />
+              </div>
+              <div className="meta-pop-field">
+                <label>Description</label>
+                <textarea rows={2} placeholder="Short description for the workflow card…" />
+              </div>
+              <div className="meta-pop-field">
+                <label>Input type</label>
+                <select defaultValue="file">
+                  <option value="file">file</option>
+                  <option value="text">text</option>
+                  <option value="batch">batch</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="dz-top-spacer" />
+      <div className="dz-top-r">
+        <button className="btn btn-ghost"><I.play /> Test</button>
+        <button className="btn btn-primary" onClick={onSave}>{dirty ? 'Save' : 'Saved'}</button>
+        <button
+          className={`burger${burgerOpen ? ' open' : ''}`}
+          onClick={onBurger}
+          aria-label={burgerOpen ? 'Close menu' : 'Open menu'}
+        >
+          <span className="bar b1" />
+          <span className="bar b2" />
+          <span className="bar b3" />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Menu({ open, onClose, theme, setTheme }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  return (
+    <React.Fragment>
+      <div className={`menu-overlay${open ? ' open' : ''}`} onClick={onClose} />
+      <div className={`menu-panel${open ? ' open' : ''}`}>
+        <div className="menu-group-label">Workflow</div>
+        <button className="menu-item"><span className="icon"><I.newDoc /></span><span>New</span><span className="kbd">⌘N</span></button>
+        <button className="menu-item"><span className="icon"><I.load /></span><span>Load…</span><span className="kbd">⌘O</span></button>
+        <button className="menu-item"><span className="icon"><I.save /></span><span>Save</span><span className="kbd">⌘S</span></button>
+        <div className="menu-divider" />
+        <div className="menu-group-label">Canvas</div>
+        <button className="menu-item primary"><span className="icon"><I.spark /></span><span>Auto-layout</span><span className="kbd">⌘L</span></button>
+        <button className="menu-item"><span className="icon"><I.play /></span><span>Test workflow</span><span className="kbd">⌘↵</span></button>
+        <a className="menu-item" href="ocr-studio.html"><span className="icon"><I.external /></span><span>Open Run-UI</span></a>
+        <div className="menu-divider" />
+        <div className="menu-group-label">Navigate</div>
+        <a className="menu-item" href="app.html"><span className="icon"><I.fold /></span><span>Back to app</span></a>
+        <a className="menu-item" href="index.html"><span className="icon"><I.fold /></span><span>Landing</span></a>
+        <div className="menu-theme">
+          <span className="menu-theme-label">Theme</span>
+          <div className="theme-seg">
+            <button className={theme === 'light' ? 'on' : ''} onClick={() => setTheme('light')} aria-label="Light mode">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.2"/><path d="M6 1v1.5M6 9.5V11M1 6h1.5M9.5 6H11M2.5 2.5l1 1M8.5 8.5l1 1M2.5 9.5l1-1M8.5 3.5l1-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+              Day
+            </button>
+            <button className={theme === 'dark' ? 'on' : ''} onClick={() => setTheme('dark')} aria-label="Dark mode">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9.5 7.5A4 4 0 015.5 2.5 4 4 0 109.5 7.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+              Night
+            </button>
+          </div>
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
+
+/* ============ Chat ============ */
+const INITIAL_MESSAGES = [
+  { id: 1, role: 'assistant', text: <React.Fragment><p>Hi — I'm your workflow assistant. Tell me what kind of document you're processing and I'll wire up the stages.</p><p>You can also drop a sample doc, paste a screenshot, or hold the <span className="em">mic</span> and describe what you want.</p></React.Fragment> },
+];
+
+const QUICK_CHIPS = [
+  'Build an ELSTER workflow',
+  'OCR a tax certificate',
+  'Add a validator',
+  'Auto-layout',
+];
+
+function Chat({ onInsert }) {
+  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [input, setInput] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const textRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, thinking]);
+
+  const grow = () => {
+    const ta = textRef.current; if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  };
+
+  const send = (textOverride) => {
+    const text = (textOverride ?? input).trim();
+    if (!text) return;
+    const newMsg = { id: Date.now(), role: 'user', text: <p>{text}</p> };
+    setMessages(m => [...m, newMsg]);
+    setInput('');
+    if (textRef.current) textRef.current.style.height = 'auto';
+    setThinking(true);
+    setTimeout(() => {
+      setThinking(false);
+      setMessages(m => [...m, {
+        id: Date.now() + 1,
+        role: 'assistant',
+        text: (
+          <React.Fragment>
+            <p>I'd add an OCR stage and a strict-JSON extractor wired up to your Document upload. Confidence: high.</p>
+          </React.Fragment>
+        ),
+        diff: {
+          summary: 'Proposed change',
+          lines: [
+            { sign: '+', txt: 'add stage  mistral-ocr            → ocr' },
+            { sign: '+', txt: 'add stage  extract/schema-guarded → fields' },
+            { sign: '~', txt: 'connect    upload.filePath → ocr.in' },
+            { sign: '~', txt: 'connect    ocr.text → fields.in' },
+          ],
+        },
+      }]);
+    }, 1100);
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  return (
+    <aside className="chat">
+      <div className="chat-messages" ref={scrollRef}>
+        {messages.map(m => (
+          <div className={`msg ${m.role}`} key={m.id}>
+            <span className={`msg-avatar ${m.role}`}>{m.role === 'assistant' ? 'C' : 'C'}</span>
+            <div className="msg-body">
+              {m.attach && (
+                <div className="msg-attach">
+                  <span className="thumb"><I.doc /></span>
+                  <span>{m.attach}</span>
+                </div>
+              )}
+              <div className="msg-text">{m.text}</div>
+              {m.diff && (
+                <div className="msg-diff">
+                  <div className="msg-diff-h"><span className="dot" /><span>{m.diff.summary}</span></div>
+                  {m.diff.lines.map((l, i) => (
+                    <div className="msg-diff-line" key={i}>
+                      <span className={`sign ${l.sign === '+' ? 'add' : 'con'}`}>{l.sign}</span>
+                      <span>{l.txt}</span>
+                    </div>
+                  ))}
+                  <div className="msg-diff-actions">
+                    <button className="msg-diff-btn primary" onClick={onInsert}>Apply</button>
+                    <button className="msg-diff-btn">Preview on canvas</button>
+                    <button className="msg-diff-btn">Discard</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {thinking && (
+          <div className="msg assistant">
+            <span className="msg-avatar assistant">C</span>
+            <div className="msg-body">
+              <div className="msg-thinking">
+                <span>Reasoning</span>
+                <span className="dots"><span /><span /><span /></span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="chat-input-wrap">
+        <div className="chat-suggestions">
+          {QUICK_CHIPS.map(c => (
+            <button key={c} className="chat-chip" onClick={() => send(c)}>{c}</button>
+          ))}
+        </div>
+        <div className="chat-input">
+          <textarea
+            ref={textRef}
+            value={input}
+            onChange={(e) => { setInput(e.target.value); grow(); }}
+            onKeyDown={onKey}
+            placeholder="Ask STURM to build, refine, or explain…"
+            rows={1}
+          />
+          <div className="chat-input-row">
+            <button className="chat-icon-btn" title="Attach file"><I.attach /></button>
+            <button className={`chat-icon-btn chat-mic${recording ? ' recording' : ''}`} title="Voice input" onClick={() => setRecording(r => !r)}><I.mic /></button>
+            <div className="spacer" />
+            <button className="chat-send" onClick={() => send()} disabled={!input.trim()}><I.send /></button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/* ============ Canvas + Inspector ============ */
+function Canvas({ inspectorOpen, onToggleInspector, selected, onSelect }) {
+  return (
+    <div className="dz-canvas">
+      <div className="dz-canvas-tools">
+        <button title="Add node"><I.plus /></button>
+        <span className="sep" />
+        <button title="Auto-layout"><I.layout /></button>
+        <span className="sep" />
+        <button title="Zoom in"><I.zoomIn /></button>
+        <button title="Zoom out"><I.zoomOut /></button>
+        <button title="Fit"><I.fit /></button>
+      </div>
+
+      <div
+        className={`node${selected ? ' selected' : ''}`}
+        style={{ left: '50%', top: '40%', transform: 'translate(-50%, -50%)' }}
+        onClick={onSelect}
+      >
+        <div className="node-h"><I.doc /> Document upload</div>
+        <div className="node-sub">workflow input · file</div>
+        <div className="node-port"><span>filePath</span><span className="dot" /></div>
+        <div className="node-port"><span>filename</span><span className="dot" /></div>
+        <div className="node-port"><span>size</span><span className="dot" /></div>
+        <div className="node-port"><span>mimetype</span><span className="dot" /></div>
+      </div>
+
+      <div className="dz-status">
+        <span><strong>1</strong> stages</span>
+        <span><strong>0</strong> edges</span>
+        <span>Input: <strong>file</strong></span>
+      </div>
+
+      <div className="minimap"><div className="minimap-vp" /></div>
+
+      {!inspectorOpen && (
+        <button className="inspector-handle" onClick={onToggleInspector}>
+          Inspector
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Inspector({ open, onClose, selected }) {
+  if (!open) return null;
+  return (
+    <aside className="inspector">
+      <div className="inspector-head">
+        <span className="inspector-title">{selected ? 'Document upload' : 'Inspector'}</span>
+        <button className="chat-icon-btn" onClick={onClose} aria-label="Close inspector"><I.fold /></button>
+      </div>
+      <div className="inspector-body">
+        {selected ? (
+          <React.Fragment>
+            <div className="insp-field">
+              <label className="insp-label">Stage ID</label>
+              <input className="insp-input mono" defaultValue="upload" />
+            </div>
+            <div className="insp-field">
+              <label className="insp-label">Display name</label>
+              <input className="insp-input" defaultValue="Document upload" />
+            </div>
+            <div className="insp-field">
+              <label className="insp-label">Accepts</label>
+              <input className="insp-input mono" defaultValue="application/pdf, image/*" />
+            </div>
+            <div className="insp-field">
+              <label className="insp-label">Max size</label>
+              <input className="insp-input mono" defaultValue="50 MB" />
+            </div>
+            <div className="insp-field">
+              <label className="insp-label">Notes</label>
+              <textarea className="insp-input" rows={3} placeholder="Optional notes for runtime / docs…" />
+            </div>
+          </React.Fragment>
+        ) : (
+          <div style={{color: 'var(--ink-3)', fontSize: 13, textAlign: 'center', padding: '20px 0'}}>
+            Select a node or edge<br/>to edit its details.
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+/* ============ App ============ */
+function App() {
+  const [wfName, setWfName] = useState('My Workflow');
+  const [wfId, setWfId] = useState('my_workflow');
+  const [dirty, setDirty] = useState(true);
+  const [burgerOpen, setBurgerOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [selected, setSelected] = useState(false);
+  const [theme, setThemeState] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
+  const setTheme = (t) => {
+    setThemeState(t);
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('sturm-theme', t); } catch (e) {}
+  };
+
+  // open inspector when node is first selected
+  const onSelect = () => {
+    setSelected(s => !s);
+    if (!selected) setInspectorOpen(true);
+  };
+
+  return (
+    <div className="dz-shell">
+      <TopBar
+        wfName={wfName} setWfName={(v) => { setWfName(v); setDirty(true); }}
+        wfId={wfId} setWfId={(v) => { setWfId(v); setDirty(true); }}
+        dirty={dirty}
+        onBurger={() => setBurgerOpen(v => !v)} burgerOpen={burgerOpen}
+        onSave={() => setDirty(false)}
+      />
+      <div className={`dz-body${inspectorOpen ? ' inspector-open' : ''}`}>
+        <Chat onInsert={() => { setDirty(true); }} />
+        <Canvas inspectorOpen={inspectorOpen} onToggleInspector={() => setInspectorOpen(v => !v)} selected={selected} onSelect={onSelect} />
+        <Inspector open={inspectorOpen} onClose={() => setInspectorOpen(false)} selected={selected} />
+      </div>
+      <Menu open={burgerOpen} onClose={() => setBurgerOpen(false)} theme={theme} setTheme={setTheme} />
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+  </script>
+</body>
+</html>
