@@ -321,7 +321,15 @@ function Topbar({ crumb, theme, setTheme }) {
 
 /* ==================== Workflows screen ==================== */
 function WorkflowsScreen() {
-  const [cat, setCat] = useState('all');
+  // Honour ?category=tax|receipt|med|ocr|lab from URL (used by landing page deep-links)
+  const initialCat = (() => {
+    try {
+      const c = new URL(location.href).searchParams.get('category');
+      const valid = ['all', 'tax', 'receipt', 'med', 'ocr', 'lab'];
+      return valid.indexOf(c) !== -1 ? c : 'all';
+    } catch { return 'all'; }
+  })();
+  const [cat, setCat] = useState(initialCat);
   const visible = WORKFLOWS.filter(w => cat === 'all' || w.cat === cat);
   return (
     <div className="content">

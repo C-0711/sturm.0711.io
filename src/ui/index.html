@@ -227,6 +227,8 @@
       max-width: 16ch;
     }
     .hero h1 .muted { color: var(--ink-3); }
+    .hero h1 .hero-traceable { color: var(--ink-2); }
+    [data-theme="dark"] .hero h1 .hero-traceable { color: oklch(0.82 0.02 80); }
     .lede {
       font-size: 18px;
       line-height: 1.5;
@@ -349,8 +351,8 @@
   <div class="menu-panel" id="menu-panel" role="dialog" aria-modal="true" aria-label="Main menu">
     <div class="menu-search">
       <i data-lucide="search" style="width:14px; height:14px;"></i>
-      <input placeholder="Search…" aria-label="Search" />
-      <span class="kbd">⌘K</span>
+      <input id="menu-search" placeholder="Search…" aria-label="Search" />
+      <span class="kbd" id="menu-kbd-hint">⌘K</span>
     </div>
 
     <div class="menu-group-label">Open</div>
@@ -374,7 +376,7 @@
       </span>
       <i data-lucide="arrow-right" class="arr" style="width:14px;height:14px;"></i>
     </a>
-    <a class="menu-item" href="/ocr-studio.html">
+    <a class="menu-item" href="/studio-ocr.html">
       <span class="menu-item-l">
         <span class="menu-item-glyph"><i data-lucide="scan-text" style="width:14px;height:14px;"></i></span>
         <span>
@@ -408,7 +410,7 @@
         <h1>
           Document in.<br />
           Result out.<br />
-          <span class="muted">Every step traceable.</span>
+          <span class="hero-traceable">Every step traceable.</span>
         </h1>
         <p class="lede">
           Build document workflows as graphs of stages — from OCR to extraction to audit. Drag, connect, test, ship.
@@ -426,28 +428,28 @@
     <!-- ============ WORKFLOWS PREVIEW ============ -->
     <section id="workflows" class="workflows-sec">
       <div class="container">
-        <div class="sec-label"><span>What people build</span></div>
+        <h2 class="sec-label"><span>What people build</span></h2>
 
         <div class="pill-row wf-pills" role="tablist" aria-label="Workflow categories">
           <button class="pill active" data-cat="all" role="tab" aria-selected="true">
-            <span>All</span><span class="count">19</span>
+            <span>All</span><span class="count">4</span>
           </button>
           <button class="pill" data-cat="elster" role="tab" aria-selected="false">
-            <span>ELSTER</span><span class="count">13</span>
+            <span>ELSTER</span><span class="count">1</span>
           </button>
           <button class="pill" data-cat="belege" role="tab" aria-selected="false">
-            <span>Belege</span><span class="count">2</span>
+            <span lang="de">Belege</span><span class="count">1</span>
           </button>
           <button class="pill" data-cat="medizin" role="tab" aria-selected="false">
-            <span>Medizin</span><span class="count">2</span>
+            <span lang="de">Medizin</span><span class="count">1</span>
           </button>
           <button class="pill" data-cat="lab" role="tab" aria-selected="false">
-            <span>Labor &amp; Tests</span><span class="count">2</span>
+            <span lang="de">Labor &amp; Tests</span><span class="count">1</span>
           </button>
         </div>
 
         <div class="wf-grid" id="wf-grid">
-          <a class="card" href="/app.html" data-category="elster">
+          <a class="card" href="/app.html?category=tax" data-category="elster">
             <div class="card-head">
               <h3 class="card-title">Tax filing</h3>
               <span class="card-id">ELSTER</span>
@@ -470,7 +472,7 @@
             </div>
           </a>
 
-          <a class="card" href="/app.html" data-category="belege">
+          <a class="card" href="/app.html?category=receipt" data-category="belege">
             <div class="card-head">
               <h3 class="card-title">Receipt</h3>
               <span class="card-id">BELEGE</span>
@@ -492,7 +494,7 @@
             </div>
           </a>
 
-          <a class="card" href="/app.html" data-category="medizin">
+          <a class="card" href="/app.html?category=med" data-category="medizin">
             <div class="card-head">
               <h3 class="card-title">Clinical report</h3>
               <span class="card-id">MEDIZIN</span>
@@ -514,7 +516,7 @@
             </div>
           </a>
 
-          <a class="card" href="/app.html" data-category="lab">
+          <a class="card" href="/app.html?category=lab" data-category="lab">
             <div class="card-head">
               <h3 class="card-title">OCR benchmark</h3>
               <span class="card-id">LAB</span>
@@ -551,7 +553,7 @@
         <span class="sep">·</span>
         <a href="/designer.html">Designer</a>
         <span class="sep">·</span>
-        <a href="/ocr-studio.html">OCR Studio</a>
+        <a href="/studio-ocr.html">OCR Studio</a>
         <span class="sep">·</span>
         <a href="/docs/WORKFLOW_TEMPLATE.md">Docs</a>
       </div>
@@ -634,6 +636,55 @@
           });
         });
       });
+
+      // ── Fix #4+#5: wire up menu search (filter menu items live + clear on close) ──
+      var menuSearch = document.getElementById('menu-search');
+      var menuItems = document.querySelectorAll('#menu-panel .menu-item');
+      var menuGroups = document.querySelectorAll('#menu-panel .menu-group-label');
+      function applyMenuFilter() {
+        var q = (menuSearch.value || '').trim().toLowerCase();
+        var anyVisible = false;
+        menuItems.forEach(function (item) {
+          var nameEl = item.querySelector('.menu-item-name');
+          var subEl  = item.querySelector('.menu-item-sub');
+          var hay = ((nameEl ? nameEl.textContent : '') + ' ' + (subEl ? subEl.textContent : '')).toLowerCase();
+          var match = !q || hay.indexOf(q) !== -1;
+          item.style.display = match ? '' : 'none';
+          if (match) anyVisible = true;
+        });
+        // Hide group labels if they have no visible items after them (lightweight: just hide if no q match anywhere)
+        menuGroups.forEach(function (g) { g.style.display = anyVisible ? '' : 'none'; });
+      }
+      menuSearch.addEventListener('input', applyMenuFilter);
+      // Clear search on menu close so re-open is clean (#5)
+      var __origSetMenu = setMenu;
+      setMenu = function (open) {
+        __origSetMenu(open);
+        if (!open) { menuSearch.value = ''; applyMenuFilter(); }
+        if (open) { setTimeout(function () { menuSearch.focus(); }, 50); }
+      };
+
+      // ── Fix #12: detect platform and show Ctrl+K on non-Mac ──
+      var kbdHint = document.getElementById('menu-kbd-hint');
+      if (kbdHint && navigator.platform && navigator.platform.indexOf('Mac') === -1) {
+        kbdHint.textContent = 'Ctrl+K';
+      }
+
+      // ── Fix #8: theme button has aria-pressed reflecting current theme ──
+      function updateThemeAria() {
+        var btn = document.getElementById('theme-btn-head');
+        var current = document.documentElement.getAttribute('data-theme') || 'dark';
+        if (btn) {
+          btn.setAttribute('aria-pressed', current === 'dark' ? 'true' : 'false');
+          btn.setAttribute('aria-label', current === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+        }
+      }
+      updateThemeAria();
+      // Patch toggleTheme to keep aria in sync
+      var __origToggleTheme = toggleTheme;
+      toggleTheme = function () { __origToggleTheme(); updateThemeAria(); };
+      document.getElementById('theme-btn-head').removeEventListener('click', __origToggleTheme);
+      document.getElementById('theme-btn-head').addEventListener('click', toggleTheme);
 
       // initial icon paint
       window.lucide && window.lucide.createIcons();
