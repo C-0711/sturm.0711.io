@@ -13,6 +13,7 @@
 import { extractLabelValues, getAll, normalizeLabel } from './extractor.ts';
 import { extractKrvBeitragsdatenBlocks } from './extractor-krv-blocks.ts';
 import type { KrvBlock } from './extractor-krv-blocks.ts';
+import { extractLstbByZeilennummer } from './extractor-lstb-zeilen.ts';
 import { normalize } from './normalizer.ts';
 import { getSchema, ALL_SCHEMAS } from './schemas.ts';
 import type {
@@ -343,6 +344,24 @@ export function mapBeleg(input: BelegInput): MappingResult {
       confidence: matchedLabel === field.pdfLabel ? 1.0 : 0.85,
       warnings: fieldWarnings.length > 0 ? fieldWarnings : undefined,
     });
+  }
+
+  // ─── LStB-Zeilennummer-Anker (3. Matching-Ebene) ─────────────────────
+  // Die Vordruckzeilen-Nummer der Lohnsteuerbescheinigung (3=Brutto,
+  // 4=LSt, ...) ist der employer-/layout-unabhängige Anker zu den
+  // E-Codes. Gap-Filler: füllt Felder die das Label-Matching verpasst
+  // hat (unbekannte Label-Wordings), via der stabilen Nummer. Läuft nur
+  // für VaSt_LStB. Label-Match (confidence 1.0) gewinnt bei Konflikt —
+  // wir fügen nur E-Codes hinzu die noch nicht in out[] stehen.
+  if (belegTyp === 'VaSt_LStB') {
+    const alreadyEmitted = new Set(out.map((f) => f.eCode));
+    const zeilenHits = extractLstbByZeilennummer(rawText, person);
+    for (const hit of zeilenHits) {
+      if (alreadyEmitted.has(hit.field.eCode)) continue;
+      out.push(hit.field);
+      alreadyEmitted.add(hit.field.eCode);
+      warnings.push(`LStB-Nr-Anker rettete ${hit.field.eCode} (Zeile ${hit.zeile}) — Label-Match hatte verpasst`);
+    }
   }
 
   // Unmatched: Labels im Beleg, die NICHT vom Schema abgedeckt sind
