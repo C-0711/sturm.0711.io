@@ -270,3 +270,63 @@ export function resolvePersonForSection(
   }
   return 'unknown';
 }
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Person-Attribution über den GLÄUBIGER-Namen — für Belege OHNE Steuer-IdNr
+ * (typisch gescannte Bank-Steuerbescheinigungen: "Für (Gläubiger) Maria Ute
+ * Stricker"). Da die VaSt für Person B oft nur die IdNr (keinen Namen) liefert,
+ * wird der Vorname am Haushalts-Nachnamen erkannt und ggf. als Person B
+ * GELERNT (Rückgabe `learned`).
+ *
+ *   - Steuer-IdNr im Beleg → eindeutiges A/B-Match (matched=true)
+ *   - Vorname == personA/B.vorname → A/B (matched=true)
+ *   - anderer Vorname + Haushalts-Nachname → B, `learned` gesetzt (matched=true)
+ *   - sonst → A, matched=false (Default Hauptperson, KEIN positiver Treffer)
+ *
+ * `matched` erlaubt dem Aufrufer, bei Text-Sektionen ohne Treffer weiter zu
+ * deferren statt blind auf A zu setzen.
+ */
+export function resolvePersonByName(
+  rawText: string,
+  household: HouseholdInfo,
+): { person: Person; matched: boolean; learned?: { vorname: string; nachname: string } } {
+  const a = household.personA;
+  const b = household.personB;
+  // (1) Steuer-IdNr-Match (selten auf Bank-Belegen, aber eindeutig)
+  const compact = rawText.replace(/\s+/g, '');
+  if (b?.idnr && compact.includes(b.idnr.replace(/\s+/g, ''))) return { person: 'B', matched: true };
+  if (a?.idnr && compact.includes(a.idnr.replace(/\s+/g, ''))) return { person: 'A', matched: true };
+  // (2) Gläubiger-Vorname am Haushalts-Nachnamen.
+  const surname = a?.nachname ?? b?.nachname;
+  if (!surname) return { person: 'A', matched: false };
+  const first = (s?: string) => s?.trim().split(/\s+/)[0]?.toLowerCase();
+  const aFirst = first(a?.vorname);
+  const bFirst = first(b?.vorname);
+  // "<Vorname[ Zweitname]> <Nachname>" — NUR auf EINER Zeile ([^\S\n] = WS ohne
+  // Newline), Titlecase-Tokens; sonst zieht \s+ über Zeilenumbrüche Adress-/
+  // Stadt-Tokens ("…Mainz\nHerrn Rainer Stricker") in den Namen.
+  const re = new RegExp(`([A-ZÄÖÜ][a-zäöüß]+(?:[^\\S\\n]+[A-ZÄÖÜ][a-zäöüß]+){0,2})[^\\S\\n]+${escapeRe(surname)}`, 'gu');
+  const givens: string[] = [];
+  for (const mm of rawText.matchAll(re)) {
+    const gv = mm[1].replace(/^(Herrn?|Frau|Fräulein|An)\b[^\S\n]*/i, '').trim();
+    if (gv) givens.push(gv);
+  }
+  // (a) Bekannter Vorname gewinnt (zuverlässigstes Signal).
+  for (const gv of givens) {
+    const gf = first(gv);
+    if (aFirst && gf === aFirst) return { person: 'A', matched: true };
+    if (bFirst && gf === bFirst) return { person: 'B', matched: true };
+  }
+  // (b) Unbekannter Vorname + Haushalts-Nachname → Person B (Name lernen).
+  for (const gv of givens) {
+    const gf = first(gv);
+    if (gf && aFirst && gf !== aFirst) {
+      return { person: 'B', matched: true, learned: { vorname: gv, nachname: surname } };
+    }
+  }
+  return { person: 'A', matched: false };
+}

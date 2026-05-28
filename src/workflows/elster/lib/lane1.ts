@@ -5,37 +5,40 @@
  *  Lane 1 = "Digital-Text-VaSt → submittable E10-XML, deterministisch."
  * ════════════════════════════════════════════════════════════════════════
  *
- * Das ist der EINZIGE benannte Eingang für Lane 1. Wer Lane 1 will, ruft
- * `runLane1()`. Kein Script verdrahtet die Kette mehr selbst.
+ * Das ist der EINZIGE benannte Eingang. Wer einen Steuerfall verarbeiten
+ * will, ruft `runLane1()`.
  *
- * Abgrenzung zu anderen Prozessen (damit nichts verwechselt wird):
+ * EIN Weg, austauschbarer Parser:
+ *   Jedes Dokument — egal ob Digital-Text-PDF, gescanntes PDF oder Bild —
+ *   geht denselben Weg. Variabel ist nur der TEXT-LIEFERANT:
  *
- *   Lane 1 (DIESES Modul)
- *     • Input:  digital-text VaSt-PDF(s) — pdftotext liefert echten Text
- *     • Engine: deterministisches Schema-Mapping gegen Postgres-Catalog
- *     • Kein OCR, kein LLM, kein Netzwerk außer dem lokalen Postgres
- *     • Output: aggregierte MappedField[] + schema-valides E10-XML
+ *     PDF mit Text         → pdftotext            (deterministisch, lokal)
+ *     gescanntes PDF / Bild → opts.parseImage()    (injizierter OCR-Parser)
  *
- *   Lane 2  (mapper-from-tagged.ts + ocr-ensemble-client.ts)
- *     • Input:  image-only PDF(s) — pdftotext liefert ~nichts
- *     • Engine: tornado-orchestrator OCR + semantic overlay → spatial map
- *     • Wird von Lane 1 NUR identifiziert (deferred[]), nie ausgeführt.
+ *   Ab dem rawText ist ALLES identisch:
+ *     splitVastText → detectBelegTyp → resolvePerson → mapBeleg
+ *       → aggregate → preValidate → buildE10XML
  *
- *   Tornado /api/v1/extract  (Rust, crates/orchestrator)
- *     • komplett separater Rust-Stack, Phasen 0-4, eigenes Windowing.
- *     • Lane 1 ruft NUR /api/v1/ocr-ensemble (Phasen 0-2b) — und auch das
- *       nur indirekt über Lane 2.
+ * Dependency-Injection für OCR: `opts.parseImage` ist optional. Ohne ihn
+ * bleibt der Kern netzfrei (image-only Belege → deferred[]); mit ihm werden
+ * Bilder INLINE im selben Lauf geparst (z.B. via tornado /ocr-ensemble).
+ * So bleibt der deterministische Kern testbar/netzfrei, ohne den Bild-Pfad
+ * künstlich abzuspalten.
  *
- * Granularität: ganzer Steuerfall. runLane1(pdfPaths[]) nimmt 1..N PDFs
- * (Einzelbelege ODER Sammel-VaSt mit mehreren Sections), splittet,
- * inferiert Household (Person A/B), aggregiert über alles, baut EIN
+ * Granularität: ganzer Steuerfall. runLane1(docPaths[]) nimmt 1..N Dokumente
+ * (Einzelbelege ODER Sammel-VaSt mit mehreren Sections), splittet, inferiert
+ * Household (Person A/B), löst Person je Beleg (IdNr/Vorname für Text-VaSt,
+ * Gläubiger-Name für gescannte Bank-Belege), aggregiert über alles, baut EIN
  * E10-XML. "Fall rein, XML raus."
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { extname } from 'node:path';
 import type pg from 'pg';
 
-import { mapBeleg, aggregate, detectBelegTyp } from './field-mapper/mapper.ts';
+import { mapBeleg, aggregate, detectBelegTyp, isFilledReturn } from './field-mapper/mapper.ts';
+import { loadVordruckMap, extractByVordruckzeile } from './field-mapper/extractor-vordruckzeile.ts';
+import type { VordruckMap } from './field-mapper/extractor-vordruckzeile.ts';
 import { preValidate } from './field-mapper/pre-validate.ts';
 import type { ValidationReport } from './field-mapper/pre-validate.ts';
 import { buildE10XML } from './field-mapper/e10-xml.ts';
@@ -43,7 +46,12 @@ import {
   splitVastText,
   inferHousehold,
   resolvePersonForSection,
+  resolvePersonByName,
 } from './field-mapper/vast-splitter.ts';
+
+/** Bild-Endungen — werden gar nicht erst durch pdftotext gejagt, sondern
+ *  direkt an den injizierten OCR-Parser (opts.parseImage) gereicht. */
+const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp', '.gif', '.bmp']);
 import type { HouseholdResolution } from './field-mapper/vast-splitter.ts';
 import type { HouseholdInfo } from './field-mapper/triage.ts';
 import type {
@@ -64,11 +72,19 @@ export interface Lane1Options {
   /** Optional: vorgegebenes Household. Wenn weggelassen → aus den PDFs
    *  inferiert (IdNr-Häufigkeit + Beleg-Typ-Stärke). */
   household?: HouseholdInfo;
-  /** Schwelle: PDF mit weniger Zeichen aus pdftotext → ocr-required
-   *  (wird als deferred markiert, nicht von Lane 1 verarbeitet). Default 200. */
+  /** Schwelle: liefert pdftotext weniger Zeichen, gilt das Dokument als
+   *  Bild/Scan → es geht an `parseImage` (falls gesetzt), sonst deferred.
+   *  Default 200. */
   minTextChars?: number;
   /** Override pdftotext-Binary. Default 'pdftotext'. */
   pdftotextBin?: string;
+  /**
+   * Injizierter OCR-/Bild-Parser. Bekommt den Dokumentpfad (Bild ODER
+   * gescanntes PDF) und liefert reading-order rawText zurück. Wenn gesetzt,
+   * werden Bild-/Scan-Belege INLINE im selben Lauf verarbeitet statt nur
+   * deferred. Wenn nicht gesetzt, bleibt der Kern netzfrei (deferred[]).
+   */
+  parseImage?: (docPath: string) => Promise<string>;
 }
 
 export type Lane1BelegStatus =
@@ -85,6 +101,8 @@ export interface Lane1BelegOutcome {
   status: Lane1BelegStatus;
   /** Anzahl extrahierter Felder (nur bei status='mapped' > 0). */
   felder: number;
+  /** Welcher Parser lieferte den Text: 'text' (pdftotext) oder 'ocr' (parseImage). */
+  method: 'text' | 'ocr';
 }
 
 export interface Lane1Deferred {
@@ -105,8 +123,11 @@ export interface Lane1Result {
   validation: ValidationReport;
   /** Submittable E10-XML — nur gesetzt wenn validation.ready === true. */
   xml: string | null;
-  /** Belege die Lane 1 NICHT verarbeiten konnte (→ Lane 2 / HiTL). */
+  /** Belege die NICHT verarbeitet werden konnten (→ OCR-Parser fehlt / HiTL). */
   deferred: Lane1Deferred[];
+  /** Feld-Keys (`eCode|person`), die aus OCR-Belegen stammen — für die
+   *  Herkunfts-Markierung (text vs. ocr) im Report/JSON. */
+  ocrFields: string[];
   warnings: string[];
   /** Kompakte Statistik für Logging/Monitoring. */
   stats: {
@@ -136,8 +157,10 @@ function extractText(pdfPath: string, bin: string): string {
 interface CollectedSection {
   source: string;
   text: string;
-  /** true wenn das PDF als ganzes zu wenig Text hatte → ocr-required. */
+  /** true wenn weder pdftotext noch parseImage verwertbaren Text lieferte. */
   ocrRequired: boolean;
+  /** Welcher Parser lieferte den Text. */
+  method: 'text' | 'ocr';
 }
 
 // ─── Public Entry ──────────────────────────────────────────────────────────
@@ -156,37 +179,58 @@ export async function runLane1(
   const minTextChars = opts.minTextChars ?? 200;
   const pdftotextBin = opts.pdftotextBin ?? 'pdftotext';
 
-  // ── 1. PDFs → Text → Sections sammeln ─────────────────────────────────
+  // ── 1. Dokumente → Text (Parser je Typ) → Sections sammeln ────────────
+  //   PDF mit Text → pdftotext;  Bild/Scan → injizierter parseImage().
+  //   Danach IDENTISCH: splitVastText → ein/mehrere Sections.
   const collected: CollectedSection[] = [];
-  for (const pdfPath of pdfPaths) {
-    if (!existsSync(pdfPath)) {
-      warnings.push(`PDF nicht gefunden, übersprungen: ${pdfPath}`);
+  for (const docPath of pdfPaths) {
+    if (!existsSync(docPath)) {
+      warnings.push(`Datei nicht gefunden, übersprungen: ${docPath}`);
       continue;
     }
-    const rawText = extractText(pdfPath, pdftotextBin);
+    const isImage = IMAGE_EXT.has(extname(docPath).toLowerCase());
+    let rawText = isImage ? '' : extractText(docPath, pdftotextBin);
+    let method: 'text' | 'ocr' = 'text';
+
     if (rawText.length < minTextChars) {
-      // ganzes PDF ist image-only → eine deferred-Section
-      collected.push({ source: pdfPath, text: rawText, ocrRequired: true });
-      continue;
+      // Bild oder gescanntes PDF: gleicher Weg, anderer Parser.
+      if (opts.parseImage) {
+        try {
+          rawText = await opts.parseImage(docPath);
+          method = 'ocr';
+        } catch (err) {
+          warnings.push(`OCR-Parser fehlgeschlagen (${docPath}): ${(err as Error).message}`);
+          collected.push({ source: docPath, text: '', ocrRequired: true, method: 'ocr' });
+          continue;
+        }
+      } else {
+        // kein OCR-Parser injiziert → Kern bleibt netzfrei, Beleg deferred.
+        collected.push({ source: docPath, text: rawText, ocrRequired: true, method: 'text' });
+        continue;
+      }
     }
-    // Sammel-VaSt: in Sections splitten. Single-Beleg → 1 Section.
+    // Sammel-VaSt: in Sections splitten. Single-Beleg / Bild → 1 Section.
     const sections = splitVastText(rawText);
     if (sections.length === 1) {
-      collected.push({ source: pdfPath, text: sections[0].text, ocrRequired: false });
+      collected.push({ source: docPath, text: sections[0].text, ocrRequired: false, method });
     } else {
       for (const sec of sections) {
         collected.push({
-          source: `${pdfPath}#section${sec.index}`,
+          source: `${docPath}#section${sec.index}`,
           text: sec.text,
           ocrRequired: false,
+          method,
         });
       }
     }
   }
 
-  // ── 2. Household inferieren (über alle text-Sections) ─────────────────
+  // ── 2. Household inferieren — NUR aus Digital-Text-VaSt (IdNr-Häufigkeit).
+  //   Gescannte Bank-Belege (method='ocr') tragen keine Steuer-IdNr und
+  //   würden die Inferenz nur mit Bank-/Adress-Tokens stören; deren Person
+  //   wird unten per Gläubiger-Name aufgelöst.
   const textSections = collected
-    .filter((c) => !c.ocrRequired)
+    .filter((c) => !c.ocrRequired && c.method === 'text')
     .map((c, i) => ({ index: i, text: c.text, chars: c.text.length, uebernommen: true }));
   let household: HouseholdInfo;
   let hhResolution: HouseholdResolution | null = null;
@@ -198,29 +242,61 @@ export async function runLane1(
     warnings.push(...hhResolution.warnings);
   }
 
-  // ── 3. Pro Section: detect + person + mapBeleg ────────────────────────
+  // ── 3. Pro Section: detect + person + mapBeleg (text & ocr identisch) ──
   const belege: Lane1BelegOutcome[] = [];
   const deferred: Lane1Deferred[] = [];
   const mappingResults: MappingResult[] = [];
+  const ocrFieldKeys = new Set<string>();
+  let vordruckMap: VordruckMap | null = null; // lazy — nur wenn eine Voll-Erklärung auftaucht
+
+  /** Person B aus einem Beleg lernen, wenn die VaSt nur ihre IdNr kannte. */
+  const learnPersonB = (learned?: { vorname: string; nachname: string }) => {
+    if (learned && !household.personB?.vorname) {
+      household.personB = { ...(household.personB ?? {}), vorname: learned.vorname, nachname: learned.nachname };
+    }
+  };
 
   for (const c of collected) {
     if (c.ocrRequired) {
       belege.push({
         source: c.source, belegTyp: 'Unbekannt', person: 'unknown',
-        status: 'deferred-ocr', felder: 0,
+        status: 'deferred-ocr', felder: 0, method: c.method,
       });
       deferred.push({
         source: c.source,
-        reason: `pdftotext < ${minTextChars} Zeichen — image-only PDF`,
+        reason: opts.parseImage
+          ? 'OCR-Parser lieferte keinen verwertbaren Text'
+          : `pdftotext < ${minTextChars} Zeichen, kein OCR-Parser injiziert — image-only`,
         route: 'lane2-ocr',
       });
       continue;
     }
+    // Ganze ausgefüllte Erklärung (multi-Anlage Druck) → Vordruckzeile-Anker
+    // statt Einzel-Beleg-Schema. Felder tragen Person je E-Code/Section.
+    if (isFilledReturn(c.text)) {
+      if (!vordruckMap) vordruckMap = await loadVordruckMap(opts.pool, opts.vz);
+      const { felder } = extractByVordruckzeile(c.text, vordruckMap);
+      mappingResults.push({
+        belegTyp: 'Einkommensteuererklaerung', person: 'A',
+        felder, missingExpected: [], unmatched: [], warnings: [],
+      });
+      if (c.method === 'ocr') for (const f of felder) ocrFieldKeys.add(`${f.eCode}|${f.person}`);
+      belege.push({
+        source: c.source, belegTyp: 'Einkommensteuererklaerung', person: 'A',
+        status: 'mapped', felder: felder.length, method: c.method,
+      });
+      warnings.push(
+        `Voll-Erklärung erkannt (${c.source}) → Vordruckzeile-Extraktor: ${felder.length} Felder. ` +
+        `⚠ VZ/Steuerjahr prüfen — der Druck kann ein anderes Jahr betreffen als die Belege.`,
+      );
+      continue;
+    }
+
     const belegTyp = detectBelegTyp(c.text);
     if (belegTyp === 'Unbekannt') {
       belege.push({
         source: c.source, belegTyp, person: 'unknown',
-        status: 'unknown-typ', felder: 0,
+        status: 'unknown-typ', felder: 0, method: c.method,
       });
       deferred.push({
         source: c.source,
@@ -229,14 +305,29 @@ export async function runLane1(
       });
       continue;
     }
-    const person = resolvePersonForSection(
-      { index: 0, text: c.text, chars: c.text.length, uebernommen: true },
-      household,
-    );
+
+    // Person-Auflösung — gleicher Beleg, je nach Quelle anderes Signal:
+    //   OCR-Belege (Bank): Gläubiger-Name (resolvePersonByName, Default A).
+    //   Text-VaSt: IdNr/Vorname (resolvePersonForSection) + Name-Fallback.
+    let person: Person | 'unknown';
+    if (c.method === 'ocr') {
+      const pr = resolvePersonByName(c.text, household);
+      person = pr.person;
+      learnPersonB(pr.learned);
+    } else {
+      person = resolvePersonForSection(
+        { index: 0, text: c.text, chars: c.text.length, uebernommen: true },
+        household,
+      );
+      if (person === 'unknown') {
+        const pr = resolvePersonByName(c.text, household);
+        if (pr.matched) { person = pr.person; learnPersonB(pr.learned); }
+      }
+    }
     if (person === 'unknown') {
       belege.push({
         source: c.source, belegTyp, person: 'unknown',
-        status: 'unknown-person', felder: 0,
+        status: 'unknown-person', felder: 0, method: c.method,
       });
       deferred.push({
         source: c.source,
@@ -245,18 +336,22 @@ export async function runLane1(
       });
       continue;
     }
+
     const input: BelegInput = {
       belegTyp, person, rawText: c.text, source: { pdfPath: c.source },
     };
     const r = mapBeleg(input);
     mappingResults.push(r);
+    if (c.method === 'ocr') {
+      for (const f of r.felder) ocrFieldKeys.add(`${f.eCode}|${f.person}`);
+    }
     belege.push({
       source: c.source, belegTyp, person,
-      status: 'mapped', felder: r.felder.length,
+      status: 'mapped', felder: r.felder.length, method: c.method,
     });
   }
 
-  // ── 4. Aggregieren ─────────────────────────────────────────────────────
+  // ── 4. Aggregieren (Text- + OCR-Felder gemeinsam) ─────────────────────
   const felderRaw = mappingResults.reduce((s, r) => s + r.felder.length, 0);
   const aggregated = aggregate(mappingResults);
 
@@ -284,6 +379,7 @@ export async function runLane1(
     validation,
     xml,
     deferred,
+    ocrFields: [...ocrFieldKeys],
     warnings,
     stats: {
       pdfs: pdfPaths.length,

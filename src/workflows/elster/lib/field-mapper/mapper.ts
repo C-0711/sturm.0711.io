@@ -37,6 +37,22 @@ export function detectBelegTyp(rawText: string): BelegTyp {
   return 'Unbekannt';
 }
 
+/**
+ * Erkennt eine GANZE ausgefüllte ELSTER-Erklärung (Druck, mehrseitig) — im
+ * Gegensatz zu einem Einzel-Beleg. Signal: ≥2 verschiedene Anlage-Section-
+ * Header am ZEILEN-ANFANG ("Anlage N", "Anlage KAP", "Anlage Vorsorgeaufwand",
+ * "Anlage Sonderausgaben", …). Ein Bank-Beleg mit "Zeile 7 Anlage KAP"
+ * triggert NICHT (dort steht "Anlage" mitten in der Zeile, nicht am Anfang).
+ * Dieser Dokumenttyp wird nicht per Einzel-Schema, sondern über den
+ * Vordruckzeile-Anker (extractor-vordruckzeile) extrahiert.
+ */
+export function isFilledReturn(rawText: string): boolean {
+  const re = /^[ \t]*(?:<b>[ \t]*)?Anlage\s+(N|KAP|Vorsorgeaufwand|Sonderausgaben|R|Kind|AV|G|S|SO|U|V)\b/gim;
+  const seen = new Set<string>();
+  for (const m of rawText.matchAll(re)) seen.add(m[1].toLowerCase());
+  return seen.size >= 2;
+}
+
 // ─── RBM bAV-Routing (Fix 3) ─────────────────────────────────────────────
 // Schema map RBM-Felder per Default in Leibr_gesetzl/Einz (gesetzliche Rente).
 // Bei bAV/Pensionskasse zeigt die Rechtsgrundlage auf "sonstige Verträge" —

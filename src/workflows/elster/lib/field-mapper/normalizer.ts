@@ -45,6 +45,22 @@ const RELIGION_MAP: Record<string, string> = {
   'sonstige': '10',
 };
 
+/**
+ * OCR-Korrektur: das deutsche Dezimal-Komma als Punkt fehlgelesen.
+ *   "6.720.00" → "6.720,00"   "5.06" → "5,06"   "0.00" → "0,00"
+ * Greift NUR wenn kein Komma vorhanden ist UND das Muster „…\.dd" am Ende
+ * steht (optional mit Tausender-Punkten davor). Reine Tausender ohne
+ * Nachkommastellen ("63.559", "1.234") bleiben unverändert.
+ */
+function ocrFixGermanDecimal(s: string): string {
+  if (s.includes(',')) return s;
+  if (/^-?\d{1,3}(?:\.\d{3})*\.\d{2}$/.test(s)) {
+    const i = s.lastIndexOf('.');
+    return s.slice(0, i) + ',' + s.slice(i + 1);
+  }
+  return s;
+}
+
 export interface NormalizeOptions {
   /** Strikter Modus: throws bei unbekannten Werten. Default: false (gibt rawValue zurück + warning). */
   strict?: boolean;
@@ -76,7 +92,7 @@ export function normalize(rawValue: string, type: ValueType, opts: NormalizeOpti
 
     case 'int_euro': {
       // "30.707,00 €" / "30.707,00" / "30707" → "30707"
-      let s = trimmed.replace(/\s|€|EUR/gi, '');
+      let s = ocrFixGermanDecimal(trimmed.replace(/\s|€|EUR/gi, ''));
       // Komma + 2 Dezimalstellen abschneiden (ELSTER rundet kaufmännisch)
       const m = s.match(/^(-?)([\d.]+)(?:,(\d{1,2}))?$/);
       if (!m) {
@@ -93,7 +109,7 @@ export function normalize(rawValue: string, type: ValueType, opts: NormalizeOpti
 
     case 'decimal_eur_cent': {
       // "2.960,00 €" → "2960,00"
-      let s = trimmed.replace(/\s|€|EUR/gi, '');
+      let s = ocrFixGermanDecimal(trimmed.replace(/\s|€|EUR/gi, ''));
       const m = s.match(/^(-?)([\d.]+)(?:,(\d{1,2}))?$/);
       if (!m) {
         warnings.push(`decimal_eur_cent: konnte "${trimmed}" nicht parsen`);

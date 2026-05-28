@@ -20,6 +20,7 @@ export type BelegTyp =
   | 'VaSt_Pers'                  // Stammdaten
   | 'VaSt_Religion'              // Religionszugehörigkeit
   | 'Steuerbescheinigung_Bank'   // Bank-Jahres-Steuerbescheinigung
+  | 'Einkommensteuererklaerung'  // ganze ausgefüllte ELSTER-Erklärung (Druck, multi-Anlage)
   | 'Unbekannt';
 
 export type Person = 'A' | 'B';
