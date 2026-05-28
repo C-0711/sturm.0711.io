@@ -179,48 +179,42 @@ export async function runLane1(
   const minTextChars = opts.minTextChars ?? 200;
   const pdftotextBin = opts.pdftotextBin ?? 'pdftotext';
 
-  // ── 1. Dokumente → Text (Parser je Typ) → Sections sammeln ────────────
-  //   PDF mit Text → pdftotext;  Bild/Scan → injizierter parseImage().
-  //   Danach IDENTISCH: splitVastText → ein/mehrere Sections.
+  // ── 1. Dokumente → Text (Parser je Typ). OCR läuft NEBENLÄUFIG ────────
+  //   PDF mit Text → pdftotext (sync);  Bild/Scan → injizierter parseImage().
+  //   Alle parseImage-Calls werden parallel gefeuert (Promise.all), nicht
+  //   seriell — der Engpass OCR skaliert so über die Dokumente.
+  interface DocText {
+    docPath: string; rawText: string; method: 'text' | 'ocr';
+    ocrRequired: boolean; missing?: boolean; error?: string;
+  }
+  const docTexts: DocText[] = await Promise.all(pdfPaths.map(async (docPath): Promise<DocText> => {
+    if (!existsSync(docPath)) return { docPath, rawText: '', method: 'text', ocrRequired: false, missing: true };
+    const isImage = IMAGE_EXT.has(extname(docPath).toLowerCase());
+    const rawText = isImage ? '' : extractText(docPath, pdftotextBin);
+    if (rawText.length >= minTextChars) return { docPath, rawText, method: 'text', ocrRequired: false };
+    if (opts.parseImage) {
+      try { return { docPath, rawText: await opts.parseImage(docPath), method: 'ocr', ocrRequired: false }; }
+      catch (err) { return { docPath, rawText: '', method: 'ocr', ocrRequired: true, error: (err as Error).message }; }
+    }
+    return { docPath, rawText, method: 'text', ocrRequired: true };
+  }));
+
+  // Reihenfolge erhalten, splitten, Warnings sammeln (deterministisch, seriell).
   const collected: CollectedSection[] = [];
-  for (const docPath of pdfPaths) {
-    if (!existsSync(docPath)) {
-      warnings.push(`Datei nicht gefunden, übersprungen: ${docPath}`);
+  for (const d of docTexts) {
+    if (d.missing) { warnings.push(`Datei nicht gefunden, übersprungen: ${d.docPath}`); continue; }
+    if (d.ocrRequired) {
+      if (d.error) warnings.push(`OCR-Parser fehlgeschlagen (${d.docPath}): ${d.error}`);
+      collected.push({ source: d.docPath, text: '', ocrRequired: true, method: d.method });
       continue;
     }
-    const isImage = IMAGE_EXT.has(extname(docPath).toLowerCase());
-    let rawText = isImage ? '' : extractText(docPath, pdftotextBin);
-    let method: 'text' | 'ocr' = 'text';
-
-    if (rawText.length < minTextChars) {
-      // Bild oder gescanntes PDF: gleicher Weg, anderer Parser.
-      if (opts.parseImage) {
-        try {
-          rawText = await opts.parseImage(docPath);
-          method = 'ocr';
-        } catch (err) {
-          warnings.push(`OCR-Parser fehlgeschlagen (${docPath}): ${(err as Error).message}`);
-          collected.push({ source: docPath, text: '', ocrRequired: true, method: 'ocr' });
-          continue;
-        }
-      } else {
-        // kein OCR-Parser injiziert → Kern bleibt netzfrei, Beleg deferred.
-        collected.push({ source: docPath, text: rawText, ocrRequired: true, method: 'text' });
-        continue;
-      }
-    }
     // Sammel-VaSt: in Sections splitten. Single-Beleg / Bild → 1 Section.
-    const sections = splitVastText(rawText);
+    const sections = splitVastText(d.rawText);
     if (sections.length === 1) {
-      collected.push({ source: docPath, text: sections[0].text, ocrRequired: false, method });
+      collected.push({ source: d.docPath, text: sections[0].text, ocrRequired: false, method: d.method });
     } else {
       for (const sec of sections) {
-        collected.push({
-          source: `${docPath}#section${sec.index}`,
-          text: sec.text,
-          ocrRequired: false,
-          method,
-        });
+        collected.push({ source: `${d.docPath}#section${sec.index}`, text: sec.text, ocrRequired: false, method: d.method });
       }
     }
   }
