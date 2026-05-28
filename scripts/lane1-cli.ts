@@ -28,6 +28,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import pg from 'pg';
 import { runLane1 } from '../src/workflows/elster/lib/lane1.ts';
+import { annotateWithKennzahl, formatKennzahl } from '../src/workflows/elster/lib/field-mapper/kennzahl-bridge.ts';
 
 const { Pool } = pg;
 
@@ -37,20 +38,22 @@ function parseArgs(argv: string[]) {
   let out: string | null = null;
   let xsd: string | null = null;
   let json = false;
+  let kennzahl = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--vz') { vz = Number(argv[++i]); }
     else if (a === '--out') { out = argv[++i]; }
     else if (a === '--xsd') { xsd = argv[++i]; }
     else if (a === '--json') { json = true; }
+    else if (a === '--kennzahl') { kennzahl = true; }
     else if (a.startsWith('--')) { console.error(`Unbekanntes Flag: ${a}`); process.exit(4); }
     else { pdfs.push(a); }
   }
-  return { pdfs, vz, out, xsd, json };
+  return { pdfs, vz, out, xsd, json, kennzahl };
 }
 
 async function main(): Promise<void> {
-  const { pdfs, vz, out, xsd, json } = parseArgs(process.argv.slice(2));
+  const { pdfs, vz, out, xsd, json, kennzahl } = parseArgs(process.argv.slice(2));
   if (pdfs.length === 0) {
     console.error('Usage: lane1-cli [--vz 2024] [--out fall.xml] [--xsd E10.xsd] [--json] <pdf...>');
     process.exit(1);
@@ -61,8 +64,17 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: url, max: 4 });
 
   let result;
+  let kennzahlRows: Array<{ eCode: string; person: string; anlage: string; sbkz: string }> = [];
   try {
     result = await runLane1(pdfs, { vz, pool });
+    // Optional: E-Code → Sachbereich.Kennzahl (ERiC-Adressierung)
+    if (kennzahl && result.aggregated.length > 0) {
+      const kz = await annotateWithKennzahl(result.aggregated, { pool, vz });
+      kennzahlRows = kz.enriched.map((f) => ({
+        eCode: f.eCode, person: String(f.person), anlage: f.anlage,
+        sbkz: formatKennzahl(f.kennzahl),
+      }));
+    }
   } catch (err) {
     console.error('FATAL:', (err as Error).message);
     await pool.end();
@@ -103,6 +115,15 @@ async function main(): Promise<void> {
       for (const d of result.deferred) {
         console.log(`    → ${d.route.padEnd(10)} ${basename(d.source)}  — ${d.reason}`);
       }
+    }
+    if (kennzahl && kennzahlRows.length > 0) {
+      console.log('');
+      console.log('  ERiC-Adressierung (E-Code → Sachbereich.Kennzahl):');
+      const resolved = kennzahlRows.filter((k) => k.sbkz !== '—').length;
+      for (const k of kennzahlRows) {
+        console.log(`    ${k.eCode.padEnd(10)} [${k.anlage.padEnd(5)}] P${k.person}  →  Kz ${k.sbkz}`);
+      }
+      console.log(`    Kennzahl-Coverage: ${resolved}/${kennzahlRows.length}`);
     }
     console.log('');
     console.log(`  Pre-Validation: ${result.validation.errorCount} errors, ${result.validation.warningCount} warnings → ready=${result.validation.ready ? '✓' : '✗'}`);
