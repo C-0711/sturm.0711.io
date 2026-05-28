@@ -72,7 +72,8 @@ export async function loadVordruckMap(pool: pg.Pool, vz: number): Promise<Vordru
        FROM elster.vw_zeile_to_code z
   LEFT JOIN elster.feld f       ON f.feld_id = z.feld_id
   LEFT JOIN elster.format_typ ft ON ft.format_id = f.format_id
-      WHERE z.vz = $1 AND z.vordruckzeile ~ '^[0-9]'`,
+      WHERE z.vz = $1 AND z.vordruckzeile ~ '^[0-9]'
+      ORDER BY z.anlage, z.vordruckzeile, z.code`, // deterministisch: niedrigster Code zuerst
     [vz],
   );
   const map: VordruckMap = new Map();
