@@ -97,11 +97,29 @@ function parseArgs(argv: string[]) {
   return { docs, vz, out, orchestrator, kennzahl, json, minScore };
 }
 
-/** Bild → temporäres 1-Seiten-PDF (image-only, kein Text-Layer → Lane 2). */
+/**
+ * Bild → temporäres 1-Seiten-PDF (image-only, kein Text-Layer → Lane 2).
+ * Cross-platform: sips (macOS) → img2pdf → ImageMagick → Python/Pillow.
+ * H200V (Linux) hat kein sips, aber python3+PIL — daher der Fallback.
+ */
 function imageToPdf(imgPath: string, workDir: string): string {
   const pdfPath = join(workDir, basename(imgPath).replace(/\.[^.]+$/, '') + '.pdf');
-  execFileSync('sips', ['-s', 'format', 'pdf', imgPath, '--out', pdfPath], { stdio: 'pipe' });
-  return pdfPath;
+  const pyScript = `from PIL import Image; Image.open(${JSON.stringify(imgPath)}).convert("RGB").save(${JSON.stringify(pdfPath)}, "PDF")`;
+  const attempts: Array<[string, string[]]> = [
+    ['sips', ['-s', 'format', 'pdf', imgPath, '--out', pdfPath]],
+    ['img2pdf', [imgPath, '-o', pdfPath]],
+    ['magick', [imgPath, pdfPath]],
+    ['convert', [imgPath, pdfPath]],
+    ['python3', ['-c', pyScript]],
+  ];
+  let lastErr: unknown;
+  for (const [bin, args] of attempts) {
+    try {
+      execFileSync(bin, args, { stdio: 'pipe' });
+      if (existsSync(pdfPath)) return pdfPath;
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error(`Bild→PDF fehlgeschlagen für ${basename(imgPath)} (kein sips/img2pdf/magick/convert/PIL): ${(lastErr as Error)?.message ?? ''}`);
 }
 
 function escapeRe(s: string): string {
