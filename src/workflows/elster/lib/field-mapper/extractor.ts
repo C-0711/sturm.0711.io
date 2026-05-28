@@ -35,15 +35,20 @@ const LABEL_VALUE_SEP_RE = /^([^\d\n][^\n]+?)\s{2,}([\d\S].*)$/;
  *      Beitragsdaten-Blöcke in VaSt_KRV)
  */
 /**
- * Strippt LStB-Zeilen-Nummerierung-Präfixe wie "3.     " oder " 22. a) ".
- * In ELSTER-Sammel-VAST-PDFs sind die LStB-Felder mit ihrer
- * Vordruck-Zeilen-Nummer + ggf. Sub-Punkt versehen:
- *   "3.     Bruttoarbeitslohn..."     → "Bruttoarbeitslohn..."
- *   "22.    a) Arbeitgeberanteil..."  → "a) Arbeitgeberanteil..."
- * Damit greift LABEL_VALUE_SEP_RE (das ein nicht-Ziffer-Erstzeichen
- * erwartet) wieder.
+ * Strippt führende Einrückung UND optional eine LStB-Vordruckzeilen-Nummer.
+ *
+ * Zwei Fälle in ELSTER-Sammel-VAST-PDFs:
+ *   "        Steuerklasse    3"        → "Steuerklasse    3"  (nur Einrückung)
+ *   "  3.     Bruttoarbeitslohn..."    → "Bruttoarbeitslohn..." (Nummer + Einrückung)
+ *   "  22.    a) Arbeitgeberanteil..." → "a) Arbeitgeberanteil..."
+ *
+ * Wichtig: ALLE führenden Whitespaces müssen weg, weil LABEL_VALUE_SEP_RE
+ * mit lazy `[^\d\n][^\n]+?` sonst die Einrückung als (leeres) Label nimmt
+ * und das echte Label in den Wert rutscht — der Steuerklasse-Bug bei
+ * eingerückten Belegen (Stricker-VAST). Die Vordruckzeilen-Nummer ist
+ * optional (`?`), damit auch nicht-nummerierte eingerückte Zeilen greifen.
  */
-const LINE_PREFIX_RE = /^\s*\d{1,3}\.\s+/;
+const LINE_PREFIX_RE = /^\s*(?:\d{1,3}\.\s+)?/;
 function stripLinePrefix(line: string): string {
   return line.replace(LINE_PREFIX_RE, '');
 }

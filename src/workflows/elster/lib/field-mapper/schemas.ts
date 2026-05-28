@@ -82,7 +82,10 @@ export const SCHEMA_VAST_LSTB: BelegSchema = {
 
     // LStB-Nr.19 (Entschädigung / nicht ermäßigt besteuert)
     { pdfLabel: 'Entschädigungen / Arbeitslohn für mehrere Kalenderjahre (in 3. enthalten)',
-      pdfLabelAliases: ['Entschädigungen / Arbeitslohn für mehrere Jahre'],
+      pdfLabelAliases: [
+        'Entschädigungen / Arbeitslohn für mehrere Jahre',
+        'Entschädigungen / Arbeitslohn für mehrere Kalenderjahre (in 3.',  // ← Wrap-around: "enthalten)" auf nächster Zeile
+      ],
       anlage: 'N', eCode: 'E0201806', valueType: 'int_euro', kontextSubpath: 'ArbL/Nicht_erm_best/Sum' },
 
     // Anlage VOR (Sozialvers-Beiträge laut LStB Nr.22-27)
