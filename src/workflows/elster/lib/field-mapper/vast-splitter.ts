@@ -132,9 +132,11 @@ export interface HouseholdResolution {
 export function inferHousehold(sections: VastSection[]): HouseholdResolution {
   const warnings: string[] = [];
   const IDNR_RE = /\b(\d{2,3}\s?\d{3}\s?\d{3}\s?\d{2,3})\b/g;
-  const LABELLED_IDNR_RE = /Identifikationsnummer[:\s]+([0-9 ]{11,17})/i;
-  const VORNAME_RE = /\bVorname[:\s]+([A-ZÄÖÜ][\wÄÖÜäöüß-]+(?:\s[A-ZÄÖÜ][\wÄÖÜäöüß-]+){0,2})/;
-  const NACHNAME_RE = /\b(?:Nachname|Name)[:\s]+([A-ZÄÖÜ][\wÄÖÜäöüß-]+(?:[ -][A-ZÄÖÜ][\wÄÖÜäöüß-]+){0,2})/;
+  const LABELLED_IDNR_RE = /Identifikationsnummer[:\t ]+([0-9 ]{11,17})/i;
+  // [:\t ] statt [:\s] — kein \n, sonst frisst "Vorname Hildburg\nName ..."
+  // den nächsten Zeilen-Token mit ("Hildburg\nName").
+  const VORNAME_RE = /\bVorname[:\t ]+([A-ZÄÖÜ][\wÄÖÜäöüß-]+(?:[ \t][A-ZÄÖÜ][\wÄÖÜäöüß-]+){0,2})/;
+  const NACHNAME_RE = /\b(?:Nachname|Name)[:\t ]+([A-ZÄÖÜ][\wÄÖÜäöüß-]+(?:[ -][A-ZÄÖÜ][\wÄÖÜäöüß-]+){0,2})/;
 
   // BelegTypen die "starke" Identitäts-Signale tragen (echte Steuerdaten,
   // kein bloßer Religions-Beleg). Tie-break-Booster.
@@ -260,7 +262,7 @@ export function resolvePersonForSection(
     if (b?.idnr && b.idnr.replace(/\s+/g, '') === idnr) return 'B';
   }
   // Fallback: Name-Match
-  const vm = section.text.match(/\bVorname[:\s]+([A-ZÄÖÜ][\wäöüÄÖÜß-]+)/);
+  const vm = section.text.match(/\bVorname[:\t ]+([A-ZÄÖÜ][\wäöüÄÖÜß-]+)/);
   if (vm) {
     const v = vm[1].toLowerCase();
     if (a?.vorname && a.vorname.toLowerCase() === v) return 'A';
