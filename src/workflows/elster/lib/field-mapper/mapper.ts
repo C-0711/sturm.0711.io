@@ -14,7 +14,7 @@ import { extractLabelValues, getAll, normalizeLabel } from './extractor.ts';
 import { extractKrvBeitragsdatenBlocks } from './extractor-krv-blocks.ts';
 import type { KrvBlock } from './extractor-krv-blocks.ts';
 import { extractLstbByZeilennummer } from './extractor-lstb-zeilen.ts';
-import { extractByAnlageZeile } from './extractor-anlage-zeilen.ts';
+import { extractByAnlageZeile, extractKapErtraegnisSumme } from './extractor-anlage-zeilen.ts';
 import { normalize } from './normalizer.ts';
 import { getSchema, ALL_SCHEMAS } from './schemas.ts';
 import type {
@@ -385,6 +385,16 @@ export function mapBeleg(input: BelegInput): MappingResult {
       } else {
         out.push(hit.field);
         warnings.push(`Anlage-Zeile-Anker rettete ${hit.field.eCode} (${hit.ref}) — Label-Match hatte verpasst`);
+      }
+    }
+    // Fallback für Erträgnisaufstellungen (Tabellen-Layout ohne inline
+    // "Zeile N Anlage KAP"-Referenzen, z.B. Volksbank): nur wenn der Anker
+    // KEIN E1900701 fand — sonst Doppelzählung mit der Summe.
+    if (!out.some((f) => f.eCode === 'E1900701')) {
+      for (const hit of extractKapErtraegnisSumme(rawText, person)) {
+        if (out.some((f) => f.eCode === hit.field.eCode)) continue;
+        out.push(hit.field);
+        warnings.push(`Erträgnisaufstellung-Summe rettete ${hit.field.eCode} (${hit.ref})`);
       }
     }
   }

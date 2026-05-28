@@ -220,6 +220,10 @@ export const SCHEMA_STEUERBESCHEINIGUNG_BANK: BelegSchema = {
   titlePatterns: [
     /^\s*Steuerbescheinigung\s*$/im,
     /Steuerbescheinigung\s+Bank/i,
+    // Erträgnisaufstellung (Volksbank/Raiffeisen u.a.) ist eine
+    // Steuerbescheinigung im Tabellen-Format — gleiche KAP-Felder, andere
+    // Überschrift. Mit Kapitalerträge-Kontext, um Fehlklassifikation zu meiden.
+    /Erträgnisaufstellung[\s\S]{0,120}Kapitalerträge/i,
   ],
   felder: [
     { pdfLabel: 'Höhe der Kapitalerträge', pdfLabelAliases: ['Kapitalerträge'],

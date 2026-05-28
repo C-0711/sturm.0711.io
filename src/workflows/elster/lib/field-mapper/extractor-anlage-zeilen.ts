@@ -69,11 +69,23 @@ export interface AnlageZeileHit {
 }
 
 /**
- * Scannt rawText nach "Zeile <N> Anlage <X>"-Referenzen und dem Betrag
- * auf derselben Zeile. Reihenfolge der Tokens variiert je Bank:
- *   "... Zeile 7 Anlage KAP    11,25"   (Ref vor Wert)
- *   "Anlage KAP Zeile 7 ...    11,25"   (Anlage vor Zeile)
+ * Scannt rawText nach "Zeile <N> Anlage <X>"-Referenzen und dem Betrag.
+ * Reihenfolge der Tokens variiert je Bank:
+ *   "... Zeile 7 Anlage KAP    11,25"   (Ref vor Wert, gleiche Zeile)
+ *   "Anlage KAP Zeile 7 ...    11,25"   (Anlage vor Zeile, gleiche Zeile)
  * Beide Formen werden erkannt.
+ *
+ * OCR-Layout-Fallback: In gescannten Belegen steht der Betrag oft NICHT auf
+ * der Ref-Zeile, sondern 1–3 Zeilen DARÜBER (der Wert lebt in der rechten
+ * EUR/CT-Spalte auf Höhe des Labels, die "Zeile N Anlage KAP"-Annotation
+ * ist eine eigene Zeile darunter):
+ *     Höhe der Kapitalerträge
+ *     nach Berücksichtigung ...        11,25   ← Wert (rechte Spalte)
+ *     (ohne Kapitalerträge ...)
+ *                       Zeile 7 Anlage KAP     ← Ref, kein Wert
+ * Wenn die Ref-Zeile keinen Wert trägt, wird der nächste Money-Decimal-Wert
+ * in den bis zu 3 nicht-leeren Zeilen darüber als Betrag genommen (jede
+ * Wert-Zeile nur einmal — `consumed`).
  */
 export function extractByAnlageZeile(rawText: string, person: Person): AnlageZeileHit[] {
   const hits: AnlageZeileHit[] = [];
@@ -84,8 +96,13 @@ export function extractByAnlageZeile(rawText: string, person: Person): AnlageZei
   const refRe = /(?:Zeile\s+(\d{1,3}[a-z]?)\s+Anlage\s+([A-Za-zÄÖÜ_]+))|(?:Anlage\s+([A-Za-zÄÖÜ_]+)\s+Zeile\s+(\d{1,3}[a-z]?))/i;
   // Betrag = letztes Zahl-Token der Zeile (mit optionalem €).
   const valueRe = /(-?\d[\d.]*(?:,\d{1,2})?)\s*€?\s*$/;
+  // Strikterer Money-Decimal (mit Komma-Nachkommastellen) für den
+  // Look-Back — verhindert dass PLZ/Jahr/Kundennr. als Wert gegriffen wird.
+  const moneyRe = /(-?\d[\d.]*,\d{1,2})\s*€?\s*$/;
+  const consumed = new Set<number>();
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const rm = line.match(refRe);
     if (!rm) continue;
     const zeile = rm[1] ?? rm[4];
@@ -96,14 +113,35 @@ export function extractByAnlageZeile(rawText: string, person: Person): AnlageZei
     if (!spec) continue;
     if (seen.has(key)) continue;
 
+    let rawValue: string | null = null;
+    let valueLineIdx = i;
+    // (a) Wert auf der Ref-Zeile selbst.
     const vm = line.match(valueRe);
-    if (!vm) continue;
-    const rawValue = vm[1];
-    // Plausi: der Wert darf nicht die Zeilen-/Anlagen-Nummer selbst sein.
+    if (vm && vm[1] !== zeile) {
+      rawValue = vm[1];
+    } else {
+      // (b) OCR-Fallback: Money-Decimal in bis zu 3 nicht-leeren Zeilen darüber.
+      // STOP an einer anderen "Anlage KAP"-Ref-Zeile — sonst greift der
+      // Look-Back über die Feld-Grenze in den Wert des Nachbar-Felds (z.B.
+      // Sparkasse-Layout: Werte UNTER der Ref → die KapSt-Ref würde sonst
+      // den Kapitalerträge-Betrag des Feldes darüber greifen).
+      let tested = 0;
+      for (let idx = i - 1; idx >= 0 && tested < 3; idx--) {
+        if (lines[idx].trim() === '') continue; // Leerzeilen überspringen (zählen nicht)
+        if (/Anlage\s+[A-ZÄÖÜ]{2,}/i.test(lines[idx])) break; // Feld-Grenze erreicht
+        tested++;
+        if (consumed.has(idx)) continue;
+        const bm = lines[idx].match(moneyRe);
+        if (bm) { rawValue = bm[1]; valueLineIdx = idx; break; }
+      }
+    }
+    if (rawValue === null) continue;
     if (rawValue === zeile) continue;
 
     seen.add(key);
+    consumed.add(valueLineIdx);
     const norm = normalize(rawValue, spec.valueType);
+    const dist = i - valueLineIdx;
     hits.push({
       ref: key,
       field: {
@@ -116,13 +154,76 @@ export function extractByAnlageZeile(rawText: string, person: Person): AnlageZei
         pdfLabel: spec.label,
         valueType: spec.valueType,
         method: 'schema',
-        confidence: 0.9,
+        confidence: dist === 0 ? 0.9 : 0.8, // Look-Back-Wert minimal unsicherer
         warnings: [
-          `Anlage-Zeile-Anker: ${key} → ${spec.eCode}`,
+          `Anlage-Zeile-Anker: ${key} → ${spec.eCode}` +
+            (dist > 0 ? ` (Wert ${dist} Zeile(n) über Ref — OCR-Spaltenlayout)` : ''),
           ...(norm.warnings ?? []),
         ],
       },
     });
   }
   return hits;
+}
+
+/**
+ * Erträgnisaufstellung-Summe-Extraktor — für Bank-Belege OHNE inline
+ * "Zeile N Anlage KAP"-Referenzen, dafür mit einer Summen-Zeile in einer
+ * Tabelle. Volksbank/Raiffeisen-Format (Stricker 2024, Maria, Volksbank
+ * Gebhardshain):
+ *     Summe zur vorstehenden Tabelle ...   Anlage KAP
+ *     Höhe der Kapitalerträge (z. B. Zinsen, Dividenden, Investmenterträge)
+ *     319,35   7                                ← Wert + Zeilen-Nr-Spalte
+ *
+ * Greift NUR die Summen-Zeile (Anker = "Höhe der Kapitalerträge"-Phrase, die
+ * im Tabellen-Kopf nicht vollständig vorkommt), NICHT die Einzelzeilen → kein
+ * Doppelzählen. Der Wert darf auf der Label-Zeile oder bis zu 2 nicht-leere
+ * Zeilen darunter stehen; der Money-Decimal wird auch dann erkannt, wenn ein
+ * bloßer Zeilen-Nr-Integer (z. B. "7") dahinter steht.
+ *
+ * Läuft als Fallback NUR wenn der Zeile-Anker kein E1900701 fand (Caller-
+ * Verantwortung), damit es sich mit dem Standard-Pfad nicht überlagert.
+ */
+export function extractKapErtraegnisSumme(rawText: string, person: Person): AnlageZeileHit[] {
+  const lines = rawText.split(/\r?\n/);
+  const moneyAnywhere = /(-?\d[\d.]*,\d{1,2})/; // Money-Decimal irgendwo in der Zeile
+  const spec = ANLAGE_ZEILE_TO_FIELD['KAP:7']; // Höhe der Kapitalerträge → E1900701
+  const labelRe = /H[öo]he\s+der\s+Kapitalertr[äa]ge/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!labelRe.test(lines[i])) continue;
+    // Wert: erst auf der Label-Zeile, sonst in den nächsten 2 nicht-leeren Zeilen.
+    let raw: string | null = null;
+    const sm = lines[i].match(moneyAnywhere);
+    if (sm) {
+      raw = sm[1];
+    } else {
+      let tested = 0;
+      for (let j = i + 1; j < lines.length && tested < 2; j++) {
+        if (lines[j].trim() === '') continue;
+        tested++;
+        const m = lines[j].match(moneyAnywhere);
+        if (m) { raw = m[1]; break; }
+      }
+    }
+    if (!raw) continue;
+    const norm = normalize(raw, spec.valueType);
+    return [{
+      ref: 'KAP:7(Summe)',
+      field: {
+        eCode: spec.eCode,
+        anlage: spec.anlage,
+        kontextSubpath: spec.kontextSubpath,
+        wert: norm.wert,
+        rawValue: raw,
+        person,
+        pdfLabel: 'Höhe der Kapitalerträge (Erträgnis-Summe)',
+        valueType: spec.valueType,
+        method: 'schema',
+        confidence: 0.8,
+        warnings: [`Erträgnisaufstellung-Summe → ${spec.eCode}`, ...(norm.warnings ?? [])],
+      },
+    }];
+  }
+  return [];
 }
