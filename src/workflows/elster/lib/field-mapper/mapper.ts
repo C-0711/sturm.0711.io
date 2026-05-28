@@ -14,6 +14,7 @@ import { extractLabelValues, getAll, normalizeLabel } from './extractor.ts';
 import { extractKrvBeitragsdatenBlocks } from './extractor-krv-blocks.ts';
 import type { KrvBlock } from './extractor-krv-blocks.ts';
 import { extractLstbByZeilennummer } from './extractor-lstb-zeilen.ts';
+import { extractByAnlageZeile } from './extractor-anlage-zeilen.ts';
 import { normalize } from './normalizer.ts';
 import { getSchema, ALL_SCHEMAS } from './schemas.ts';
 import type {
@@ -361,6 +362,30 @@ export function mapBeleg(input: BelegInput): MappingResult {
       out.push(hit.field);
       alreadyEmitted.add(hit.field.eCode);
       warnings.push(`LStB-Nr-Anker rettete ${hit.field.eCode} (Zeile ${hit.zeile}) — Label-Match hatte verpasst`);
+    }
+  }
+
+  // ─── Anlage-Zeile-Anker (Bank-Steuerbescheinigung) ───────────────────
+  // Bank-Steuerbescheinigungen drucken die Ziel-Anlage-KAP-Zeile direkt
+  // ("Zeile 7 Anlage KAP   11,25"). Amtliche Muster-Pflicht (§ 45a EStG)
+  // → die Zeilen-Referenz ist ZUVERLÄSSIGER als das Label-Matching, weil
+  // bei diesem Layout das Label oft mehrere Zeilen über dem Wert steht und
+  // der generische Extractor den falschen Nachbarn greift (z.B. den
+  // Konfessions-Namen als KiSt-"Wert"). Daher: Anker ÜBERSCHREIBT
+  // Label-Matches für die E-Codes die er findet.
+  if (belegTyp === 'Steuerbescheinigung_Bank') {
+    const zeileHits = extractByAnlageZeile(rawText, person);
+    for (const hit of zeileHits) {
+      const idx = out.findIndex((f) => f.eCode === hit.field.eCode);
+      if (idx >= 0) {
+        if (out[idx].wert !== hit.field.wert) {
+          warnings.push(`Anlage-Zeile-Anker korrigierte ${hit.field.eCode} (${hit.ref}): "${out[idx].wert}" → "${hit.field.wert}"`);
+        }
+        out[idx] = hit.field; // amtliche Zeilen-Referenz gewinnt
+      } else {
+        out.push(hit.field);
+        warnings.push(`Anlage-Zeile-Anker rettete ${hit.field.eCode} (${hit.ref}) — Label-Match hatte verpasst`);
+      }
     }
   }
 
