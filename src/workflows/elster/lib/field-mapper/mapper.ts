@@ -371,13 +371,23 @@ export function mapBeleg(input: BelegInput): MappingResult {
   // für VaSt_LStB. Label-Match (confidence 1.0) gewinnt bei Konflikt —
   // wir fügen nur E-Codes hinzu die noch nicht in out[] stehen.
   if (belegTyp === 'VaSt_LStB') {
-    const alreadyEmitted = new Set(out.map((f) => f.eCode));
+    // „Sauberer Betrag": nur Ziffern/Trennzeichen, KEINE Buchstaben. Der
+    // Anker emittiert ausschließlich Betragsfelder — trägt ein Label-Match
+    // dort einen nicht-numerischen Wert (mehrdeutiges Label traf die falsche
+    // Zeile, z.B. „Einbehaltene Kirchensteuer … von 9. und 10." → Wert
+    // „von 9. und 10."), ist der stabile Nummern-Anker verlässlicher.
+    const isCleanAmount = (s: string): boolean => /\d/.test(s) && !/[A-Za-zÄÖÜäöü]/.test(s);
     const zeilenHits = extractLstbByZeilennummer(rawText, person);
     for (const hit of zeilenHits) {
-      if (alreadyEmitted.has(hit.field.eCode)) continue;
-      out.push(hit.field);
-      alreadyEmitted.add(hit.field.eCode);
-      warnings.push(`LStB-Nr-Anker rettete ${hit.field.eCode} (Zeile ${hit.zeile}) — Label-Match hatte verpasst`);
+      const idx = out.findIndex((f) => f.eCode === hit.field.eCode);
+      if (idx < 0) {
+        out.push(hit.field);
+        warnings.push(`LStB-Nr-Anker rettete ${hit.field.eCode} (Zeile ${hit.zeile}) — Label-Match hatte verpasst`);
+      } else if (!isCleanAmount(out[idx].wert) && isCleanAmount(hit.field.wert)) {
+        warnings.push(`LStB-Nr-Anker korrigierte ${hit.field.eCode} (Zeile ${hit.zeile}): "${out[idx].wert}" → "${hit.field.wert}" (Label-Wert nicht numerisch)`);
+        out[idx] = hit.field;
+      }
+      // sonst: numerischer Label-Match gewinnt (unverändert)
     }
   }
 

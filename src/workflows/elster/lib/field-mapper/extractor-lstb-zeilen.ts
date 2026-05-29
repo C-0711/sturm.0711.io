@@ -101,22 +101,33 @@ const CURRENCY_RE = /\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2}/;
  *  „EUR | Ct"-Spalten; paddleocr liest den Betrag oft OHNE Dezimalkomma —
  *  „24.432,98" → „24.43298", „365,19" → „36519", „2.272,27" → „2.27227".
  *  Die letzten 2 Ziffern sind IMMER Cent (Spalten-Semantik). Kandidaten:
- *  Tausenderpunkt-gruppiert + 2 Endziffern, ODER reine ≥3-Ziffern-Läufe.
- *  Wir nehmen den LETZTEN (= rechte Wertspalte). */
-const DROPOUT_RE = /\d{1,3}(?:\.\d{3})+\d{2}(?!\d)|\d{3,}(?!\d)/g;
+ *  Tausenderpunkt-gruppiert + 2 Endziffern, ODER reiner Ziffernlauf (3–9).
+ *  WORTGRENZEN-isoliert (`(?<![\w.,])…(?![\w.,])`): schließt in alphanumerische
+ *  Scan-/Barcode-IDs eingebettete Ziffern aus („0B302F12404440009761" → kein
+ *  „302"), Längen-Cap 9 schließt lange IDs aus (14-stellige KmID). */
+const DROPOUT_RE = /(?<![\w.,])(?:\d{1,3}(?:\.\d{3})+\d{2}|\d{3,9})(?![\w.,])/g;
 
 /**
  * Erste Währungszahl in einem Block — toleriert den OCR-Komma-Dropout.
  * Liefert kanonisch „<euro>,<ct>" (ohne Tausenderpunkte), was normalize()
  * frisst. Komma-Form gewinnt; nur wenn keine existiert, greift die
- * Dropout-Reparatur (letzter Geld-Token, letzte 2 Ziffern = Cent).
- */
+ * Dropout-Reparatur.
+ *
+ * Wert = ERSTER Geld-Token (nicht letzter): im 2-spaltigen Foto-Layout
+ * verschränkt die OCR linke-Spalten-Zahlen (PLZ, Steuernummer) HINTER den
+ * echten Wert in denselben Block — „… Krankenversicherung 1.93024 49356
+ * Diepholz 45/231/06001". Der erste Token nach dem Label ist der Wert; der
+ * Rest ist Adress-/Steuernummer-Müll. Tausenderpunkt-Token werden bevorzugt
+ * (echte Beträge), reine Ziffernläufe (PLZ) nur als Fallback. */
 function firstCurrency(s: string): string | undefined {
   const m = s.match(CURRENCY_RE);
   if (m) return m[0];
   const cand = s.match(DROPOUT_RE);
   if (!cand) return undefined;
-  const digits = cand[cand.length - 1].replace(/\./g, '');
+  // Tausenderpunkt-Token (eindeutig Betrag) vor reinen Ziffernläufen (PLZ/StNr).
+  const dotted = cand.find((t) => t.includes('.'));
+  const pick = dotted ?? cand[0];
+  const digits = pick.replace(/\./g, '');
   if (digits.length < 3) return undefined; // mind. 1 Euro-Ziffer + 2 Cent
   return digits.slice(0, -2) + ',' + digits.slice(-2);
 }

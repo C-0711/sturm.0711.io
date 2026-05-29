@@ -124,7 +124,7 @@ Ausdruck der elektronischen Lohnsteuerbescheinigung für 2024
 4.05896
 5.Einbehaltener Solidaritätszuschlag von 3
 6.Einbehaltene Kirchensteuer des Arbeitnehmers
-von 3.   36519
+0B302F12404440009761   von 3.   36519
 7. Einbehaltene Kirchensteuer des Ehegatten
 8.In 3.enthaltene Versorgungsbezüge
 9.Ermäßigt besteuerte Versorgungsbezüge
