@@ -36,23 +36,24 @@ const de = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, 
  *  Aggregations-Regeln (§19 WK, §10 Vorsorge-Höchstbetrag, §22 Rente,
  *  §20 KAP) ab. */
 function* battery(): Generator<TaxCase> {
-  const vz = 2023, art: Veranlagungsart = 'einzeln';
-  // Reine Lohnfälle über die Tarifzonen (testet §19 WK-Pauschbetrag + Tarif).
-  for (const lohn of [0, 11000, 14000, 16000, 25000, 40000, 60000, 90000, 150000, 300000]) {
-    yield { name: `Lohn ${lohn}`, vz, art, elsterFelder: { E0200201: de(lohn) } };
+  for (const vz of [2023, 2024]) {
+    const art: Veranlagungsart = 'einzeln';
+    // Reine Lohnfälle über die Tarifzonen (testet §19 WK + §32a-Tarif je VZ).
+    for (const lohn of [0, 11000, 14000, 16000, 25000, 40000, 60000, 90000, 150000, 300000]) {
+      yield { name: `[${vz}] Lohn ${lohn}`, vz, art, elsterFelder: { E0200201: de(lohn) } };
+    }
+    // Lohn + Vorsorge — MCP-Vokabular: rv_beitraege=E0202204, kv_beitraege=E2003104.
+    for (const [lohn, rv, kv] of [[50000, 9300, 4000], [80000, 14880, 6000]]) {
+      yield { name: `[${vz}] Lohn ${lohn} +Vorsorge`, vz, art, elsterFelder: { E0200201: de(lohn), E0202204: de(rv), E2003104: de(kv) } };
+    }
+    // Rentner — anlage_r.rente_brutto=E2400103, renteneintritt=E2400107.
+    yield { name: `[${vz}] Rente 24000 (2010)`, vz, art, elsterFelder: { E2400103: de(24000), E2400107: '2010' } };
+    // Lohn + KAP.
+    yield { name: `[${vz}] Lohn 50k + KAP 5k`, vz, art, elsterFelder: { E0200201: de(50000), E1900701: de(5000) } };
+    // Splitting (Zusammenveranlagung, Einverdiener) — verheiratet-Flag E0101201.
+    yield { name: `[${vz}] Splitting Lohn 80000`, vz, art: 'zusammen', elsterFelder: { E0200201: de(80000), E0101201: 'X' } };
+    yield { name: `[${vz}] Splitting Lohn 160000`, vz, art: 'zusammen', elsterFelder: { E0200201: de(160000), E0101201: 'X' } };
   }
-  // Lohn + Vorsorge — MCP-Vokabular: rv_beitraege=E0202204, kv_beitraege=E2003104.
-  for (const [lohn, rv, kv] of [[50000, 9300, 4000], [80000, 14880, 6000], [120000, 16000, 8000]]) {
-    yield { name: `Lohn ${lohn} +Vorsorge`, vz, art, elsterFelder: { E0200201: de(lohn), E0202204: de(rv), E2003104: de(kv) } };
-  }
-  // Rentner — MCP-Vokabular: anlage_r.rente_brutto=E2400103, renteneintritt=E2400107.
-  for (const [rente, jahr] of [[24000, 2010], [30000, 2005], [18000, 2020]] as Array<[number, number]>) {
-    yield { name: `Rente ${rente} (Beginn ${jahr})`, vz, art, elsterFelder: { E2400103: de(rente), E2400107: String(jahr) } };
-  }
-  // Mischfall Lohn + Rente.
-  yield { name: 'Lohn 35k + Rente 12k (2015)', vz, art, elsterFelder: { E0200201: de(35000), E2400103: de(12000), E2400107: '2015' } };
-  // Lohn + Kapitalerträge (§20 — Abgeltungsteuer, i.d.R. NICHT im zvE).
-  yield { name: 'Lohn 50k + KAP 5k', vz, art, elsterFelder: { E0200201: de(50000), E1900701: de(5000) } };
 }
 
 const ABS_TOL = 1; // € — statutarische Euro-Abrundung

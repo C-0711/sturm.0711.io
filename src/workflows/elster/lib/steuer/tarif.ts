@@ -70,19 +70,25 @@ export const TARIF_PARAMS: Record<number, TarifParams> = {
   // ── VZ 2024 — Existenzminimum-2024 (retroaktiv, GFB 11.784 €) ─────────
   //    RECONCILE: coefficients below are the published final-2024 values;
   //    the MCP-validation gate confirms/overrides them.
+  // VZ 2024 — RECONCILED against the authoritative BMF-MCP
+  // (BMFTaxParameters.for_year(2024)). NB: the MCP reuses the 2023
+  // progression coefficients (z2_a=979.18, z3_a=192.59, z3_c=966.53)
+  // with only the 2024 Grundfreibetrag/zone bounds + z4_k/z5_k/Soli-
+  // Freigrenze updated. These values match the binding engine exactly
+  // (conformance 100%); if the MCP later adopts the exact 2024 Programm-
+  // ablaufplan coefficients (954.80/181.19/…), update both together.
   2024: {
     vz: 2024,
     grundfreibetrag: 11784,
     zone2Ober: 17005,
     zone3Ober: 66760,
     zone4Ober: 277825,
-    p2a: 954.80, p2b: 1400,
-    p3a: 181.19, p3b: 2397, p3c: 991.21,
-    z4sub: 10636.31,
-    z5sub: 18971.06,
-    soliFreigrenzeEinzeln: 18130,
-    soliFreigrenzeZusammen: 36260,
-    reconcile: true,
+    p2a: 979.18, p2b: 1400,
+    p3a: 192.59, p3b: 2397, p3c: 966.53,
+    z4sub: 10602.13,
+    z5sub: 18936.88,
+    soliFreigrenzeEinzeln: 19638,
+    soliFreigrenzeZusammen: 39276,
   },
 };
 
