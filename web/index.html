@@ -1,7 +1,6 @@
-<!doctype html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="de"><head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>STURM · Steuer-Engine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -9,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#0c0e12; --ink2:#13161c; --panel:#161a21; --line:#ffffff14; --line2:#ffffff26;
+    --ink:#0c0e12; --ink2:#161a21; --line:#ffffff14; --line2:#ffffff26;
     --txt:#ece9e2; --mut:#9a968c; --dim:#6b6a64;
     --amber:#f0b429; --amber-d:#b8841a; --green:#62d18c; --red:#f0686a; --blue:#7db4e6;
     --mono:'IBM Plex Mono',ui-monospace,monospace; --disp:'Fraunces',Georgia,serif;
@@ -26,18 +25,15 @@
   }
   body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;z-index:99;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+  /* ── LANDING ── */
   .wrap{max-width:1080px;margin:0 auto;padding:42px 26px 90px}
-  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:22px}
+  header.lh{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:22px}
   .mark{font-family:var(--disp);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1}
   .mark b{color:var(--amber)}
-  .sub{font-family:var(--disp);font-style:italic;font-weight:500;color:var(--mut);font-size:18px}
-  .tag{margin-left:auto;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+  .lsub{font-family:var(--disp);font-style:italic;font-weight:500;color:var(--mut);font-size:18px}
+  .ltag{margin-left:auto;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
        border:1px solid var(--line);border-radius:999px;padding:6px 12px}
-  h2{font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.22em;text-transform:uppercase;
-     color:var(--amber);margin:0 0 14px;display:flex;align-items:center;gap:10px}
-  h2 .ix{font-size:11px;color:var(--dim);font-family:var(--mono)}
-
-  /* ---- intake ---- */
   .intake{margin-top:30px}
   .drop{border:1.5px dashed var(--line2);border-radius:16px;padding:48px 28px;text-align:center;
         transition:.25s cubic-bezier(.2,.7,.2,1);background:linear-gradient(180deg,#ffffff05,transparent);cursor:pointer;position:relative}
@@ -51,87 +47,189 @@
   .btn{background:var(--amber);color:#1a1205;border:none;border-radius:9px;padding:10px 20px;font-family:var(--mono);font-weight:600;font-size:13px;cursor:pointer;transition:.2s}
   .btn:hover{filter:brightness(1.07)}.btn:disabled{opacity:.4;cursor:not-allowed}
   .files{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-  .chip{background:var(--ink2);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11.5px;color:var(--mut)}
-  .chip b{color:var(--txt);font-weight:500}
-
-  /* ---- stepper ---- */
+  .chip0{background:var(--ink2);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11.5px;color:var(--mut)}
+  .chip0 b{color:var(--txt);font-weight:500}
   .stepper{display:flex;gap:6px;margin:30px 0 6px;align-items:center;justify-content:space-between}
   .step{flex:1;text-align:center;position:relative}
-  .step .dot{width:12px;height:12px;border-radius:50%;background:#2a2e37;margin:0 auto 9px;border:2px solid #2a2e37;transition:.3s}
+  .step .sdot{width:12px;height:12px;border-radius:50%;background:#2a2e37;margin:0 auto 9px;border:2px solid #2a2e37;transition:.3s}
   .step .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);transition:.3s}
   .step:not(:last-child)::after{content:"";position:absolute;top:5px;left:calc(50% + 12px);right:calc(-50% + 12px);height:2px;background:#23262e}
-  .step.done .dot{background:var(--amber);border-color:var(--amber)}
+  .step.done .sdot{background:var(--amber);border-color:var(--amber)}
   .step.done .lbl{color:var(--mut)}
-  .step.active .dot{border-color:var(--amber);background:transparent;animation:pulse 1.1s infinite}
+  .step.active .sdot{border-color:var(--amber);background:transparent;animation:pulse 1.1s infinite}
   .step.active .lbl{color:var(--amber)}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #f0b42955}50%{box-shadow:0 0 0 6px #f0b42900}}
-
-  /* ---- results ---- */
-  #results{margin-top:18px;display:none}
-  #results.show{display:block}
-  .reveal{opacity:0;transform:translateY(10px);animation:rise .55s cubic-bezier(.2,.7,.2,1) forwards}
-  @keyframes rise{to{opacity:1;transform:none}}
-  .summary{display:flex;gap:26px;flex-wrap:wrap;padding:18px 20px;border:1px solid var(--line);border-radius:13px;background:var(--ink2);margin-bottom:34px}
-  .stat .n{font-family:var(--disp);font-size:28px;font-weight:600;line-height:1}
-  .stat .k{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-top:5px}
-  .stat .n.am{color:var(--amber)}
-  .block{margin-bottom:40px}
-
-  /* Bescheid cards */
-  .bescheide{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}
-  .bescheid{border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#181c23,#13161c);overflow:hidden}
-  .bescheid .hd{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
-  .bescheid .who{font-family:var(--disp);font-size:18px;font-weight:600}
-  .src{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;border-radius:999px;border:1px solid var(--amber-d);color:var(--amber)}
-  .rows{padding:8px 18px 4px}
-  .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #ffffff0d;font-size:13px}
-  .row .v{font-variant-numeric:tabular-nums}
-  .row.tot{border-bottom:none;color:var(--txt)}.row.tot .l{font-weight:500}
-  .row .l{color:var(--mut)}
-  .saldo{margin:6px 18px 18px;padding:16px;border-radius:11px;text-align:center}
-  .saldo.refund{background:#62d18c12;border:1px solid #62d18c44}
-  .saldo.owe{background:#f0686a10;border:1px solid #f0686a40}
-  .saldo .k{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut)}
-  .saldo .v{font-family:var(--disp);font-size:34px;font-weight:800;line-height:1.1;margin-top:4px}
-  .saldo.refund .v{color:var(--green)} .saldo.owe .v{color:var(--red)}
-  .meta{padding:0 18px 14px;font-size:10.5px;color:var(--dim)}
-
-  /* mapping table */
-  .tbl{width:100%;border-collapse:collapse;font-size:12px}
-  .tbl th{text-align:left;font-weight:500;color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:0 10px 9px;border-bottom:1px solid var(--line)}
-  .tbl td{padding:8px 10px;border-bottom:1px solid #ffffff08;vertical-align:top}
-  .tbl tr:hover td{background:#ffffff05}
-  .ec{color:var(--amber);font-weight:500}
-  .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--txt)}
-  .pchip{display:inline-block;width:18px;text-align:center;border-radius:5px;font-size:10px;font-weight:600;padding:2px 0}
-  .pA{background:#7db4e620;color:var(--blue)} .pB{background:#f0b42920;color:var(--amber)}
-  .mchip{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
-  .mchip.ocr{color:var(--amber)} .anl{color:var(--mut)}
-  .mapwrap{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--ink2)}
-  .mapwrap thead th{position:sticky;top:0;background:var(--ink2);z-index:1}
-
-  /* belege */
-  .belege{display:flex;flex-direction:column;gap:7px}
-  .beleg{display:flex;align-items:center;gap:12px;padding:11px 15px;border:1px solid var(--line);border-radius:10px;background:var(--ink2);font-size:12.5px}
-  .beleg .bt{font-weight:500;flex:1;color:var(--txt)}
-  .beleg .st{color:var(--dim);font-size:11px}
-  .badge{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px;border:1px solid var(--line2);color:var(--mut)}
-  .badge.ocr{border-color:var(--amber-d);color:var(--amber)}
-  .badge.text{border-color:#7db4e644;color:var(--blue)}
-  .fc{font-variant-numeric:tabular-nums;color:var(--mut);min-width:64px;text-align:right}
-  .err{color:var(--red);padding:18px;border:1px solid #f0686a40;border-radius:12px;background:#f0686a10}
-  .muted{color:var(--dim);font-size:11.5px;margin-top:26px;border-top:1px solid var(--line);padding-top:16px}
+  .err{color:var(--red);padding:18px;border:1px solid #f0686a40;border-radius:12px;background:#f0686a10;margin-top:18px}
+  .lmuted{color:var(--dim);font-size:11.5px;margin-top:26px;border-top:1px solid var(--line);padding-top:16px}
   a{color:var(--amber)}
+</style>
+<style id="sturm-db2-style">
+/* ── DASHBOARD TOKENS ── */
+#sdb { --bg:#0c0e12; --bg2:#161a21; --panel:#0f1217; --line:#ffffff14; --line2:#ffffff26; --txt:#ece9e2; --mut:#9a968c; --dim:#6b6a64; --amber:#f0b429; --amber-d:#b8841a; --green:#62d18c; --red:#f0686a; --blue:#7db4e6; --mono:'IBM Plex Mono',ui-monospace,monospace; }
+#sdb.light { --bg:#f5f3ef; --bg2:#ede9e2; --panel:#eae6df; --line:#00000010; --line2:#00000020; --txt:#1a1815; --mut:#6b6660; --dim:#9a9590; --amber:#c48a00; --amber-d:#9a6e00; --green:#1a7a42; --red:#c0333a; --blue:#2666a0; }
+#sdb { display:none; min-height:100vh; color:var(--txt); font-family:var(--mono); font-size:13px;line-height:1.5; -webkit-font-smoothing:antialiased; transition:background .3s,color .3s; }
+#sdb.show { display:block; }
+#sdb:not(.light) { background: radial-gradient(900px 500px at 78% -8%,#1d212b 0%,transparent 60%), radial-gradient(700px 500px at 8% 108%,#181b23 0%,transparent 55%), #0c0e12; }
+#sdb.light { background:#f5f3ef; }
+/* HEADER */
+#sdb .hd { display:flex;align-items:center;justify-content:space-between; padding:18px 40px; border-bottom:1px solid var(--line); position:sticky;top:0;z-index:20; background:rgba(12,14,18,.9); backdrop-filter:blur(14px); transition:background .3s,border-color .3s; }
+#sdb.light .hd { background:rgba(245,243,239,.92); }
+#sdb .hd-l { display:flex;align-items:baseline;gap:14px;flex-wrap:wrap; }
+#sdb .hd-logo { font-family:var(--disp,'Fraunces');font-size:20px;font-weight:800;letter-spacing:-.5px;color:var(--txt); }
+#sdb .hd-logo span { color:var(--amber); }
+#sdb .hd-sep { color:var(--line2); }
+#sdb .hd-sub { font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--dim); }
+#sdb .hd-r { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+#sdb .chip { display:inline-flex;align-items:center;gap:5px; border:1px solid var(--line2);color:var(--mut);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:2px;transition:all .3s; }
+#sdb .chip.ok { border-color:rgba(98,209,140,.25);color:var(--green); }
+#sdb .chip.amber { border-color:rgba(240,180,41,.25);color:var(--amber); }
+#sdb .chip.blue { border-color:rgba(125,180,230,.25);color:var(--blue); }
+#sdb .theme-btn,#sdb .close-btn { display:flex;align-items:center;gap:6px; background:none;border:1px solid var(--line2);color:var(--mut); font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase; padding:5px 12px;border-radius:2px;cursor:pointer;transition:all .2s; }
+#sdb .theme-btn:hover { border-color:var(--amber);color:var(--amber); }
+#sdb .close-btn:hover { border-color:var(--red);color:var(--red); }
+/* BODY */
+#sdb .body { padding:32px 40px;max-width:1280px;margin:0 auto; }
+/* PROCESS */
+#sdb .proc { display:flex;align-items:center;justify-content:center; margin-bottom:36px;padding:20px 0;border-bottom:1px solid var(--line);gap:0;flex-wrap:wrap; }
+#sdb .proc-item { display:flex;align-items:center; }
+#sdb .proc-wrap { display:flex;flex-direction:column;align-items:center; }
+#sdb .proc-dot { display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1px solid var(--dim);color:var(--dim);font-size:9px;transition:all .3s; }
+#sdb .proc-dot.done { border-color:var(--green);color:var(--green);background:rgba(98,209,140,.08); }
+#sdb .proc-line { width:56px;height:1px;background:var(--line); }
+#sdb .proc-line.done { background:rgba(98,209,140,.2); }
+#sdb .proc-label { font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);text-align:center;margin-top:6px;white-space:nowrap; }
+#sdb .proc-label.done { color:var(--green); }
+#sdb .pup-wrap { position:relative;display:inline-flex;align-items:center;flex-shrink:0;margin-left:20px; }
+#sdb .pup-btn { display:inline-flex;align-items:center;gap:5px;border:1px dashed var(--line2);background:transparent;color:var(--dim);font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 10px;border-radius:2px;cursor:pointer;transition:all .2s;white-space:nowrap; }
+#sdb .pup-btn:hover { border-color:var(--amber);color:var(--amber);background:rgba(240,180,41,.04); }
+#sdb .pup-badge { display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:50%;background:var(--amber);color:#1a1205;font-size:8px;font-weight:700;margin-left:3px;padding:0 3px; }
+#sdb .pup-panel { display:none;position:absolute;top:calc(100% + 8px);right:0;width:300px;background:var(--bg2);border:1px solid var(--line2);border-radius:2px;z-index:100;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.4); }
+#sdb .pup-panel.open { display:block; }
+#sdb .pup-drop { border:1px dashed var(--line2);border-radius:2px;padding:14px 12px;text-align:center;cursor:pointer;position:relative;transition:all .2s;margin-bottom:10px; }
+#sdb .pup-drop:hover,#sdb .pup-drop.over { border-color:var(--amber);background:rgba(240,180,41,.03); }
+#sdb .pup-drop input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+#sdb .pup-drop-txt { font-size:10px;color:var(--mut); }
+#sdb .pup-drop-hint { font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-top:2px; }
+#sdb .pup-queue { margin-bottom:10px;max-height:120px;overflow:auto; }
+#sdb .pup-pill { display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--panel);border:1px solid var(--line);border-radius:2px;margin-bottom:3px;gap:8px; }
+#sdb .pup-pill-name { font-size:10px;color:var(--txt);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+#sdb .pup-pill-size { font-size:9px;color:var(--dim);white-space:nowrap; }
+#sdb .pup-actions { display:flex;align-items:center;gap:8px; }
+#sdb .pup-vz { background:var(--panel);border:1px solid var(--line2);color:var(--txt);font-family:var(--mono);font-size:10px;padding:5px 8px;border-radius:2px;outline:none;cursor:pointer; }
+#sdb .pup-run { flex:1;background:var(--amber);color:#1a1205;border:none;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:7px 12px;border-radius:2px;cursor:pointer;transition:background .15s; }
+#sdb .pup-run:hover { background:var(--amber-d); }
+#sdb .pup-run:disabled { background:var(--line);color:var(--dim);cursor:default; }
+#sdb .pup-status { font-size:9px;color:var(--green);letter-spacing:.5px;white-space:nowrap; }
+/* KPI */
+#sdb .kpi-row { display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:1px; }
+#sdb .kpi { background:var(--bg);padding:20px 20px 18px;position:relative; }
+#sdb .kpi::after { content:'';position:absolute;bottom:0;left:20px;right:20px;height:2px;background:var(--ka,var(--line)); }
+#sdb .kpi-val { font-family:'Fraunces',Georgia,serif;font-size:22px;font-weight:600;color:var(--txt);line-height:1;margin-bottom:6px;font-variant-numeric:tabular-nums; }
+#sdb .kpi-val.amber { color:var(--amber); } #sdb .kpi-val.red { color:var(--red); } #sdb .kpi-val.green { color:var(--green); }
+#sdb .kpi-label { font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim); }
+#sdb .kpi-sub { font-size:10px;color:var(--dim);margin-top:3px; }
+/* HERO */
+#sdb .hero { background:var(--bg2);border:1px solid var(--line);padding:24px 36px;margin-bottom:1px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap; }
+#sdb .hero-label { font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--amber);margin-bottom:4px; }
+#sdb .hero-title { font-family:'Fraunces',Georgia,serif;font-size:15px;color:var(--txt);margin-bottom:2px; }
+#sdb .hero-desc { font-size:10px;color:var(--dim);letter-spacing:.5px;max-width:560px; }
+#sdb .hero-amt { font-family:'Fraunces',Georgia,serif;font-size:48px;font-weight:600;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums;text-align:right; }
+#sdb .hero-amt.owe { color:var(--red); } #sdb .hero-amt.refund { color:var(--green); }
+#sdb .hero-amt-sub { font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);text-align:right;margin-top:6px; }
+/* GRID */
+#sdb .g3 { display:grid;grid-template-columns:3fr 2fr;gap:1px;background:var(--line);margin-bottom:1px; }
+#sdb .g2 { display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);margin-bottom:1px; }
+@media(max-width:880px){ #sdb .g3,#sdb .g2,#sdb .kpi-row{grid-template-columns:1fr} }
+/* CARD */
+#sdb .card { background:var(--bg); }
+#sdb .card-head { display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;transition:background .2s; }
+#sdb .card-head:hover { background:rgba(255,255,255,.015); }
+#sdb.light .card-head:hover { background:rgba(0,0,0,.02); }
+#sdb .card-title { font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:8px; }
+#sdb .ctdot { width:5px;height:5px;border-radius:50%;background:var(--dot-c,var(--dim)); }
+#sdb .chev { color:var(--dim);font-size:10px;transition:transform .2s; }
+#sdb .chev.open { transform:rotate(180deg); }
+#sdb .card-body { padding:24px; }
+#sdb .card-body.collapsed { display:none; }
+#sdb .slabel { font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--line);margin-top:4px; }
+/* CALC ROWS */
+#sdb .cr { display:flex;align-items:flex-start;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);gap:16px; }
+#sdb.light .cr { border-bottom-color:rgba(0,0,0,.05); }
+#sdb .cr:last-child { border-bottom:none; }
+#sdb .cr-lbl { color:var(--mut);font-size:12px; }
+#sdb .cr-lbl strong { color:var(--txt);font-weight:400; }
+#sdb .cr-code { font-size:9px;color:var(--dim);margin-top:2px;letter-spacing:.5px; }
+#sdb .cr-val { font-size:13px;font-weight:600;color:var(--txt);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums; }
+#sdb .cr-val.amber { color:var(--amber); } #sdb .cr-val.green { color:var(--green); } #sdb .cr-val.dim,#sdb .cr-val.zero { color:var(--dim); }
+#sdb .cr.total { background:rgba(240,180,41,.05);margin:8px -24px;padding:12px 24px;border-top:1px solid rgba(240,180,41,.15);border-bottom:1px solid rgba(240,180,41,.15); }
+#sdb .cr.total .cr-lbl strong { color:var(--amber);font-size:13px; } #sdb .cr.total .cr-val { color:var(--amber);font-size:15px; }
+#sdb .cr.result { background:rgba(240,180,41,.08);margin:10px -24px -24px;padding:16px 24px;border-top:1px solid rgba(240,180,41,.2); }
+#sdb .cr.result .cr-lbl strong { color:var(--amber);font-size:14px; } #sdb .cr.result .cr-val { color:var(--amber);font-size:17px; }
+/* BAR */
+#sdb .br { margin:8px 0; }
+#sdb .br-meta { display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-bottom:4px; }
+#sdb .br-track { height:2px;background:var(--line);border-radius:1px;overflow:hidden; }
+#sdb .br-fill { height:100%;border-radius:1px; }
+#sdb hr.dv { border:none;border-top:1px solid var(--line);margin:16px 0; }
+/* INFO ROWS */
+#sdb .ir { display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);gap:12px; }
+#sdb.light .ir { border-bottom-color:rgba(0,0,0,.05); }
+#sdb .ir:last-child { border-bottom:none; }
+#sdb .ir-k { font-size:10px;color:var(--dim); }
+#sdb .ir-v { font-size:11px;color:var(--txt);text-align:right;font-variant-numeric:tabular-nums; }
+#sdb .tag { display:inline-block;border:1px solid var(--line2);color:var(--mut);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:1px; }
+#sdb .tag.amber { border-color:rgba(240,180,41,.25);color:var(--amber); } #sdb .tag.green { border-color:rgba(98,209,140,.25);color:var(--green); }
+/* PERSON TABS */
+#sdb .ptabs { display:flex;margin-bottom:20px;border-bottom:1px solid var(--line); }
+#sdb .ptab { flex:1;padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-align:center;margin-bottom:-1px; }
+#sdb .ptab-name { font-size:12px;color:var(--mut);transition:color .15s; }
+#sdb .ptab:hover .ptab-name { color:var(--txt); }
+#sdb .ptab.active { border-bottom-color:var(--amber); }
+#sdb .ptab.active .ptab-name { color:var(--txt); }
+#sdb .ptab-role { font-size:9px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px; }
+#sdb .ptab.active .ptab-role { color:rgba(240,180,41,.6); }
+#sdb .pc { display:none; } #sdb .pc.active { display:block; }
+/* BELEGE */
+#sdb .bel-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line); }
+@media(max-width:880px){ #sdb .bel-grid{grid-template-columns:1fr 1fr} }
+#sdb .bel-item { background:var(--bg);padding:14px 16px; }
+#sdb .bel-item:hover { background:var(--bg2); }
+#sdb .bel-type { display:inline-block;font-size:8px;letter-spacing:2px;text-transform:uppercase;border:1px solid;padding:2px 6px;border-radius:1px;margin-bottom:8px; }
+#sdb .bel-type.ocr { border-color:rgba(125,180,230,.25);color:var(--blue); }
+#sdb .bel-type.text { border-color:rgba(98,209,140,.25);color:var(--green); }
+#sdb .bel-name { font-size:11px;color:var(--txt);margin-bottom:3px; }
+#sdb .bel-src { font-size:9px;color:var(--dim); }
+/* ELSTER TABLE */
+#sdb .et { width:100%;border-collapse:collapse;font-size:11px; }
+#sdb .et th { text-align:left;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);padding:8px 10px;border-bottom:1px solid var(--line);font-weight:400; }
+#sdb .et td { padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--mut);vertical-align:middle; }
+#sdb.light .et td { border-bottom-color:rgba(0,0,0,.05); }
+#sdb .et tr:last-child td { border-bottom:none; }
+#sdb .et tr:hover td { background:rgba(255,255,255,.015); }
+#sdb .et td:first-child { font-size:10px;color:var(--blue); }
+#sdb .et td.num { color:var(--txt);text-align:right;font-variant-numeric:tabular-nums; }
+#sdb .etag { display:inline-block;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;border:1px solid rgba(255,255,255,.06);color:var(--dim);padding:1px 5px;border-radius:1px; }
+#sdb .etag.kap { border-color:rgba(125,180,230,.2);color:var(--blue); }
+#sdb .etag.n,#sdb .etag.est1a { border-color:rgba(98,209,140,.2);color:var(--green); }
+#sdb .etag.vor { border-color:rgba(240,180,41,.2);color:var(--amber); }
+#sdb .etag.a { border-color:rgba(236,233,226,.15);color:var(--txt); } #sdb .etag.b { border-color:var(--line2);color:var(--mut); }
+#sdb .etag.ocr { border-color:rgba(125,180,230,.2);color:var(--blue); } #sdb .etag.text { border-color:rgba(98,209,140,.2);color:var(--green); }
+#sdb .warn { margin-top:1px;background:var(--bg);border:1px solid var(--line);padding:14px 24px;font-size:10px;color:var(--dim); }
+#sdb .warn b{color:var(--amber);font-weight:400}
+#sdb .footer { margin-top:40px;padding:20px 0;border-top:1px solid var(--line);font-size:9px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;text-align:center; }
+#sdb ::-webkit-scrollbar { width:4px;height:4px; }
+#sdb ::-webkit-scrollbar-thumb { background:var(--line2);border-radius:2px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="mark">ST<b>U</b>RM</div>
-    <div class="sub">Steuer-Engine</div>
-    <div class="tag">Beleg rein · Bescheid raus</div>
-  </header>
 
+<!-- ══ LANDING ══ -->
+<div class="wrap" id="landing">
+  <header class="lh">
+    <div class="mark">ST<b>U</b>RM</div>
+    <div class="lsub">Steuer-Engine</div>
+    <div class="ltag">Beleg rein · Bescheid raus</div>
+  </header>
   <section class="intake">
     <div class="drop" id="drop">
       <div class="seal">▦</div>
@@ -147,45 +245,49 @@
       <span id="status"></span>
     </div>
     <div class="files" id="files"></div>
+    <div id="landing-err"></div>
   </section>
-
   <div class="stepper" id="stepper">
-    <div class="step" data-s="upload"><div class="dot"></div><div class="lbl">Upload</div></div>
-    <div class="step" data-s="ocr"><div class="dot"></div><div class="lbl">OCR / Text</div></div>
-    <div class="step" data-s="extract"><div class="dot"></div><div class="lbl">Extraktion</div></div>
-    <div class="step" data-s="map"><div class="dot"></div><div class="lbl">ELSTER-Mapping</div></div>
-    <div class="step" data-s="calc"><div class="dot"></div><div class="lbl">Berechnung</div></div>
+    <div class="step" data-s="upload"><div class="sdot"></div><div class="lbl">Upload</div></div>
+    <div class="step" data-s="ocr"><div class="sdot"></div><div class="lbl">OCR / Text</div></div>
+    <div class="step" data-s="extract"><div class="sdot"></div><div class="lbl">Extraktion</div></div>
+    <div class="step" data-s="map"><div class="sdot"></div><div class="lbl">ELSTER-Mapping</div></div>
+    <div class="step" data-s="calc"><div class="sdot"></div><div class="lbl">Berechnung</div></div>
   </div>
-
-  <main id="results"></main>
-
-  <div class="muted">Deterministische Extraktion + ELSTER-Mapping (sturm) · Fallnormalizer erkennt Veranlagungsart (Einzel-/Zusammenveranlagung) · verbindliche Berechnung BMF-MCP, Splitting §32a Abs. 5.</div>
+  <div class="lmuted">Deterministische Extraktion + ELSTER-Mapping (sturm) · Fallnormalizer erkennt Veranlagungsart · verbindliche Berechnung BMF-MCP, Splitting §32a Abs. 5.</div>
 </div>
 
+<!-- ══ DASHBOARD (data-driven) ══ -->
+<div id="sdb"></div>
+
 <script>
-const $ = (s)=>document.querySelector(s);
-const drop=$('#drop'), fileInput=$('#file'), go=$('#go'), statusEl=$('#status'), filesEl=$('#files'), results=$('#results');
-let picked=[]; // File[]
-const fmt=(n)=>Number(n).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
-const step=(s,state)=>{const el=document.querySelector('.step[data-s="'+s+'"]');if(!el)return;el.classList.remove('active','done');if(state)el.classList.add(state);};
+const $=(s,r=document)=>r.querySelector(s);
+const drop=$('#drop'), fileInput=$('#file'), go=$('#go'), statusEl=$('#status'), filesEl=$('#files'),
+      landing=$('#landing'), sdb=$('#sdb');
+let picked=[];
+let lastData=null;
+
+const eur=(n)=>Number(n).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const parseDe=(s)=>{const t=String(s==null?'':s).replace(/[^\d,.\-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.');const n=parseFloat(t);return Number.isFinite(n)?n:NaN;};
+const step=(s,state)=>{const el=$('.step[data-s="'+s+'"]');if(!el)return;el.classList.remove('active','done');if(state)el.classList.add(state);};
 const resetSteps=()=>document.querySelectorAll('.step').forEach(e=>e.classList.remove('active','done'));
 
+/* ── intake ── */
 function showFiles(){
-  filesEl.innerHTML = picked.map(f=>`<span class="chip"><b>${f.name}</b> · ${(f.size/1024).toFixed(0)} kB</span>`).join('');
-  go.disabled = picked.length===0;
+  filesEl.innerHTML=picked.map(f=>`<span class="chip0"><b>${esc(f.name)}</b> · ${(f.size/1024).toFixed(0)} kB</span>`).join('');
+  go.disabled=picked.length===0;
 }
-function addFiles(list){ for(const f of list) picked.push(f); showFiles(); }
-
+function addFiles(list){for(const f of list)picked.push(f);showFiles();}
 drop.addEventListener('click',()=>fileInput.click());
 fileInput.addEventListener('change',e=>addFiles(e.target.files));
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
 drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+go.addEventListener('click',()=>run($('#vz').value));
 
-go.addEventListener('click',run);
-
-async function run(){
-  go.disabled=true; results.classList.remove('show'); results.innerHTML=''; resetSteps();
+async function run(vz){
+  go.disabled=true; $('#landing-err').innerHTML=''; resetSteps();
   try{
     step('upload','active'); statusEl.textContent='lade hoch…';
     const paths=[];
@@ -195,77 +297,212 @@ async function run(){
     }
     step('upload','done'); step('ocr','active'); step('extract','active'); statusEl.textContent='OCR + Extraktion + Mapping…';
     const t0=performance.now();
-    const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz:$('#vz').value})});
+    const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz})});
     const data=await r.json();
     if(!data.ok) throw new Error(data.error||'Berechnung fehlgeschlagen');
     ['ocr','extract','map'].forEach(s=>step(s,'done')); step('calc','done');
-    statusEl.textContent=`fertig · ${Math.round(performance.now()-t0)} ms`;
-    render(data);
+    data._clientMs=Math.round(performance.now()-t0);
+    statusEl.textContent='fertig · '+data._clientMs+' ms';
+    renderDashboard(data);
   }catch(e){
-    results.innerHTML=`<div class="err">Fehler: ${e.message}</div>`; results.classList.add('show');
-    statusEl.textContent='Fehler';
+    $('#landing-err').innerHTML=`<div class="err">Fehler: ${esc(e.message)}</div>`;
   }finally{ go.disabled=false; }
 }
 
-function render(d){
-  const hh=d.household||{};
-  const a=hh.personA?`${hh.personA.vorname||''} ${hh.personA.nachname||''}`.trim():'—';
-  const b=hh.personB?`${hh.personB.vorname||''} ${hh.personB.nachname||''}`.trim():'—';
-  let delay=0; const rv=()=>`style="animation-delay:${(delay+=70)}ms"`;
+/* ── data helpers ── */
+const field=(d,person,code)=>d.fields.find(f=>f.person===person&&f.eCode===code);
+const fval=(d,person,code)=>{const f=field(d,person,code);return f?f.wert:null;};
+const feur=(d,person,code)=>{const v=fval(d,person,code);if(v==null)return null;const n=parseDe(v);return Number.isFinite(n)?eur(n):esc(v);};
+const idnr=(s)=>{const t=String(s||'').replace(/\D/g,'');return t.length===11?t.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/,'$1 $2 $3 $4'):esc(s||'—');};
+const BELN={VaSt_LStB:'Lohnsteuerbescheinigung',VaSt_Religion:'Kirchensteuer-Merkmal',VaSt_FSA:'Freistellungsauftrag',Steuerbescheinigung_Bank:'Bank-Steuerbescheinigung',Einkommensteuererklaerung:'ESt-Erklärung',VaSt_KRV:'Renten-/KV-Bezug',Unbekannt:'Unbekannt'};
+const primaryCalc=(d)=>d.calcs.find(c=>c.einheit==='A+B')||d.calcs[0]||null;
 
-  let h=`<div class="summary reveal" ${rv()}>
-    <div class="stat"><div class="n">${d.belege.length}</div><div class="k">Belege</div></div>
-    <div class="stat"><div class="n">${d.ocrCount}<span style="color:var(--dim)">/${d.belege.length}</span></div><div class="k">davon OCR</div></div>
-    <div class="stat"><div class="n am">${d.fields.length}</div><div class="k">E-Code-Felder</div></div>
-    <div class="stat"><div class="n">${d.calcs.length}</div><div class="k">Steuerpflichtige</div></div>
-    <div class="stat"><div class="n">${d.lane1Ms}<span style="font-size:15px;color:var(--dim)"> ms</span></div><div class="k">Extraktion</div></div>
-    <div class="stat" style="margin-left:auto;text-align:right"><div class="n" style="font-size:15px">A · ${a}<br>B · ${b}</div><div class="k">Household</div></div>
-  </div>`;
+/* ── render ── */
+function renderDashboard(d){
+  lastData=d;
+  const c=primaryCalc(d);
+  const zus=d.veranlagungsart==='zusammen';
+  const refund=c&&c.erstattung>=0;
+  const verbindlich=c&&(c.quelle==='mcp'||c.quelle==='mcp-splitting');
+  const nA=d.household&&d.household.personA?`${d.household.personA.vorname||''} ${d.household.personA.nachname||''}`.trim():'';
+  const nB=d.household&&d.household.personB?`${d.household.personB.vorname||''} ${d.household.personB.nachname||''}`.trim():'';
+  const mcpMs=c&&c.latenzMs&&c.latenzMs.mcp?Math.round(c.latenzMs.mcp)+' ms':'—';
+  const brutto=feur(d,'A','E0200201');
+  const stkl=fval(d,'A','E0200002');
 
-  // Berechnung
-  const vart=d.veranlagungsart==='zusammen'?'Zusammenveranlagung · Ehegatten-Splitting (§32a Abs. 5)':'Einzelveranlagung · Grundtarif';
-  const bgr=(d.begruendung||[]).length?`<div class="muted" style="margin:-4px 0 14px">${d.veranlagungsart==='zusammen'?'🔗':'👤'} ${vart} — ${(d.begruendung||[]).join(' · ').replace(/</g,'&lt;')}</div>`:'';
-  h+=`<div class="block reveal" ${rv()}><h2><span class="ix">③</span> Berechnung — Steuerbescheid</h2>${bgr}<div class="bescheide">`;
-  for(const c of d.calcs){
-    const refund=c.erstattung>=0;
-    const verbindlich=c.quelle==='mcp'||c.quelle==='mcp-splitting';
-    h+=`<div class="bescheid">
-      <div class="hd"><div class="who">${c.einheit==='A+B'?'Ehepaar · Zusammenveranlagung':'Person '+c.person}</div><div class="src">${verbindlich?'BMF-MCP · verbindlich'+(c.quelle==='mcp-splitting'?' · Splitting':''):'In-Process (Fallback)'}</div></div>
-      <div class="rows">
-        <div class="row"><span class="l">zu versteuerndes Einkommen</span><span class="v">${fmt(c.bindend.zve)}</span></div>
-        <div class="row"><span class="l">Einkommensteuer (§32a)</span><span class="v">${fmt(c.bindend.einkommensteuer)}</span></div>
-        <div class="row"><span class="l">Solidaritätszuschlag</span><span class="v">${fmt(c.bindend.solidaritaetszuschlag)}</span></div>
-        <div class="row"><span class="l">Kirchensteuer</span><span class="v">${fmt(c.bindend.kirchensteuer)}</span></div>
-        <div class="row tot"><span class="l">festgesetzte Gesamtsteuer</span><span class="v">${fmt(c.bindend.gesamtsteuer)}</span></div>
-        <div class="row"><span class="l">− angerechnete Abzugsteuern</span><span class="v">${fmt(c.angerechnet)}</span></div>
+  /* header chips */
+  const chips=[`<span class="chip ok">✓ fertig · ${d._clientMs||d.lane1Ms} ms</span>`,
+    `<span class="chip amber">VZ ${esc(d.vz)}</span>`];
+  if(verbindlich)chips.push('<span class="chip blue">BMF · verbindlich</span>');
+  if(zus)chips.push('<span class="chip">Splitting §32a</span>');
+
+  /* KPIs */
+  const kpi=(val,cls,label,sub,ka)=>`<div class="kpi" style="--ka:${ka}"><div class="kpi-val ${cls||''}">${val}</div><div class="kpi-label">${label}</div><div class="kpi-sub">${sub}</div></div>`;
+  const kpis=[
+    kpi(d.belege.length,'','Belege',`${d.ocrCount} davon OCR`,'rgba(98,209,140,.3)'),
+    kpi(d.fields.length,'','E-Code-Felder','gemappt','rgba(125,180,230,.3)'),
+    kpi(brutto||'—','','Bruttoarbeitslohn',`${esc(nA||'Person A')}${stkl?' · SKl '+esc(stkl):''}`,'rgba(236,233,226,.15)'),
+    kpi(c?eur(c.bindend.zve):'—','','z.v. Einkommen',zus?'§32a · Splitting':'§32a · Grundtarif','rgba(236,233,226,.15)'),
+    kpi(c?eur(c.bindend.gesamtsteuer):'—','','Gesamtsteuer','ESt + KiSt + SolZ','rgba(240,104,106,.3)'),
+    c?kpi(eur(Math.abs(c.erstattung)),refund?'green':'amber',refund?'Erstattung':'Nachzahlung',`${verbindlich?'MCP bindend':'In-Process'} · ${mcpMs}`,'rgba(240,180,41,.4)'):''
+  ].join('');
+
+  /* hero */
+  const heroTitle=zus?`Ehepaar ${esc(d.household&&d.household.personA?d.household.personA.nachname||'':'')} · Zusammenveranlagung`
+                     :(c&&c.einheit?`Person ${esc(c.einheit)} · Einzelveranlagung`:'Steuerfall');
+  const heroDesc=(d.begruendung&&d.begruendung.length)?esc(d.begruendung.join(' · '))
+                 :(zus?'Splittingtarif §32a Abs. 5 · BMF-MCP bindend':'Grundtarif §32a · BMF-MCP bindend');
+  const hero=c?`<div class="hero"><div>
+      <div class="hero-label">Steuerbescheid ${esc(d.vz)}</div>
+      <div class="hero-title">${heroTitle}</div>
+      <div class="hero-desc">${heroDesc}${c.abgleich?` · ΔESt = ${c.abgleich.estDelta}`:''}</div>
+    </div><div><div class="hero-amt ${refund?'refund':'owe'}">${eur(Math.abs(c.erstattung))}</div>
+      <div class="hero-amt-sub">${refund?'Erstattung · vom Finanzamt':'Nachzahlung · an Finanzamt'}</div></div></div>`:'';
+
+  /* kalkulation (left) */
+  let calcCard='';
+  if(c){
+    const b=c.bindend;
+    const eff=(b.durchschnittssteuersatz!=null?b.durchschnittssteuersatz:(b.zve>0?b.einkommensteuer/b.zve:0))*100;
+    const mx=Math.max(b.einkommensteuer,b.kirchensteuer,b.solidaritaetszuschlag,c.angerechnet,1);
+    const bar=(lbl,v,col)=>`<div class="br"><div class="br-meta"><span>${lbl}</span><span>${eur(v)}</span></div><div class="br-track"><div class="br-fill" style="width:${(v/mx*100).toFixed(1)}%;background:${col}"></div></div></div>`;
+    calcCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--amber)"></div>Steuer-Kalkulation · transparent</div><span class="chev open">▼</span></div>
+      <div class="card-body">
+        <div class="slabel">Festgesetzte Steuer · ${verbindlich?'BMF-MCP bindend':'In-Process-Fallback'}</div>
+        <div class="cr"><div><div class="cr-lbl"><strong>Zu versteuerndes Einkommen</strong></div><div class="cr-code">${zus?'§32a Abs. 5 · Splittingtarif':'§32a · Grundtarif'}</div></div><div class="cr-val">${eur(b.zve)}</div></div>
+        <div class="br"><div class="br-meta"><span>Durchschnittssteuersatz (ESt/zvE)</span><span>${eff.toFixed(1)} %</span></div><div class="br-track"><div class="br-fill" style="width:${Math.min(eff,100).toFixed(1)}%;background:var(--amber)"></div></div></div>
+        <div class="cr"><div><div class="cr-lbl">Einkommensteuer (§32a)</div></div><div class="cr-val">${eur(b.einkommensteuer)}</div></div>
+        <div class="cr"><div><div class="cr-lbl">Solidaritätszuschlag</div></div><div class="cr-val ${b.solidaritaetszuschlag?'':'zero'}">${eur(b.solidaritaetszuschlag)}</div></div>
+        <div class="cr"><div><div class="cr-lbl">Kirchensteuer</div></div><div class="cr-val ${b.kirchensteuer?'':'zero'}">${eur(b.kirchensteuer)}</div></div>
+        <div class="cr total"><div><div class="cr-lbl"><strong>Festgesetzte Gesamtsteuer</strong></div></div><div class="cr-val">${eur(b.gesamtsteuer)}</div></div>
+        <div class="slabel">Anrechnung & Saldo</div>
+        <div class="cr"><div><div class="cr-lbl dim">Summe angerechnete Abzugsteuern</div><div class="cr-code">LSt · KapESt · SolZ · KiSt</div></div><div class="cr-val green">− ${eur(c.angerechnet)}</div></div>
+        <div class="cr result"><div><div class="cr-lbl"><strong>${refund?'Erstattung':'Nachzahlung'}</strong></div><div class="cr-code" style="color:rgba(240,180,41,.5)">${eur(b.gesamtsteuer)} − ${eur(c.angerechnet)}</div></div><div class="cr-val ${refund?'green':'amber'}">${eur(Math.abs(c.erstattung))}</div></div>
+        <div class="slabel">Steuerstruktur</div>
+        ${bar('Einkommensteuer festgesetzt',b.einkommensteuer,'var(--amber)')}
+        ${bar('Angerechnete Abzugsteuern',c.angerechnet,'var(--blue)')}
+        ${bar('Kirchensteuer',b.kirchensteuer,'var(--mut)')}
+        ${bar('Solidaritätszuschlag',b.solidaritaetszuschlag,'var(--green)')}
+      </div></div>`;
+  }
+
+  /* veranlagung + KAP (right) */
+  const ir=(k,v)=>`<div class="ir"><div class="ir-k">${k}</div><div class="ir-v">${v}</div></div>`;
+  const relA=fval(d,'A','E0100402'), relB=fval(d,'B','E0101002');
+  let veranlCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Veranlagungsart</div><span class="chev open">▼</span></div>
+    <div class="card-body">
+      ${ir('Form',`<span class="tag ${zus?'amber':''}">${zus?'Zusammenveranlagung':'Einzelveranlagung'}</span>`)}
+      ${ir('Rechtsgrundlage',zus?'§32a Abs. 5 EStG':'§32a EStG')}
+      ${ir('Tarif',zus?'Splittingtarif':'Grundtarif')}
+      ${stkl?ir('Steuerklasse',esc(stkl)):''}
+      ${relA?ir('Konfession A','Schlüssel '+esc(relA)):''}
+      ${relB?ir('Konfession B','Schlüssel '+esc(relB)):''}
+      ${c?ir('Berechnung',esc((c.quelle||'').toUpperCase())):''}
+      ${c&&c.abgleich?ir('Abgleich',`ΔESt ${c.abgleich.estDelta} · ${c.abgleich.konform?'konform':'MCP bindend'}`):''}
+      ${ir('Laufzeit MCP',mcpMs)}
+    </div></div>`;
+  const kapRows=[
+    ['Sparer-Pauschbetrag (A)',feur(d,'A','E1901402')],
+    ['Kapitalerträge (A)',feur(d,'A','E1900701')],
+    ['KapErtSt (A)',feur(d,'A','E1904701')],
+    ['Kapitalerträge (B)',feur(d,'B','E1900701')],
+    ['KapErtSt (B)',feur(d,'B','E1904701')],
+    ['SolZ KAP (A)',feur(d,'A','E1904901')],
+    ['KiSt KAP (A)',feur(d,'A','E1904801')],
+  ].filter(r=>r[1]!=null);
+  const kapCard=kapRows.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--green)"></div>Kapitalerträge · KAP</div><span class="chev open">▼</span></div>
+    <div class="card-body">${kapRows.map(r=>ir(r[0],r[1])).join('')}</div></div>`:'';
+
+  /* personen tabs */
+  const persons=[]; if(d.fields.some(f=>f.person==='A')||nA)persons.push('A'); if(d.fields.some(f=>f.person==='B')||nB)persons.push('B');
+  const pName={A:nA||'Person A',B:nB||'Person B'};
+  const tabs=persons.map((p,i)=>`<div class="ptab${i===0?' active':''}" data-pc="pc-${p}"><div class="ptab-name">${esc(pName[p])}</div><div class="ptab-role">Person ${p}${p==='A'?' · Hauptveranlagter':' · Ehegatte'}</div></div>`).join('');
+  const pane=(p,i)=>{
+    const hh=d.household?(p==='A'?d.household.personA:d.household.personB):null;
+    let rows=''; if(hh&&hh.idnr)rows+=ir('Steuer-ID',idnr(hh.idnr));
+    for(const f of d.fields.filter(x=>x.person===p)){
+      const n=parseDe(f.wert); const show=(Number.isFinite(n)&&/[.,]\d|^\d{4,}/.test(String(f.wert)))?eur(n):esc(f.wert);
+      rows+=`<div class="ir"><div class="ir-k">${esc((f.label||f.eCode).slice(0,46))}</div><div class="ir-v">${show}</div></div>`;
+    }
+    return `<div id="pc-${p}" class="pc${i===0?' active':''}">${rows||'<div class="ir"><div class="ir-k" style="font-style:italic">Keine Felder.</div></div>'}</div>`;
+  };
+  const personenCard=persons.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--amber)"></div>Personen · Haushalt</div><span class="chev open">▼</span></div>
+    <div class="card-body"><div class="ptabs">${tabs}</div>${persons.map((p,i)=>pane(p,i)).join('')}</div></div>`:'';
+
+  /* belege */
+  const belItems=d.belege.map(bg=>`<div class="bel-item"><span class="bel-type ${bg.method}">${esc(bg.method)}</span>
+      <div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div>
+      <div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div>
+      <div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div></div>`).join('');
+  const belegeCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Belege · ${d.belege.length} Dokumente</div><span class="chev open">▼</span></div>
+    <div class="card-body" style="padding:0"><div class="bel-grid">${belItems}</div></div></div>`;
+
+  /* elster table */
+  const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
+  const rows=d.fields.map(f=>`<tr><td style="padding-left:24px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td>
+      <td class="num">${esc((f.wert||'').slice(0,20))}</td>
+      <td><span class="etag ${f.person==='A'?'a':'b'}">${esc(f.person)}</span></td>
+      <td><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td>
+      <td style="padding-right:24px"><span class="etag ${esc(f.method)}">${esc(f.method)}</span></td></tr>`).join('');
+  const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${d.fields.length} Felder</div><span class="chev">▼</span></div>
+    <div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:24px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:24px">Quelle</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+
+  /* warnings */
+  const warn=(d.warnings&&d.warnings.length)?`<div class="warn"><b>Hinweise:</b> ${d.warnings.map(w=>esc(w)).join(' &nbsp;·&nbsp; ')}</div>`:'';
+
+  /* assemble */
+  sdb.innerHTML=`
+    <div class="hd">
+      <div class="hd-l"><div class="hd-logo">ST<span>U</span>RM</div><div class="hd-sep">·</div><div class="hd-sub">Steuer-Dashboard</div></div>
+      <div class="hd-r">${chips.join('')}
+        <button class="theme-btn" id="theme-btn"><span>☾</span> Theme</button>
+        <button class="close-btn" id="reset-btn">Neuer Fall ×</button>
       </div>
-      <div class="saldo ${refund?'refund':'owe'}"><div class="k">${refund?'Erstattung':'Nachzahlung'}</div><div class="v">${fmt(Math.abs(c.erstattung))}</div></div>
-      <div class="meta">${c.felder} Felder · ${c.abgleich?('Abgleich In-Process↔MCP ΔESt='+c.abgleich.estDelta+' · '+(c.abgleich.konform?'konform':'MCP bindend')):'kein MCP-Abgleich'} · ${c.latenzMs?.mcp?(Math.round(c.latenzMs.mcp)+' ms MCP'):''}</div>
+    </div>
+    <div class="body">
+      <div class="proc">
+        ${['Upload','OCR / Text','Extraktion','ELSTER-Mapping','Berechnung'].map((l,i,a)=>`<div class="proc-item"><div class="proc-wrap"><div class="proc-dot done">✓</div><div class="proc-label done">${l}</div></div>${i<a.length-1?'<div class="proc-line done"></div>':''}</div>`).join('')}
+        <div class="pup-wrap">
+          <button class="pup-btn" id="pup-btn">+ Belege hinzufügen <span class="pup-badge" id="pup-badge" style="display:none">0</span></button>
+          <div class="pup-panel" id="pup-panel">
+            <div class="pup-drop" id="pup-drop"><input type="file" id="pup-input" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff"><div class="pup-drop-txt">▦ Ablegen oder klicken</div><div class="pup-drop-hint">PDF · PNG · JPG · TIF</div></div>
+            <div class="pup-queue" id="pup-queue"></div>
+            <div class="pup-actions"><select class="pup-vz" id="pup-vz"><option value="2023">2023</option><option value="2024">2024</option></select><button class="pup-run" id="pup-run" disabled>Neu berechnen</button><span class="pup-status" id="pup-status"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="kpi-row">${kpis}</div>
+      ${hero}
+      <div class="g3">${calcCard}<div>${veranlCard}${kapCard}</div></div>
+      <div class="g2">${personenCard}${belegeCard}</div>
+      ${elsterCard}
+      ${warn}
+      <div class="footer">STURM · Steuer-Engine · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verbindlich?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div>
     </div>`;
-  }
-  h+=`</div></div>`;
-
-  // ELSTER-Mapping
-  h+=`<div class="block reveal" ${rv()}><h2><span class="ix">②</span> ELSTER-Mapping — ${d.fields.length} Felder</h2>
-    <div class="mapwrap"><table class="tbl"><thead><tr><th>E-Code</th><th>Bezeichnung</th><th class="num">Wert</th><th>Pers</th><th>Anlage</th><th>Quelle</th></tr></thead><tbody>`;
-  for(const f of d.fields){
-    h+=`<tr><td class="ec">${f.eCode}</td><td>${(f.label||'').replace(/</g,'&lt;').slice(0,52)}</td><td class="num">${(f.wert||'').slice(0,18)}</td>
-      <td><span class="pchip p${f.person}">${f.person}</span></td><td class="anl">${f.anlage||''}</td>
-      <td><span class="mchip ${f.method}">${f.method}</span></td></tr>`;
-  }
-  h+=`</tbody></table></div></div>`;
-
-  // Extraktion
-  h+=`<div class="block reveal" ${rv()}><h2><span class="ix">①</span> Extraktion — ${d.belege.length} Belege</h2><div class="belege">`;
-  for(const bg of d.belege){
-    h+=`<div class="beleg"><span class="badge ${bg.method}">${bg.method}</span>
-      <span class="bt">${bg.belegTyp} <span class="st">· ${bg.status} · Person ${bg.person}</span></span>
-      <span class="fc">${bg.felder} Felder</span></div>`;
-  }
-  h+=`</div></div>`;
-
-  results.innerHTML=h; results.classList.add('show');
+  $('#pup-vz').value=String(d.vz);
+  try{ if(localStorage.getItem('sturm-theme')==='light') sdb.classList.add('light'); }catch(_){}
+  landing.style.display='none';
+  sdb.classList.add('show');
+  window.scrollTo(0,0);
 }
+
+/* ── dashboard interactivity (event delegation) ── */
+sdb.addEventListener('click',e=>{
+  const head=e.target.closest('.card-head');
+  if(head){const b=head.nextElementSibling;b.classList.toggle('collapsed');const ch=head.querySelector('.chev');if(ch)ch.classList.toggle('open');return;}
+  const tab=e.target.closest('.ptab');
+  if(tab){const root=tab.closest('.card-body');root.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');root.querySelectorAll('.pc').forEach(p=>p.classList.remove('active'));const pc=root.querySelector('#'+tab.dataset.pc);if(pc)pc.classList.add('active');return;}
+  if(e.target.closest('#theme-btn')){sdb.classList.toggle('light');try{localStorage.setItem('sturm-theme',sdb.classList.contains('light')?'light':'dark');}catch(_){}return;}
+  if(e.target.closest('#reset-btn')){sdb.classList.remove('show');sdb.innerHTML='';picked=[];showFiles();resetSteps();statusEl.textContent='';landing.style.display='';window.scrollTo(0,0);return;}
+  if(e.target.closest('#pup-btn')){$('#pup-panel').classList.toggle('open');return;}
+  if(e.target.closest('#pup-drop')){$('#pup-input').click();return;}
+  if(e.target.closest('#pup-run')){const vz=$('#pup-vz').value;landing.style.display='';sdb.classList.remove('show');run(vz);return;}
+});
+sdb.addEventListener('change',e=>{
+  if(e.target.id==='pup-input'){addFiles(e.target.files);const q=$('#pup-queue'),bd=$('#pup-badge'),rn=$('#pup-run');
+    if(q)q.innerHTML=picked.map(f=>`<div class="pup-pill"><span class="pup-pill-name">${esc(f.name)}</span><span class="pup-pill-size">${(f.size/1024).toFixed(0)} kB</span></div>`).join('');
+    if(bd){bd.style.display=picked.length?'inline-flex':'none';bd.textContent=picked.length;}
+    if(rn)rn.disabled=picked.length===0;}
+});
 </script>
-</body>
-</html>
+</body></html>
