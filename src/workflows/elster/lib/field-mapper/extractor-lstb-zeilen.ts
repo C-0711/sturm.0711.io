@@ -89,40 +89,87 @@ export interface LstbZeileHit {
   field: MappedField;
 }
 
+/** Deutsche Währung mit Cent — der Wert-Marker einer LStB-Betragszeile.
+ *  Akzeptiert BEIDE Schreibweisen: mit Tausenderpunkt ("69.291,80",
+ *  VaSt-Export) UND ohne ("51144,88", gedrucktes BMF-Muster). Reine
+ *  Referenz-Nummern ("von 3.", "9. und 10.") haben kein „,dd" → nie als Wert.
+ *  Die gruppierte Alternative steht zuerst, damit "1.427,16" voll matcht
+ *  statt nur "427,16". */
+const CURRENCY_RE = /\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2}/;
+const firstCurrency = (s: string): string | undefined => (s.match(CURRENCY_RE) ?? [])[0];
+
+interface ZeilenBlock {
+  nr: number;
+  text: string; // alles nach der Nummer bis zur nächsten Nummer (Zeilen zusammengeführt)
+}
+
 /**
- * Scannt rawText nach LStB-Zeilen der Form "<nr>. [<sub>)] <label>  <wert>"
- * und emittiert pro erkannter Nummer einen MappedField.
+ * Scannt rawText nach LStB-Vordruckzeilen und emittiert pro erkannter Nummer
+ * einen MappedField.
  *
- * Nur Zeilen mit Nummer im LSTB_ZEILE_TO_FIELD-Table werden berücksichtigt;
- * alles andere ignoriert (Label-Matching deckt's ab oder es ist Meta).
+ * ROBUST gegen ZWEI Layouts (Memory [[pdf-render-families]]):
+ *   • VaSt-Export (Sammel-Datenabholung): einspaltig, „3. Label … 69.291,80 €"
+ *     — Nummer, Label und Wert auf EINER Zeile.
+ *   • BMF-Muster „Ausdruck der elektronischen Lohnsteuerbescheinigung":
+ *     ZWEISPALTIG. `pdftotext -layout` verschränkt linke (Name/Adresse/IdNr)
+ *     und rechte (nummerierte Felder) Spalte → die Nummer steht NICHT am
+ *     Zeilenanfang (Stray-Linksspalten-Text davor) und der Wert steht oft auf
+ *     einer FOLGEZEILE (umbrochenes Label). Der alte Zeilen-Regex verfehlte
+ *     so das wichtigste Feld (Nr. 3 Bruttoarbeitslohn) → zvE = 0.
+ *
+ * Lösung: sequenzieller Zeilennummern-Automat. Das Muster nummeriert 1..34 in
+ * AUFSTEIGENDER Reihenfolge — wir akzeptieren ein „<n>."-Token nur als Anker,
+ * wenn n die Sequenz fortsetzt (streng steigend, moderater Vorwärts-Gap für
+ * unzugeordnete/abwesende Nummern). Das verwirft Rückwärts-Referenzen
+ * („von 3."), Stray-Zahlen („141003", „15 %") und Sub-Wiederholungen. Pro
+ * Anker wird der Block bis zur nächsten Nummer gesammelt; der Wert ist die
+ * erste Währungszahl im Block (Sub a)/b) separat behandelt).
  */
 export function extractLstbByZeilennummer(rawText: string, person: Person): LstbZeileHit[] {
-  const hits: LstbZeileHit[] = [];
-  const seen = new Set<string>(); // Nr-Keys schon gesehen (erstes Vorkommen gewinnt)
   const lines = rawText.split(/\r?\n/);
 
+  // ── Phase 1: Sequenzieller Automat → Blöcke ──
+  // Ein „<n>."-Token ist nur dann ein FELD-Anker, wenn direkt ein Label folgt:
+  // Großbuchstabe (Feldnamen sind großgeschrieben) ODER ein Sub-Marker „a)".
+  // Das verwirft In-Label-Referenzen wie „… ohne 9. und 10.)" (klein „und" /
+  // „)") und „von 3.  318,72" (Ziffer) — DIE Ursache, dass Nr. 4–8 sonst in
+  // den Bruttolohn-Block (Nr. 3) gesaugt würden.
+  const blocks: ZeilenBlock[] = [];
+  const anchorRe = /(?:^|\s)(\d{1,2})\.(?=\s+(?:[A-ZÄÖÜ]|[a-c]\)))/g;
+  const MAX_GAP = 15; // 8→19 (Gap 11) im Muster kommt vor
+  let lastNr = 0;
+  let open: ZeilenBlock | null = null;
+
   for (const line of lines) {
-    // "  3.     Bruttoarbeitslohn ...        69.291,80 €"
-    // "  22.    a) Arbeitgeberanteil ...      6.544,01 €"
-    const m = line.match(/^\s*(\d{1,3})\.\s+(.+?)\s{2,}(\S.*?)\s*$/);
-    if (!m) continue;
-    const nr = m[1];
-    let rest = m[2];
-    const rawValue = m[3];
+    let acceptNr = -1;
+    let acceptEnd = -1;
+    anchorRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = anchorRe.exec(line)) !== null) {
+      const n = parseInt(m[1], 10);
+      if (n > lastNr && n <= lastNr + MAX_GAP) {
+        acceptNr = n;
+        acceptEnd = m.index + m[0].length; // direkt hinter „<n>."
+        break;
+      }
+    }
+    if (acceptNr !== -1) {
+      if (open) blocks.push(open);
+      open = { nr: acceptNr, text: line.slice(acceptEnd) };
+      lastNr = acceptNr;
+    } else if (open) {
+      open.text += ' ' + line.trim();
+    }
+  }
+  if (open) blocks.push(open);
 
-    // optionaler Sub-Buchstabe "a)" / "b)"
-    let key = nr;
-    const subM = rest.match(/^([a-z])\)\s+/);
-    if (subM) key = nr + subM[1];
-
+  // ── Phase 2: Blöcke → Felder über die Tabelle ──
+  const hits: LstbZeileHit[] = [];
+  const seen = new Set<string>();
+  const emit = (key: string, rawValue: string | undefined): void => {
     const spec = LSTB_ZEILE_TO_FIELD[key];
-    if (!spec) continue;
-    if (seen.has(key)) continue;
+    if (!spec || !rawValue || seen.has(key)) return;
     seen.add(key);
-
-    // Wert muss numerisch aussehen (sonst ist's keine Betrags-/Datums-Zeile)
-    if (!/[\d]/.test(rawValue)) continue;
-
     const norm = normalize(rawValue, spec.valueType);
     hits.push({
       zeile: key,
@@ -143,6 +190,22 @@ export function extractLstbByZeilennummer(rawText: string, person: Person): Lstb
         ],
       },
     });
+  };
+
+  for (const b of blocks) {
+    const nr = String(b.nr);
+    const hasSub = LSTB_ZEILE_TO_FIELD[nr + 'a'] || LSTB_ZEILE_TO_FIELD[nr + 'b'];
+    if (hasSub) {
+      // a) = gesetzliche RV (primär, erste Währung); b) = berufsständisch/privat
+      // (nach „b)"-Marker). Robust gegen Spalten-Verschränkung im Muster.
+      const bIdx = b.text.indexOf('b)');
+      const aRaw = firstCurrency(bIdx >= 0 ? b.text.slice(0, bIdx) : b.text);
+      const bRaw = bIdx >= 0 ? firstCurrency(b.text.slice(bIdx)) : undefined;
+      emit(nr + 'a', aRaw);
+      emit(nr + 'b', bRaw);
+    } else if (LSTB_ZEILE_TO_FIELD[nr]) {
+      emit(nr, firstCurrency(b.text));
+    }
   }
   return hits;
 }

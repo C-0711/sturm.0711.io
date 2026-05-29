@@ -40,7 +40,7 @@
  * ════════════════════════════════════════════════════════════════════════
  */
 import type { HouseholdInfo } from '../field-mapper/triage.ts';
-import type { SteuerFeld } from './adapter.ts';
+import { parseEuro, type SteuerFeld } from './adapter.ts';
 
 export type Veranlagungsart = 'einzeln' | 'zusammen';
 
@@ -172,9 +172,13 @@ export function normalisiereSteuerfall(
   }
 
   // ── 2. Partner-Kirchensteuer (E0200601) gehört zur zweiten Person.
+  //    NUR umhängen, wenn der Betrag > 0 ist: jede Lohnsteuerbescheinigung
+  //    führt Nr. 7 „KiSt des Ehegatten" mit 0,00 als Formular-Platzhalter —
+  //    ein Single würde sonst eine leere Person B mit zvE 0 spawnen.
   let partnerKiStUmgehaengt = false;
   arbeit = arbeit.map((f) => {
-    if (f.eCode === ECODE_KIST_PARTNER && f.person === 'A' && art === 'einzeln') {
+    if (f.eCode === ECODE_KIST_PARTNER && f.person === 'A' && art === 'einzeln'
+        && (parseEuro(f.wert) ?? 0) > 0) {
       partnerKiStUmgehaengt = true;
       return { ...f, person: 'B' as const };
     }
