@@ -159,7 +159,7 @@
 
   <main id="results"></main>
 
-  <div class="muted">Deterministische Extraktion + ELSTER-Mapping (sturm) · §32a-Vorschau in-process · verbindliche Berechnung BMF-MCP. Beträge bei gemischten Steuerpflichtigen je Person als Einzelveranlagung, illustrativ.</div>
+  <div class="muted">Deterministische Extraktion + ELSTER-Mapping (sturm) · Fallnormalizer erkennt Veranlagungsart (Einzel-/Zusammenveranlagung) · verbindliche Berechnung BMF-MCP, Splitting §32a Abs. 5.</div>
 </div>
 
 <script>
@@ -190,7 +190,7 @@ async function run(){
     step('upload','active'); statusEl.textContent='lade hoch…';
     const paths=[];
     for(const f of picked){
-      const r=await fetch('/api/upload',{method:'POST',headers:{'X-Filename':f.name},body:await f.arrayBuffer()});
+      const r=await fetch('/api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
       const j=await r.json(); if(j.error) throw new Error(j.error); paths.push(j.path);
     }
     step('upload','done'); step('ocr','active'); step('extract','active'); statusEl.textContent='OCR + Extraktion + Mapping…';
@@ -223,11 +223,14 @@ function render(d){
   </div>`;
 
   // Berechnung
-  h+=`<div class="block reveal" ${rv()}><h2><span class="ix">③</span> Berechnung — Steuerbescheid</h2><div class="bescheide">`;
+  const vart=d.veranlagungsart==='zusammen'?'Zusammenveranlagung · Ehegatten-Splitting (§32a Abs. 5)':'Einzelveranlagung · Grundtarif';
+  const bgr=(d.begruendung||[]).length?`<div class="muted" style="margin:-4px 0 14px">${d.veranlagungsart==='zusammen'?'🔗':'👤'} ${vart} — ${(d.begruendung||[]).join(' · ').replace(/</g,'&lt;')}</div>`:'';
+  h+=`<div class="block reveal" ${rv()}><h2><span class="ix">③</span> Berechnung — Steuerbescheid</h2>${bgr}<div class="bescheide">`;
   for(const c of d.calcs){
     const refund=c.erstattung>=0;
+    const verbindlich=c.quelle==='mcp'||c.quelle==='mcp-splitting';
     h+=`<div class="bescheid">
-      <div class="hd"><div class="who">Person ${c.person}</div><div class="src">${c.quelle==='mcp'?'BMF-MCP · verbindlich':'In-Process (Fallback)'}</div></div>
+      <div class="hd"><div class="who">${c.einheit==='A+B'?'Ehepaar · Zusammenveranlagung':'Person '+c.person}</div><div class="src">${verbindlich?'BMF-MCP · verbindlich'+(c.quelle==='mcp-splitting'?' · Splitting':''):'In-Process (Fallback)'}</div></div>
       <div class="rows">
         <div class="row"><span class="l">zu versteuerndes Einkommen</span><span class="v">${fmt(c.bindend.zve)}</span></div>
         <div class="row"><span class="l">Einkommensteuer (§32a)</span><span class="v">${fmt(c.bindend.einkommensteuer)}</span></div>

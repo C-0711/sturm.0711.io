@@ -9,14 +9,16 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import pg from 'pg';
 import { runLane1 } from '../src/workflows/elster/lib/lane1.ts';
 import { ocrEnsembleFromPath, pingOrchestrator } from '../src/workflows/elster/lib/field-mapper/ocr-ensemble-client.ts';
 import { ocrEnsembleToRawText } from '../src/workflows/elster/lib/field-mapper/lane2-adapter.ts';
-import { berechneSteuerfallAuthoritativ } from '../src/workflows/elster/lib/steuer/authoritative.ts';
+import { berechneHaushaltAuthoritativ } from '../src/workflows/elster/lib/steuer/authoritative.ts';
+import { normalisiereSteuerfall } from '../src/workflows/elster/lib/steuer/fallnormalizer.ts';
 import type { SteuerFeld } from '../src/workflows/elster/lib/steuer/adapter.ts';
 
 const { Pool } = pg;
@@ -27,7 +29,23 @@ const pgUrl = process.env.ELSTER_CATALOG_PG_URL ?? 'postgresql://elster:elster_d
 const HEBESATZ = 0.09;
 
 const pool = new Pool({ connectionString: pgUrl, max: 4 });
-const parseImage = async (p: string) => ocrEnsembleToRawText(await ocrEnsembleFromPath(p, { baseUrl }));
+
+// Dropped phone photos (JPG/PNG) are not PDFs → the orchestrator's pdfium
+// rasterizer throws FormatError. Wrap them in a one-page PDF first (Pillow,
+// 200 dpi) so the OCR ensemble sees a page it can raster.
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.webp', '.bmp', '.gif']);
+const PY = process.env.PDL3_PY ?? `${process.env.HOME}/.venvs/pdl3/bin/python`;
+function imageToPdf(img: string): string {
+  const pdf = img.replace(/\.[^.]+$/, '') + '.asimg.pdf';
+  execFileSync(PY, ['-c',
+    "from PIL import Image;import sys;Image.open(sys.argv[1]).convert('RGB').save(sys.argv[2],'PDF',resolution=200.0)",
+    img, pdf], { stdio: 'pipe' });
+  return pdf;
+}
+const parseImage = async (p: string) => {
+  const src = IMAGE_EXT.has(extname(p).toLowerCase()) ? imageToPdf(p) : p;
+  return ocrEnsembleToRawText(await ocrEnsembleFromPath(src, { baseUrl }));
+};
 
 async function body(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -52,21 +70,22 @@ async function runSteuerfall(paths: string[], vz: number) {
   }));
   const felder: SteuerFeld[] = r.aggregated.map((f) => ({ eCode: f.eCode, wert: f.wert, person: f.person, anlage: f.anlage, pdfLabel: f.pdfLabel }));
 
-  const calcs: unknown[] = [];
-  for (const person of ['A', 'B'] as const) {
-    const pf = felder.filter((f) => f.person === person).map((f) => ({ ...f, person: 'A' as const }));
-    if (pf.length === 0) continue;
-    const res = await berechneSteuerfallAuthoritativ({ felder: pf, vz, kirchensteuerHebesatz: HEBESATZ });
-    calcs.push({
-      person, felder: pf.length, quelle: res.quelle, bindend: res.bindend,
-      angerechnet: res.angerechnet, erstattung: res.erstattung,
-      abgleich: res.abgleich ?? null, latenzMs: res.latenzMs, konflikte: res.konflikte.length,
-    });
-  }
+  // Fallnormalizer: Veranlagungsart erkennen + Felder reattribuieren, DANN
+  // verbindlich rechnen (Zusammenveranlagung = ein Splitting-Bescheid).
+  const fall = normalisiereSteuerfall(felder, r.household);
+  const haushalt = await berechneHaushaltAuthoritativ(fall, { vz, kirchensteuerHebesatz: HEBESATZ });
+  const calcs = haushalt.bescheide.map((bx) => ({
+    person: bx.einheit, einheit: bx.einheit, felder: bx.felder,
+    quelle: bx.res.quelle, bindend: bx.res.bindend,
+    angerechnet: bx.res.angerechnet, erstattung: bx.res.erstattung,
+    abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
+  }));
   return {
     ok: true, vz, lane1Ms: Math.round(lane1Ms),
     belege: r.belege, fields, ocrCount: r.belege.filter((b) => b.method === 'ocr').length,
-    household: r.household, warnings: r.warnings ?? [], calcs,
+    household: r.household,
+    veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
+    warnings: [...(r.warnings ?? []), ...haushalt.warnungen], calcs,
   };
 }
 
@@ -81,7 +100,9 @@ createServer(async (req, res) => {
     if (req.method === 'POST' && url === '/api/upload') {
       const buf = await body(req);
       if (buf.length === 0 || buf.length > 40 * 1024 * 1024) return json(res, 413, { error: 'leer oder zu groß' });
-      const raw = String(req.headers['x-filename'] ?? 'upload.pdf');
+      const hdr = String(req.headers['x-filename'] ?? 'upload.pdf');
+      let raw = hdr;
+      try { raw = decodeURIComponent(hdr); } catch { /* header not percent-encoded → use as-is */ }
       const safe = raw.replace(/[^\w.\-]+/g, '_').slice(-80) || 'upload.pdf';
       const dir = mkdtempSync(join(tmpdir(), 'steuerweb-'));
       const path = join(dir, safe);
