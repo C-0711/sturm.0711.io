@@ -242,6 +242,12 @@ function elsterFelderZusammen(
   const b = feldateToElsterFelder(felderB);
   const elsterFelder: Record<string, string> = { ...a.elsterFelder };
   for (const [k, v] of Object.entries(b.elsterFelder)) elsterFelder[`${k}__B`] = v;
+  // Verheiratet-Kennzeichen (E0101201) — der DURABLE married-Pfad der MCP
+  // (baue_canonical_params → canonical "verheiratet", überlebt Container-
+  // recreate). Damit splittet die MCP nativ UND setzt den §10c-SA-Pauschbetrag
+  // auf 72 € (Zusammenveranlagung) statt 36 €. Unabhängig vom StKl-married-
+  // Patch; sturm rechnet den Splittingtarif ohnehin selbst (Doppelabsicherung).
+  elsterFelder.E0101201 = 'X';
   return { elsterFelder, konflikte: [...a.konflikte, ...b.konflikte.map((c) => `B: ${c}`)] };
 }
 
