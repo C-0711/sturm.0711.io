@@ -190,12 +190,12 @@ async function run(){
     step('upload','active'); statusEl.textContent='lade hoch…';
     const paths=[];
     for(const f of picked){
-      const r=await fetch('/api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
+      const r=await fetch('api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
       const j=await r.json(); if(j.error) throw new Error(j.error); paths.push(j.path);
     }
     step('upload','done'); step('ocr','active'); step('extract','active'); statusEl.textContent='OCR + Extraktion + Mapping…';
     const t0=performance.now();
-    const r=await fetch('/api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz:$('#vz').value})});
+    const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz:$('#vz').value})});
     const data=await r.json();
     if(!data.ok) throw new Error(data.error||'Berechnung fehlgeschlagen');
     ['ocr','extract','map'].forEach(s=>step(s,'done')); step('calc','done');
