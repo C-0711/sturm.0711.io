@@ -109,5 +109,58 @@ console.log('\n5. Mehrdeutige Nummern (31) NICHT im Anker — Label disambiguier
     hits.find((h) => h.zeile === '31') === undefined, hits);
 }
 
+console.log('\n6. FOTO-LStB: OCR-Komma-Dropout repariert (echte Melanie-Tokens)\n');
+{
+  // Reale paddleocr-Ausgabe eines fotografierten LStB @300dpi: getrennte
+  // EUR|Ct-Spalten → Komma verloren ("24.432,98" → "24.43298"). Räumlich
+  // rekonstruiert: Nummer+Label auf einer Zeile, Wert auf der Folgezeile.
+  // Kontinuierliche Nummern wie im echten Muster (Zwischenfelder 7-21, 24
+  // sind im Druck/OCR vorhanden, auch wenn 0/leer) — so bleibt die Sequenz.
+  const text = `
+Ausdruck der elektronischen Lohnsteuerbescheinigung für 2024
+3.Bruttoarbeitslohn einschl. Sachbezüge ohne
+9.und 10.   24.43298
+4. Einbehaltene Lohnsteuer von 3.
+4.05896
+5.Einbehaltener Solidaritätszuschlag von 3
+6.Einbehaltene Kirchensteuer des Arbeitnehmers
+von 3.   36519
+7. Einbehaltene Kirchensteuer des Ehegatten
+8.In 3.enthaltene Versorgungsbezüge
+9.Ermäßigt besteuerte Versorgungsbezüge
+10. Ermäßigt besteuerter Arbeitslohn
+11. Einbehaltene Lohnsteuer von 9. und 10.
+12. Einbehaltener Solidaritätszuschlag
+13. Einbehaltene Kirchensteuer des Arbeitnehmers
+14. Einbehaltene Kirchensteuer des Ehegatten
+15. Kurzarbeitergeld
+16. Steuerfreier Arbeitslohn
+17. Steuerfreie Arbeitgeberleistungen
+18. Pauschal besteuerte Arbeitgeberleistungen
+19. Steuerpflichtige Entschädigungen
+20. Steuerfreie Verpflegungszuschüsse
+21. Steuerfreie Arbeitgeberleistungen
+22.Arbeitgeber a) zur gesetzlichen Rentenversicherung   2.27227
+23.Arbeitnehmer a) zur gesetzlichen Rentenversicherung   2.27227
+24. Steuerfreie Arbeitgeberzuschüsse
+25.Arbeitnehmerbeiträge zur gesetzlichen
+Krankenversicherung   1.93024
+26.Arbeitnehmerbeiträge zur sozialen
+Pflegeversicherung   41535
+27.Arbeitnehmerbeiträge zur
+Arbeitslosenversicherung   31759
+`;
+  const hits = extractLstbByZeilennummer(text, 'A');
+  const byZeile = new Map(hits.map((h) => [h.zeile, h.field]));
+  assert('Nr.3 Brutto 24.43298 → 24433 (Komma repariert)', byZeile.get('3')?.wert === '24433', byZeile.get('3'));
+  assert('Nr.4 LSt 4.05896 → 4058,96',  byZeile.get('4')?.wert === '4058,96', byZeile.get('4'));
+  assert('Nr.6 KiSt 36519 → 365,19',    byZeile.get('6')?.wert === '365,19', byZeile.get('6'));
+  assert('Nr.22a RV-AG 2.27227 → 2272', byZeile.get('22a')?.wert === '2272', byZeile.get('22a'));
+  assert('Nr.23a RV-AN 2.27227 → 2272', byZeile.get('23a')?.wert === '2272', byZeile.get('23a'));
+  assert('Nr.25 KV 1.93024 → 1930',     byZeile.get('25')?.wert === '1930', byZeile.get('25'));
+  assert('Nr.26 PV 41535 → 415',        byZeile.get('26')?.wert === '415', byZeile.get('26'));
+  assert('Nr.27 ALV 31759 → 318',       byZeile.get('27')?.wert === '318', byZeile.get('27'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -96,7 +96,30 @@ export interface LstbZeileHit {
  *  Die gruppierte Alternative steht zuerst, damit "1.427,16" voll matcht
  *  statt nur "427,16". */
 const CURRENCY_RE = /\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2}/;
-const firstCurrency = (s: string): string | undefined => (s.match(CURRENCY_RE) ?? [])[0];
+
+/** OCR-Komma-Dropout (fotografiertes LStB): das BMF-Muster hat getrennte
+ *  „EUR | Ct"-Spalten; paddleocr liest den Betrag oft OHNE Dezimalkomma —
+ *  „24.432,98" → „24.43298", „365,19" → „36519", „2.272,27" → „2.27227".
+ *  Die letzten 2 Ziffern sind IMMER Cent (Spalten-Semantik). Kandidaten:
+ *  Tausenderpunkt-gruppiert + 2 Endziffern, ODER reine ≥3-Ziffern-Läufe.
+ *  Wir nehmen den LETZTEN (= rechte Wertspalte). */
+const DROPOUT_RE = /\d{1,3}(?:\.\d{3})+\d{2}(?!\d)|\d{3,}(?!\d)/g;
+
+/**
+ * Erste Währungszahl in einem Block — toleriert den OCR-Komma-Dropout.
+ * Liefert kanonisch „<euro>,<ct>" (ohne Tausenderpunkte), was normalize()
+ * frisst. Komma-Form gewinnt; nur wenn keine existiert, greift die
+ * Dropout-Reparatur (letzter Geld-Token, letzte 2 Ziffern = Cent).
+ */
+function firstCurrency(s: string): string | undefined {
+  const m = s.match(CURRENCY_RE);
+  if (m) return m[0];
+  const cand = s.match(DROPOUT_RE);
+  if (!cand) return undefined;
+  const digits = cand[cand.length - 1].replace(/\./g, '');
+  if (digits.length < 3) return undefined; // mind. 1 Euro-Ziffer + 2 Cent
+  return digits.slice(0, -2) + ',' + digits.slice(-2);
+}
 
 interface ZeilenBlock {
   nr: number;
@@ -134,9 +157,13 @@ export function extractLstbByZeilennummer(rawText: string, person: Person): Lstb
   // Das verwirft In-Label-Referenzen wie „… ohne 9. und 10.)" (klein „und" /
   // „)") und „von 3.  318,72" (Ziffer) — DIE Ursache, dass Nr. 4–8 sonst in
   // den Bruttolohn-Block (Nr. 3) gesaugt würden.
+  // `\s*` (nicht `\s+`): die Foto-OCR klebt Nummer und Label oft zusammen
+  // („5.Einbehaltener", „22.Arbeitgeber"). Der folgende Großbuchstabe/„a)"
+  // bleibt Pflicht → Referenzen („9.und 10.", „von 3.  4.058") werden weiter
+  // verworfen (klein „und" / Ziffer nach dem Punkt).
   const blocks: ZeilenBlock[] = [];
-  const anchorRe = /(?:^|\s)(\d{1,2})\.(?=\s+(?:[A-ZÄÖÜ]|[a-c]\)))/g;
-  const MAX_GAP = 15; // 8→19 (Gap 11) im Muster kommt vor
+  const anchorRe = /(?:^|\s)(\d{1,2})\.(?=\s*(?:[A-ZÄÖÜ]|[a-c]\)))/g;
+  const MAX_GAP = 18; // 8→19 (Gap 11) + Reserve für vereinzelt verlorene OCR-Zeilen
   let lastNr = 0;
   let open: ZeilenBlock | null = null;
 
