@@ -86,6 +86,17 @@ const KONFORM_TOLERANZ_EUR = 1;
 /** Felder → `elster_felder` (ein Wert je E-Code). Bei Mehrfachwerten:
  *  größter Betrag bei rein numerischen Duplikaten, sonst erster; alle
  *  Konflikte werden zurückgegeben. */
+/** Extraktions-E-Codes → MCP-module_mappings-Vokabular. Conformance-Befund:
+ *  der sturm-Extraktor nutzt teils andere E-Codes als die MCP erwartet
+ *  (gesetzliche Rente, RV-Beiträge). Ohne diese Übersetzung ignoriert die
+ *  MCP die betroffenen Felder still. */
+const EXTRACTION_TO_MCP: Record<string, string> = {
+  E1800301: 'E2400103', E1803102: 'E2400203',   // gesetzliche Rente (Brutto)
+  E1800501: 'E2400107', E1803202: 'E2400207',   // Rentenbeginn (Datum → Jahr)
+  E2000601: 'E0202204',                          // RV-Arbeitnehmeranteil
+};
+const RENTENBEGINN_MCP = new Set(['E2400107', 'E2400207']);
+
 export function feldateToElsterFelder(
   felder: SteuerFeld[],
 ): { elsterFelder: Record<string, string>; konflikte: string[] } {
@@ -99,16 +110,25 @@ export function feldateToElsterFelder(
   }
   const elsterFelder: Record<string, string> = {};
   const konflikte: string[] = [];
+  const emit = (code: string, val: string) => {
+    const mcp = EXTRACTION_TO_MCP[code] ?? code;
+    let out = val;
+    if (RENTENBEGINN_MCP.has(mcp)) {
+      const yr = (val.match(/(?:19|20)\d{2}/) ?? [])[0];
+      if (yr) out = yr;          // MCP renteneintritt_jahr erwartet das Jahr
+    }
+    elsterFelder[mcp] = out;
+  };
   for (const [code, vals] of byCode) {
-    if (vals.length === 1) { elsterFelder[code] = vals[0]; continue; }
+    if (vals.length === 1) { emit(code, vals[0]); continue; }
     const parsed = vals.map((v) => ({ v, n: parseEuro(v) }));
     const allNum = parsed.every((p) => p.n !== null);
     if (allNum) {
       const best = parsed.reduce((a, b) => (Math.abs(b.n!) > Math.abs(a.n!) ? b : a));
-      elsterFelder[code] = best.v;
+      emit(code, best.v);
       konflikte.push(`${code}: ${vals.length} Werte ${JSON.stringify(vals)} → größter (${best.v})`);
     } else {
-      elsterFelder[code] = vals[0];
+      emit(code, vals[0]);
       konflikte.push(`${code}: ${vals.length} Werte ${JSON.stringify(vals)} → erster (${vals[0]})`);
     }
   }
