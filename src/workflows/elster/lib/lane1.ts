@@ -85,6 +85,16 @@ export interface Lane1Options {
    * deferred. Wenn nicht gesetzt, bleibt der Kern netzfrei (deferred[]).
    */
   parseImage?: (docPath: string) => Promise<string>;
+  /**
+   * Optional document-text cache hook. If it returns a non-null
+   * `{ rawText, method }`, that text is used directly — bypassing BOTH
+   * pdftotext and `parseImage`. OCR/pdftotext are deterministic per
+   * document, so a content-addressed cache makes warm re-processing of a
+   * case fully I/O-free (no subprocess spawn, no orchestrator round-trip).
+   * `method` is preserved so household inference (text-only) behaves
+   * identically to a live run.
+   */
+  parseDoc?: (docPath: string) => Promise<{ rawText: string; method: 'text' | 'ocr' } | null>;
 }
 
 export type Lane1BelegStatus =
@@ -189,6 +199,12 @@ export async function runLane1(
   }
   const docTexts: DocText[] = await Promise.all(pdfPaths.map(async (docPath): Promise<DocText> => {
     if (!existsSync(docPath)) return { docPath, rawText: '', method: 'text', ocrRequired: false, missing: true };
+    // Document-text cache hook (warm path): a cache hit skips pdftotext +
+    // OCR entirely, preserving the original text|ocr method.
+    if (opts.parseDoc) {
+      const cached = await opts.parseDoc(docPath);
+      if (cached) return { docPath, rawText: cached.rawText, method: cached.method, ocrRequired: false };
+    }
     const isImage = IMAGE_EXT.has(extname(docPath).toLowerCase());
     const rawText = isImage ? '' : extractText(docPath, pdftotextBin);
     if (rawText.length >= minTextChars) return { docPath, rawText, method: 'text', ocrRequired: false };

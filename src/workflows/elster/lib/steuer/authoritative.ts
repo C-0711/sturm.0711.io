@@ -1,0 +1,206 @@
+/**
+ * authoritative — MCP-autoritative Steuerberechnung mit In-Process-Vorschau.
+ *
+ * ════════════════════════════════════════════════════════════════════════
+ *  „Es muss für JEDEN Steuerfall funktionieren." → die verbindliche Zahl
+ *  kommt IMMER aus der BMF-MCP (ctaxv1-lane1-bmf, :12010): sie akzeptiert
+ *  beliebige E-Code-Sätze und rechnet den vollständigen Tarif-/Abzugs-
+ *  apparat (jeder Fall, BMF-konform, stored procedures). Der In-Process-
+ *  Rechenkern (engine.ts) liefert NUR die Sofort-Vorschau (<1 ms) und einen
+ *  Konformitäts-Abgleich — er ist niemals die bindende Quelle, außer als
+ *  ausdrücklich markierter Fallback, wenn die MCP nicht erreichbar ist.
+ *
+ *  Reihenfolge:
+ *    1. Felder → elster_felder (Dedup je E-Code, Konflikte werden GELOGGT).
+ *    2. In-Process-Vorschau (immer, schnell).
+ *    3. MCP-Aufruf (verbindlich). Erfolg → quelle='mcp'; Fehler → Fallback
+ *       auf Vorschau mit quelle='in-process-fallback' + mcpFehler.
+ *    4. Erstattung/Nachzahlung = bindende Festsetzung − angerechnete Abzüge.
+ * ════════════════════════════════════════════════════════════════════════
+ */
+import { BmfMcpClient, type BmfSteuerErgebnis } from '../../../../lib/bmf-mcp-client.ts';
+import { bausteineAusFelder, parseEuro, type SteuerFeld } from './adapter.ts';
+import { berechneSteuerfall, type SteuerbescheidErgebnis } from './engine.ts';
+import { kirchensteuer, type Veranlagungsart } from './tarif.ts';
+
+export interface SteuerfallAuthInput {
+  /** Gemappte E-Code-Felder EINES Steuerpflichtigen (bzw. einer
+   *  Ehegatten-Zusammenveranlagung). Gemischte Steuerpflichtige müssen
+   *  vorher getrennt werden — siehe steuerfall-demo.ts. */
+  felder: SteuerFeld[];
+  vz: number;
+  art?: Veranlagungsart;
+  /** Kirchensteuer-Hebesatz (0 | 0.08 | 0.09). */
+  kirchensteuerHebesatz?: number;
+  /** Injizierbarer MCP-Client (Default: neue Instanz auf :12010). */
+  mcp?: BmfMcpClient;
+  /** MCP-Timeout; bei Überschreitung greift der Fallback. Default 4000 ms. */
+  mcpTimeoutMs?: number;
+}
+
+export interface BindendeFestsetzung {
+  zve: number;
+  einkommensteuer: number;
+  solidaritaetszuschlag: number;
+  /** In-Process aus Festsetzungs-ESt × Hebesatz abgeleitet (§51a). */
+  kirchensteuer: number;
+  /** ESt + Soli + KiSt. */
+  gesamtsteuer: number;
+  grenzsteuersatz?: number;
+  durchschnittssteuersatz?: number;
+}
+
+export interface Abgleich {
+  zveDelta: number;
+  estDelta: number;
+  gesamtDelta: number;
+  /** true wenn In-Process und MCP innerhalb der Toleranz übereinstimmen. */
+  konform: boolean;
+}
+
+export interface SteuerfallAuthResult {
+  vz: number;
+  /** Welche Quelle ist verbindlich. */
+  quelle: 'mcp' | 'in-process-fallback';
+  bindend: BindendeFestsetzung;
+  /** Summe der angerechneten Abzugsteuern (LSt, Soli, KiSt, KapESt). */
+  angerechnet: number;
+  /** > 0 = Erstattung, < 0 = Nachzahlung. */
+  erstattung: number;
+  /** Roh-Antwort der MCP (wenn erreichbar). */
+  mcp: BmfSteuerErgebnis['daten'] | null;
+  mcpFehler?: string;
+  /** In-Process-Sofortvorschau (immer vorhanden). */
+  vorschau: SteuerbescheidErgebnis;
+  /** Abgleich Vorschau↔MCP (nur wenn quelle='mcp'). */
+  abgleich?: Abgleich;
+  /** Dedup-Konflikte (transparent für HiTL). */
+  konflikte: string[];
+  latenzMs: { vorschau: number; mcp: number | null };
+}
+
+/** Toleranz für den Konformitäts-Abgleich: ≤ 1 € (statutarische
+ *  Euro-Abrundung, siehe engine.test.ts). */
+const KONFORM_TOLERANZ_EUR = 1;
+
+/** Felder → `elster_felder` (ein Wert je E-Code). Bei Mehrfachwerten:
+ *  größter Betrag bei rein numerischen Duplikaten, sonst erster; alle
+ *  Konflikte werden zurückgegeben. */
+export function feldateToElsterFelder(
+  felder: SteuerFeld[],
+): { elsterFelder: Record<string, string>; konflikte: string[] } {
+  const byCode = new Map<string, string[]>();
+  for (const f of felder) {
+    const w = (f.wert ?? '').trim();
+    if (!w) continue;
+    const arr = byCode.get(f.eCode);
+    if (arr) arr.push(w);
+    else byCode.set(f.eCode, [w]);
+  }
+  const elsterFelder: Record<string, string> = {};
+  const konflikte: string[] = [];
+  for (const [code, vals] of byCode) {
+    if (vals.length === 1) { elsterFelder[code] = vals[0]; continue; }
+    const parsed = vals.map((v) => ({ v, n: parseEuro(v) }));
+    const allNum = parsed.every((p) => p.n !== null);
+    if (allNum) {
+      const best = parsed.reduce((a, b) => (Math.abs(b.n!) > Math.abs(a.n!) ? b : a));
+      elsterFelder[code] = best.v;
+      konflikte.push(`${code}: ${vals.length} Werte ${JSON.stringify(vals)} → größter (${best.v})`);
+    } else {
+      elsterFelder[code] = vals[0];
+      konflikte.push(`${code}: ${vals.length} Werte ${JSON.stringify(vals)} → erster (${vals[0]})`);
+    }
+  }
+  return { elsterFelder, konflikte };
+}
+
+/**
+ * Verbindliche Steuerberechnung für einen Fall — MCP-autoritativ, mit
+ * In-Process-Vorschau und Fallback.
+ */
+export async function berechneSteuerfallAuthoritativ(
+  input: SteuerfallAuthInput,
+): Promise<SteuerfallAuthResult> {
+  const hebesatz = input.kirchensteuerHebesatz ?? 0;
+
+  // 1. In-Process-Vorschau (immer, schnell).
+  const tV0 = process.hrtime.bigint();
+  const { eingabe, anrechnung } = bausteineAusFelder(input.felder, {
+    vz: input.vz, art: input.art, kirchensteuerHebesatz: hebesatz,
+  });
+  const vorschau = berechneSteuerfall({ ...eingabe, anrechnung, kirchensteuerHebesatz: hebesatz });
+  const tV1 = process.hrtime.bigint();
+  const vorschauMs = Number(tV1 - tV0) / 1e6;
+
+  const angerechnet = vorschau.angerechnet;
+  const { elsterFelder, konflikte } = feldateToElsterFelder(input.felder);
+
+  // 2. MCP-Aufruf (verbindlich).
+  const client = input.mcp ?? new BmfMcpClient({ timeoutMs: input.mcpTimeoutMs ?? 4000 });
+  let mcpDaten: BmfSteuerErgebnis['daten'] | null = null;
+  let mcpFehler: string | undefined;
+  let mcpMs: number | null = null;
+  try {
+    const tM0 = process.hrtime.bigint();
+    const res = await client.berechneVollstaendigeSteuerV2({
+      erklaerungsjahr: input.vz,
+      elster_felder: elsterFelder,
+    });
+    mcpMs = Number(process.hrtime.bigint() - tM0) / 1e6;
+    if (!res.erfolg) throw new Error(`MCP erfolg=false (${JSON.stringify(res.fehler ?? {}).slice(0, 120)})`);
+    mcpDaten = res.daten;
+  } catch (e) {
+    mcpFehler = (e as Error).message;
+  }
+
+  // 3. Bindende Festsetzung zusammensetzen.
+  if (mcpDaten) {
+    const est = mcpDaten.einkommensteuer;
+    const soli = mcpDaten.solidaritaetszuschlag;
+    const kist = kirchensteuer(est, hebesatz);
+    const gesamt = round2(est + soli + kist);
+    const bindend: BindendeFestsetzung = {
+      zve: mcpDaten.zve,
+      einkommensteuer: est,
+      solidaritaetszuschlag: soli,
+      kirchensteuer: kist,
+      gesamtsteuer: gesamt,
+      grenzsteuersatz: mcpDaten.grenzsteuersatz,
+      durchschnittssteuersatz: mcpDaten.durchschnittssteuersatz,
+    };
+    const abgleich: Abgleich = {
+      zveDelta: round2(vorschau.einkommen.zvE - mcpDaten.zve),
+      estDelta: round2(vorschau.steuer.einkommensteuer - est),
+      gesamtDelta: round2(vorschau.steuer.gesamtsteuer - gesamt),
+      konform: Math.abs(vorschau.steuer.einkommensteuer - est) <= KONFORM_TOLERANZ_EUR,
+    };
+    return {
+      vz: input.vz, quelle: 'mcp', bindend, angerechnet,
+      erstattung: round2(angerechnet - gesamt),
+      mcp: mcpDaten, vorschau, abgleich, konflikte,
+      latenzMs: { vorschau: vorschauMs, mcp: mcpMs },
+    };
+  }
+
+  // 4. Fallback: In-Process ist (ausdrücklich markiert) bindend.
+  return {
+    vz: input.vz, quelle: 'in-process-fallback',
+    bindend: {
+      zve: vorschau.einkommen.zvE,
+      einkommensteuer: vorschau.steuer.einkommensteuer,
+      solidaritaetszuschlag: vorschau.steuer.solidaritaetszuschlag,
+      kirchensteuer: vorschau.steuer.kirchensteuer,
+      gesamtsteuer: vorschau.steuer.gesamtsteuer,
+      grenzsteuersatz: vorschau.steuer.grenzsteuersatz,
+      durchschnittssteuersatz: vorschau.steuer.durchschnittssteuersatz,
+    },
+    angerechnet, erstattung: vorschau.erstattung,
+    mcp: null, mcpFehler, vorschau, konflikte,
+    latenzMs: { vorschau: vorschauMs, mcp: mcpMs },
+  };
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
