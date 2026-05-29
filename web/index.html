@@ -180,8 +180,8 @@
 #sdb .tag { display:inline-block;border:1px solid var(--line2);color:var(--mut);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:1px; }
 #sdb .tag.amber { border-color:rgba(240,180,41,.25);color:var(--amber); } #sdb .tag.green { border-color:rgba(98,209,140,.25);color:var(--green); }
 /* PERSON TABS */
-#sdb .ptabs { display:flex;margin-bottom:20px;border-bottom:1px solid var(--line); }
-#sdb .ptab { flex:1;padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-align:center;margin-bottom:-1px; }
+#sdb .ptabs { display:flex;margin-bottom:20px;border-bottom:1px solid var(--line);flex-wrap:wrap; }
+#sdb .ptab { flex:1;padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-align:center;margin-bottom:-1px;min-width:120px; }
 #sdb .ptab-name { font-size:12px;color:var(--mut);transition:color .15s; }
 #sdb .ptab:hover .ptab-name { color:var(--txt); }
 #sdb .ptab.active { border-bottom-color:var(--amber); }
@@ -267,7 +267,7 @@ const drop=$('#drop'), fileInput=$('#file'), go=$('#go'), statusEl=$('#status'),
 let picked=[];
 let lastData=null;
 
-const eur=(n)=>Number(n).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const eur=(n)=>Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const parseDe=(s)=>{const t=String(s==null?'':s).replace(/[^\d,.\-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.');const n=parseFloat(t);return Number.isFinite(n)?n:NaN;};
 const step=(s,state)=>{const el=$('.step[data-s="'+s+'"]');if(!el)return;el.classList.remove('active','done');if(state)el.classList.add(state);};
@@ -315,91 +315,114 @@ const fval=(d,person,code)=>{const f=field(d,person,code);return f?f.wert:null;}
 const feur=(d,person,code)=>{const v=fval(d,person,code);if(v==null)return null;const n=parseDe(v);return Number.isFinite(n)?eur(n):esc(v);};
 const idnr=(s)=>{const t=String(s||'').replace(/\D/g,'');return t.length===11?t.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/,'$1 $2 $3 $4'):esc(s||'—');};
 const BELN={VaSt_LStB:'Lohnsteuerbescheinigung',VaSt_Religion:'Kirchensteuer-Merkmal',VaSt_FSA:'Freistellungsauftrag',Steuerbescheinigung_Bank:'Bank-Steuerbescheinigung',Einkommensteuererklaerung:'ESt-Erklärung',VaSt_KRV:'Renten-/KV-Bezug',Unbekannt:'Unbekannt'};
-const primaryCalc=(d)=>d.calcs.find(c=>c.einheit==='A+B')||d.calcs[0]||null;
+
+const INCOME=[['E0200201','Bruttoarbeitslohn'],['E0200203','Bruttoarbeitslohn'],['E0200204','Bruttoarbeitslohn'],['E0201806','Entschädigung (§34)'],['E2400103','Gesetzliche Rente'],['E2400203','Gesetzliche Rente'],['E1800301','Gesetzliche Rente'],['E1803102','Gesetzliche Rente'],['E1900701','Kapitalerträge']];
+const VORS=[['E2000601','Rentenvers. AN'],['E2000801','Rentenvers. AG'],['E2000501','Berufsständ. Versorgung'],['E2000401','Rentenvers. (Summe)'],['E2001203','Krankenversicherung'],['E2001505','Pflegeversicherung'],['E2004403','Arbeitslosenversicherung']];
+const ANRECH=[['E0200301','Lohnsteuer'],['E0200401','Solidaritätszuschlag'],['E0200501','Kirchensteuer (AN)'],['E0200601','Kirchensteuer (Partner)'],['E1904701','Kapitalertragsteuer'],['E1904901','SolZ auf KapErt'],['E1904801','KiSt auf KapErt']];
+
+function itemRows(d,persons,list,neg){
+  let h='';
+  for(const p of persons)for(const pair of list){
+    const code=pair[0], fb=pair[1];
+    const f=field(d,p,code); if(!f)continue; const n=parseDe(f.wert); if(!Number.isFinite(n))continue;
+    const lbl=esc((f.label||fb).slice(0,42))+(persons.length>1?` <span style="color:var(--dim)">(${p})</span>`:'');
+    h+=`<div class="cr"><div><div class="cr-lbl">${lbl}</div><div class="cr-code">${esc(code)}${f.anlage?' · '+esc(f.anlage):''}</div></div><div class="cr-val${neg?' green':''}">${neg?'− ':''}${eur(Math.abs(n))}</div></div>`;
+  }
+  return h;
+}
+
+function bescheidCard(d,c){
+  const b=c.bindend||{}; const persons=c.einheit==='A+B'?['A','B']:[c.einheit||'A'];
+  const refundC=(c.erstattung||0)>=0; const verb=c.quelle==='mcp'||c.quelle==='mcp-splitting';
+  const eff=((b.durchschnittssteuersatz!=null?b.durchschnittssteuersatz:(b.zve>0?(b.einkommensteuer||0)/b.zve:0))*100);
+  const who=c.einheit==='A+B'?'Ehepaar · Zusammenveranlagung':('Person '+(c.einheit||'A')+' · Einzelveranlagung');
+  const mx=Math.max(b.einkommensteuer||0,b.kirchensteuer||0,b.solidaritaetszuschlag||0,c.angerechnet||0,1);
+  const bar=(lbl,v,col)=>`<div class="br"><div class="br-meta"><span>${lbl}</span><span>${eur(v||0)}</span></div><div class="br-track"><div class="br-fill" style="width:${((v||0)/mx*100).toFixed(1)}%;background:${col}"></div></div></div>`;
+  const inc=itemRows(d,persons,INCOME,false), vor=itemRows(d,persons,VORS,false), anr=itemRows(d,persons,ANRECH,true);
+  return `<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--amber)"></div>${who}</div><span class="tag ${verb?'amber':''}">${verb?'BMF-MCP'+(c.quelle==='mcp-splitting'?' · Splitting':''):'In-Process'}</span></div>
+    <div class="card-body">
+      ${inc?`<div class="slabel">Einkommensgrundlage</div>${inc}`:''}
+      ${vor?`<div class="slabel">Vorsorgeaufwendungen (§10 EStG)</div>${vor}`:''}
+      <div class="slabel">Festgesetzte Steuer · ${verb?'BMF-MCP bindend':'In-Process-Fallback'}</div>
+      <div class="cr"><div><div class="cr-lbl"><strong>Zu versteuerndes Einkommen</strong></div><div class="cr-code">${c.einheit==='A+B'?'§32a Abs. 5 · Splittingtarif':'§32a · Grundtarif'}</div></div><div class="cr-val">${eur(b.zve||0)}</div></div>
+      <div class="br"><div class="br-meta"><span>Durchschnittssteuersatz (ESt/zvE)</span><span>${eff.toFixed(1)} %</span></div><div class="br-track"><div class="br-fill" style="width:${Math.min(Math.max(eff,0),100).toFixed(1)}%;background:var(--amber)"></div></div></div>
+      <div class="cr"><div><div class="cr-lbl">Einkommensteuer (§32a)</div></div><div class="cr-val">${eur(b.einkommensteuer||0)}</div></div>
+      <div class="cr"><div><div class="cr-lbl">Solidaritätszuschlag</div></div><div class="cr-val ${b.solidaritaetszuschlag?'':'zero'}">${eur(b.solidaritaetszuschlag||0)}</div></div>
+      <div class="cr"><div><div class="cr-lbl">Kirchensteuer</div></div><div class="cr-val ${b.kirchensteuer?'':'zero'}">${eur(b.kirchensteuer||0)}</div></div>
+      <div class="cr total"><div><div class="cr-lbl"><strong>Festgesetzte Gesamtsteuer</strong></div></div><div class="cr-val">${eur(b.gesamtsteuer||0)}</div></div>
+      ${anr?`<div class="slabel">Anrechnungen</div>${anr}`:''}
+      <div class="cr"><div><div class="cr-lbl dim">Summe angerechnet</div></div><div class="cr-val green">− ${eur(c.angerechnet||0)}</div></div>
+      <div class="cr result"><div><div class="cr-lbl"><strong>${refundC?'Erstattung':'Nachzahlung'}</strong></div><div class="cr-code" style="color:rgba(240,180,41,.5)">${eur(b.gesamtsteuer||0)} − ${eur(c.angerechnet||0)}</div></div><div class="cr-val ${refundC?'green':'amber'}">${eur(Math.abs(c.erstattung||0))}</div></div>
+      ${c.abgleich?`<div class="cr"><div><div class="cr-lbl dim">Abgleich In-Process ↔ MCP</div></div><div class="cr-val dim">ΔESt ${c.abgleich.estDelta} · ${c.abgleich.konform?'konform':'MCP bindend'}</div></div>`:''}
+      <div class="slabel">Steuerstruktur</div>
+      ${bar('Einkommensteuer festgesetzt',b.einkommensteuer,'var(--amber)')}
+      ${bar('Angerechnete Abzugsteuern',c.angerechnet,'var(--blue)')}
+      ${bar('Kirchensteuer',b.kirchensteuer,'var(--mut)')}
+      ${bar('Solidaritätszuschlag',b.solidaritaetszuschlag,'var(--green)')}
+    </div></div>`;
+}
 
 /* ── render ── */
 function renderDashboard(d){
   lastData=d;
-  const c=primaryCalc(d);
+  const calcs=Array.isArray(d.calcs)?d.calcs:[];
+  const belege=Array.isArray(d.belege)?d.belege:[];
+  const fields=Array.isArray(d.fields)?d.fields:[];
+  d.fields=fields; d.belege=belege;
   const zus=d.veranlagungsart==='zusammen';
-  const refund=c&&c.erstattung>=0;
-  const verbindlich=c&&(c.quelle==='mcp'||c.quelle==='mcp-splitting');
+  const ir=(k,v)=>`<div class="ir"><div class="ir-k">${k}</div><div class="ir-v">${v}</div></div>`;
   const nA=d.household&&d.household.personA?`${d.household.personA.vorname||''} ${d.household.personA.nachname||''}`.trim():'';
   const nB=d.household&&d.household.personB?`${d.household.personB.vorname||''} ${d.household.personB.nachname||''}`.trim():'';
-  const mcpMs=c&&c.latenzMs&&c.latenzMs.mcp?Math.round(c.latenzMs.mcp)+' ms':'—';
-  const brutto=feur(d,'A','E0200201');
-  const stkl=fval(d,'A','E0200002');
+  const stkl=fval(d,'A','E0200002')||fval(d,'B','E0200002');
+  const verbindlich=calcs.some(c=>c.quelle==='mcp'||c.quelle==='mcp-splitting');
 
-  /* header chips */
-  const chips=[`<span class="chip ok">✓ fertig · ${d._clientMs||d.lane1Ms} ms</span>`,
-    `<span class="chip amber">VZ ${esc(d.vz)}</span>`];
+  const T={zve:0,gesamt:0,ang:0,saldo:0,mcpMs:0};
+  for(const c of calcs){const b=c.bindend||{};T.zve+=b.zve||0;T.gesamt+=b.gesamtsteuer||0;T.ang+=c.angerechnet||0;T.saldo+=c.erstattung||0;T.mcpMs=Math.max(T.mcpMs,(c.latenzMs&&c.latenzMs.mcp)||0);}
+  const refund=T.saldo>=0;
+  const bruttoN=['A','B'].reduce((s,p)=>{const n=parseDe(fval(d,p,'E0200201'));return s+(Number.isFinite(n)?n:0);},0);
+
+  const chips=[`<span class="chip ok">✓ fertig · ${d._clientMs||d.lane1Ms} ms</span>`,`<span class="chip amber">VZ ${esc(d.vz)}</span>`];
   if(verbindlich)chips.push('<span class="chip blue">BMF · verbindlich</span>');
-  if(zus)chips.push('<span class="chip">Splitting §32a</span>');
+  if(zus)chips.push('<span class="chip">Splitting §32a</span>'); else if(calcs.length>1)chips.push(`<span class="chip">${calcs.length} Einzelveranlagungen</span>`);
 
-  /* KPIs */
   const kpi=(val,cls,label,sub,ka)=>`<div class="kpi" style="--ka:${ka}"><div class="kpi-val ${cls||''}">${val}</div><div class="kpi-label">${label}</div><div class="kpi-sub">${sub}</div></div>`;
   const kpis=[
-    kpi(d.belege.length,'','Belege',`${d.ocrCount} davon OCR`,'rgba(98,209,140,.3)'),
-    kpi(d.fields.length,'','E-Code-Felder','gemappt','rgba(125,180,230,.3)'),
-    kpi(brutto||'—','','Bruttoarbeitslohn',`${esc(nA||'Person A')}${stkl?' · SKl '+esc(stkl):''}`,'rgba(236,233,226,.15)'),
-    kpi(c?eur(c.bindend.zve):'—','','z.v. Einkommen',zus?'§32a · Splitting':'§32a · Grundtarif','rgba(236,233,226,.15)'),
-    kpi(c?eur(c.bindend.gesamtsteuer):'—','','Gesamtsteuer','ESt + KiSt + SolZ','rgba(240,104,106,.3)'),
-    c?kpi(eur(Math.abs(c.erstattung)),refund?'green':'amber',refund?'Erstattung':'Nachzahlung',`${verbindlich?'MCP bindend':'In-Process'} · ${mcpMs}`,'rgba(240,180,41,.4)'):''
+    kpi(belege.length,'','Belege',`${d.ocrCount||0} davon OCR`,'rgba(98,209,140,.3)'),
+    kpi(fields.length,'','E-Code-Felder','gemappt','rgba(125,180,230,.3)'),
+    kpi(bruttoN>0?eur(bruttoN):'—','','Bruttoarbeitslohn',`${esc(nA||'Person A')}${stkl?' · SKl '+esc(stkl):''}`,'rgba(236,233,226,.15)'),
+    kpi(calcs.length?eur(T.zve):'—','','z.v. Einkommen',zus?'§32a · Splitting':'§32a · Grundtarif','rgba(236,233,226,.15)'),
+    kpi(calcs.length?eur(T.gesamt):'—','','Gesamtsteuer','ESt + KiSt + SolZ','rgba(240,104,106,.3)'),
+    calcs.length?kpi(eur(Math.abs(T.saldo)),refund?'green':'amber',refund?'Erstattung':'Nachzahlung',`${verbindlich?'MCP bindend':'In-Process'} · ${T.mcpMs?Math.round(T.mcpMs)+' ms':'—'}`,'rgba(240,180,41,.4)'):kpi('—','','Saldo','keine Berechnung','rgba(240,180,41,.4)')
   ].join('');
 
-  /* hero */
-  const heroTitle=zus?`Ehepaar ${esc(d.household&&d.household.personA?d.household.personA.nachname||'':'')} · Zusammenveranlagung`
-                     :(c&&c.einheit?`Person ${esc(c.einheit)} · Einzelveranlagung`:'Steuerfall');
-  const heroDesc=(d.begruendung&&d.begruendung.length)?esc(d.begruendung.join(' · '))
-                 :(zus?'Splittingtarif §32a Abs. 5 · BMF-MCP bindend':'Grundtarif §32a · BMF-MCP bindend');
-  const hero=c?`<div class="hero"><div>
+  const lastName=d.household&&d.household.personA?d.household.personA.nachname||'':'';
+  const heroTitle=zus?`Ehepaar ${esc(lastName)} · Zusammenveranlagung`
+    :(calcs.length>1?`Haushalt · ${calcs.length} Einzelveranlagungen`
+      :(calcs.length===1?`${esc(nA||('Person '+(calcs[0].einheit||'A')))} · Einzelveranlagung`:'Steuerfall'));
+  const heroDesc=(d.begruendung&&d.begruendung.length)?esc(d.begruendung.join(' · ')):(zus?'Splittingtarif §32a Abs. 5':'Grundtarif §32a');
+  const hero=calcs.length?`<div class="hero"><div>
       <div class="hero-label">Steuerbescheid ${esc(d.vz)}</div>
       <div class="hero-title">${heroTitle}</div>
-      <div class="hero-desc">${heroDesc}${c.abgleich?` · ΔESt = ${c.abgleich.estDelta}`:''}</div>
-    </div><div><div class="hero-amt ${refund?'refund':'owe'}">${eur(Math.abs(c.erstattung))}</div>
-      <div class="hero-amt-sub">${refund?'Erstattung · vom Finanzamt':'Nachzahlung · an Finanzamt'}</div></div></div>`:'';
+      <div class="hero-desc">${heroDesc}</div>
+    </div><div><div class="hero-amt ${refund?'refund':'owe'}">${eur(Math.abs(T.saldo))}</div>
+      <div class="hero-amt-sub">${refund?'Erstattung · vom Finanzamt':'Nachzahlung · an Finanzamt'}${calcs.length>1?' · Haushalt gesamt':''}</div></div></div>`:'';
 
-  /* kalkulation (left) */
-  let calcCard='';
-  if(c){
-    const b=c.bindend;
-    const eff=(b.durchschnittssteuersatz!=null?b.durchschnittssteuersatz:(b.zve>0?b.einkommensteuer/b.zve:0))*100;
-    const mx=Math.max(b.einkommensteuer,b.kirchensteuer,b.solidaritaetszuschlag,c.angerechnet,1);
-    const bar=(lbl,v,col)=>`<div class="br"><div class="br-meta"><span>${lbl}</span><span>${eur(v)}</span></div><div class="br-track"><div class="br-fill" style="width:${(v/mx*100).toFixed(1)}%;background:${col}"></div></div></div>`;
-    calcCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--amber)"></div>Steuer-Kalkulation · transparent</div><span class="chev open">▼</span></div>
-      <div class="card-body">
-        <div class="slabel">Festgesetzte Steuer · ${verbindlich?'BMF-MCP bindend':'In-Process-Fallback'}</div>
-        <div class="cr"><div><div class="cr-lbl"><strong>Zu versteuerndes Einkommen</strong></div><div class="cr-code">${zus?'§32a Abs. 5 · Splittingtarif':'§32a · Grundtarif'}</div></div><div class="cr-val">${eur(b.zve)}</div></div>
-        <div class="br"><div class="br-meta"><span>Durchschnittssteuersatz (ESt/zvE)</span><span>${eff.toFixed(1)} %</span></div><div class="br-track"><div class="br-fill" style="width:${Math.min(eff,100).toFixed(1)}%;background:var(--amber)"></div></div></div>
-        <div class="cr"><div><div class="cr-lbl">Einkommensteuer (§32a)</div></div><div class="cr-val">${eur(b.einkommensteuer)}</div></div>
-        <div class="cr"><div><div class="cr-lbl">Solidaritätszuschlag</div></div><div class="cr-val ${b.solidaritaetszuschlag?'':'zero'}">${eur(b.solidaritaetszuschlag)}</div></div>
-        <div class="cr"><div><div class="cr-lbl">Kirchensteuer</div></div><div class="cr-val ${b.kirchensteuer?'':'zero'}">${eur(b.kirchensteuer)}</div></div>
-        <div class="cr total"><div><div class="cr-lbl"><strong>Festgesetzte Gesamtsteuer</strong></div></div><div class="cr-val">${eur(b.gesamtsteuer)}</div></div>
-        <div class="slabel">Anrechnung & Saldo</div>
-        <div class="cr"><div><div class="cr-lbl dim">Summe angerechnete Abzugsteuern</div><div class="cr-code">LSt · KapESt · SolZ · KiSt</div></div><div class="cr-val green">− ${eur(c.angerechnet)}</div></div>
-        <div class="cr result"><div><div class="cr-lbl"><strong>${refund?'Erstattung':'Nachzahlung'}</strong></div><div class="cr-code" style="color:rgba(240,180,41,.5)">${eur(b.gesamtsteuer)} − ${eur(c.angerechnet)}</div></div><div class="cr-val ${refund?'green':'amber'}">${eur(Math.abs(c.erstattung))}</div></div>
-        <div class="slabel">Steuerstruktur</div>
-        ${bar('Einkommensteuer festgesetzt',b.einkommensteuer,'var(--amber)')}
-        ${bar('Angerechnete Abzugsteuern',c.angerechnet,'var(--blue)')}
-        ${bar('Kirchensteuer',b.kirchensteuer,'var(--mut)')}
-        ${bar('Solidaritätszuschlag',b.solidaritaetszuschlag,'var(--green)')}
-      </div></div>`;
-  }
+  const bescheide=calcs.length?calcs.map(c=>bescheidCard(d,c)).join('')
+    :'<div class="card"><div class="card-body" style="color:var(--dim)">Keine Berechnung — es wurden keine rechenbaren Felder einem Steuerpflichtigen zugeordnet.</div></div>';
 
-  /* veranlagung + KAP (right) */
-  const ir=(k,v)=>`<div class="ir"><div class="ir-k">${k}</div><div class="ir-v">${v}</div></div>`;
   const relA=fval(d,'A','E0100402'), relB=fval(d,'B','E0101002');
-  let veranlCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Veranlagungsart</div><span class="chev open">▼</span></div>
+  const primary=calcs.find(c=>c.einheit==='A+B')||calcs[0]||null;
+  const veranlCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Veranlagungsart</div><span class="chev open">▼</span></div>
     <div class="card-body">
       ${ir('Form',`<span class="tag ${zus?'amber':''}">${zus?'Zusammenveranlagung':'Einzelveranlagung'}</span>`)}
       ${ir('Rechtsgrundlage',zus?'§32a Abs. 5 EStG':'§32a EStG')}
       ${ir('Tarif',zus?'Splittingtarif':'Grundtarif')}
+      ${ir('Bescheide',calcs.length)}
       ${stkl?ir('Steuerklasse',esc(stkl)):''}
       ${relA?ir('Konfession A','Schlüssel '+esc(relA)):''}
       ${relB?ir('Konfession B','Schlüssel '+esc(relB)):''}
-      ${c?ir('Berechnung',esc((c.quelle||'').toUpperCase())):''}
-      ${c&&c.abgleich?ir('Abgleich',`ΔESt ${c.abgleich.estDelta} · ${c.abgleich.konform?'konform':'MCP bindend'}`):''}
-      ${ir('Laufzeit MCP',mcpMs)}
+      ${primary?ir('Berechnung',esc((primary.quelle||'').toUpperCase())):''}
+      ${ir('Laufzeit MCP',T.mcpMs?Math.round(T.mcpMs)+' ms':'—')}
     </div></div>`;
   const kapRows=[
     ['Sparer-Pauschbetrag (A)',feur(d,'A','E1901402')],
@@ -414,13 +437,13 @@ function renderDashboard(d){
     <div class="card-body">${kapRows.map(r=>ir(r[0],r[1])).join('')}</div></div>`:'';
 
   /* personen tabs */
-  const persons=[]; if(d.fields.some(f=>f.person==='A')||nA)persons.push('A'); if(d.fields.some(f=>f.person==='B')||nB)persons.push('B');
+  const persons=[]; if(fields.some(f=>f.person==='A')||nA)persons.push('A'); if(fields.some(f=>f.person==='B')||nB)persons.push('B');
   const pName={A:nA||'Person A',B:nB||'Person B'};
   const tabs=persons.map((p,i)=>`<div class="ptab${i===0?' active':''}" data-pc="pc-${p}"><div class="ptab-name">${esc(pName[p])}</div><div class="ptab-role">Person ${p}${p==='A'?' · Hauptveranlagter':' · Ehegatte'}</div></div>`).join('');
   const pane=(p,i)=>{
     const hh=d.household?(p==='A'?d.household.personA:d.household.personB):null;
     let rows=''; if(hh&&hh.idnr)rows+=ir('Steuer-ID',idnr(hh.idnr));
-    for(const f of d.fields.filter(x=>x.person===p)){
+    for(const f of fields.filter(x=>x.person===p)){
       const n=parseDe(f.wert); const show=(Number.isFinite(n)&&/[.,]\d|^\d{4,}/.test(String(f.wert)))?eur(n):esc(f.wert);
       rows+=`<div class="ir"><div class="ir-k">${esc((f.label||f.eCode).slice(0,46))}</div><div class="ir-v">${show}</div></div>`;
     }
@@ -430,27 +453,25 @@ function renderDashboard(d){
     <div class="card-body"><div class="ptabs">${tabs}</div>${persons.map((p,i)=>pane(p,i)).join('')}</div></div>`:'';
 
   /* belege */
-  const belItems=d.belege.map(bg=>`<div class="bel-item"><span class="bel-type ${bg.method}">${esc(bg.method)}</span>
+  const belItems=belege.map(bg=>`<div class="bel-item"><span class="bel-type ${bg.method}">${esc(bg.method)}</span>
       <div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div>
       <div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div>
       <div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div></div>`).join('');
-  const belegeCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Belege · ${d.belege.length} Dokumente</div><span class="chev open">▼</span></div>
+  const belegeCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Belege · ${belege.length} Dokumente</div><span class="chev open">▼</span></div>
     <div class="card-body" style="padding:0"><div class="bel-grid">${belItems}</div></div></div>`;
 
   /* elster table */
   const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
-  const rows=d.fields.map(f=>`<tr><td style="padding-left:24px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td>
+  const trows=fields.map(f=>`<tr><td style="padding-left:24px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td>
       <td class="num">${esc((f.wert||'').slice(0,20))}</td>
       <td><span class="etag ${f.person==='A'?'a':'b'}">${esc(f.person)}</span></td>
       <td><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td>
       <td style="padding-right:24px"><span class="etag ${esc(f.method)}">${esc(f.method)}</span></td></tr>`).join('');
-  const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${d.fields.length} Felder</div><span class="chev">▼</span></div>
-    <div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:24px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:24px">Quelle</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${fields.length} Felder</div><span class="chev">▼</span></div>
+    <div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:24px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:24px">Quelle</th></tr></thead><tbody>${trows}</tbody></table></div></div>`;
 
-  /* warnings */
   const warn=(d.warnings&&d.warnings.length)?`<div class="warn"><b>Hinweise:</b> ${d.warnings.map(w=>esc(w)).join(' &nbsp;·&nbsp; ')}</div>`:'';
 
-  /* assemble */
   sdb.innerHTML=`
     <div class="hd">
       <div class="hd-l"><div class="hd-logo">ST<span>U</span>RM</div><div class="hd-sep">·</div><div class="hd-sub">Steuer-Dashboard</div></div>
@@ -473,13 +494,13 @@ function renderDashboard(d){
       </div>
       <div class="kpi-row">${kpis}</div>
       ${hero}
-      <div class="g3">${calcCard}<div>${veranlCard}${kapCard}</div></div>
+      <div class="g3">${bescheide}<div>${veranlCard}${kapCard}</div></div>
       <div class="g2">${personenCard}${belegeCard}</div>
       ${elsterCard}
       ${warn}
       <div class="footer">STURM · Steuer-Engine · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verbindlich?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div>
     </div>`;
-  $('#pup-vz').value=String(d.vz);
+  const pv=$('#pup-vz'); if(pv)pv.value=String(d.vz);
   try{ if(localStorage.getItem('sturm-theme')==='light') sdb.classList.add('light'); }catch(_){}
   landing.style.display='none';
   sdb.classList.add('show');
@@ -489,14 +510,14 @@ function renderDashboard(d){
 /* ── dashboard interactivity (event delegation) ── */
 sdb.addEventListener('click',e=>{
   const head=e.target.closest('.card-head');
-  if(head){const b=head.nextElementSibling;b.classList.toggle('collapsed');const ch=head.querySelector('.chev');if(ch)ch.classList.toggle('open');return;}
+  if(head){const b=head.nextElementSibling;if(b)b.classList.toggle('collapsed');const ch=head.querySelector('.chev');if(ch)ch.classList.toggle('open');return;}
   const tab=e.target.closest('.ptab');
   if(tab){const root=tab.closest('.card-body');root.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');root.querySelectorAll('.pc').forEach(p=>p.classList.remove('active'));const pc=root.querySelector('#'+tab.dataset.pc);if(pc)pc.classList.add('active');return;}
   if(e.target.closest('#theme-btn')){sdb.classList.toggle('light');try{localStorage.setItem('sturm-theme',sdb.classList.contains('light')?'light':'dark');}catch(_){}return;}
   if(e.target.closest('#reset-btn')){sdb.classList.remove('show');sdb.innerHTML='';picked=[];showFiles();resetSteps();statusEl.textContent='';landing.style.display='';window.scrollTo(0,0);return;}
-  if(e.target.closest('#pup-btn')){$('#pup-panel').classList.toggle('open');return;}
-  if(e.target.closest('#pup-drop')){$('#pup-input').click();return;}
-  if(e.target.closest('#pup-run')){const vz=$('#pup-vz').value;landing.style.display='';sdb.classList.remove('show');run(vz);return;}
+  if(e.target.closest('#pup-btn')){const p=$('#pup-panel');if(p)p.classList.toggle('open');return;}
+  if(e.target.closest('#pup-drop')){const i=$('#pup-input');if(i)i.click();return;}
+  if(e.target.closest('#pup-run')){const v=$('#pup-vz');landing.style.display='';sdb.classList.remove('show');run(v?v.value:String((lastData&&lastData.vz)||2023));return;}
 });
 sdb.addEventListener('change',e=>{
   if(e.target.id==='pup-input'){addFiles(e.target.files);const q=$('#pup-queue'),bd=$('#pup-badge'),rn=$('#pup-run');
