@@ -223,6 +223,16 @@
   .etag.a{color:var(--ink)} .etag.ocr{border-color:color-mix(in srgb,var(--blue) 25%,transparent);color:var(--blue)} .etag.text{border-color:color-mix(in srgb,var(--green) 25%,transparent);color:var(--green)}
   .warn{margin-top:1px;background:var(--bg);border:1px solid var(--line);padding:13px 20px;font-size:10px;color:var(--dim)}
   .warn b{color:var(--gold);font-weight:400}
+  .doccard{cursor:pointer} .docpanel__list .doccard:hover{border-color:var(--gold)}
+  .docview{display:flex;flex-direction:column;min-height:calc(100vh - 150px)}
+  .docview__bar{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .docview__name{font-family:var(--font-serif);font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .docview__frame{flex:1;width:100%;min-height:70vh;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+  .docview__imgwrap{flex:1;min-height:60vh;border:1px solid var(--line);border-radius:10px;background:var(--bg2);display:flex;align-items:center;justify-content:center;overflow:auto;padding:12px}
+  .docview__imgwrap img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:4px}
+  .docview__none{flex:1;min-height:50vh;border:1px dashed var(--line2);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;gap:6px}
+  .docview__none span{color:var(--dim);font-size:10.5px}
+  .docview__fields{padding:6px 4px 24px}
   .foot{margin-top:32px;padding-top:18px;border-top:1px solid var(--line);font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;text-align:center}
   .err{color:var(--red);padding:14px 16px;border:1px solid color-mix(in srgb,var(--red) 40%,transparent);border-radius:10px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:14px 0;font-size:12px}
   ::-webkit-scrollbar{width:6px;height:6px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
@@ -299,8 +309,9 @@ async function makeThumb(file){
 }
 
 /* ── state ── */
-let active=null;   // {id,label,vz,paths:[],docs:[{name,size,path,thumb,badge,state}],data}
+let active=null;   // {id,label,vz,paths:[],docs:[{name,size,path,thumb,badge,state,fields,_file}],data}
 let busy=false;
+let viewDoc=null;  // Index des angeklickten Belegs (Dokument-Detailansicht) oder null
 
 /* ── Fallverwaltung (localStorage) ── */
 const CASES_KEY='sturm-cases-v1';
@@ -321,7 +332,7 @@ function persistActive(){
   const entry={id:active.id,label:active.label,vz:active.vz,ts:Date.now(),
     saldo:c?c.erstattung:0,refund:c?c.erstattung>=0:true,veranlagung:active.data.veranlagungsart,
     data:active.data,paths:active.paths,
-    docs:active.docs.map(d=>({name:d.name,size:d.size,badge:d.badge,state:d.state}))};
+    docs:active.docs.map(d=>({name:d.name,size:d.size,badge:d.badge,state:d.state,fields:d.fields||[],thumbUrl:(d.thumb&&typeof d.thumb.url==='string'&&d.thumb.url.indexOf('data:')===0)?d.thumb.url:null,isImg:!!(d.thumb&&d.thumb.kind==='img')}))};
   const arr=loadCases().filter(x=>x.id!==active.id&&x.label!==active.label);
   arr.unshift(entry); storeCases(arr); renderCases();
 }
@@ -343,8 +354,9 @@ caselistEl.addEventListener('click',e=>{
   const it=e.target.closest('.caseitem'); if(!it)return;
   const c=loadCases().find(x=>x.id===it.getAttribute('data-id')); if(!c)return;
   active={id:c.id,label:c.label,vz:c.vz,paths:c.paths||[],
-    docs:(c.docs||[]).map(d=>({...d,thumb:{kind:/\.(png|jpe?g|tiff?|webp)$/i.test(d.name)?'img':'pdf'}})),data:c.data};
-  closeNcp(); render(); window.scrollTo({top:0,behavior:'smooth'});
+    docs:(c.docs||[]).map(d=>({name:d.name,size:d.size,badge:d.badge,state:d.state,fields:d.fields||[],
+      thumb:d.thumbUrl?{kind:'img',url:d.thumbUrl}:{kind:d.isImg?'img':'pdf'}})),data:c.data};
+  viewDoc=null; closeNcp(); render(); window.scrollTo({top:0,behavior:'smooth'});
 });
 
 /* ── Neuer-Fall-Panel ── */
@@ -390,9 +402,9 @@ async function createCase(){
     const vz=ncp.vz, files=ncp.files.slice();
     const docs=[]; const paths=[];
     for(const f of files){ const path=await uploadFile(f); paths.push(path);
-      docs.push({name:f.name,size:f.size,path,thumb:await makeThumb(f),badge:'',state:'pending'}); }
+      docs.push({name:f.name,size:f.size,path,thumb:await makeThumb(f),badge:'',state:'pending',_file:f}); }
     const data=await compute(paths,vz);
-    active={id:'c'+Date.now(),label:caseLabel(data),vz,paths,docs,data};
+    active={id:'c'+Date.now(),label:caseLabel(data),vz,paths,docs,data}; viewDoc=null;
     applyBadges();
     busy=false; closeNcp(); render(); persistActive();
     window.scrollTo({top:0,behavior:'smooth'});
@@ -407,7 +419,7 @@ async function addDocs(fileList){
   for(const f of files){ active.docs.push({name:f.name,size:f.size,path:null,thumb:await makeThumb(f),badge:'liest…',state:'pending',_file:f}); }
   renderDocPanel();
   try{
-    for(const d of active.docs){ if(d.state==='pending'&&d._file&&!d.path){ d.path=await uploadFile(d._file); active.paths.push(d.path); delete d._file; } }
+    for(const d of active.docs){ if(d.state==='pending'&&d._file&&!d.path){ d.path=await uploadFile(d._file); active.paths.push(d.path); } }
     active.data=await compute(active.paths,active.vz);
     active.label=caseLabel(active.data);
     applyBadges(); busy=false; render(); persistActive();
@@ -419,6 +431,7 @@ function applyBadges(){
   const bel=active.data.belege||[];
   for(const d of active.docs){
     const base=d.path; const hits=base?bel.filter(b=>String(b.source).split('#')[0]===base):[];
+    d.fields=hits.flatMap(h=>h.felderListe||[]);
     if(!hits.length){ d.state='done'; d.badge='verarbeitet'; continue; }
     const felder=hits.reduce((s,h)=>s+(h.felder||0),0);
     const typ=BELN[hits[0].belegTyp]||hits[0].belegTyp;
@@ -430,7 +443,32 @@ function applyBadges(){
 }
 
 /* ── render ── */
-function render(){ renderCases(); updateChips(); renderCenter(); renderDocPanel(); }
+function render(){ renderCases(); updateChips();
+  if(active&&viewDoc!=null&&active.docs[viewDoc]) renderDocDetail();
+  else { renderCenter(); renderDocPanel(); }
+}
+
+/* ── Dokument-Detailansicht: Mitte = Beleg-Vorschau, rechts = extrahierte Felder ── */
+function renderDocDetail(){
+  const d=active.docs[viewDoc];
+  let url=null;
+  if(d._file){ try{ if(d._objUrl)URL.revokeObjectURL(d._objUrl); d._objUrl=URL.createObjectURL(d._file); url=d._objUrl; }catch(_){} }
+  let preview;
+  if(url) preview=`<iframe class="docview__frame" src="${url}#toolbar=0&navpanes=0"></iframe>`;
+  else if(d.thumb&&d.thumb.url) preview=`<div class="docview__imgwrap"><img src="${d.thumb.url}" alt=""></div>`;
+  else preview=`<div class="docview__none">Vorschau nur in der aktuellen Sitzung verfügbar.<br><span>Die extrahierten Felder rechts bleiben gespeichert.</span></div>`;
+  center.innerHTML=`<div class="docview">
+    <div class="docview__bar"><button class="hbtn" id="doc-back">← Zurück zum Bescheid</button><div class="docview__name">${esc(d.name)}</div></div>
+    ${preview}</div>`;
+  const fields=d.fields||[];
+  const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
+  const rows=fields.length?fields.map(f=>`<tr><td style="padding-left:14px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,40))}</td><td class="num">${esc((f.wert||'').slice(0,18))}</td><td style="padding-right:14px"><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td></tr>`).join('')
+    :`<tr><td colspan="4" style="color:var(--dim);padding:16px 14px">Aus diesem Dokument wurden keine Felder extrahiert${d.state==='err'?' (nicht lesbar)':''}.</td></tr>`;
+  docpanel.innerHTML=`<div class="docpanel__head">
+      <p class="docpanel__title"><span>Extrahiert</span><span class="docpanel__vz">${fields.length} Felder</span></p>
+      <p class="docpanel__count" style="font-size:13px;color:var(--green)">${esc(d.badge||'verarbeitet')}</p></div>
+    <div class="docview__fields"><table class="et"><thead><tr><th style="padding-left:14px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th style="padding-right:14px">Anlage</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 
 function updateChips(){
   const box=$('#hd-chips'); const keep=box.querySelectorAll('.hbtn');
@@ -462,7 +500,10 @@ function introHTML(){
     <p class="intro__foot">BMF-MCP bindend · ELSTER-konform · VZ 2023 &amp; 2024</p>
   </section>`;
 }
-center.addEventListener('click',e=>{ if(e.target.closest('#intro-cta')){ openNcp(); window.scrollTo({top:0,behavior:'smooth'}); } });
+center.addEventListener('click',e=>{
+  if(e.target.closest('#doc-back')){ viewDoc=null; render(); window.scrollTo({top:0,behavior:'smooth'}); return; }
+  if(e.target.closest('#intro-cta')){ openNcp(); window.scrollTo({top:0,behavior:'smooth'}); }
+});
 
 function renderDocPanel(){
   if(!active){
@@ -471,14 +512,14 @@ function renderDocPanel(){
     return;
   }
   const n=active.docs.length, done=active.docs.filter(d=>d.state==='done').length;
-  const cards=active.docs.map(d=>{
+  const cards=active.docs.map((d,i)=>{
     const t=d.thumb||{kind:'pdf'};
     const thumb=t.kind==='img'&&t.url?`<div class="doccard__thumb"><img src="${t.url}" alt=""></div>`
       :`<div class="doccard__thumb doccard__thumb--${t.kind==='img'?'img':'pdf'}">${t.kind==='img'?'IMG':'PDF'}</div>`;
     const badgeCls=d.state==='pending'?'doccard__badge--pending':d.state==='err'?'doccard__badge--err':'';
     const badge=d.state==='pending'?`<span class="doccard__badge doccard__badge--pending"><span class="dot-spin"></span>${esc(d.badge||'liest…')}</span>`
       :`<span class="doccard__badge ${badgeCls}"><b>${esc(d.badge||'verarbeitet')}</b></span>`;
-    return `<div class="doccard">${thumb}<div class="doccard__body"><div class="doccard__name">${esc(d.name)}</div><div class="doccard__size">${kb(d.size)}</div>${badge}</div></div>`;
+    return `<div class="doccard" data-doc="${i}" title="Dokument ansehen">${thumb}<div class="doccard__body"><div class="doccard__name">${esc(d.name)}</div><div class="doccard__size">${kb(d.size)}</div>${badge}</div></div>`;
   }).join('');
   docpanel.innerHTML=`<div class="docpanel__head">
       <p class="docpanel__title"><span>Belege</span><span class="docpanel__vz">VZ ${esc(active.vz)}</span></p>
@@ -487,7 +528,10 @@ function renderDocPanel(){
     <div class="docpanel__drop" id="doc-drop">▦ Weitere Belege ablegen oder klicken<input type="file" id="doc-input" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden></div>
     <div class="docpanel__list">${cards}</div>`;
 }
-docpanel.addEventListener('click',e=>{ if(e.target.closest('#doc-drop')){ $('#doc-input')&&$('#doc-input').click(); } });
+docpanel.addEventListener('click',e=>{
+  if(e.target.closest('#doc-drop')){ $('#doc-input')&&$('#doc-input').click(); return; }
+  const card=e.target.closest('.doccard'); if(card){ viewDoc=Number(card.getAttribute('data-doc')); render(); window.scrollTo({top:0,behavior:'smooth'}); }
+});
 docpanel.addEventListener('change',e=>{ if(e.target.id==='doc-input'){ addDocs(e.target.files); e.target.value=''; } });
 ['dragenter','dragover'].forEach(ev=>docpanel.addEventListener(ev,e=>{const d=e.target.closest('#doc-drop');if(d){e.preventDefault();d.classList.add('over');}}));
 ['dragleave','drop'].forEach(ev=>docpanel.addEventListener(ev,e=>{const d=e.target.closest('#doc-drop');if(d){e.preventDefault();d.classList.remove('over');if(ev==='drop')addDocs(e.dataTransfer.files);}}));

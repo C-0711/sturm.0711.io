@@ -113,6 +113,17 @@ export interface Lane1BelegOutcome {
   felder: number;
   /** Welcher Parser lieferte den Text: 'text' (pdftotext) oder 'ocr' (parseImage). */
   method: 'text' | 'ocr';
+  /** Die je Dokument extrahierten Felder — für die Dokument-Detailansicht der
+   *  Web-UI (Klick auf eine Beleg-Karte zeigt genau diese Felder). */
+  felderListe?: { eCode: string; label: string; wert: string; person: string; anlage: string }[];
+}
+
+/** MappedField[] → kompakte Web-Form für die Dokument-Detailansicht. */
+function toFelderListe(felder: MappedField[]): NonNullable<Lane1BelegOutcome['felderListe']> {
+  return felder.map((f) => ({
+    eCode: f.eCode, label: f.pdfLabel ?? '', wert: f.wert,
+    person: String(f.person), anlage: f.anlage ?? '',
+  }));
 }
 
 export interface Lane1Deferred {
@@ -294,6 +305,7 @@ export async function runLane1(
       belege.push({
         source: c.source, belegTyp: 'Einkommensteuererklaerung', person: 'A',
         status: 'mapped', felder: felder.length, method: c.method,
+        felderListe: toFelderListe(felder),
       });
       warnings.push(
         `Voll-Erklärung erkannt (${c.source}) → Vordruckzeile-Extraktor: ${felder.length} Felder. ` +
@@ -358,6 +370,7 @@ export async function runLane1(
     belege.push({
       source: c.source, belegTyp, person,
       status: 'mapped', felder: r.felder.length, method: c.method,
+      felderListe: toFelderListe(r.felder),
     });
   }
 
