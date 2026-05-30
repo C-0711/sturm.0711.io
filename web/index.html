@@ -221,6 +221,18 @@
   .etag.n,.etag.est1a{border-color:color-mix(in srgb,var(--green) 25%,transparent);color:var(--green)}
   .etag.vor{border-color:color-mix(in srgb,var(--gold) 25%,transparent);color:var(--gold)}
   .etag.a{color:var(--ink)} .etag.ocr{border-color:color-mix(in srgb,var(--blue) 25%,transparent);color:var(--blue)} .etag.text{border-color:color-mix(in srgb,var(--green) 25%,transparent);color:var(--green)}
+  /* Provenienz: erkannte Felder gelb hinterlegt + Viewer mit Overlay-Boxen */
+  .et tr.hasprov td{background:color-mix(in srgb,var(--gold) 9%,transparent);cursor:pointer}
+  .et tr.hasprov:hover td{background:color-mix(in srgb,var(--gold) 22%,transparent)}
+  .et tr.hasprov td:first-child::before{content:'◳ ';color:var(--gold)}
+  .docview{overflow:auto;max-height:calc(100vh - 132px)}
+  .docview__wrap{position:relative;width:100%}
+  .docview__wrap img{display:block;width:100%}
+  .hlbox{position:absolute;border:1.5px solid var(--gold);background:color-mix(in srgb,var(--gold) 20%,transparent);border-radius:2px;transition:.15s;pointer-events:none}
+  .hlbox.active{background:color-mix(in srgb,var(--gold) 42%,transparent);border-color:var(--gold-d);animation:hlpulse 1.1s ease-in-out 2}
+  @keyframes hlpulse{0%,100%{box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 75%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--gold) 0%,transparent)}}
+  .docview__back{background:none;border:1px solid var(--line2);color:var(--muted);font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:3px;cursor:pointer}
+  .docview__back:hover{border-color:var(--gold);color:var(--gold)}
   .warn{margin-top:1px;background:var(--bg);border:1px solid var(--line);padding:13px 20px;font-size:10px;color:var(--dim)}
   .warn b{color:var(--gold);font-weight:400}
   .doccard{cursor:pointer} .docpanel__list .doccard:hover{border-color:var(--gold)}
@@ -596,7 +608,11 @@ function renderDash(d){
   const belItems=d.belege.map(bg=>`<div class="bel-item"><span class="bel-type ${bg.method}">${esc(bg.method)}</span><div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div><div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div><div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div></div>`).join('');
   const belegeCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Belege · ${d.belege.length} Dokumente</div><span class="chev open">▼</span></div><div class="card-body" style="padding:0"><div class="bel-grid">${belItems}</div></div></div>`;
   const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
-  const rows=d.fields.map(f=>`<tr><td style="padding-left:20px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td><td class="num">${esc((f.wert||'').slice(0,20))}</td><td><span class="etag ${f.person==='A'?'a':'b'}">${esc(f.person)}</span></td><td><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td><td style="padding-right:20px"><span class="etag ${esc(f.method)}">${esc(f.method)}</span></td></tr>`).join('');
+  const rows=d.fields.map(f=>{
+    const p=f.prov;
+    const pa=p?` class="hasprov" data-hash="${esc(p.hash)}" data-page="${p.page}" data-box="${p.box.join(',')}" title="im Beleg zeigen"`:'';
+    return `<tr${pa}><td style="padding-left:20px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td><td class="num">${esc((f.wert||'').slice(0,20))}</td><td><span class="etag ${f.person==='A'?'a':'b'}">${esc(f.person)}</span></td><td><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td><td style="padding-right:20px"><span class="etag ${esc(f.method)}">${esc(f.method)}</span></td></tr>`;
+  }).join('');
   const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${d.fields.length} Felder</div><span class="chev">▼</span></div><div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:20px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:20px">Quelle</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   const warn=(d.warnings&&d.warnings.length)?`<div class="warn"><b>Hinweise:</b> ${d.warnings.map(w=>esc(w)).join(' &nbsp;·&nbsp; ')}</div>`:'';
   center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}<div class="g2">${calcCard}<div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
@@ -605,8 +621,35 @@ center.addEventListener('click',e=>{
   const head=e.target.closest('.card-head');
   if(head){const b=head.nextElementSibling;b.classList.toggle('collapsed');const ch=head.querySelector('.chev');if(ch)ch.classList.toggle('open');return;}
   const tab=e.target.closest('.ptab');
-  if(tab){const root=tab.closest('.card-body');root.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');root.querySelectorAll('.pc').forEach(p=>p.classList.remove('active'));const pc=root.querySelector('#'+tab.dataset.pc);if(pc)pc.classList.add('active');}
+  if(tab){const root=tab.closest('.card-body');root.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');root.querySelectorAll('.pc').forEach(p=>p.classList.remove('active'));const pc=root.querySelector('#'+tab.dataset.pc);if(pc)pc.classList.add('active');return;}
+  const pr=e.target.closest('tr.hasprov');
+  if(pr){openProv(pr,true);if(window.innerWidth<=1180)docpanel.classList.add('open');}
 });
+
+/* ── Provenienz-Viewer: erkanntes Feld → Box im Beleg rechts ── */
+let curProv='';
+function openProv(tr,focus){
+  const hash=tr.dataset.hash, page=+tr.dataset.page, box=tr.dataset.box.split(',').map(Number);
+  const key=hash+':'+page+':'+tr.dataset.box;
+  if(!focus && key===curProv) return; curProv=key;
+  showDocView(hash,page,focus?box:null);
+}
+center.addEventListener('mouseover',e=>{const tr=e.target.closest('tr.hasprov');if(tr)openProv(tr,false);});
+function showDocView(hash,page,focusBox){
+  const d=active&&active.data; if(!d)return;
+  const doc=(d.docs||[]).find(x=>x.hash===hash); if(!doc){renderDocPanel();return;}
+  const dim=(doc.pages||[])[page]||{w:1,h:1};
+  const fk=focusBox?focusBox.join(','):'';
+  const boxes=(d.fields||[]).filter(f=>f.prov&&f.prov.hash===hash&&f.prov.page===page);
+  const hl=boxes.map(f=>{const b=f.prov.box;const L=b[0]/dim.w*100,T=b[1]/dim.h*100,W=(b[2]-b[0])/dim.w*100,H=(b[3]-b[1])/dim.h*100;
+    return `<div class="hlbox${b.join(',')===fk?' active':''}" style="left:${L}%;top:${T}%;width:${W}%;height:${H}%" title="${esc(f.eCode)} = ${esc(f.wert)}"></div>`;}).join('');
+  docpanel.innerHTML=`<div class="docpanel__head"><p class="docpanel__title"><span>${esc(doc.name.slice(0,26))}</span><button class="docview__back" id="dv-back">← Belege</button></p>
+    <p class="docpanel__count"><b>${boxes.length}</b> Felder erkannt${(doc.pages||[]).length>1?` · Seite ${page+1}/${doc.pages.length}`:''}</p></div>
+    <div class="docview" id="dv-scroll"><div class="docview__wrap"><img id="dv-img" src="api/page?h=${esc(hash)}&p=${page}" alt="">${hl}</div></div>`;
+  const img=$('#dv-img'); const scrollToBox=()=>{const el=docpanel.querySelector('.hlbox.active');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});};
+  if(img){ if(img.complete)scrollToBox(); else img.onload=scrollToBox; }
+}
+docpanel.addEventListener('click',e=>{ if(e.target.closest('#dv-back')){curProv='';renderDocPanel();} });
 
 render();
 </script>
