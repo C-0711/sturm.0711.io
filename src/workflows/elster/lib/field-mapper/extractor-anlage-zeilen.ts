@@ -93,7 +93,10 @@ export function extractByAnlageZeile(rawText: string, person: Person): AnlageZei
   const lines = rawText.split(/\r?\n/);
 
   // Erkennt "Zeile N Anlage X" ODER "Anlage X Zeile N" irgendwo in der Zeile.
-  const refRe = /(?:Zeile\s+(\d{1,3}[a-z]?)\s+Anlage\s+([A-Za-zÄÖÜ_]+))|(?:Anlage\s+([A-Za-zÄÖÜ_]+)\s+Zeile\s+(\d{1,3}[a-z]?))/i;
+  // `\s*` (statt `\s+`) an den Zahl-Grenzen: die Foto-OCR klebt die Tokens oft
+  // zusammen („Zeile 38Anlage KAP", „Zeile39 Anlage KAP") → sonst fällt die
+  // betroffene Zeile (typisch SolZ Z.38 / KiSt Z.39) komplett aus.
+  const refRe = /(?:Zeile\s*(\d{1,3}[a-z]?)\s*Anlage\s+([A-Za-zÄÖÜ_]+))|(?:Anlage\s+([A-Za-zÄÖÜ_]+)\s+Zeile\s*(\d{1,3}[a-z]?))/i;
   // Betrag = letztes Zahl-Token der Zeile (mit optionalem €).
   const valueRe = /(-?\d[\d.]*(?:,\d{1,2})?)\s*€?\s*$/;
   // Strikterer Money-Decimal (mit Komma-Nachkommastellen) für den
