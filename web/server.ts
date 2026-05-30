@@ -8,10 +8,11 @@
  *   ELSTER_CATALOG_PG_URL=… TORNADO_ORCHESTRATOR_URL=… npx tsx web/server.ts
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import pg from 'pg';
 import { runLane1 } from '../src/workflows/elster/lib/lane1.ts';
@@ -42,9 +43,26 @@ function imageToPdf(img: string): string {
     img, pdf], { stdio: 'pipe' });
   return pdf;
 }
+// ── Content-addressed OCR cache ──────────────────────────────────────────
+// OCR ist GPU-gebunden und serialisiert (~100–145 ms/Seite); der teure Teil
+// jeder Berechnung. OCR/pdftotext sind aber DETERMINISTISCH pro Dokument-
+// Inhalt → wir cachen das Ergebnis unter sha256(Datei-Bytes). Re-Compute
+// eines Falls oder wiederholt gedroppte Belege (gleicher Inhalt, neuer Temp-
+// Pfad) überspringen die OCR komplett. Persistiert auf Platte (überlebt
+// Neustart). `parseDoc` (Cache-Lesen) läuft VOR pdftotext/OCR in runLane1.
+const OCR_CACHE_DIR = process.env.OCR_CACHE_DIR ?? join(tmpdir(), 'sturm-ocr-cache');
+mkdirSync(OCR_CACHE_DIR, { recursive: true });
+const contentHash = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
+const cacheFile = (p: string) => join(OCR_CACHE_DIR, contentHash(p) + '.json');
+const parseDoc = async (p: string): Promise<{ rawText: string; method: 'text' | 'ocr' } | null> => {
+  try { const f = cacheFile(p); if (existsSync(f)) return JSON.parse(readFileSync(f, 'utf8')); } catch { /* miss */ }
+  return null;
+};
 const parseImage = async (p: string) => {
   const src = IMAGE_EXT.has(extname(p).toLowerCase()) ? imageToPdf(p) : p;
-  return ocrEnsembleToRawText(await ocrEnsembleFromPath(src, { baseUrl }));
+  const rawText = ocrEnsembleToRawText(await ocrEnsembleFromPath(src, { baseUrl }));
+  try { writeFileSync(cacheFile(p), JSON.stringify({ rawText, method: 'ocr' })); } catch { /* best-effort */ }
+  return rawText;
 };
 
 async function body(req: IncomingMessage): Promise<Buffer> {
@@ -60,7 +78,7 @@ function json(res: ServerResponse, code: number, obj: unknown): void {
 async function runSteuerfall(paths: string[], vz: number) {
   const t0 = process.hrtime.bigint();
   const orchUp = await pingOrchestrator(baseUrl);
-  const r = await runLane1(paths, { vz, pool, parseImage: orchUp ? parseImage : undefined });
+  const r = await runLane1(paths, { vz, pool, parseDoc, parseImage: orchUp ? parseImage : undefined });
   const lane1Ms = Number(process.hrtime.bigint() - t0) / 1e6;
 
   const ocrSet = new Set(r.ocrFields);
