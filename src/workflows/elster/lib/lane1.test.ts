@@ -103,7 +103,7 @@ Anlage Vorsorgeaufwand`;
     assert('belegTyp = Einkommensteuererklaerung', b?.belegTyp === 'Einkommensteuererklaerung', b);
     assert('mapped via Vordruckzeile (>0 Felder)', b?.status === 'mapped' && (b?.felder ?? 0) > 0, b);
     assert('Geburtsdatum E0100401 = 27.05.1963', r.aggregated.find((f) => f.eCode === 'E0100401')?.wert === '27.05.1963', r.aggregated.find((f) => f.eCode === 'E0100401'));
-    assert('IBAN E0102102 = DE08…', r.aggregated.find((f) => f.eCode === 'E0102102')?.wert?.startsWith('DE08'), r.aggregated.find((f) => f.eCode === 'E0102102'));
+    assert('IBAN E0102102 = DE08…', Boolean(r.aggregated.find((f) => f.eCode === 'E0102102')?.wert?.startsWith('DE08')), r.aggregated.find((f) => f.eCode === 'E0102102'));
     // Code-agnostisch: Lohnsteuer hat mehrere Instanz-E-Codes (E0200301..304),
     // die deterministische Auswahl darf variieren — der WERT muss stimmen.
     const lst = r.aggregated.find((f) => f.anlage === 'N' && /Lohnsteuer/i.test(f.pdfLabel ?? ''));

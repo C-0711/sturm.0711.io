@@ -129,7 +129,7 @@ Zeile 39 Anlage KAP`;
   assert('KAP:38 → 0,15', byRef.get('KAP:38')?.wert === '0,15', byRef.get('KAP:38'));
   assert('KAP:39 → 0,24 (Wert auf Text-Zeile)', byRef.get('KAP:39')?.wert === '0,24', byRef.get('KAP:39'));
   assert('genau 4 Hits aus OCR-Layout', hits.length === 4, hits.length);
-  assert('Look-Back dokumentiert', byRef.get('KAP:7')?.warnings?.some((w) => w.includes('über Ref')), byRef.get('KAP:7')?.warnings);
+  assert('Look-Back dokumentiert', Boolean(byRef.get('KAP:7')?.warnings?.some((w) => w.includes('über Ref'))), byRef.get('KAP:7')?.warnings);
 }
 
 console.log('\n7. Look-Back greift NICHT auf PLZ/Jahr (kein Money-Decimal)\n');

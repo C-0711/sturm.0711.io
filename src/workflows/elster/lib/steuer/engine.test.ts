@@ -44,7 +44,7 @@ ok('Erstattung = LSt − festgesetzt', near(fall.erstattung, 6000 - fall.festges
   [fall.erstattung, 6000 - fall.festgesetzt]);
 console.log('    zvE-Trace:');
 for (const t of fall.einkommen.trace) console.log(`      ${t.schritt.padEnd(38)} ${t.betrag.toFixed(2).padStart(12)}`);
-console.log('    →', JSON.stringify({ zvE: fall.einkommen.zvE, ...fall.steuer, festgesetzt: fall.festgesetzt, erstattung: fall.erstattung }));
+console.log('    →', JSON.stringify({ ...fall.steuer, zvE: fall.einkommen.zvE, festgesetzt: fall.festgesetzt, erstattung: fall.erstattung }));
 
 console.log('\nVerheiratet/Splitting — beide verdienen, VZ2023\n');
 const ehe = berechneSteuerfall({
