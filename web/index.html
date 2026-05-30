@@ -255,6 +255,7 @@
   <header class="hd">
     <div class="hd-l"><div class="logo">ST<b>U</b>RM</div><div class="hd-sub">Steuer-Engine</div></div>
     <div class="hd-r" id="hd-chips"><span class="chip">Beleg rein · Bescheid raus</span>
+      <button class="hbtn" id="recompute-btn" title="mit gespeicherten Belegen neu berechnen (aktualisiert Provenienz)" style="display:none">↻ Neu berechnen</button>
       <button class="hbtn docdrawer-btn" id="drawer-btn">▦ Belege</button>
       <button class="hbtn" id="theme-btn"><span>☀</span> Theme</button>
     </div>
@@ -437,6 +438,21 @@ async function addDocs(fileList){
     applyBadges(); busy=false; render(); persistActive();
   }catch(e){ busy=false; for(const d of active.docs){if(d.state==='pending'){d.state='err';d.badge='Fehler';}} renderDocPanel(); alert('Fehler: '+e.message); }
 }
+
+/* ── Neu berechnen: mit gespeicherten Belegen erneut rechnen (z.B. um alte
+   Fälle ohne Provenienz zu aktualisieren) — kein Re-Upload nötig. ── */
+async function recompute(){
+  if(!active||busy)return;
+  if(!active.paths||!active.paths.length){ alert('Dieser Fall hat keine gespeicherten Beleg-Pfade — bitte die Belege neu hochladen.'); return; }
+  busy=true; updateChips();
+  try{
+    const data=await compute(active.paths,active.vz);
+    if(!(data.fields&&data.fields.length)) throw new Error('Belege nicht mehr auf dem Server verfügbar (Cache geleert) — bitte neu hochladen.');
+    active.data=data; active.label=caseLabel(data); applyBadges();
+    busy=false; render(); persistActive();
+  }catch(e){ busy=false; updateChips(); alert('Neu berechnen: '+e.message); }
+}
+$('#recompute-btn').addEventListener('click',recompute);
 const BELN={VaSt_LStB:'Lohnsteuerbescheinigung',VaSt_Religion:'Kirchensteuer-Merkmal',VaSt_FSA:'Freistellungsauftrag',VaSt_RBM:'Rentenbezugsmitteilung',VaSt_KRV:'Kranken-/Pflegevers.',VaSt_Pers:'Stammdaten',Steuerbescheinigung_Bank:'Bank-Steuerbescheinigung',Einkommensteuererklaerung:'ESt-Erklärung',Unbekannt:'Unbekannt'};
 function applyBadges(){
   if(!active||!active.data)return;
@@ -491,6 +507,7 @@ function updateChips(){
       (d.veranlagungsart==='zusammen'?'<span class="chip">Splitting §32a</span>':'');
   }
   box.innerHTML=chips; keep.forEach(b=>box.appendChild(b));
+  const rb=$('#recompute-btn'); if(rb){ rb.style.display=active?'inline-flex':'none'; rb.disabled=busy; rb.textContent=busy?'↻ rechnet…':'↻ Neu berechnen'; }
 }
 
 function renderCenter(){
