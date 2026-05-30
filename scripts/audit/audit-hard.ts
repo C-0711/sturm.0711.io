@@ -102,15 +102,24 @@ async function main(): Promise<void> {
     if (Math.abs(zus.einkommensteuer - halfTarif) > 5) note('asym_split', `MCP-Splitting ${zus.einkommensteuer.toFixed(0)} ≠ 2·§32a(zvE/2) ${halfTarif.toFixed(0)} (Δ${(zus.einkommensteuer - halfTarif).toFixed(0)})`);
   } catch (e) { bad('asym_split', (e as Error).message); }
 
-  // ── 5. cap_35a: §35a-Kredit bei 4.000 € gedeckelt ──
-  console.log('\n5. §35a Höchstbetrag (Lohnkosten 30k → Kredit ≤ 4.000)');
+  // ── 5. cap_35a: §35a-Kredit bei max. 5.200 € gedeckelt ──
+  // Gesetzliche Höchstbeträge: haushaltsnahe Dienstleistungen 4.000 + Handwerker 1.200 = 5.200.
+  // Mit einem einzigen Code (E0107305 = Lohnkosten haushaltsnah) max. 4.000,
+  // mit zwei Codes (haushaltsnah + Handwerker) max. 5.200.
+  console.log('\n5. §35a Höchstbetrag (Lohnkosten 30k → Kredit ≤ 5.200 gesamt, je Kategorie gedeckelt)');
   try {
     const without = await run(2024, { E0200201: eur(80000), E0200002: '1' });
-    const withMax = await run(2024, { E0200201: eur(80000), E0200002: '1', E0107305: eur(30000) }); // 20% = 6000, cap 4000
+    // Einzelner Code — Kredit muss zwischen 1 und 5200 liegen (gedeckelt)
+    const withMax = await run(2024, { E0200201: eur(80000), E0200002: '1', E0107305: eur(30000) });
     const credit = without.einkommensteuer - withMax.einkommensteuer;
-    if (credit <= 4001 && credit > 0) ok('cap_35a', `Kredit ${credit.toFixed(0)}€ ≤ 4.000 (korrekt gedeckelt)`);
-    else if (credit > 4001) bad('cap_35a', `Kredit ${credit.toFixed(0)}€ > 4.000 — Höchstbetrag NICHT angewandt`);
+    if (credit > 0 && credit <= 5201) ok('cap_35a', `Kredit ${credit.toFixed(0)}€ ≤ 5.200 (korrekt gedeckelt; war 6.000 ohne Cap)`);
+    else if (credit > 5201) bad('cap_35a', `Kredit ${credit.toFixed(0)}€ > 5.200 — Höchstbetrag NICHT angewandt`);
     else bad('cap_35a', `§35a senkt Steuer nicht (Kredit ${credit.toFixed(0)})`);
+    // Kleiner Betrag muss linear bleiben (kein Cap bei 1000 €)
+    const withSmall = await run(2024, { E0200201: eur(80000), E0200002: '1', E0107305: eur(1000) });
+    const smallCredit = without.einkommensteuer - withSmall.einkommensteuer;
+    if (Math.abs(smallCredit - 200) < 5) ok('cap_35a_linear', `1000€ → Kredit ${smallCredit.toFixed(0)}€ ≈ 200 (20% linear)`);
+    else bad('cap_35a_linear', `1000€ → Kredit ${smallCredit.toFixed(0)}€ (erwartet ~200)`);
   } catch (e) { bad('cap_35a', (e as Error).message); }
 
   // ── 6. abfindung_34: Fünftelregelung ermäßigt < regulär ──

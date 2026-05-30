@@ -93,5 +93,47 @@ console.log('\nberechneSteuer — Hochverdiener zvE=120000 (Soli greift), 9% KiS
   console.log('    →', JSON.stringify(r));
 }
 
+console.log('\n§32a VZ 2024 — Monotonie & Stetigkeit (fängt den Zonenkoeffizienten-Bug)\n');
+{
+  // 1. MONOTONIE: feiner Sweep, ESt darf NIE fallen (der 2024-Bug: an 17005/66760 fiel sie).
+  for (const art of ['einzeln', 'zusammen'] as const) {
+    let prev = -1, prevZ = -1, mono = true, worst = '';
+    for (let zve = 0; zve <= 320000; zve += 25) {
+      const est = einkommensteuer(zve, 2024, art);
+      if (est < prev - 0.001) { mono = false; worst = `zvE ${prevZ}→${zve}: ESt ${prev.toFixed(2)}→${est.toFixed(2)}`; break; }
+      prev = est; prevZ = zve;
+    }
+    ok(`2024 ${art}: ESt monoton (0..320k)`, mono, worst);
+  }
+  // 2. Feinsweep ±20 € exakt um jeden Knick (dort brach es).
+  for (const knee of [11784, 17005, 66760, 277825]) {
+    let prev = einkommensteuerGrundtarif(knee - 20, 2024), mono = true, worst = '';
+    for (let zve = knee - 19; zve <= knee + 20; zve++) {
+      const est = einkommensteuerGrundtarif(zve, 2024);
+      if (est < prev - 0.001) { mono = false; worst = `${zve - 1}→${zve}: ${prev.toFixed(2)}→${est.toFixed(2)}`; break; }
+      prev = est;
+    }
+    ok(`2024 Knick ${knee}: monoton (±20 €)`, mono, worst);
+  }
+  // 3. STETIGKEIT: Sprung an den Knicken < 2 € (gesetzlich zulässig: der
+  //    Programmablaufplan floort je Zone auf volle Euro → max. 1 € Artefakt).
+  //    Der Bug gab 43 € / 181 € — das wäre hier längst aufgefallen.
+  for (const knee of [17005, 66760, 277825]) {
+    const jump = Math.abs(einkommensteuerGrundtarif(knee + 1, 2024) - einkommensteuerGrundtarif(knee, 2024));
+    ok(`2024 Knick ${knee}: stetig (Sprung ${jump.toFixed(2)} € < 2)`, jump < 2, jump);
+  }
+  // 4. Amtliche Zonenwerte (BMF EStH 2024): lineare Zonen 4/5 sind eindeutig.
+  ok('2024 GFB 11784 → ESt 0', einkommensteuerGrundtarif(11784, 2024) === 0);
+  ok('2024 Zone4: ESt(80000) = 0,42·x−10636,31', near(einkommensteuerGrundtarif(80000, 2024), Math.floor(0.42 * 80000 - 10636.31), 1), einkommensteuerGrundtarif(80000, 2024));
+  ok('2024 Zone5: ESt(300000) = 0,45·x−18971,06', near(einkommensteuerGrundtarif(300000, 2024), Math.floor(0.45 * 300000 - 18971.06), 1), einkommensteuerGrundtarif(300000, 2024));
+  // 5. Grenzsteuersatz ∈ [0, 45 %] über den ganzen Bereich.
+  let rateOk = true, rb = '';
+  for (let zve = 11785; zve <= 320000; zve += 137) {
+    const r = einkommensteuerGrundtarif(zve + 100, 2024) - einkommensteuerGrundtarif(zve, 2024);
+    if (r < -0.001 || r > 45.5) { rateOk = false; rb = `zvE ${zve}: ${r.toFixed(2)} €/100 €`; break; }
+  }
+  ok('2024 Grenzsteuersatz ∈ [0, 45 %]', rateOk, rb);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
