@@ -6,202 +6,226 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-  /* ── THEME TOKENS ── */
+  /* ── DESIGN TOKENS ── */
   #app{
-    --bg:#0c0e12; --bg2:#161a21; --panel:#0f1217; --line:#ffffff14; --line2:#ffffff26;
-    --txt:#ece9e2; --mut:#9a968c; --dim:#6b6a64;
-    --amber:#f0b429; --amber-d:#b8841a; --green:#62d18c; --red:#f0686a; --blue:#7db4e6;
-    --mono:'IBM Plex Mono',ui-monospace,monospace; --disp:'Fraunces',Georgia,serif;
+    --gold:#c48a00; --gold-d:#9a6e00; --green:#2f7d4f; --red:#c0333a; --blue:#2666a0;
+    --ink:#1a1815; --paper:#fbf8f2; --line:rgba(26,24,21,.14); --line2:rgba(26,24,21,.22);
+    --muted:#8a8378; --dim:#a39b8f;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace; --font-serif:'Fraunces',Georgia,serif;
+    /* dashboard-aliases (renderDash nutzt diese Namen) */
+    --bg:var(--paper); --bg2:#faf7f1; --panel:#f3efe7; --txt:var(--ink); --mut:var(--muted);
+    --amber:var(--gold); --amber-d:var(--gold-d); --mono:var(--font-mono); --disp:var(--font-serif);
   }
-  #app.light{
-    --bg:#f5f3ef; --bg2:#ede9e2; --panel:#eae6df; --line:#00000010; --line2:#00000020;
-    --txt:#1a1815; --mut:#6b6660; --dim:#9a9590; --amber:#c48a00; --amber-d:#9a6e00;
-    --green:#1a7a42; --red:#c0333a; --blue:#2666a0;
+  #app.dark{
+    --ink:#ece9e2; --paper:#0c0e12; --line:#ffffff14; --line2:#ffffff26; --muted:#9a968c; --dim:#6b6a64;
+    --gold:#f0b429; --gold-d:#b8841a; --green:#62d18c; --red:#f0686a; --blue:#7db4e6;
+    --bg:var(--paper); --bg2:#161a21; --panel:#0f1217; --txt:var(--ink); --mut:var(--muted);
+    --amber:var(--gold); --amber-d:var(--gold-d);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  #app{
-    min-height:100vh; color:var(--txt); font-family:var(--mono); font-size:13px; line-height:1.5;
-    -webkit-font-smoothing:antialiased; transition:background .3s,color .3s;
-  }
-  #app:not(.light){ background:
+  #app{min-height:100vh;color:var(--ink);font-family:var(--font-mono);font-size:13px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;background:var(--paper);transition:background .3s,color .3s}
+  #app.dark{background:
     radial-gradient(900px 500px at 78% -8%, #1d212b 0%, transparent 60%),
-    radial-gradient(700px 500px at 8% 108%, #181b23 0%, transparent 55%), var(--bg); }
-  #app.light{ background:var(--bg); }
-  #app::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.03;z-index:0;
+    radial-gradient(700px 500px at 8% 108%, #181b23 0%, transparent 55%), var(--paper)}
+  #app::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.025;z-index:0;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
-  #app > *{position:relative;z-index:1}
-  a{color:var(--amber)}
+  #app>*{position:relative;z-index:1}
+  a{color:var(--gold)}
 
   /* ── HEADER ── */
   .hd{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
-      padding:16px 28px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;
-      background:rgba(12,14,18,.86);backdrop-filter:blur(14px);transition:background .3s}
-  #app.light .hd{background:rgba(245,243,239,.9)}
-  .hd-l{display:flex;align-items:baseline;gap:13px}
-  .logo{font-family:var(--disp);font-weight:800;font-size:22px;letter-spacing:-.02em}
-  .logo b{color:var(--amber)}
-  .hd-sub{font-family:var(--disp);font-style:italic;color:var(--mut);font-size:15px}
+    padding:15px 26px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;
+    background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(14px)}
+  .hd-l{display:flex;align-items:baseline;gap:12px}
+  .logo{font-family:var(--font-serif);font-weight:800;font-size:22px;letter-spacing:-.02em}
+  .logo b{color:var(--gold)}
+  .hd-sub{font-family:var(--font-serif);font-style:italic;color:var(--muted);font-size:15px}
   .hd-r{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line2);color:var(--mut);
-        font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;border-radius:3px}
-  .chip.ok{border-color:rgba(98,209,140,.3);color:var(--green)}
-  .chip.amber{border-color:rgba(240,180,41,.3);color:var(--amber)}
-  .chip.blue{border-color:rgba(125,180,230,.3);color:var(--blue)}
+  .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line2);color:var(--muted);
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;border-radius:3px}
+  .chip.ok{border-color:rgba(47,125,79,.35);color:var(--green)}
+  .chip.amber{border-color:rgba(196,138,0,.35);color:var(--gold)}
+  .chip.blue{border-color:rgba(38,102,160,.35);color:var(--blue)}
   .hbtn{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid var(--line2);
-        color:var(--mut);font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-        padding:6px 12px;border-radius:3px;cursor:pointer;transition:.2s}
-  .hbtn:hover{border-color:var(--amber);color:var(--amber)}
+    color:var(--muted);font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    padding:6px 12px;border-radius:3px;cursor:pointer;transition:.2s}
+  .hbtn:hover{border-color:var(--gold);color:var(--gold)}
 
-  /* ── LAYOUT ── */
-  .layout{display:grid;grid-template-columns:248px 1fr;gap:0;align-items:start}
-  @media(max-width:860px){ .layout{grid-template-columns:1fr} aside.cases{display:none} }
+  /* ── LAYOUT: Fälle | Bescheid | Belege ── */
+  .layout{display:grid;grid-template-columns:248px minmax(0,1fr) 340px;align-items:start}
+  @media(max-width:1180px){ .layout{grid-template-columns:248px minmax(0,1fr)} .docpanel{position:fixed;top:0;right:0;height:100vh;width:340px;transform:translateX(100%);transition:transform .25s;z-index:40;box-shadow:-12px 0 40px rgba(0,0,0,.18)} .docpanel.open{transform:none} .docdrawer-btn{display:inline-flex!important} }
+  @media(max-width:760px){ .layout{grid-template-columns:1fr} aside.cases{display:none} }
+  .docdrawer-btn{display:none}
 
-  /* ── SIDEBAR · FALLVERWALTUNG ── */
-  aside.cases{border-right:1px solid var(--line);min-height:calc(100vh - 58px);padding:18px 14px;
-    position:sticky;top:58px}
+  /* ── SIDEBAR · FÄLLE ── */
+  aside.cases{border-right:1px solid var(--line);min-height:calc(100vh - 56px);padding:18px 14px;position:sticky;top:56px}
   .cases-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
   .cases-ttl{font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim)}
-  .newcase{background:var(--amber);color:#1a1205;border:none;border-radius:4px;padding:5px 10px;
-    font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.05em;cursor:pointer;transition:.15s}
+  .newcase{background:var(--gold);color:#1a1205;border:none;border-radius:5px;padding:6px 11px;
+    font-family:var(--font-mono);font-weight:600;font-size:10px;letter-spacing:.04em;cursor:pointer;transition:.15s}
   .newcase:hover{filter:brightness(1.08)}
   .caselist{display:flex;flex-direction:column;gap:5px}
-  .caseitem{border:1px solid var(--line);border-radius:8px;padding:10px 11px;cursor:pointer;
-    background:var(--bg2);transition:.15s;position:relative}
+  .caseitem{border:1px solid var(--line);border-radius:8px;padding:10px 11px;cursor:pointer;background:var(--bg2);transition:.15s;position:relative}
   .caseitem:hover{border-color:var(--line2)}
-  .caseitem.active{border-color:var(--amber);background:linear-gradient(180deg,#f0b42910,transparent)}
-  .caseitem .cn{font-family:var(--disp);font-size:14px;font-weight:600;color:var(--txt);line-height:1.15;
-    padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .caseitem.active{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 9%,var(--bg2))}
+  .caseitem .cn{font-family:var(--font-serif);font-size:14px;font-weight:600;color:var(--ink);line-height:1.15;padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .caseitem .cmeta{font-size:10px;color:var(--dim);margin-top:3px;display:flex;gap:8px;align-items:center}
-  .caseitem .csaldo{font-variant-numeric:tabular-nums;font-weight:500}
+  .csaldo{font-variant-numeric:tabular-nums;font-weight:500}
   .csaldo.refund{color:var(--green)} .csaldo.owe{color:var(--red)}
-  .caseitem .cdel{position:absolute;top:7px;right:8px;color:var(--dim);font-size:13px;line-height:1;
-    background:none;border:none;cursor:pointer;opacity:0;transition:.15s;padding:0;font-family:inherit}
+  .caseitem .cdel{position:absolute;top:7px;right:8px;color:var(--dim);font-size:13px;line-height:1;background:none;border:none;cursor:pointer;opacity:0;transition:.15s;padding:0;font-family:inherit}
   .caseitem:hover .cdel{opacity:1} .caseitem .cdel:hover{color:var(--red)}
   .cases-empty{font-size:10.5px;color:var(--dim);line-height:1.6;padding:6px 2px}
 
-  /* ── MAIN ── */
-  main{padding:26px 32px 80px;max-width:1180px}
-  @media(max-width:860px){ main{padding:20px 16px 60px} }
+  /* ── NEUER-FALL-PANEL (inline, links) ── */
+  .ncp{border:1px solid var(--gold);border-radius:10px;background:color-mix(in srgb,var(--gold) 6%,var(--bg2));padding:13px;margin-bottom:14px;animation:rise .35s ease both}
+  .ncp__step{margin-bottom:14px}
+  .ncp__step.locked{opacity:.45;pointer-events:none}
+  .ncp__lbl{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;display:flex;align-items:center;gap:6px}
+  .ncp__n{width:17px;height:17px;border-radius:50%;background:var(--gold);color:#1a1205;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+  .ncp__yrs{display:flex;gap:6px}
+  .ncp__yr{flex:1;padding:8px 0;border:1px solid var(--line2);border-radius:7px;background:var(--bg);color:var(--ink);font-family:var(--font-mono);font-size:13px;cursor:pointer;transition:.15s;text-align:center}
+  .ncp__yr:hover{border-color:var(--gold)}
+  .ncp__yr.sel{border-color:var(--gold);background:var(--gold);color:#1a1205;font-weight:600}
+  .ncp__drop{border:1.5px dashed var(--line2);border-radius:8px;padding:14px 10px;text-align:center;color:var(--muted);font-size:10.5px;cursor:pointer;transition:.15s}
+  .ncp__drop:hover{border-color:var(--gold);color:var(--gold)}
+  .ncp__hint{font-size:9.5px;color:var(--dim);margin-top:6px;font-style:italic}
+  .ncp__staged{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+  .ncp__file{font-size:10px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 8px;display:flex;justify-content:space-between;gap:6px}
+  .ncp__file b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ncp__actions{display:flex;gap:7px;margin-top:6px}
+  .ncp__go{flex:1;background:var(--gold);color:#1a1205;border:none;border-radius:7px;padding:9px;font-family:var(--font-mono);font-weight:600;font-size:11px;cursor:pointer;transition:.15s}
+  .ncp__go:disabled{background:var(--line);color:var(--dim);cursor:default}
+  .ncp__cancel{background:none;border:1px solid var(--line2);color:var(--muted);border-radius:7px;padding:9px 11px;font-family:var(--font-mono);font-size:11px;cursor:pointer}
 
-  /* ── INTAKE / DROP ── */
-  .intake{margin-bottom:26px}
-  .drop{border:1.5px dashed var(--line2);border-radius:14px;padding:30px 24px;text-align:center;cursor:pointer;
-    transition:.25s cubic-bezier(.2,.7,.2,1);background:linear-gradient(180deg,#ffffff05,transparent)}
-  .drop.big{padding:54px 28px}
-  .drop:hover{border-color:var(--amber-d);transform:translateY(-1px)}
-  .drop.over{border-color:var(--amber);background:linear-gradient(180deg,#f0b42915,transparent);box-shadow:0 0 0 4px #f0b42912}
-  .drop .seal{font-size:30px;margin-bottom:6px;filter:grayscale(.2)}
-  .drop.big .seal{font-size:38px}
-  .drop .big-t{font-family:var(--disp);font-size:20px;font-weight:600}
-  .drop.big .big-t{font-size:27px}
-  .drop .hint{color:var(--mut);margin-top:7px;font-size:12px}
-  .controls{display:flex;gap:13px;align-items:center;justify-content:center;margin-top:15px;flex-wrap:wrap;color:var(--mut);font-size:12px}
-  .controls select{background:var(--bg2);color:var(--txt);border:1px solid var(--line2);border-radius:7px;padding:7px 10px;font-family:var(--mono);font-size:12px}
-  .btn{background:var(--amber);color:#1a1205;border:none;border-radius:8px;padding:10px 20px;font-family:var(--mono);font-weight:600;font-size:13px;cursor:pointer;transition:.2s}
-  .btn:hover{filter:brightness(1.07)} .btn:disabled{opacity:.4;cursor:not-allowed}
-  .files{margin-top:12px;display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
-  .chip0{background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11px;color:var(--mut)}
-  .chip0 b{color:var(--txt);font-weight:500}
-  .err{color:var(--red);padding:14px 16px;border:1px solid #f0686a40;border-radius:10px;background:#f0686a10;margin-top:14px;font-size:12px}
+  /* ── MITTE: Bescheid / Onboarding ── */
+  main{min-height:calc(100vh - 56px);padding:24px 30px 70px;max-width:1000px}
+  @media(max-width:760px){ main{padding:18px 14px 50px} }
 
-  /* stepper */
-  .stepper{display:flex;gap:6px;margin:16px 0 0;align-items:center;justify-content:space-between;opacity:.5;transition:opacity .3s}
-  .stepper.live{opacity:1}
-  .step{flex:1;text-align:center;position:relative}
-  .step .sdot{width:11px;height:11px;border-radius:50%;background:var(--line2);margin:0 auto 8px;border:2px solid var(--line2);transition:.3s}
-  .step .lbl{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);transition:.3s}
-  .step:not(:last-child)::after{content:"";position:absolute;top:5px;left:calc(50% + 11px);right:calc(-50% + 11px);height:2px;background:var(--line)}
-  .step.done .sdot{background:var(--amber);border-color:var(--amber)}
-  .step.active .sdot{border-color:var(--amber);background:transparent;animation:pulse 1.1s infinite}
-  .step.active .lbl,.step.done .lbl{color:var(--amber)}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #f0b42955}50%{box-shadow:0 0 0 6px #f0b42900}}
+  /* Onboarding */
+  .intro{max-width:560px;margin:54px auto;padding:0 8px}
+  .intro__kick{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+  .intro__h{font-family:var(--font-serif);font-size:30px;line-height:1.18;font-weight:600;color:var(--ink);margin:0 0 12px}
+  .intro__sub{font-size:13px;line-height:1.6;color:var(--muted);margin:0 0 32px;max-width:470px}
+  .intro__sub b{color:var(--ink)}
+  .intro__steps{list-style:none;padding:0;margin:0 0 30px;border-left:2px solid var(--line)}
+  .intro__step{display:flex;gap:14px;padding:0 0 22px 20px;position:relative}
+  .intro__step:last-child{padding-bottom:0}
+  .intro__num{position:absolute;left:-15px;top:0;width:28px;height:28px;border-radius:50%;background:var(--paper);border:2px solid var(--gold);color:var(--gold);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .intro__t{font-size:13px;font-weight:600;color:var(--ink);margin:2px 0 3px}
+  .intro__d{font-size:11.5px;line-height:1.55;color:var(--muted);margin:0}
+  .pill{background:color-mix(in srgb,var(--gold) 14%,transparent);color:var(--gold);border-radius:5px;padding:1px 6px;font-size:10.5px}
+  .intro__speed{display:flex;align-items:center;gap:14px;margin:0 0 28px;padding:14px 16px;background:color-mix(in srgb,var(--green) 8%,transparent);border:1px solid color-mix(in srgb,var(--green) 24%,transparent);border-radius:12px;font-size:11px;line-height:1.5;color:var(--ink)}
+  .intro__ms{font-family:var(--font-serif);font-size:26px;font-weight:600;color:var(--green);line-height:1;white-space:nowrap}
+  .intro__speed b{color:var(--green)}
+  .intro__cta{font-family:inherit;font-size:12.5px;font-weight:600;letter-spacing:.03em;padding:11px 18px;border:none;border-radius:9px;background:var(--gold);color:#1a1205;cursor:pointer;transition:.15s}
+  .intro__cta:hover{filter:brightness(1.08)}
+  .intro__foot{font-size:10px;color:var(--muted);margin:14px 0 0;letter-spacing:.04em}
 
-  /* ── DASHBOARD ── */
+  /* ── RECHTS: Belege-Panel ── */
+  .docpanel{border-left:1px solid var(--line);background:var(--bg2);min-height:calc(100vh - 56px);overflow-y:auto;display:flex;flex-direction:column;position:sticky;top:56px}
+  .docpanel__head{padding:15px 16px 11px;position:sticky;top:0;background:var(--bg2);z-index:2;border-bottom:1px solid var(--line)}
+  .docpanel__title{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;display:flex;justify-content:space-between;align-items:center}
+  .docpanel__vz{font-size:9px;color:var(--gold);letter-spacing:.1em}
+  .docpanel__count{font-family:var(--font-serif);font-size:19px;color:var(--ink);margin:4px 0 0}
+  .docpanel__count b{color:var(--green)}
+  .docpanel__drop{margin:12px 14px;border:1.5px dashed var(--line2);border-radius:10px;padding:16px 12px;text-align:center;color:var(--muted);font-size:10.5px;cursor:pointer;transition:.15s}
+  .docpanel__drop:hover,.docpanel__drop.over{border-color:var(--gold);color:var(--gold);background:color-mix(in srgb,var(--gold) 4%,transparent)}
+  .docpanel__list{padding:2px 12px 24px;display:flex;flex-direction:column;gap:8px}
+  .docpanel__locked{padding:40px 22px;text-align:center;color:var(--dim);font-size:11px;line-height:1.6}
+  .doccard{display:flex;gap:9px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px;animation:doccard-in .45s ease both}
+  @keyframes doccard-in{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .doccard__thumb{width:40px;min-width:40px;height:52px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:11px;overflow:hidden;background:var(--line)}
+  .doccard__thumb img{width:100%;height:100%;object-fit:cover}
+  .doccard__thumb--img{background:linear-gradient(135deg,#6b8f9e,#3f5d6b)}
+  .doccard__thumb--pdf{background:linear-gradient(135deg,#b85c4a,#8a3d30)}
+  .doccard__body{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;justify-content:center}
+  .doccard__name{font-size:10px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .doccard__size{font-size:9px;color:var(--muted)}
+  .doccard__badge{display:inline-flex;align-items:center;gap:5px;font-size:9px;padding:3px 7px;border-radius:999px;background:color-mix(in srgb,var(--green) 10%,transparent);color:var(--green);border:1px solid color-mix(in srgb,var(--green) 24%,transparent);width:fit-content;max-width:100%}
+  .doccard__badge b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .doccard__badge--pending{background:color-mix(in srgb,var(--gold) 10%,transparent);color:var(--gold);border-color:color-mix(in srgb,var(--gold) 30%,transparent)}
+  .doccard__badge--err{background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent)}
+  .dot-spin{width:7px;height:7px;border-radius:50%;background:currentColor;animation:dotpulse 1s infinite}
+  @keyframes dotpulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+  /* ── DASHBOARD (Bescheid, unverändert in Logik) ── */
   .reveal{opacity:0;transform:translateY(8px);animation:rise .5s cubic-bezier(.2,.7,.2,1) forwards}
-  @keyframes rise{to{opacity:1;transform:none}}
-  .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:1px}
-  @media(max-width:980px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+  .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:1px}
   @media(max-width:560px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
-  .kpi{background:var(--bg);padding:18px 18px 16px;position:relative}
-  .kpi::after{content:'';position:absolute;bottom:0;left:18px;right:18px;height:2px;background:var(--ka,var(--line))}
-  .kpi-val{font-family:var(--disp);font-size:21px;font-weight:600;line-height:1;margin-bottom:6px;font-variant-numeric:tabular-nums}
-  .kpi-val.amber{color:var(--amber)} .kpi-val.green{color:var(--green)} .kpi-val.red{color:var(--red)}
-  .kpi-label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  .kpi{background:var(--bg);padding:16px 16px 14px;position:relative}
+  .kpi::after{content:'';position:absolute;bottom:0;left:16px;right:16px;height:2px;background:var(--ka,var(--line))}
+  .kpi-val{font-family:var(--font-serif);font-size:20px;font-weight:600;line-height:1;margin-bottom:5px;font-variant-numeric:tabular-nums}
+  .kpi-val.amber{color:var(--gold)} .kpi-val.green{color:var(--green)} .kpi-val.red{color:var(--red)}
+  .kpi-label{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
   .kpi-sub{font-size:10px;color:var(--dim);margin-top:3px}
-  .hero{background:var(--bg2);border:1px solid var(--line);padding:22px 30px;margin-bottom:1px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
-  .hero-label{font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--amber);margin-bottom:4px}
-  .hero-title{font-family:var(--disp);font-size:16px;color:var(--txt);margin-bottom:3px}
-  .hero-desc{font-size:10px;color:var(--dim);letter-spacing:.04em;max-width:600px}
-  .hero-amt{font-family:var(--disp);font-size:46px;font-weight:600;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:right}
+  .hero{background:var(--bg2);border:1px solid var(--line);padding:22px 28px;margin-bottom:1px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .hero-label{font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);margin-bottom:4px}
+  .hero-title{font-family:var(--font-serif);font-size:16px;color:var(--ink);margin-bottom:3px}
+  .hero-desc{font-size:10px;color:var(--dim);letter-spacing:.04em;max-width:560px}
+  .hero-amt{font-family:var(--font-serif);font-size:44px;font-weight:600;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:right}
   .hero-amt.owe{color:var(--red)} .hero-amt.refund{color:var(--green)}
   .hero-amt-sub{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);text-align:right;margin-top:6px}
-  .g3{display:grid;grid-template-columns:3fr 2fr;gap:1px;background:var(--line);margin-bottom:1px}
   .g2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);margin-bottom:1px}
-  @media(max-width:860px){.g3,.g2{grid-template-columns:1fr}}
+  @media(max-width:760px){.g2{grid-template-columns:1fr}}
   .card{background:var(--bg)}
-  .card-head{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;transition:background .2s}
+  .card-head{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;transition:background .2s}
   .card-head:hover{background:var(--bg2)}
-  .card-title{font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:8px}
+  .card-title{font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
   .ctdot{width:5px;height:5px;border-radius:50%;background:var(--dot-c,var(--dim))}
-  .chev{color:var(--dim);font-size:10px;transition:transform .2s}
-  .chev.open{transform:rotate(180deg)}
-  .card-body{padding:22px}
-  .card-body.collapsed{display:none}
-  .slabel{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:4px 0 13px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .chev{color:var(--dim);font-size:10px;transition:transform .2s} .chev.open{transform:rotate(180deg)}
+  .card-body{padding:20px} .card-body.collapsed{display:none}
+  .slabel{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:4px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
   .cr{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);gap:16px}
   .cr:last-child{border-bottom:none}
-  .cr-lbl{color:var(--mut);font-size:12px} .cr-lbl strong{color:var(--txt);font-weight:400}
-  .cr-code{font-size:9px;color:var(--dim);margin-top:2px;letter-spacing:.04em}
-  .cr-val{font-size:13px;font-weight:600;color:var(--txt);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .cr-lbl{color:var(--muted);font-size:12px} .cr-lbl strong{color:var(--ink);font-weight:400}
+  .cr-code{font-size:9px;color:var(--dim);margin-top:2px}
+  .cr-val{font-size:13px;font-weight:600;color:var(--ink);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   .cr-val.green{color:var(--green)} .cr-val.zero{color:var(--dim)}
-  .cr.total{background:rgba(240,180,41,.05);margin:8px -22px;padding:11px 22px;border-top:1px solid rgba(240,180,41,.15);border-bottom:1px solid rgba(240,180,41,.15)}
-  .cr.total .cr-lbl strong{color:var(--amber)} .cr.total .cr-val{color:var(--amber);font-size:15px}
-  .cr.result{background:rgba(240,180,41,.08);margin:10px -22px -22px;padding:15px 22px;border-top:1px solid rgba(240,180,41,.2)}
-  .cr.result .cr-lbl strong{color:var(--amber);font-size:14px} .cr.result .cr-val{font-size:17px}
-  .cr.result .cr-val.green{color:var(--green)} .cr.result .cr-val.amber{color:var(--amber)}
-  .br{margin:8px 0}
-  .br-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-bottom:4px}
-  .br-track{height:2px;background:var(--line);border-radius:1px;overflow:hidden}
-  .br-fill{height:100%;border-radius:1px}
+  .cr.total{background:color-mix(in srgb,var(--gold) 5%,transparent);margin:8px -20px;padding:11px 20px;border-top:1px solid color-mix(in srgb,var(--gold) 15%,transparent);border-bottom:1px solid color-mix(in srgb,var(--gold) 15%,transparent)}
+  .cr.total .cr-lbl strong{color:var(--gold)} .cr.total .cr-val{color:var(--gold);font-size:15px}
+  .cr.result{background:color-mix(in srgb,var(--gold) 8%,transparent);margin:10px -20px -20px;padding:15px 20px;border-top:1px solid color-mix(in srgb,var(--gold) 20%,transparent)}
+  .cr.result .cr-lbl strong{color:var(--gold);font-size:14px} .cr.result .cr-val{font-size:17px}
+  .cr.result .cr-val.green{color:var(--green)} .cr.result .cr-val.amber{color:var(--gold)}
+  .br{margin:8px 0} .br-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-bottom:4px}
+  .br-track{height:2px;background:var(--line);border-radius:1px;overflow:hidden} .br-fill{height:100%;border-radius:1px}
   hr.dv{border:none;border-top:1px solid var(--line);margin:15px 0}
   .ir{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line);gap:12px}
   .ir:last-child{border-bottom:none}
-  .ir-k{font-size:10px;color:var(--dim)} .ir-v{font-size:11px;color:var(--txt);text-align:right;font-variant-numeric:tabular-nums}
-  .tag{display:inline-block;border:1px solid var(--line2);color:var(--mut);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:2px}
-  .tag.amber{border-color:rgba(240,180,41,.3);color:var(--amber)}
+  .ir-k{font-size:10px;color:var(--dim)} .ir-v{font-size:11px;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;border:1px solid var(--line2);color:var(--muted);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:2px}
+  .tag.amber{border-color:color-mix(in srgb,var(--gold) 30%,transparent);color:var(--gold)}
   .ptabs{display:flex;margin-bottom:18px;border-bottom:1px solid var(--line)}
   .ptab{flex:1;padding:11px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:.15s;text-align:center;margin-bottom:-1px}
-  .ptab-name{font-size:12px;color:var(--mut)} .ptab:hover .ptab-name{color:var(--txt)}
-  .ptab.active{border-bottom-color:var(--amber)} .ptab.active .ptab-name{color:var(--txt)}
+  .ptab-name{font-size:12px;color:var(--muted)} .ptab:hover .ptab-name{color:var(--ink)}
+  .ptab.active{border-bottom-color:var(--gold)} .ptab.active .ptab-name{color:var(--ink)}
   .ptab-role{font-size:9px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
   .pc{display:none} .pc.active{display:block}
-  .bel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line)}
-  @media(max-width:860px){.bel-grid{grid-template-columns:1fr 1fr}}
+  .bel-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
   .bel-item{background:var(--bg);padding:13px 15px}
-  .bel-item:hover{background:var(--bg2)}
   .bel-type{display:inline-block;font-size:8px;letter-spacing:.18em;text-transform:uppercase;border:1px solid;padding:2px 6px;border-radius:2px;margin-bottom:8px}
-  .bel-type.ocr{border-color:rgba(125,180,230,.3);color:var(--blue)}
-  .bel-type.text{border-color:rgba(98,209,140,.3);color:var(--green)}
-  .bel-name{font-size:11px;color:var(--txt);margin-bottom:3px}
-  .bel-src{font-size:9px;color:var(--dim)}
+  .bel-type.ocr{border-color:color-mix(in srgb,var(--blue) 30%,transparent);color:var(--blue)}
+  .bel-type.text{border-color:color-mix(in srgb,var(--green) 30%,transparent);color:var(--green)}
+  .bel-name{font-size:11px;color:var(--ink);margin-bottom:3px} .bel-src{font-size:9px;color:var(--dim)}
   .et{width:100%;border-collapse:collapse;font-size:11px}
   .et th{text-align:left;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);padding:8px 10px;border-bottom:1px solid var(--line);font-weight:400}
-  .et td{padding:7px 10px;border-bottom:1px solid var(--line);color:var(--mut);vertical-align:middle}
-  .et tr:last-child td{border-bottom:none}
-  .et tr:hover td{background:var(--bg2)}
-  .et td:first-child{font-size:10px;color:var(--blue)}
-  .et td.num{color:var(--txt);text-align:right;font-variant-numeric:tabular-nums}
+  .et td{padding:7px 10px;border-bottom:1px solid var(--line);color:var(--muted);vertical-align:middle}
+  .et tr:last-child td{border-bottom:none} .et tr:hover td{background:var(--bg2)}
+  .et td:first-child{font-size:10px;color:var(--blue)} .et td.num{color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
   .etag{display:inline-block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line2);color:var(--dim);padding:1px 5px;border-radius:2px}
-  .etag.kap{border-color:rgba(125,180,230,.25);color:var(--blue)}
-  .etag.n,.etag.est1a{border-color:rgba(98,209,140,.25);color:var(--green)}
-  .etag.vor{border-color:rgba(240,180,41,.25);color:var(--amber)}
-  .etag.a{color:var(--txt)} .etag.ocr{border-color:rgba(125,180,230,.25);color:var(--blue)} .etag.text{border-color:rgba(98,209,140,.25);color:var(--green)}
-  .warn{margin-top:1px;background:var(--bg);border:1px solid var(--line);padding:13px 22px;font-size:10px;color:var(--dim)}
-  .warn b{color:var(--amber);font-weight:400}
-  .foot{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;text-align:center}
-  ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+  .etag.kap{border-color:color-mix(in srgb,var(--blue) 25%,transparent);color:var(--blue)}
+  .etag.n,.etag.est1a{border-color:color-mix(in srgb,var(--green) 25%,transparent);color:var(--green)}
+  .etag.vor{border-color:color-mix(in srgb,var(--gold) 25%,transparent);color:var(--gold)}
+  .etag.a{color:var(--ink)} .etag.ocr{border-color:color-mix(in srgb,var(--blue) 25%,transparent);color:var(--blue)} .etag.text{border-color:color-mix(in srgb,var(--green) 25%,transparent);color:var(--green)}
+  .warn{margin-top:1px;background:var(--bg);border:1px solid var(--line);padding:13px 20px;font-size:10px;color:var(--dim)}
+  .warn b{color:var(--gold);font-weight:400}
+  .foot{margin-top:32px;padding-top:18px;border-top:1px solid var(--line);font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;text-align:center}
+  .err{color:var(--red);padding:14px 16px;border:1px solid color-mix(in srgb,var(--red) 40%,transparent);border-radius:10px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:14px 0;font-size:12px}
+  ::-webkit-scrollbar{width:6px;height:6px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
 </style>
 </head>
 <body>
@@ -209,179 +233,271 @@
   <header class="hd">
     <div class="hd-l"><div class="logo">ST<b>U</b>RM</div><div class="hd-sub">Steuer-Engine</div></div>
     <div class="hd-r" id="hd-chips"><span class="chip">Beleg rein · Bescheid raus</span>
-      <button class="hbtn" id="theme-btn"><span>☾</span> Theme</button>
+      <button class="hbtn docdrawer-btn" id="drawer-btn">▦ Belege</button>
+      <button class="hbtn" id="theme-btn"><span>☀</span> Theme</button>
     </div>
   </header>
 
   <div class="layout">
-    <!-- ══ FALLVERWALTUNG ══ -->
     <aside class="cases">
-      <div class="cases-hd">
-        <div class="cases-ttl">Fälle</div>
-        <button class="newcase" id="newcase">+ Neuer Fall</button>
-      </div>
+      <div class="cases-hd"><div class="cases-ttl">Fälle</div><button class="newcase" id="newcase">+ Neuer Fall</button></div>
+      <div id="ncp-host"></div>
       <div class="caselist" id="caselist"></div>
     </aside>
 
-    <!-- ══ MAIN ══ -->
-    <main>
-      <section class="intake">
-        <div class="drop big" id="drop">
-          <div class="seal">▦</div>
-          <div class="big-t">Belege hier ablegen</div>
-          <div class="hint">Lohnsteuerbescheinigung, Renten, Bank-Steuerbescheinigung, ganze Erklärung — PDF oder Scan. Klicken zum Auswählen.</div>
-          <input type="file" id="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden>
-        </div>
-        <div class="controls">
-          <label>Veranlagungszeitraum
-            <select id="vz"><option>2023</option><option>2024</option></select>
-          </label>
-          <button class="btn" id="go" disabled>Steuerfall berechnen</button>
-          <span id="status"></span>
-        </div>
-        <div class="files" id="files"></div>
-        <div id="err"></div>
-        <div class="stepper" id="stepper">
-          <div class="step" data-s="upload"><div class="sdot"></div><div class="lbl">Upload</div></div>
-          <div class="step" data-s="ocr"><div class="sdot"></div><div class="lbl">OCR / Text</div></div>
-          <div class="step" data-s="extract"><div class="sdot"></div><div class="lbl">Extraktion</div></div>
-          <div class="step" data-s="map"><div class="sdot"></div><div class="lbl">ELSTER-Mapping</div></div>
-          <div class="step" data-s="calc"><div class="sdot"></div><div class="lbl">Berechnung</div></div>
-        </div>
-      </section>
-      <div id="dash"></div>
-    </main>
+    <main id="center"></main>
+
+    <aside class="docpanel" id="docpanel"></aside>
   </div>
 </div>
 
 <script>
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=(s,r=document)=>r.querySelector(s);
-const app=$('#app'), drop=$('#drop'), fileInput=$('#file'), go=$('#go'), statusEl=$('#status'),
-      filesEl=$('#files'), dash=$('#dash'), stepper=$('#stepper');
-let picked=[];
+const app=$('#app'), center=$('#center'), docpanel=$('#docpanel'), caselistEl=$('#caselist'), ncpHost=$('#ncp-host');
 
 const eur=(n)=>Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const parseDe=(s)=>{const t=String(s==null?'':s).replace(/[^\d,.\-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.');const n=parseFloat(t);return Number.isFinite(n)?n:NaN;};
-const step=(s,st)=>{const el=$('.step[data-s="'+s+'"]');if(!el)return;el.classList.remove('active','done');if(st)el.classList.add(st);};
-const resetSteps=()=>document.querySelectorAll('.step').forEach(e=>e.classList.remove('active','done'));
+const kb=(b)=>b>=1024*1024?(b/1048576).toFixed(1)+' MB':(b/1024).toFixed(0)+' kB';
 
 /* ── theme ── */
-try{ if(localStorage.getItem('sturm-theme')==='light') app.classList.add('light'); }catch(_){}
-$('#theme-btn').addEventListener('click',()=>{app.classList.toggle('light');try{localStorage.setItem('sturm-theme',app.classList.contains('light')?'light':'dark');}catch(_){}});
+try{ if(localStorage.getItem('sturm-theme')==='dark') app.classList.add('dark'); }catch(_){}
+$('#theme-btn').addEventListener('click',()=>{app.classList.toggle('dark');try{localStorage.setItem('sturm-theme',app.classList.contains('dark')?'dark':'light');}catch(_){}});
+$('#drawer-btn').addEventListener('click',()=>docpanel.classList.toggle('open'));
 
-/* ── intake ── */
-function showFiles(){
-  filesEl.innerHTML=picked.map((f,i)=>`<span class="chip0"><b>${esc(f.name)}</b> · ${(f.size/1024).toFixed(0)} kB</span>`).join('');
-  go.disabled=picked.length===0;
+/* ── API ── */
+async function uploadFile(f){
+  const r=await fetch('api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
+  const j=await r.json(); if(j.error) throw new Error(j.error); return j.path;
 }
-function addFiles(list){for(const f of list)picked.push(f);showFiles();}
-drop.addEventListener('click',()=>fileInput.click());
-fileInput.addEventListener('change',e=>{addFiles(e.target.files);fileInput.value='';});
-['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
-['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
-drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
-go.addEventListener('click',()=>run($('#vz').value));
-
-async function run(vz){
-  go.disabled=true; $('#err').innerHTML=''; resetSteps(); stepper.classList.add('live');
-  try{
-    step('upload','active'); statusEl.textContent='lade hoch…';
-    const paths=[];
-    for(const f of picked){
-      const r=await fetch('api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
-      const j=await r.json(); if(j.error) throw new Error(j.error); paths.push(j.path);
-    }
-    step('upload','done'); step('ocr','active'); step('extract','active'); statusEl.textContent='OCR + Extraktion + Mapping…';
-    const t0=performance.now();
-    const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz})});
-    const data=await r.json();
-    if(!data.ok) throw new Error(data.error||'Berechnung fehlgeschlagen');
-    ['ocr','extract','map'].forEach(s=>step(s,'done')); step('calc','done');
-    data._clientMs=Math.round(performance.now()-t0);
-    statusEl.textContent='fertig · '+data._clientMs+' ms';
-    saveCase(data);
-    renderDash(data);
-    picked=[]; showFiles();
-    setTimeout(()=>stepper.classList.remove('live'),1500);
-  }catch(e){
-    $('#err').innerHTML=`<div class="err">Fehler: ${esc(e.message)}</div>`;
-    statusEl.textContent='Fehler'; stepper.classList.remove('live');
-  }finally{ go.disabled=false; }
+async function compute(paths,vz){
+  const t0=performance.now();
+  const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz})});
+  const d=await r.json(); if(!d.ok) throw new Error(d.error||'Berechnung fehlgeschlagen');
+  d._clientMs=Math.round(performance.now()-t0); return d;
 }
 
-/* ── data helpers ── */
-const field=(d,p,c)=>d.fields.find(f=>f.person===p&&f.eCode===c);
-const fval=(d,p,c)=>{const f=field(d,p,c);return f?f.wert:null;};
-const feur=(d,p,c)=>{const v=fval(d,p,c);if(v==null)return null;const n=parseDe(v);return Number.isFinite(n)?eur(n):esc(v);};
-const idnr=(s)=>{const t=String(s||'').replace(/\D/g,'');return t.length===11?t.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/,'$1 $2 $3 $4'):esc(s||'—');};
-const BELN={VaSt_LStB:'Lohnsteuerbescheinigung',VaSt_Religion:'Kirchensteuer-Merkmal',VaSt_FSA:'Freistellungsauftrag',VaSt_RBM:'Rentenbezugsmitteilung',VaSt_KRV:'Kranken-/Pflegevers.',VaSt_Pers:'Stammdaten',Steuerbescheinigung_Bank:'Bank-Steuerbescheinigung',Einkommensteuererklaerung:'ESt-Erklärung',Unbekannt:'Unbekannt'};
-const primaryCalc=(d)=>(d.calcs||[]).find(c=>c.einheit==='A+B')||(d.calcs||[])[0]||null;
-function caseLabel(d){
-  const a=d.household&&d.household.personA, b=d.household&&d.household.personB;
-  const nA=((a&&(a.nachname||a.vorname))||'').trim(), nB=((b&&b.nachname)||'').trim();
-  let who=nA||'Fall';
-  if(nB && nB.toLowerCase()!==nA.toLowerCase()) who=nA+' & '+nB;
-  else if(d.veranlagungsart==='zusammen'&&nA) who=nA+' (Ehe)';
-  return who+' · '+d.vz;
+/* ── thumbnails (echt: Bild=ObjectURL, PDF=pdf.js Seite 1) ── */
+async function makeThumb(file){
+  const name=(file.name||'').toLowerCase();
+  if((file.type||'').startsWith('image/')||/\.(png|jpe?g|tiff?|webp|bmp|gif)$/.test(name))
+    return {kind:'img',url:URL.createObjectURL(file)};
+  if(name.endsWith('.pdf')){
+    try{
+      if(window.pdfjsLib){
+        const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+        const page=await pdf.getPage(1); const vp=page.getViewport({scale:.5});
+        const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+        await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+        return {kind:'img',url:c.toDataURL('image/png')};
+      }
+    }catch(_){}
+    return {kind:'pdf'};
+  }
+  return {kind:'pdf'};
 }
+
+/* ── state ── */
+let active=null;   // {id,label,vz,paths:[],docs:[{name,size,path,thumb,badge,state}],data}
+let busy=false;
 
 /* ── Fallverwaltung (localStorage) ── */
 const CASES_KEY='sturm-cases-v1';
 const loadCases=()=>{try{return JSON.parse(localStorage.getItem(CASES_KEY)||'[]');}catch(_){return [];}};
-const storeCases=(arr)=>{try{localStorage.setItem(CASES_KEY,JSON.stringify(arr.slice(0,30)));}catch(_){}};
-let activeId=null;
-function saveCase(d){
-  const c=primaryCalc(d); const label=caseLabel(d);
-  const entry={id:'c'+Date.now(), label, vz:d.vz, ts:Date.now(),
-    saldo:c?c.erstattung:0, refund:c?c.erstattung>=0:true, veranlagung:d.veranlagungsart, data:d};
-  const arr=loadCases().filter(x=>x.label!==label); // gleicher Fall → ersetzen
-  arr.unshift(entry); storeCases(arr); activeId=entry.id; renderCases();
+const storeCases=(a)=>{try{localStorage.setItem(CASES_KEY,JSON.stringify(a.slice(0,30)));}catch(_){}};
+const primaryCalc=(d)=>(d.calcs||[]).find(c=>c.einheit==='A+B')||(d.calcs||[])[0]||null;
+function caseLabel(d){
+  const a=d.household&&d.household.personA,b=d.household&&d.household.personB;
+  const nA=((a&&(a.nachname||a.vorname))||'').trim(),nB=((b&&b.nachname)||'').trim();
+  let who=nA||'Fall';
+  if(nB&&nB.toLowerCase()!==nA.toLowerCase())who=nA+' & '+nB;
+  else if(d.veranlagungsart==='zusammen'&&nA)who=nA+' (Ehe)';
+  return who+' · '+d.vz;
+}
+function persistActive(){
+  if(!active)return;
+  const c=primaryCalc(active.data);
+  const entry={id:active.id,label:active.label,vz:active.vz,ts:Date.now(),
+    saldo:c?c.erstattung:0,refund:c?c.erstattung>=0:true,veranlagung:active.data.veranlagungsart,
+    data:active.data,paths:active.paths,
+    docs:active.docs.map(d=>({name:d.name,size:d.size,badge:d.badge,state:d.state}))};
+  const arr=loadCases().filter(x=>x.id!==active.id&&x.label!==active.label);
+  arr.unshift(entry); storeCases(arr); renderCases();
 }
 function renderCases(){
-  const arr=loadCases(); const el=$('#caselist');
-  if(!arr.length){ el.innerHTML='<div class="cases-empty">Noch keine Fälle.<br>Belege ablegen und berechnen — der Fall erscheint hier.</div>'; return; }
-  el.innerHTML=arr.map(c=>{
-    const d=new Date(c.ts);
-    const datum=d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'});
-    return `<div class="caseitem ${c.id===activeId?'active':''}" data-id="${c.id}">
-      <button class="cdel" data-del="${c.id}" title="Fall löschen">×</button>
+  const arr=loadCases();
+  if(!arr.length){ caselistEl.innerHTML='<div class="cases-empty">Noch keine Fälle.<br>Mit „+ Neuer Fall" anlegen.</div>'; return; }
+  caselistEl.innerHTML=arr.map(c=>{
+    const d=new Date(c.ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'});
+    return `<div class="caseitem ${active&&c.id===active.id?'active':''}" data-id="${c.id}">
+      <button class="cdel" data-del="${c.id}" title="löschen">×</button>
       <div class="cn">${esc(c.label)}</div>
-      <div class="cmeta"><span>${datum}</span><span class="csaldo ${c.refund?'refund':'owe'}">${c.refund?'+':'−'}${eur(Math.abs(c.saldo)).replace(' €','')} €</span></div>
-    </div>`;
-  }).join('');
+      <div class="cmeta"><span>${d}</span><span class="csaldo ${c.refund?'refund':'owe'}">${c.refund?'+':'−'}${eur(Math.abs(c.saldo)).replace(' €','')} €</span></div>
+    </div>`;}).join('');
 }
-$('#caselist').addEventListener('click',e=>{
+caselistEl.addEventListener('click',e=>{
   const del=e.target.closest('[data-del]');
-  if(del){ e.stopPropagation(); const id=del.getAttribute('data-del');
-    storeCases(loadCases().filter(x=>x.id!==id));
-    if(activeId===id){activeId=null;dash.innerHTML='';updateChips(null);}
-    renderCases(); return; }
-  const item=e.target.closest('.caseitem'); if(!item) return;
-  const id=item.getAttribute('data-id'); const c=loadCases().find(x=>x.id===id);
-  if(c){ activeId=id; renderDash(c.data); renderCases(); window.scrollTo({top:0,behavior:'smooth'}); }
-});
-$('#newcase').addEventListener('click',()=>{
-  activeId=null; picked=[]; showFiles(); dash.innerHTML=''; $('#err').innerHTML='';
-  statusEl.textContent=''; resetSteps(); updateChips(null); renderCases();
-  drop.classList.add('big'); window.scrollTo({top:0,behavior:'smooth'});
+  if(del){e.stopPropagation();const id=del.getAttribute('data-del');storeCases(loadCases().filter(x=>x.id!==id));
+    if(active&&active.id===id){active=null;render();}else renderCases();return;}
+  const it=e.target.closest('.caseitem'); if(!it)return;
+  const c=loadCases().find(x=>x.id===it.getAttribute('data-id')); if(!c)return;
+  active={id:c.id,label:c.label,vz:c.vz,paths:c.paths||[],
+    docs:(c.docs||[]).map(d=>({...d,thumb:{kind:/\.(png|jpe?g|tiff?|webp)$/i.test(d.name)?'img':'pdf'}})),data:c.data};
+  closeNcp(); render(); window.scrollTo({top:0,behavior:'smooth'});
 });
 
-/* ── header chips ── */
-function updateChips(d){
-  const box=$('#hd-chips'); const theme=$('#theme-btn');
+/* ── Neuer-Fall-Panel ── */
+let ncp=null; // {vz, files:[File]}
+function openNcp(){ ncp={vz:'',files:[]}; renderNcp(); }
+function closeNcp(){ ncp=null; ncpHost.innerHTML=''; }
+function renderNcp(){
+  if(!ncp){ ncpHost.innerHTML=''; return; }
+  const canGo=ncp.vz&&ncp.files.length>0&&!busy;
+  ncpHost.innerHTML=`<div class="ncp">
+    <div class="ncp__step">
+      <div class="ncp__lbl"><span class="ncp__n">1</span> Veranlagungszeitraum</div>
+      <div class="ncp__yrs">
+        <button class="ncp__yr ${ncp.vz==='2023'?'sel':''}" data-yr="2023">2023</button>
+        <button class="ncp__yr ${ncp.vz==='2024'?'sel':''}" data-yr="2024">2024</button>
+      </div>
+    </div>
+    <div class="ncp__step ${ncp.vz?'':'locked'}">
+      <div class="ncp__lbl"><span class="ncp__n">2</span> Belege hochladen</div>
+      <div class="ncp__drop" id="ncp-drop">▦ Ablegen oder klicken<input type="file" id="ncp-input" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden></div>
+      ${ncp.vz?'':'<div class="ncp__hint">Zuerst oben das Steuerjahr wählen.</div>'}
+      <div class="ncp__staged">${ncp.files.map(f=>`<div class="ncp__file"><b>${esc(f.name)}</b><span>${kb(f.size)}</span></div>`).join('')}</div>
+    </div>
+    <div class="ncp__actions">
+      <button class="ncp__go" id="ncp-go" ${canGo?'':'disabled'}>${busy?'rechnet…':'Fall anlegen →'}</button>
+      <button class="ncp__cancel" id="ncp-cancel">Abbrechen</button>
+    </div>
+  </div>`;
+}
+ncpHost.addEventListener('click',e=>{
+  const yr=e.target.closest('[data-yr]'); if(yr){ncp.vz=yr.getAttribute('data-yr');renderNcp();return;}
+  if(e.target.closest('#ncp-drop')){ if(ncp.vz) $('#ncp-input').click(); return; }
+  if(e.target.closest('#ncp-cancel')){ closeNcp(); return; }
+  if(e.target.closest('#ncp-go')){ createCase(); return; }
+});
+ncpHost.addEventListener('change',e=>{ if(e.target.id==='ncp-input'){ for(const f of e.target.files)ncp.files.push(f); renderNcp(); } });
+$('#newcase').addEventListener('click',openNcp);
+
+async function createCase(){
+  if(!ncp||!ncp.vz||!ncp.files.length||busy)return;
+  busy=true; renderNcp();
+  try{
+    const vz=ncp.vz, files=ncp.files.slice();
+    const docs=[]; const paths=[];
+    for(const f of files){ const path=await uploadFile(f); paths.push(path);
+      docs.push({name:f.name,size:f.size,path,thumb:await makeThumb(f),badge:'',state:'pending'}); }
+    const data=await compute(paths,vz);
+    active={id:'c'+Date.now(),label:caseLabel(data),vz,paths,docs,data};
+    applyBadges();
+    busy=false; closeNcp(); render(); persistActive();
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){ busy=false; renderNcp(); alert('Fehler: '+e.message); }
+}
+
+/* ── Belege rechts: hinzufügen → live neu rechnen ── */
+async function addDocs(fileList){
+  if(!active||busy)return;
+  const files=[...fileList]; if(!files.length)return;
+  busy=true;
+  for(const f of files){ active.docs.push({name:f.name,size:f.size,path:null,thumb:await makeThumb(f),badge:'liest…',state:'pending',_file:f}); }
+  renderDocPanel();
+  try{
+    for(const d of active.docs){ if(d.state==='pending'&&d._file&&!d.path){ d.path=await uploadFile(d._file); active.paths.push(d.path); delete d._file; } }
+    active.data=await compute(active.paths,active.vz);
+    active.label=caseLabel(active.data);
+    applyBadges(); busy=false; render(); persistActive();
+  }catch(e){ busy=false; for(const d of active.docs){if(d.state==='pending'){d.state='err';d.badge='Fehler';}} renderDocPanel(); alert('Fehler: '+e.message); }
+}
+const BELN={VaSt_LStB:'Lohnsteuerbescheinigung',VaSt_Religion:'Kirchensteuer-Merkmal',VaSt_FSA:'Freistellungsauftrag',VaSt_RBM:'Rentenbezugsmitteilung',VaSt_KRV:'Kranken-/Pflegevers.',VaSt_Pers:'Stammdaten',Steuerbescheinigung_Bank:'Bank-Steuerbescheinigung',Einkommensteuererklaerung:'ESt-Erklärung',Unbekannt:'Unbekannt'};
+function applyBadges(){
+  if(!active||!active.data)return;
+  const bel=active.data.belege||[];
+  for(const d of active.docs){
+    const base=d.path; const hits=base?bel.filter(b=>String(b.source).split('#')[0]===base):[];
+    if(!hits.length){ d.state='done'; d.badge='verarbeitet'; continue; }
+    const felder=hits.reduce((s,h)=>s+(h.felder||0),0);
+    const typ=BELN[hits[0].belegTyp]||hits[0].belegTyp;
+    const person=hits[0].person&&hits[0].person!=='unknown'?' · Person '+hits[0].person:'';
+    const allDef=hits.every(h=>String(h.status).includes('deferred'));
+    if(allDef&&felder===0){ d.state='err'; d.badge='nicht lesbar'; }
+    else { d.state='done'; d.badge=`${typ}${person} · ${felder} Felder${hits.length>1?' ('+hits.length+'×)':''}`; }
+  }
+}
+
+/* ── render ── */
+function render(){ renderCases(); updateChips(); renderCenter(); renderDocPanel(); }
+
+function updateChips(){
+  const box=$('#hd-chips'); const keep=box.querySelectorAll('.hbtn');
   let chips='<span class="chip">Beleg rein · Bescheid raus</span>';
-  if(d){
-    const c=primaryCalc(d); const verb=c&&(c.quelle==='mcp'||c.quelle==='mcp-splitting');
-    chips=`<span class="chip ok">✓ ${d._clientMs||d.lane1Ms} ms</span>`+
-      `<span class="chip amber">VZ ${esc(d.vz)}</span>`+
-      (verb?'<span class="chip blue">BMF · verbindlich</span>':'')+
+  if(active&&active.data){ const d=active.data,c=primaryCalc(d),verb=c&&(c.quelle==='mcp'||c.quelle==='mcp-splitting');
+    chips=(busy?'<span class="chip amber">rechnet…</span>':`<span class="chip ok">✓ ${d._clientMs||d.lane1Ms} ms</span>`)+
+      `<span class="chip amber">VZ ${esc(d.vz)}</span>`+(verb?'<span class="chip blue">BMF · verbindlich</span>':'')+
       (d.veranlagungsart==='zusammen'?'<span class="chip">Splitting §32a</span>':'');
   }
-  box.innerHTML=chips; box.appendChild(theme);
+  box.innerHTML=chips; keep.forEach(b=>box.appendChild(b));
 }
 
-/* ── dashboard render (into #dash) ── */
+function renderCenter(){
+  if(!active){ center.innerHTML=introHTML(); return; }
+  renderDash(active.data);
+}
+function introHTML(){
+  return `<section class="intro">
+    <p class="intro__kick">★ Willkommen bei STURM</p>
+    <h1 class="intro__h">Beleg rein. Bescheid raus.</h1>
+    <p class="intro__sub">STURM liest deine Steuerbelege, ordnet jedes Feld dem richtigen <b>ELSTER-Code</b> zu und berechnet den fertigen Bescheid — in Sekundenbruchteilen. Fotos, Scans oder PDFs genügen.</p>
+    <ol class="intro__steps">
+      <li class="intro__step"><span class="intro__num">1</span><div><p class="intro__t">Fall anlegen &amp; Steuerjahr wählen</p><p class="intro__d">Links auf <span class="pill">+ Neuer Fall</span> klicken und den <b>Veranlagungszeitraum</b> festlegen — er bestimmt, wie deine Belege ausgewertet werden.</p></div></li>
+      <li class="intro__step"><span class="intro__num">2</span><div><p class="intro__t">Belege rechts ablegen</p><p class="intro__d">Lohnsteuerbescheinigung, Renten, Bank-Steuerbescheinigung oder die ganze Erklärung ins rechte Panel ziehen. STURM erkennt Dokumenttyp und Person automatisch.</p></div></li>
+      <li class="intro__step"><span class="intro__num">3</span><div><p class="intro__t">Bescheid sofort hier in der Mitte</p><p class="intro__d">Mit jedem Beleg aktualisiert sich der Bescheid live — Erstattung oder Nachzahlung, nachvollziehbar bis zur Rechtsgrundlage.</p></div></li>
+    </ol>
+    <div class="intro__speed"><span class="intro__ms">137 ms</span><span>Vom letzten Beleg bis zum fertigen Bescheid. <b>Keine Wartezeit, keine Berechnen-Taste.</b></span></div>
+    <button class="intro__cta" id="intro-cta">+ Neuen Fall anlegen →</button>
+    <p class="intro__foot">BMF-MCP bindend · ELSTER-konform · VZ 2023 &amp; 2024</p>
+  </section>`;
+}
+center.addEventListener('click',e=>{ if(e.target.closest('#intro-cta')){ openNcp(); window.scrollTo({top:0,behavior:'smooth'}); } });
+
+function renderDocPanel(){
+  if(!active){
+    docpanel.innerHTML=`<div class="docpanel__head"><p class="docpanel__title">Belege</p></div>
+      <div class="docpanel__locked">Noch kein Fall offen.<br>Lege links einen Fall an — dann kannst du hier Belege ablegen.</div>`;
+    return;
+  }
+  const n=active.docs.length, done=active.docs.filter(d=>d.state==='done').length;
+  const cards=active.docs.map(d=>{
+    const t=d.thumb||{kind:'pdf'};
+    const thumb=t.kind==='img'&&t.url?`<div class="doccard__thumb"><img src="${t.url}" alt=""></div>`
+      :`<div class="doccard__thumb doccard__thumb--${t.kind==='img'?'img':'pdf'}">${t.kind==='img'?'IMG':'PDF'}</div>`;
+    const badgeCls=d.state==='pending'?'doccard__badge--pending':d.state==='err'?'doccard__badge--err':'';
+    const badge=d.state==='pending'?`<span class="doccard__badge doccard__badge--pending"><span class="dot-spin"></span>${esc(d.badge||'liest…')}</span>`
+      :`<span class="doccard__badge ${badgeCls}"><b>${esc(d.badge||'verarbeitet')}</b></span>`;
+    return `<div class="doccard">${thumb}<div class="doccard__body"><div class="doccard__name">${esc(d.name)}</div><div class="doccard__size">${kb(d.size)}</div>${badge}</div></div>`;
+  }).join('');
+  docpanel.innerHTML=`<div class="docpanel__head">
+      <p class="docpanel__title"><span>Belege</span><span class="docpanel__vz">VZ ${esc(active.vz)}</span></p>
+      <p class="docpanel__count"><b>${done}</b> / ${n} verarbeitet</p>
+    </div>
+    <div class="docpanel__drop" id="doc-drop">▦ Weitere Belege ablegen oder klicken<input type="file" id="doc-input" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" hidden></div>
+    <div class="docpanel__list">${cards}</div>`;
+}
+docpanel.addEventListener('click',e=>{ if(e.target.closest('#doc-drop')){ $('#doc-input')&&$('#doc-input').click(); } });
+docpanel.addEventListener('change',e=>{ if(e.target.id==='doc-input'){ addDocs(e.target.files); e.target.value=''; } });
+['dragenter','dragover'].forEach(ev=>docpanel.addEventListener(ev,e=>{const d=e.target.closest('#doc-drop');if(d){e.preventDefault();d.classList.add('over');}}));
+['dragleave','drop'].forEach(ev=>docpanel.addEventListener(ev,e=>{const d=e.target.closest('#doc-drop');if(d){e.preventDefault();d.classList.remove('over');if(ev==='drop')addDocs(e.dataTransfer.files);}}));
+
+/* ── data helpers (Bescheid) ── */
+const field=(d,p,c)=>d.fields.find(f=>f.person===p&&f.eCode===c);
+const fval=(d,p,c)=>{const f=field(d,p,c);return f?f.wert:null;};
+const feur=(d,p,c)=>{const v=fval(d,p,c);if(v==null)return null;const n=parseDe(v);return Number.isFinite(n)?eur(n):esc(v);};
+const idnr=(s)=>{const t=String(s||'').replace(/\D/g,'');return t.length===11?t.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/,'$1 $2 $3 $4'):esc(s||'—');};
+
 function renderDash(d){
   const c=primaryCalc(d); const zus=d.veranlagungsart==='zusammen';
   const refund=c&&c.erstattung>=0; const verb=c&&(c.quelle==='mcp'||c.quelle==='mcp-splitting');
@@ -389,92 +505,65 @@ function renderDash(d){
   const nB=d.household&&d.household.personB?`${d.household.personB.vorname||''} ${d.household.personB.nachname||''}`.trim():'';
   const mcpMs=c&&c.latenzMs&&c.latenzMs.mcp?Math.round(c.latenzMs.mcp)+' ms':'—';
   const brutto=feur(d,'A','E0200201'), stkl=fval(d,'A','E0200002');
-  updateChips(d);
-  drop.classList.remove('big');
-
   const kpi=(v,cls,l,sub,ka)=>`<div class="kpi" style="--ka:${ka}"><div class="kpi-val ${cls||''}">${v}</div><div class="kpi-label">${l}</div><div class="kpi-sub">${sub}</div></div>`;
   const kpis=[
-    kpi(d.belege.length,'','Belege',`${d.ocrCount} davon OCR`,'rgba(98,209,140,.3)'),
-    kpi(d.fields.length,'','E-Code-Felder','gemappt','rgba(125,180,230,.3)'),
-    kpi(brutto||'—','','Bruttoarbeitslohn',`${esc(nA||'Person A')}${stkl?' · SKl '+esc(stkl):''}`,'rgba(236,233,226,.15)'),
-    kpi(c?eur(c.bindend.zve):'—','','z.v. Einkommen',zus?'§32a · Splitting':'§32a · Grundtarif','rgba(236,233,226,.15)'),
-    kpi(c?eur(c.bindend.gesamtsteuer):'—','','Gesamtsteuer','ESt + KiSt + SolZ','rgba(240,104,106,.3)'),
-    c?kpi(eur(Math.abs(c.erstattung)),refund?'green':'amber',refund?'Erstattung':'Nachzahlung',`${verb?'MCP bindend':'In-Process'} · ${mcpMs}`,'rgba(240,180,41,.4)'):''
+    kpi(d.belege.length,'','Belege',`${d.ocrCount} davon OCR`,'color-mix(in srgb,var(--green) 40%,transparent)'),
+    kpi(d.fields.length,'','E-Code-Felder','gemappt','color-mix(in srgb,var(--blue) 40%,transparent)'),
+    kpi(brutto||'—','','Bruttoarbeitslohn',`${esc(nA||'Person A')}${stkl?' · SKl '+esc(stkl):''}`,'var(--line2)'),
+    kpi(c?eur(c.bindend.zve):'—','','z.v. Einkommen',zus?'§32a · Splitting':'§32a · Grundtarif','var(--line2)'),
+    kpi(c?eur(c.bindend.gesamtsteuer):'—','','Gesamtsteuer','ESt + KiSt + SolZ','color-mix(in srgb,var(--red) 40%,transparent)'),
+    c?kpi(eur(Math.abs(c.erstattung)),refund?'green':'amber',refund?'Erstattung':'Nachzahlung',`${verb?'MCP bindend':'In-Process'} · ${mcpMs}`,'color-mix(in srgb,var(--gold) 50%,transparent)'):''
   ].join('');
-
   const heroNach=zus?`Ehepaar ${esc((d.household&&d.household.personA&&d.household.personA.nachname)||'')} · Zusammenveranlagung`:(c&&c.einheit?`Person ${esc(c.einheit)} · Einzelveranlagung`:'Steuerfall');
   const heroDesc=(d.begruendung&&d.begruendung.length)?esc(d.begruendung.join(' · ')):(zus?'Splittingtarif §32a Abs. 5 · BMF-MCP bindend':'Grundtarif §32a · BMF-MCP bindend');
-  const hero=c?`<div class="hero reveal"><div>
-    <div class="hero-label">Steuerbescheid ${esc(d.vz)}</div><div class="hero-title">${heroNach}</div>
-    <div class="hero-desc">${heroDesc}${c.abgleich?` · ΔESt = ${c.abgleich.estDelta}`:''}</div></div>
-    <div><div class="hero-amt ${refund?'refund':'owe'}">${eur(Math.abs(c.erstattung))}</div>
-    <div class="hero-amt-sub">${refund?'Erstattung · vom Finanzamt':'Nachzahlung · an Finanzamt'}</div></div></div>`:'';
-
-  // Kalkulation
+  const hero=c?`<div class="hero"><div><div class="hero-label">Steuerbescheid ${esc(d.vz)}</div><div class="hero-title">${heroNach}</div><div class="hero-desc">${heroDesc}${c.abgleich?` · ΔESt = ${c.abgleich.estDelta}`:''}</div></div><div><div class="hero-amt ${refund?'refund':'owe'}">${eur(Math.abs(c.erstattung))}</div><div class="hero-amt-sub">${refund?'Erstattung · vom Finanzamt':'Nachzahlung · an Finanzamt'}</div></div></div>`:'';
   let calcCard='';
   if(c){const b=c.bindend; const eff=(b.durchschnittssteuersatz!=null?b.durchschnittssteuersatz:(b.zve>0?b.einkommensteuer/b.zve:0))*100;
     const mx=Math.max(b.einkommensteuer,b.kirchensteuer,b.solidaritaetszuschlag,c.angerechnet,1);
     const bar=(l,v,col)=>`<div class="br"><div class="br-meta"><span>${l}</span><span>${eur(v)}</span></div><div class="br-track"><div class="br-fill" style="width:${(v/mx*100).toFixed(1)}%;background:${col}"></div></div></div>`;
-    calcCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--amber)"></div>Steuer-Kalkulation · transparent</div><span class="chev open">▼</span></div><div class="card-body">
+    calcCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--gold)"></div>Steuer-Kalkulation · transparent</div><span class="chev open">▼</span></div><div class="card-body">
       <div class="slabel">Festgesetzte Steuer · ${verb?'BMF-MCP bindend':'In-Process-Fallback'}</div>
       <div class="cr"><div><div class="cr-lbl"><strong>Zu versteuerndes Einkommen</strong></div><div class="cr-code">${zus?'§32a Abs. 5 · Splittingtarif':'§32a · Grundtarif'}</div></div><div class="cr-val">${eur(b.zve)}</div></div>
-      <div class="br"><div class="br-meta"><span>Durchschnittssteuersatz</span><span>${eff.toFixed(1)} %</span></div><div class="br-track"><div class="br-fill" style="width:${Math.min(eff,100).toFixed(1)}%;background:var(--amber)"></div></div></div>
+      <div class="br"><div class="br-meta"><span>Durchschnittssteuersatz</span><span>${eff.toFixed(1)} %</span></div><div class="br-track"><div class="br-fill" style="width:${Math.min(eff,100).toFixed(1)}%;background:var(--gold)"></div></div></div>
       <div class="cr"><div><div class="cr-lbl">Einkommensteuer (§32a)</div></div><div class="cr-val">${eur(b.einkommensteuer)}</div></div>
       <div class="cr"><div><div class="cr-lbl">Solidaritätszuschlag</div></div><div class="cr-val ${b.solidaritaetszuschlag?'':'zero'}">${eur(b.solidaritaetszuschlag)}</div></div>
       <div class="cr"><div><div class="cr-lbl">Kirchensteuer</div></div><div class="cr-val ${b.kirchensteuer?'':'zero'}">${eur(b.kirchensteuer)}</div></div>
       <div class="cr total"><div><div class="cr-lbl"><strong>Festgesetzte Gesamtsteuer</strong></div></div><div class="cr-val">${eur(b.gesamtsteuer)}</div></div>
-      <div class="slabel">Anrechnung & Saldo</div>
+      <div class="slabel">Anrechnung &amp; Saldo</div>
       <div class="cr"><div><div class="cr-lbl">Summe angerechnete Abzugsteuern</div><div class="cr-code">LSt · KapESt · SolZ · KiSt</div></div><div class="cr-val green">− ${eur(c.angerechnet)}</div></div>
       <div class="cr result"><div><div class="cr-lbl"><strong>${refund?'Erstattung':'Nachzahlung'}</strong></div><div class="cr-code">${eur(b.gesamtsteuer)} − ${eur(c.angerechnet)}</div></div><div class="cr-val ${refund?'green':'amber'}">${eur(Math.abs(c.erstattung))}</div></div>
       <div class="slabel">Steuerstruktur</div>
-      ${bar('Einkommensteuer festgesetzt',b.einkommensteuer,'var(--amber)')}
-      ${bar('Angerechnete Abzugsteuern',c.angerechnet,'var(--blue)')}
-      ${bar('Kirchensteuer',b.kirchensteuer,'var(--mut)')}
-      ${bar('Solidaritätszuschlag',b.solidaritaetszuschlag,'var(--green)')}
+      ${bar('Einkommensteuer festgesetzt',b.einkommensteuer,'var(--gold)')}${bar('Angerechnete Abzugsteuern',c.angerechnet,'var(--blue)')}${bar('Kirchensteuer',b.kirchensteuer,'var(--muted)')}${bar('Solidaritätszuschlag',b.solidaritaetszuschlag,'var(--green)')}
     </div></div>`;}
-
   const ir=(k,v)=>`<div class="ir"><div class="ir-k">${k}</div><div class="ir-v">${v}</div></div>`;
-  const relA=fval(d,'A','E0100402'), relB=fval(d,'B','E0101002');
+  const relA=fval(d,'A','E0100402'),relB=fval(d,'B','E0101002');
   const veranlCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Veranlagungsart</div><span class="chev open">▼</span></div><div class="card-body">
-    ${ir('Form',`<span class="tag ${zus?'amber':''}">${zus?'Zusammenveranlagung':'Einzelveranlagung'}</span>`)}
-    ${ir('Rechtsgrundlage',zus?'§32a Abs. 5 EStG':'§32a EStG')}${ir('Tarif',zus?'Splittingtarif':'Grundtarif')}
-    ${stkl?ir('Steuerklasse',esc(stkl)):''}${relA?ir('Konfession A','Schlüssel '+esc(relA)):''}${relB?ir('Konfession B','Schlüssel '+esc(relB)):''}
-    ${c?ir('Berechnung',esc((c.quelle||'').toUpperCase())):''}${c&&c.abgleich?ir('Abgleich',`ΔESt ${c.abgleich.estDelta} · ${c.abgleich.konform?'konform':'MCP bindend'}`):''}${ir('Laufzeit MCP',mcpMs)}
+    ${ir('Form',`<span class="tag ${zus?'amber':''}">${zus?'Zusammenveranlagung':'Einzelveranlagung'}</span>`)}${ir('Rechtsgrundlage',zus?'§32a Abs. 5 EStG':'§32a EStG')}${ir('Tarif',zus?'Splittingtarif':'Grundtarif')}${stkl?ir('Steuerklasse',esc(stkl)):''}${relA?ir('Konfession A','Schlüssel '+esc(relA)):''}${relB?ir('Konfession B','Schlüssel '+esc(relB)):''}${c?ir('Berechnung',esc((c.quelle||'').toUpperCase())):''}${c&&c.abgleich?ir('Abgleich',`ΔESt ${c.abgleich.estDelta} · ${c.abgleich.konform?'konform':'MCP bindend'}`):''}${ir('Laufzeit MCP',mcpMs)}
   </div></div>`;
   const kapRows=[['Sparer-Pauschbetrag (A)',feur(d,'A','E1901402')],['Kapitalerträge (A)',feur(d,'A','E1900701')],['KapErtSt (A)',feur(d,'A','E1904701')],['Kapitalerträge (B)',feur(d,'B','E1900701')],['KapErtSt (B)',feur(d,'B','E1904701')]].filter(r=>r[1]!=null);
   const kapCard=kapRows.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--green)"></div>Kapitalerträge · KAP</div><span class="chev open">▼</span></div><div class="card-body">${kapRows.map(r=>ir(r[0],r[1])).join('')}</div></div>`:'';
-
   const persons=[]; if(d.fields.some(f=>f.person==='A')||nA)persons.push('A'); if(d.fields.some(f=>f.person==='B')||nB)persons.push('B');
   const pName={A:nA||'Person A',B:nB||'Person B'};
   const tabs=persons.map((p,i)=>`<div class="ptab${i===0?' active':''}" data-pc="pc-${p}"><div class="ptab-name">${esc(pName[p])}</div><div class="ptab-role">Person ${p}${p==='A'?' · Haupt':' · Ehegatte'}</div></div>`).join('');
   const pane=(p,i)=>{const hh=d.household?(p==='A'?d.household.personA:d.household.personB):null;let rows='';if(hh&&hh.idnr)rows+=ir('Steuer-ID',idnr(hh.idnr));
     for(const f of d.fields.filter(x=>x.person===p)){const n=parseDe(f.wert);const show=(Number.isFinite(n)&&/[.,]\d|^\d{4,}/.test(String(f.wert)))?eur(n):esc(f.wert);rows+=ir(esc((f.label||f.eCode).slice(0,46)),show);}
     return `<div id="pc-${p}" class="pc${i===0?' active':''}">${rows||'<div class="ir"><div class="ir-k" style="font-style:italic">Keine Felder.</div></div>'}</div>`;};
-  const personenCard=persons.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--amber)"></div>Personen · Haushalt</div><span class="chev open">▼</span></div><div class="card-body"><div class="ptabs">${tabs}</div>${persons.map((p,i)=>pane(p,i)).join('')}</div></div>`:'';
-
+  const personenCard=persons.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--gold)"></div>Personen · Haushalt</div><span class="chev open">▼</span></div><div class="card-body"><div class="ptabs">${tabs}</div>${persons.map((p,i)=>pane(p,i)).join('')}</div></div>`:'';
   const belItems=d.belege.map(bg=>`<div class="bel-item"><span class="bel-type ${bg.method}">${esc(bg.method)}</span><div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div><div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div><div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div></div>`).join('');
   const belegeCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Belege · ${d.belege.length} Dokumente</div><span class="chev open">▼</span></div><div class="card-body" style="padding:0"><div class="bel-grid">${belItems}</div></div></div>`;
-
   const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
-  const rows=d.fields.map(f=>`<tr><td style="padding-left:22px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td><td class="num">${esc((f.wert||'').slice(0,20))}</td><td><span class="etag ${f.person==='A'?'a':'b'}">${esc(f.person)}</span></td><td><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td><td style="padding-right:22px"><span class="etag ${esc(f.method)}">${esc(f.method)}</span></td></tr>`).join('');
-  const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${d.fields.length} Felder</div><span class="chev">▼</span></div><div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:22px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:22px">Quelle</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
-
+  const rows=d.fields.map(f=>`<tr><td style="padding-left:20px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,52))}</td><td class="num">${esc((f.wert||'').slice(0,20))}</td><td><span class="etag ${f.person==='A'?'a':'b'}">${esc(f.person)}</span></td><td><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td><td style="padding-right:20px"><span class="etag ${esc(f.method)}">${esc(f.method)}</span></td></tr>`).join('');
+  const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${d.fields.length} Felder</div><span class="chev">▼</span></div><div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:20px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:20px">Quelle</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   const warn=(d.warnings&&d.warnings.length)?`<div class="warn"><b>Hinweise:</b> ${d.warnings.map(w=>esc(w)).join(' &nbsp;·&nbsp; ')}</div>`:'';
-
-  dash.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}
-    <div class="g3">${calcCard}<div>${veranlCard}${kapCard}</div></div>
-    <div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${warn}
-    <div class="foot">STURM · Steuer-Engine · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
+  center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}<div class="g2">${calcCard}<div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
 }
-
-/* ── dashboard interactivity (delegation) ── */
-dash.addEventListener('click',e=>{
+center.addEventListener('click',e=>{
   const head=e.target.closest('.card-head');
   if(head){const b=head.nextElementSibling;b.classList.toggle('collapsed');const ch=head.querySelector('.chev');if(ch)ch.classList.toggle('open');return;}
   const tab=e.target.closest('.ptab');
   if(tab){const root=tab.closest('.card-body');root.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');root.querySelectorAll('.pc').forEach(p=>p.classList.remove('active'));const pc=root.querySelector('#'+tab.dataset.pc);if(pc)pc.classList.add('active');}
 });
 
-renderCases();
+render();
 </script>
 </body></html>
