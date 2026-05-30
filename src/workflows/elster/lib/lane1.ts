@@ -115,7 +115,10 @@ export interface Lane1BelegOutcome {
   method: 'text' | 'ocr';
   /** Die je Dokument extrahierten Felder — für die Dokument-Detailansicht der
    *  Web-UI (Klick auf eine Beleg-Karte zeigt genau diese Felder). */
-  felderListe?: { eCode: string; label: string; wert: string; person: string; anlage: string }[];
+  felderListe?: { eCode: string; label: string; wert: string; person: string; anlage: string;
+    /** Provenienz: Box dieses Feldes IM EIGENEN Beleg-Dokument (vom Web-Server
+     *  nachgerüstet, pro Beleg gematcht — treibt die Beleg-Detailansicht). */
+    prov?: { hash: string; page: number; box: [number, number, number, number] } }[];
 }
 
 /** MappedField[] → kompakte Web-Form für die Dokument-Detailansicht. */

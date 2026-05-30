@@ -237,7 +237,7 @@
   .warn b{color:var(--gold);font-weight:400}
   .doccard{cursor:pointer} .docpanel__list .doccard:hover{border-color:var(--gold)}
   .docview{display:flex;flex-direction:column;min-height:calc(100vh - 150px)}
-  .docview__bar{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .docview__bar{display:flex;align-items:center;gap:14px;margin-bottom:14px;position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line)}
   .docview__name{font-family:var(--font-serif);font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .docview__frame{flex:1;width:100%;min-height:70vh;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
   .docview__imgwrap{flex:1;min-height:60vh;border:1px solid var(--line);border-radius:10px;background:var(--bg2);display:flex;align-items:center;justify-content:center;overflow:auto;padding:12px}
@@ -245,6 +245,15 @@
   .docview__none{flex:1;min-height:50vh;border:1px dashed var(--line2);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;gap:6px}
   .docview__none span{color:var(--dim);font-size:10.5px}
   .docview__fields{padding:6px 4px 24px}
+  /* Beleg-Detail Mitte: gerastertes Dokument mit gelben Provenienz-Boxen */
+  .docview__doc{display:flex;flex-direction:column;gap:6px;align-items:center;padding-bottom:24px}
+  .docview__doc .docview__wrap{max-width:900px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.07)}
+  .docview__pg{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);align-self:flex-start;margin-top:8px}
+  .docview--prov .hlbox{pointer-events:auto;cursor:pointer}
+  .hlbox__tag{position:absolute;left:0;top:-17px;font-family:var(--font-mono);font-size:9px;background:var(--gold-d);color:#fff;padding:1px 5px;border-radius:3px;white-space:nowrap;opacity:0;transition:.12s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.25);z-index:3}
+  .docview--prov .hlbox:hover .hlbox__tag,.hlbox.active .hlbox__tag{opacity:1}
+  .provrow{cursor:pointer} .provrow:hover,.provrow.hot{background:color-mix(in srgb,var(--gold) 13%,transparent)}
+  .provrow__dot{color:var(--gold)}
   .foot{margin-top:32px;padding-top:18px;border-top:1px solid var(--line);font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;text-align:center}
   .err{color:var(--red);padding:14px 16px;border:1px solid color-mix(in srgb,var(--red) 40%,transparent);border-radius:10px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:14px 0;font-size:12px}
   ::-webkit-scrollbar{width:6px;height:6px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
@@ -345,7 +354,7 @@ function persistActive(){
   const entry={id:active.id,label:active.label,vz:active.vz,ts:Date.now(),
     saldo:c?c.erstattung:0,refund:c?c.erstattung>=0:true,veranlagung:active.data.veranlagungsart,
     data:active.data,paths:active.paths,
-    docs:active.docs.map(d=>({name:d.name,size:d.size,badge:d.badge,state:d.state,fields:d.fields||[],thumbUrl:(d.thumb&&typeof d.thumb.url==='string'&&d.thumb.url.indexOf('data:')===0)?d.thumb.url:null,isImg:!!(d.thumb&&d.thumb.kind==='img')}))};
+    docs:active.docs.map(d=>({name:d.name,size:d.size,path:d.path||null,badge:d.badge,state:d.state,fields:d.fields||[],thumbUrl:(d.thumb&&typeof d.thumb.url==='string'&&d.thumb.url.indexOf('data:')===0)?d.thumb.url:null,isImg:!!(d.thumb&&d.thumb.kind==='img')}))};
   const arr=loadCases().filter(x=>x.id!==active.id&&x.label!==active.label);
   arr.unshift(entry); storeCases(arr); renderCases();
 }
@@ -367,7 +376,7 @@ caselistEl.addEventListener('click',e=>{
   const it=e.target.closest('.caseitem'); if(!it)return;
   const c=loadCases().find(x=>x.id===it.getAttribute('data-id')); if(!c)return;
   active={id:c.id,label:c.label,vz:c.vz,paths:c.paths||[],
-    docs:(c.docs||[]).map(d=>({name:d.name,size:d.size,badge:d.badge,state:d.state,fields:d.fields||[],
+    docs:(c.docs||[]).map(d=>({name:d.name,size:d.size,path:d.path||null,badge:d.badge,state:d.state,fields:d.fields||[],
       thumb:d.thumbUrl?{kind:'img',url:d.thumbUrl}:{kind:d.isImg?'img':'pdf'}})),data:c.data};
   viewDoc=null; closeNcp(); render(); window.scrollTo({top:0,behavior:'smooth'});
 });
@@ -454,11 +463,18 @@ async function recompute(){
 }
 $('#recompute-btn').addEventListener('click',recompute);
 const BELN={VaSt_LStB:'Lohnsteuerbescheinigung',VaSt_Religion:'Kirchensteuer-Merkmal',VaSt_FSA:'Freistellungsauftrag',VaSt_RBM:'Rentenbezugsmitteilung',VaSt_KRV:'Kranken-/Pflegevers.',VaSt_Pers:'Stammdaten',Steuerbescheinigung_Bank:'Bank-Steuerbescheinigung',Einkommensteuererklaerung:'ESt-Erklärung',Unbekannt:'Unbekannt'};
+// Server-Basename ist deterministisch aus dem Originalnamen ableitbar
+// (X-Filename → safeName). So matchen Belege/Provenienz auch nach
+// persist/restore, wenn die Card ihren Server-`path` verloren hat.
+const safeName=(s)=>String(s||'').replace(/[^\w.\-]+/g,'_').slice(-80);
+const baseOf=(p)=>String(p||'').split('#')[0].split('/').pop();
 function applyBadges(){
   if(!active||!active.data)return;
   const bel=active.data.belege||[];
   for(const d of active.docs){
-    const base=d.path; const hits=base?bel.filter(b=>String(b.source).split('#')[0]===base):[];
+    const cardBase=d.path?baseOf(d.path):safeName(d.name);
+    const hits=bel.filter(b=>baseOf(b.source)===cardBase);
+    if(!d.path&&hits.length) d.path=String(hits[0].source).split('#')[0];  // Pfad rekonstruieren → wird persistiert
     d.fields=hits.flatMap(h=>h.felderListe||[]);
     if(!hits.length){ d.state='done'; d.badge='verarbeitet'; continue; }
     const felder=hits.reduce((s,h)=>s+(h.felder||0),0);
@@ -476,27 +492,67 @@ function render(){ renderCases(); updateChips();
   else { renderCenter(); renderDocPanel(); }
 }
 
-/* ── Dokument-Detailansicht: Mitte = Beleg-Vorschau, rechts = extrahierte Felder ── */
+/* ── Beleg-Detailansicht: Mitte = gerastertes Dokument MIT gelben Provenienz-
+   Markierungen (genau das OCR-Bild → pixelgenaue Boxen); rechts = extrahierte
+   Felder (Zeile überfahren → zugehörige Box im Dokument leuchtet auf). ── */
 function renderDocDetail(){
-  const d=active.docs[viewDoc];
-  let url=null;
-  if(d._file){ try{ if(d._objUrl)URL.revokeObjectURL(d._objUrl); d._objUrl=URL.createObjectURL(d._file); url=d._objUrl; }catch(_){} }
-  let preview;
-  if(url) preview=`<iframe class="docview__frame" src="${url}#toolbar=0&navpanes=0"></iframe>`;
-  else if(d.thumb&&d.thumb.url) preview=`<div class="docview__imgwrap"><img src="${d.thumb.url}" alt=""></div>`;
-  else preview=`<div class="docview__none">Vorschau nur in der aktuellen Sitzung verfügbar.<br><span>Die extrahierten Felder rechts bleiben gespeichert.</span></div>`;
-  center.innerHTML=`<div class="docview">
-    <div class="docview__bar"><button class="hbtn" id="doc-back">← Zurück zum Bescheid</button><div class="docview__name">${esc(d.name)}</div></div>
-    ${preview}</div>`;
+  const d=active.docs[viewDoc], data=active&&active.data;
   const fields=d.fields||[];
+  const boxed=fields.filter(f=>f.prov&&f.prov.box);                 // Felder DIESES Belegs mit Box
+  // Prov-Dokument (Bild-Dims + PNG-Hash): per Basename, sonst per Feld-Hash.
+  const cardBase=d.path?baseOf(d.path):safeName(d.name);
+  let provDoc=data&&(data.docs||[]).find(x=>x.name===cardBase);
+  if(!provDoc&&boxed.length&&data) provDoc=(data.docs||[]).find(x=>x.hash===boxed[0].prov.hash);
+
+  let bodyHtml, badge='';
+  if(provDoc){
+    const hash=provDoc.hash, mine=boxed.filter(f=>f.prov.hash===hash);
+    const pages=(provDoc.pages||[]).map((dim,pi)=>{
+      const boxes=mine.filter(f=>f.prov.page===pi).map(f=>{const b=f.prov.box,L=b[0]/dim.w*100,T=b[1]/dim.h*100,W=(b[2]-b[0])/dim.w*100,H=(b[3]-b[1])/dim.h*100;
+        return `<div class="hlbox" data-box="${b.join(',')}" title="${esc(f.eCode)} = ${esc(f.wert)}" style="left:${L}%;top:${T}%;width:${W}%;height:${H}%"><span class="hlbox__tag">${esc(f.eCode)} · ${esc(f.wert)}</span></div>`;}).join('');
+      const pl=(provDoc.pages.length>1)?`<div class="docview__pg">Seite ${pi+1} / ${provDoc.pages.length}</div>`:'';
+      return `${pl}<div class="docview__wrap"><img loading="lazy" src="api/page?h=${esc(hash)}&p=${pi}" alt="Seite ${pi+1}">${boxes}</div>`;}).join('');
+    bodyHtml=`<div class="docview__doc docview--prov" id="dv-doc">${pages}</div>`;
+    badge=`<span class="chip ok" style="margin-left:auto">${mine.length?mine.length+(mine.length===1?' Feld':' Felder')+' markiert':'OCR-Dokument'}</span>`;
+  } else if(d._file){
+    let url=null; try{ if(d._objUrl)URL.revokeObjectURL(d._objUrl); d._objUrl=URL.createObjectURL(d._file); url=d._objUrl; }catch(_){}
+    bodyHtml=url?`<iframe class="docview__frame" src="${url}#toolbar=0&navpanes=0"></iframe>`:`<div class="docview__none">Vorschau nicht verfügbar.</div>`;
+  } else if(d.thumb&&d.thumb.url){
+    bodyHtml=`<div class="docview__imgwrap"><img src="${d.thumb.url}" alt=""></div>`;
+  } else {
+    bodyHtml=`<div class="docview__none">Dokument-Vorschau nur in der Sitzung verfügbar, in der hochgeladen wurde.<br><span>Tipp: „↻ Neu berechnen" rastert den Beleg serverseitig — dann erscheint er hier mit Markierungen.</span></div>`;
+  }
+  center.innerHTML=`<div class="docview">
+    <div class="docview__bar"><button class="hbtn" id="doc-back">← Zurück zum Bescheid</button><div class="docview__name">${esc(d.name)}</div>${badge}</div>
+    ${bodyHtml}</div>`;
+
   const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
-  const rows=fields.length?fields.map(f=>`<tr><td style="padding-left:14px">${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,40))}</td><td class="num">${esc((f.wert||'').slice(0,18))}</td><td style="padding-right:14px"><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td></tr>`).join('')
+  const rows=fields.length?fields.map(f=>{const pv=f.prov&&f.prov.box?f.prov:null;
+      const attrs=pv?` class="provrow" data-box="${pv.box.join(',')}"`:'';
+      return `<tr${attrs}><td style="padding-left:14px">${pv?'<span class="provrow__dot">◳</span> ':''}${esc(f.eCode)}</td><td>${esc((f.label||'').slice(0,40))}</td><td class="num">${esc((f.wert||'').slice(0,18))}</td><td style="padding-right:14px"><span class="etag ${anlCls(f.anlage)}">${esc(f.anlage||'')}</span></td></tr>`;}).join('')
     :`<tr><td colspan="4" style="color:var(--dim);padding:16px 14px">Aus diesem Dokument wurden keine Felder extrahiert${d.state==='err'?' (nicht lesbar)':''}.</td></tr>`;
   docpanel.innerHTML=`<div class="docpanel__head">
       <p class="docpanel__title"><span>Extrahiert</span><span class="docpanel__vz">${fields.length} Felder</span></p>
-      <p class="docpanel__count" style="font-size:13px;color:var(--green)">${esc(d.badge||'verarbeitet')}</p></div>
+      <p class="docpanel__count" style="font-size:13px;color:var(--green)">${esc(d.badge||'verarbeitet')}</p>
+      ${boxed.length?'<p style="font-size:10px;color:var(--muted);margin:6px 0 0">'+boxed.length+' im Dokument markiert · Zeile überfahren → Box leuchtet</p>':''}</div>
     <div class="docview__fields"><table class="et"><thead><tr><th style="padding-left:14px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th style="padding-right:14px">Anlage</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  // Erste Box sanft in den Viewer-Scrollbereich holen (nur Container, nicht Seite).
+  if(boxed.length){const sc=center.querySelector('.docview'),img=center.querySelector('#dv-doc img');
+    const go=()=>{const el=center.querySelector('.docview--prov .hlbox');if(sc&&el){const er=el.getBoundingClientRect(),sr=sc.getBoundingClientRect();sc.scrollTop+=er.top-sr.top-sr.height*0.32;}};
+    if(img){ if(img.complete)go(); else img.addEventListener('load',go,{once:true}); }}
 }
+/* Feld-Zeile (rechts) ↔ Box (Mitte) synchronisieren */
+function activateBox(boxStr,scroll){
+  center.querySelectorAll('.hlbox.active').forEach(b=>b.classList.remove('active'));
+  if(!boxStr)return; const el=center.querySelector('.docview--prov .hlbox[data-box="'+boxStr+'"]');
+  if(el){el.classList.add('active'); if(scroll)el.scrollIntoView({block:'center',behavior:'smooth'});}
+}
+docpanel.addEventListener('mouseover',e=>{const r=e.target.closest('.provrow');if(r)activateBox(r.dataset.box,false);});
+docpanel.addEventListener('click',e=>{const r=e.target.closest('.provrow');if(r)activateBox(r.dataset.box,true);});
+center.addEventListener('mouseover',e=>{const hb=e.target.closest('.docview--prov .hlbox');if(!hb)return;
+  docpanel.querySelectorAll('.provrow.hot').forEach(r=>r.classList.remove('hot'));
+  const r=docpanel.querySelector('.provrow[data-box="'+hb.dataset.box+'"]'); if(r){r.classList.add('hot');r.scrollIntoView({block:'nearest'});}});
 
 function updateChips(){
   const box=$('#hd-chips'); const keep=box.querySelectorAll('.hbtn');

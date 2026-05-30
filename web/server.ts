@@ -124,8 +124,9 @@ function matchProv(value: string, docs: { hash: string; pages: ProvPage[] }[]): 
   }
   // Kurze Ganzzahl (300, 915, 11): zu mehrdeutig → NUR wenn ein Record exakt
   // diese Zahl ist (kein Teilstring — „11" steckt sonst in „Seite 1 von 1").
+  // Auch die ausgeschriebene „,00"-Form zählt (Feldwert „36" ↔ Beleg „36,00").
   if (isNum) {
-    return scan((rt) => rt.trim() === v);
+    return scan((rt) => { const t = rt.trim(); return t === v || t === `${v},00` || t === `${v}.00`; });
   }
   const lv = v.toLowerCase();
   return scan((rt) => v.length >= 3 && rt.toLowerCase() === lv)      // exakter Text
@@ -173,6 +174,20 @@ async function runSteuerfall(paths: string[], vz: number) {
       const m = matchProv(String(f.wert ?? ''), provDocs);
       return m ? { ...f, prov: m } : f;
     });
+    // Per-Beleg-Provenienz: jedes Feld GEGEN DIE RECORDS SEINES EIGENEN
+    // Belegs matchen (nicht greedy über alle Docs) → die Beleg-Detailansicht
+    // (Klick auf eine Beleg-Karte) zeigt genau die Felder DIESES Belegs als
+    // Box auf DIESEM Dokument — keine Cross-Doc-Verwechslung.
+    const provBySource = new Map(provDocs.map((d) => [d.path, d]));
+    for (const b of r.belege) {
+      if (b.method !== 'ocr' || !Array.isArray(b.felderListe)) continue;
+      const pd = provBySource.get(String(b.source).split('#')[0]);
+      if (!pd) continue;
+      for (const f of b.felderListe) {
+        const m = matchProv(String(f.wert ?? ''), [pd]);
+        if (m) f.prov = { hash: m.hash, page: m.page, box: m.box };
+      }
+    }
   } catch (e) {
     console.error('PROV', (e as Error).message);
   }
