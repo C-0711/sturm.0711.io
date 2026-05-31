@@ -130,8 +130,10 @@ export async function phraseFinding(f: AuditFinding): Promise<AuditFinding> {
   );
   if (obj && typeof obj.frage === 'string' && obj.frage.trim().length > 5)
     return { ...f, frage: obj.frage.trim(), begruendung: String(obj.begruendung ?? '').trim(), grounding };
+  // Fallback: bereits vorformulierte Frage (z.B. aus der Soll-Liste) bevorzugen, sonst generisch.
   const fb = fallbackFrage(f);
-  return { ...f, frage: fb.frage, begruendung: fb.begruendung, grounding };
+  const frage = (f.frage && f.frage.trim().length > 5) ? f.frage.trim() : fb.frage;
+  return { ...f, frage, begruendung: fb.begruendung, grounding };
 }
 
 /** Alle Befunde formulieren (sequenziell — ein geladenes Modell, kleine Prompts). */

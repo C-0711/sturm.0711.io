@@ -6,6 +6,8 @@
  * Fragen; er erfindet keine Anforderungen. Korrektheit lebt hier, nicht im LLM.
  */
 
+import { pruefeSoll } from './soll-katalog.ts';
+
 export type FindingKind = 'missing_beleg' | 'open_question' | 'conflict' | 'confirm_value' | 'optimize';
 export type Severity = 'blocker' | 'empfohlen' | 'optional';
 export type ErwartetTyp = 'upload' | 'boolean' | 'value' | 'text';
@@ -127,6 +129,20 @@ export function auditCase(data: CaseData): AuditReport {
       fakt: `Verifizierter Befund (Katalog-KG): Es liegen Kapitalerträge (Anlage KAP) vor, aber kein Sparer-Pauschbetrag (E1901402 = ${sparer?.wert ?? 'leer'}). Zu klären, ob ein Freistellungsauftrag bzw. der Sparer-Pauschbetrag (801 € einzeln / 1602 € zusammen) berücksichtigt wurde.`,
       basis: { quelle: 'catalog', ref: 'kap-ohne-sparer' }, erwartet: { typ: 'value', eCode: 'E1901402' },
     });
+
+  // F) Vollständigkeit gegen die volle EST (Soll-Liste): erwartete Felder, die im Fall
+  // fehlen — Adresse, IBAN, Geburtsdatum, Pendlerpauschale, Günstigerprüfung … (profil-getrieben).
+  for (const it of pruefeSoll(data).fehlt) {
+    const istAbzug = it.kategorie === 'Werbungskosten' || it.kategorie === 'Kapitalerträge';
+    push({
+      kind: istAbzug ? 'optimize' : 'open_question',
+      severity: it.severity,
+      fakt: `Verifizierter Befund (Soll-Liste EST · ${it.kategorie}): Das erwartete Feld „${it.label}" fehlt im Fall (${it.herkunft}).`,
+      frage: it.frage,  // kuratierte Frage als Fallback, falls der Auditor nicht umformuliert
+      basis: { quelle: 'rule', ref: `soll:${it.id}` },
+      erwartet: { typ: istAbzug ? 'boolean' : 'value', eCode: it.eCodes[0] },
+    });
+  }
 
   const order: Record<Severity, number> = { blocker: 0, empfohlen: 1, optional: 2 };
   out.sort((a, b) => order[a.severity] - order[b.severity]);
