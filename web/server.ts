@@ -21,6 +21,8 @@ import { ocrEnsembleToRawText } from '../src/workflows/elster/lib/field-mapper/l
 import { berechneHaushaltAuthoritativ } from '../src/workflows/elster/lib/steuer/authoritative.ts';
 import { normalisiereSteuerfall } from '../src/workflows/elster/lib/steuer/fallnormalizer.ts';
 import type { SteuerFeld } from '../src/workflows/elster/lib/steuer/adapter.ts';
+import { auditCase } from './audit.ts';
+import { phraseFindings, interpretAnswer } from './auditor.ts';
 
 const { Pool } = pg;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -272,6 +274,22 @@ createServer(async (req, res) => {
       if (!Array.isArray(paths) || paths.length === 0) return json(res, 400, { error: 'keine Dateien' });
       const out = await runSteuerfall(paths, Number(vz) || 2023);
       return json(res, 200, out);
+    }
+    // Auditor: gerechneter Fall → verifizierte Befunde (deterministisch) +
+    // user-gerichtete Fragen (lokales Gemma, on-prem). „der Auditor" — das
+    // zugrundeliegende Modell wird nie nach außen genannt.
+    if (req.method === 'POST' && url === '/api/audit') {
+      const { data } = JSON.parse((await body(req)).toString('utf8'));
+      if (!data || typeof data !== 'object') return json(res, 400, { error: 'kein Fall' });
+      const rep = auditCase(data);
+      const findings = await phraseFindings(rep.findings);
+      return json(res, 200, { ok: true, findings, score: rep.score });
+    }
+    if (req.method === 'POST' && url === '/api/audit/answer') {
+      const { finding, antwort } = JSON.parse((await body(req)).toString('utf8'));
+      if (!finding || typeof antwort !== 'string') return json(res, 400, { error: 'unvollständig' });
+      const verdict = await interpretAnswer(finding, antwort);
+      return json(res, 200, { ok: true, verdict });
     }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found');
   } catch (e) {
