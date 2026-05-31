@@ -191,42 +191,55 @@ export function extractKapErtraegnisSumme(rawText: string, person: Person): Anla
   const lines = rawText.split(/\r?\n/);
   const moneyAnywhere = /(-?\d[\d.]*,\d{1,2})/; // Money-Decimal irgendwo in der Zeile
   const spec = ANLAGE_ZEILE_TO_FIELD['KAP:7']; // Höhe der Kapitalerträge → E1900701
-  const labelRe = /H[öo]he\s+der\s+Kapitalertr[äa]ge/i;
+  // Anker in Prioritätsreihenfolge. Volksbank-/Raiffeisen-Erträgnisaufstellungen
+  // tragen die maßgebliche Gesamtsumme NICHT als „Höhe der Kapitalerträge Zeile 7
+  // Anlage KAP <Wert>" (das zerlegt OCR über die Tabellen-Spaltenköpfe, Umlaute
+  // weg), sondern auf der Zeile „Ermittelt aus der Summe der steuerpflichtigen
+  // Einzelerträge … <Summe>" (Wert INLINE) bzw. unter „Summe zur vorstehenden
+  // Tabelle". Anker 1 greift auf das distinktive „steuerpflichtigen Einzelerträge"
+  // (überspringt das OCR-anfällige „Summe/Surmme"); Anker 3 ist der Alt-Label-Pfad.
+  const anchors: RegExp[] = [
+    /steuerpflichtigen\s+Einzelertr[äa]ge/i,   // Wert auf derselben Zeile
+    /Summe\s+zur\s+vorstehenden\s+Tabelle/i,   // Wert 1–2 Zeilen darunter
+    /H[öo]he\s+der\s+Kapitalertr[äa]ge/i,      // klassischer Label-Anker
+  ];
 
-  for (let i = 0; i < lines.length; i++) {
-    if (!labelRe.test(lines[i])) continue;
-    // Wert: erst auf der Label-Zeile, sonst in den nächsten 2 nicht-leeren Zeilen.
-    let raw: string | null = null;
-    const sm = lines[i].match(moneyAnywhere);
-    if (sm) {
-      raw = sm[1];
-    } else {
-      let tested = 0;
-      for (let j = i + 1; j < lines.length && tested < 2; j++) {
-        if (lines[j].trim() === '') continue;
-        tested++;
-        const m = lines[j].match(moneyAnywhere);
-        if (m) { raw = m[1]; break; }
+  for (const anchor of anchors) {
+    for (let i = 0; i < lines.length; i++) {
+      if (!anchor.test(lines[i])) continue;
+      // Wert: erst auf der Anker-Zeile, sonst in den nächsten 3 nicht-leeren Zeilen.
+      let raw: string | null = null;
+      const sm = lines[i].match(moneyAnywhere);
+      if (sm) {
+        raw = sm[1];
+      } else {
+        let tested = 0;
+        for (let j = i + 1; j < lines.length && tested < 3; j++) {
+          if (lines[j].trim() === '') continue;
+          tested++;
+          const m = lines[j].match(moneyAnywhere);
+          if (m) { raw = m[1]; break; }
+        }
       }
+      if (!raw) continue;
+      const norm = normalize(raw, spec.valueType);
+      return [{
+        ref: 'KAP:7(Summe)',
+        field: {
+          eCode: spec.eCode,
+          anlage: spec.anlage,
+          kontextSubpath: spec.kontextSubpath,
+          wert: norm.wert,
+          rawValue: raw,
+          person,
+          pdfLabel: 'Höhe der Kapitalerträge (Erträgnis-Summe)',
+          valueType: spec.valueType,
+          method: 'schema',
+          confidence: 0.8,
+          warnings: [`Erträgnisaufstellung-Summe → ${spec.eCode}`, ...(norm.warnings ?? [])],
+        },
+      }];
     }
-    if (!raw) continue;
-    const norm = normalize(raw, spec.valueType);
-    return [{
-      ref: 'KAP:7(Summe)',
-      field: {
-        eCode: spec.eCode,
-        anlage: spec.anlage,
-        kontextSubpath: spec.kontextSubpath,
-        wert: norm.wert,
-        rawValue: raw,
-        person,
-        pdfLabel: 'Höhe der Kapitalerträge (Erträgnis-Summe)',
-        valueType: spec.valueType,
-        method: 'schema',
-        confidence: 0.8,
-        warnings: [`Erträgnisaufstellung-Summe → ${spec.eCode}`, ...(norm.warnings ?? [])],
-      },
-    }];
   }
   return [];
 }

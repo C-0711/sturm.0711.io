@@ -170,6 +170,41 @@ Höhe der Kapitalerträge (z. B. Zinsen, Dividenden, Investmenterträge)
   assert('mapBeleg fängt 319 (Person B)', kap?.wert === '319' && kap?.person === 'B', kap);
 }
 
+console.log('\n8b. Erträgnisaufstellung — VERBATIM OCR-Text (Typos: "Surmme", Umlaute weg, Label über 2 Spaltenköpfe zerlegt)\n');
+{
+  // 1:1 aus dem OCR-Cache (d25a6856.jpg, Volksbank Gebhardshain, Maria Ute
+  // Stricker 2024). HIER scheitert der Label-Anker, weil OCR »Hohe der« und
+  // »Kapitalertrage« auf GETRENNTE Spaltenkopf-Zeilen legt und die Umlaute
+  // verschluckt — vorher: 0 Felder. Der Summen-Anker auf »steuerpflichtigen
+  // Einzelerträge« (Wert 319,35 inline, trotz Typo »Surmme«) MUSS greifen.
+  const realOcr = `Volksbanken
+Raiffeisenbanken
+Seite:   1von 2
+Kundennummer:   172945
+Frau   Volksbank Gebhardshain eG
+Maria Ute Stricker   Kirchplatz4
+Erträgnisaufstellung für das Jahr 2024 für lhre privaten Kapitalerträge
+Geschaftsdatum   Hohe der   Gewinne   Zeilen-Nr.
+Konto-Nr./   Art der Kapitalertrage   Kapitalertrage   (davon Aktiengewinne)   Anlage KAP
+Depot-Nr.   in EUR/CT
+28.03.2024Zinsen Einlagen   4.06
+172945   Valuta 31.03.2024
+28.06.2024Zinsen Einlagen   5,16   7
+30.09.2024Zinsen Einlagen   8,18   7
+30.12.2024Zinsen Einlagen   293,75
+Summe zur vorstehenden Tabelle (siche auch auf der Steuerbescheinigung)   EUR/CT   Zeilen-Nr.
+Anlage KAP
+Ermittelt aus der Surmme der steuerpflichtigen Einzelertrage Gewinne/Veriuste   319,35
+und ggf.unter Berücksichtigung der Verlusttopfe per 31.12.2024`;
+  const hits = extractKapErtraegnisSumme(realOcr, 'B');
+  assert('VERBATIM: Summe → E1900701 = 319 (nicht Einzelzeile 4,06/5,16)', hits[0]?.field.eCode === 'E1900701' && hits[0]?.field.wert === '319', hits[0]?.field);
+  assert('VERBATIM: genau 1 Summe-Hit', hits.length === 1, hits.length);
+  assert('VERBATIM: detectBelegTyp = Steuerbescheinigung_Bank', detectBelegTyp(realOcr) === 'Steuerbescheinigung_Bank', detectBelegTyp(realOcr));
+  const rr = mapBeleg({ belegTyp: 'Steuerbescheinigung_Bank', person: 'B', rawText: realOcr });
+  const kk = rr.felder.find((f) => f.eCode === 'E1900701');
+  assert('VERBATIM: mapBeleg fängt 319 (Person B) statt 0 Felder', kk?.wert === '319' && kk?.person === 'B', kk);
+}
+
 console.log('\n9. Kein Doppelzählen: Standard-Steuerbescheinigung triggert NICHT die Summe\n');
 {
   // Wenn der Zeile-Anker E1900701 findet, darf die Summe-Fallback NICHT
