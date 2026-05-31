@@ -130,18 +130,30 @@ export function auditCase(data: CaseData): AuditReport {
       basis: { quelle: 'catalog', ref: 'kap-ohne-sparer' }, erwartet: { typ: 'value', eCode: 'E1901402' },
     });
 
-  // F) Vollständigkeit gegen die volle EST (Soll-Liste): erwartete Felder, die im Fall
-  // fehlen — Adresse, IBAN, Geburtsdatum, Pendlerpauschale, Günstigerprüfung … (profil-getrieben).
-  for (const it of pruefeSoll(data).fehlt) {
-    const istAbzug = it.kategorie === 'Werbungskosten' || it.kategorie === 'Kapitalerträge';
-    push({
-      kind: istAbzug ? 'optimize' : 'open_question',
-      severity: it.severity,
-      fakt: `Verifizierter Befund (Soll-Liste EST · ${it.kategorie}): Das erwartete Feld „${it.label}" fehlt im Fall (${it.herkunft}).`,
-      frage: it.frage,  // kuratierte Frage als Fallback, falls der Auditor nicht umformuliert
-      basis: { quelle: 'rule', ref: `soll:${it.id}` },
-      erwartet: { typ: istAbzug ? 'boolean' : 'value', eCode: it.eCodes[0] },
-    });
+  // F) Vollständigkeit gegen die volle EST MIT Recovery-Regel: erst aus Beleg /
+  // Berechnung / Vorjahr recovern, nur was nirgends herkommt wird gefragt.
+  for (const r of pruefeSoll(data).ergebnisse) {
+    if (r.status === 'erfuellt') continue;
+    const it = r.item;
+    const basis = { quelle: 'rule' as const, ref: `soll:${it.id}` };
+    const pre = `Verifizierter Befund (Soll-Liste · ${it.kategorie}): „${it.label}"`;
+    if (r.status === 'im_beleg') {
+      push({ kind: 'confirm_value', severity: 'empfohlen', fakt: `${pre} ${r.hinweis}.`,
+        frage: `Bitte „${it.label}" aus dem Beleg „${r.belegTyp}" übernehmen und bestätigen.`,
+        basis, erwartet: { typ: 'value', eCode: it.eCodes[0] } });
+    } else if (r.status === 'berechenbar') {
+      push({ kind: 'optimize', severity: 'optional', fakt: `${pre} — ${r.hinweis}`,
+        frage: r.hinweis, basis, erwartet: { typ: 'text', eCode: it.eCodes[0] } });
+    } else if (r.status === 'vorjahr') {
+      push({ kind: 'confirm_value', severity: 'empfohlen', fakt: `${pre} ${r.hinweis}.`,
+        frage: `„${it.label}" aus der Vorjahres-Erklärung übernehmen?`,
+        basis, erwartet: { typ: 'boolean', eCode: it.eCodes[0] } });
+    } else {
+      const istAbzug = it.kategorie === 'Werbungskosten' || it.kategorie === 'Kapitalerträge';
+      push({ kind: istAbzug ? 'optimize' : 'open_question', severity: it.severity,
+        fakt: `${pre} fehlt im Fall (${it.herkunft}).`, frage: it.frage,
+        basis, erwartet: { typ: istAbzug ? 'boolean' : 'value', eCode: it.eCodes[0] } });
+    }
   }
 
   const order: Record<Severity, number> = { blocker: 0, empfohlen: 1, optional: 2 };
