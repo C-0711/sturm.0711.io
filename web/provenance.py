@@ -30,8 +30,13 @@ def ocr_png(png_bytes):
         return []
 
 
-def page_pngs(path):
-    """Yield PIL.Image pro Seite (Bild = 1 Seite; PDF = render @ MAXW)."""
+def page_data(path):
+    """Yield (PIL.Image, records_or_None) pro Seite.
+
+    PDF mit Textebene → Wort-Boxen direkt aus fitz (get_text("words")),
+    mit DEMSELBEN zoom skaliert wie das gerenderte PNG → exakt, OCR-frei.
+    Bild oder image-only-PDF (keine Wörter) → records=None ⇒ Caller OCRt das PNG.
+    """
     from PIL import Image
     name = path.lower()
     if name.endswith(".pdf"):
@@ -41,22 +46,28 @@ def page_pngs(path):
             # Skaliere so, dass die Breite ~MAXW ist.
             zoom = MAXW / pg.rect.width if pg.rect.width else 1.5
             pix = pg.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-            yield Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+            im = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+            words = pg.get_text("words") or []  # (x0,y0,x1,y1,wort,block,line,wno)
+            recs = [{"text": w[4], "bbox": [round(w[0] * zoom, 1), round(w[1] * zoom, 1),
+                                            round(w[2] * zoom, 1), round(w[3] * zoom, 1)]}
+                    for w in words if str(w[4]).strip()]
+            yield im, (recs if recs else None)
     else:
         im = Image.open(path).convert("RGB")
         if im.width > MAXW:
             im = im.resize((MAXW, round(im.height * MAXW / im.width)))
-        yield im
+        yield im, None
 
 
 def main():
     path, outdir = sys.argv[1], sys.argv[2]
     os.makedirs(outdir, exist_ok=True)
     pages = []
-    for i, im in enumerate(page_pngs(path)):
+    for i, (im, recs) in enumerate(page_data(path)):
         png_path = os.path.join(outdir, f"p{i}.png")
         im.save(png_path, "PNG")
-        recs = ocr_png(open(png_path, "rb").read())
+        if recs is None:  # Bild / image-only-PDF → OCR das gerenderte PNG
+            recs = ocr_png(open(png_path, "rb").read())
         pages.append({"w": im.width, "h": im.height, "png": png_path, "records": recs})
     print(json.dumps({"pages": pages}))
 

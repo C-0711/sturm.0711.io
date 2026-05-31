@@ -161,9 +161,15 @@ async function runSteuerfall(paths: string[], vz: number) {
   // Fehler hier darf den Bescheid nie kippen.
   let docs: Array<{ hash: string; name: string; pages: Array<{ w: number; h: number }> }> = [];
   try {
-    const ocrSources = new Set<string>();
-    for (const b of r.belege) if (b.method === 'ocr') ocrSources.add(String(b.source).split('#')[0]);
-    const provDocs = [...ocrSources].filter((p) => existsSync(p)).map((p) => {
+    // OCR-Belege (Bild/Scan) UND Text-PDFs: provenance.py liefert für PDFs mit
+    // Textebene die Wort-Boxen direkt (OCR-frei), sonst OCR — gleiche Records.
+    const provSources = new Set<string>();
+    for (const b of r.belege) {
+      const src = String(b.source).split('#')[0];
+      if (b.method === 'ocr') provSources.add(src);
+      else if (b.method === 'text' && src.toLowerCase().endsWith('.pdf')) provSources.add(src);
+    }
+    const provDocs = [...provSources].filter((p) => existsSync(p)).map((p) => {
       const { hash, pages } = provenanceFor(p);
       return { path: p, hash, pages };
     });
@@ -180,9 +186,9 @@ async function runSteuerfall(paths: string[], vz: number) {
     // Box auf DIESEM Dokument — keine Cross-Doc-Verwechslung.
     const provBySource = new Map(provDocs.map((d) => [d.path, d]));
     for (const b of r.belege) {
-      if (b.method !== 'ocr' || !Array.isArray(b.felderListe)) continue;
+      if (!Array.isArray(b.felderListe)) continue;
       const pd = provBySource.get(String(b.source).split('#')[0]);
-      if (!pd) continue;
+      if (!pd) continue;  // kein Prov-Dokument (z.B. image-only ohne Treffer) → keine Box
       for (const f of b.felderListe) {
         const m = matchProv(String(f.wert ?? ''), [pd]);
         if (m) f.prov = { hash: m.hash, page: m.page, box: m.box };
