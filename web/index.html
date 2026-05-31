@@ -248,6 +248,9 @@
   /* Beleg-Detail Mitte: gerastertes Dokument mit gelben Provenienz-Boxen */
   .docview__doc{display:flex;flex-direction:column;gap:6px;align-items:center;padding-bottom:24px}
   .docview__doc .docview__wrap{max-width:900px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.07)}
+  .docview__wrap.is-404{min-height:110px;display:flex;align-items:center;justify-content:center;background:var(--bg2)}
+  .docview__wrap.is-404 img,.docview__wrap.is-404 .hlbox{display:none}
+  .docview__wrap.is-404::after{content:'Beleg-Bild nicht mehr im Server-Cache — „↻ Neu berechnen"';color:var(--muted);font-size:11px;padding:20px;text-align:center}
   .docview__pg{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);align-self:flex-start;margin-top:8px}
   .docview--prov .hlbox{pointer-events:auto;cursor:pointer}
   .hlbox__tag{position:absolute;left:0;top:-17px;font-family:var(--font-mono);font-size:9px;background:var(--gold-d);color:#fff;padding:1px 5px;border-radius:3px;white-space:nowrap;opacity:0;transition:.12s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.25);z-index:3}
@@ -472,8 +475,11 @@ function applyBadges(){
   if(!active||!active.data)return;
   const bel=active.data.belege||[];
   for(const d of active.docs){
-    const cardBase=d.path?baseOf(d.path):safeName(d.name);
-    const hits=bel.filter(b=>baseOf(b.source)===cardBase);
+    // Voller Pfad ist eindeutig (mkdtemp-Dir) → exakt matchen; nur ein nach
+    // persist/restore verlorener Pfad fällt auf den Basenamen zurück.
+    const full=d.path?String(d.path).split('#')[0]:null;
+    const cardBase=full?baseOf(full):safeName(d.name);
+    const hits=bel.filter(b=>{const s=String(b.source).split('#')[0];return full?s===full:baseOf(s)===cardBase;});
     if(!d.path&&hits.length) d.path=String(hits[0].source).split('#')[0];  // Pfad rekonstruieren → wird persistiert
     d.fields=hits.flatMap(h=>h.felderListe||[]);
     if(!hits.length){ d.state='done'; d.badge='verarbeitet'; continue; }
@@ -499,10 +505,12 @@ function renderDocDetail(){
   const d=active.docs[viewDoc], data=active&&active.data;
   const fields=d.fields||[];
   const boxed=fields.filter(f=>f.prov&&f.prov.box);                 // Felder DIESES Belegs mit Box
-  // Prov-Dokument (Bild-Dims + PNG-Hash): per Basename, sonst per Feld-Hash.
+  // Prov-Dokument (Bild-Dims + PNG-Hash): per FELD-HASH (eindeutig pro Inhalt),
+  // sonst per Basename — verhindert, dass zwei gleichnamige Dateien sich das
+  // Bild/die Geometrie klauen.
   const cardBase=d.path?baseOf(d.path):safeName(d.name);
-  let provDoc=data&&(data.docs||[]).find(x=>x.name===cardBase);
-  if(!provDoc&&boxed.length&&data) provDoc=(data.docs||[]).find(x=>x.hash===boxed[0].prov.hash);
+  let provDoc=(boxed.length&&data)?(data.docs||[]).find(x=>x.hash===boxed[0].prov.hash):null;
+  if(!provDoc&&data) provDoc=(data.docs||[]).find(x=>x.name===cardBase);
 
   let bodyHtml, badge='';
   if(provDoc){
@@ -511,7 +519,7 @@ function renderDocDetail(){
       const boxes=mine.filter(f=>f.prov.page===pi).map(f=>{const b=f.prov.box,L=b[0]/dim.w*100,T=b[1]/dim.h*100,W=(b[2]-b[0])/dim.w*100,H=(b[3]-b[1])/dim.h*100;
         return `<div class="hlbox" data-box="${b.join(',')}" title="${esc(f.eCode)} = ${esc(f.wert)}" style="left:${L}%;top:${T}%;width:${W}%;height:${H}%"><span class="hlbox__tag">${esc(f.eCode)} · ${esc(f.wert)}</span></div>`;}).join('');
       const pl=(provDoc.pages.length>1)?`<div class="docview__pg">Seite ${pi+1} / ${provDoc.pages.length}</div>`:'';
-      return `${pl}<div class="docview__wrap"><img loading="lazy" src="api/page?h=${esc(hash)}&p=${pi}" alt="Seite ${pi+1}">${boxes}</div>`;}).join('');
+      return `${pl}<div class="docview__wrap"><img loading="lazy" src="api/page?h=${esc(hash)}&p=${pi}" alt="Seite ${pi+1}" onerror="this.closest('.docview__wrap').classList.add('is-404')">${boxes}</div>`;}).join('');
     bodyHtml=`<div class="docview__doc docview--prov" id="dv-doc">${pages}</div>`;
     badge=`<span class="chip ok" style="margin-left:auto">${mine.length?mine.length+(mine.length===1?' Feld':' Felder')+' markiert':'OCR-Dokument'}</span>`;
   } else if(d._file){

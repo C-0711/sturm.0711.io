@@ -124,9 +124,11 @@ function matchProv(value: string, docs: { hash: string; pages: ProvPage[] }[]): 
   }
   // Kurze Ganzzahl (300, 915, 11): zu mehrdeutig → NUR wenn ein Record exakt
   // diese Zahl ist (kein Teilstring — „11" steckt sonst in „Seite 1 von 1").
-  // Auch die ausgeschriebene „,00"-Form zählt (Feldwert „36" ↔ Beleg „36,00").
+  // Exakt zuerst; erst danach die ausgeschriebene „,00"-Form (Feldwert „36" ↔
+  // Beleg „36,00") — so verliert ein echtes „300" nicht gegen ein fremdes „300,00".
   if (isNum) {
-    return scan((rt) => { const t = rt.trim(); return t === v || t === `${v},00` || t === `${v}.00`; });
+    return scan((rt) => rt.trim() === v)
+        ?? scan((rt) => { const t = rt.trim(); return t === `${v},00` || t === `${v}.00`; });
   }
   const lv = v.toLowerCase();
   return scan((rt) => v.length >= 3 && rt.toLowerCase() === lv)      // exakter Text
@@ -169,31 +171,39 @@ async function runSteuerfall(paths: string[], vz: number) {
       if (b.method === 'ocr') provSources.add(src);
       else if (b.method === 'text' && src.toLowerCase().endsWith('.pdf')) provSources.add(src);
     }
+    // Pro Dokument isoliert: ein korruptes PDF/Bild (provenance.py-Fehler) darf
+    // nicht die Boxen ALLER Belege kippen → per-Doc try/catch, dann ausfiltern.
     const provDocs = [...provSources].filter((p) => existsSync(p)).map((p) => {
-      const { hash, pages } = provenanceFor(p);
-      return { path: p, hash, pages };
-    });
+      try { const { hash, pages } = provenanceFor(p); return { path: p, hash, pages }; }
+      catch (e) { console.error('PROV-DOC', basename(p), (e as Error).message); return null; }
+    }).filter((d): d is { path: string; hash: string; pages: ProvPage[] } => d !== null);
     const byHash = new Map<string, { hash: string; name: string; pages: Array<{ w: number; h: number }> }>();
     for (const d of provDocs) byHash.set(d.hash, { hash: d.hash, name: basename(d.path), pages: d.pages.map((pg) => ({ w: pg.w, h: pg.h })) });
     docs = [...byHash.values()];
-    fields = fields.map((f) => {
-      const m = matchProv(String(f.wert ?? ''), provDocs);
-      return m ? { ...f, prov: m } : f;
-    });
-    // Per-Beleg-Provenienz: jedes Feld GEGEN DIE RECORDS SEINES EIGENEN
-    // Belegs matchen (nicht greedy über alle Docs) → die Beleg-Detailansicht
-    // (Klick auf eine Beleg-Karte) zeigt genau die Felder DIESES Belegs als
-    // Box auf DIESEM Dokument — keine Cross-Doc-Verwechslung.
+    // Per-Beleg-Provenienz ZUERST: jedes Feld gegen die Records SEINES EIGENEN
+    // Belegs matchen (eindeutig, kein Greedy-Cross-Doc). Treibt die Beleg-Detail-
+    // ansicht UND — via provByField — die Provenienz der aggregierten Felder.
     const provBySource = new Map(provDocs.map((d) => [d.path, d]));
+    const provByField = new Map<string, FieldProv>();
     for (const b of r.belege) {
       if (!Array.isArray(b.felderListe)) continue;
       const pd = provBySource.get(String(b.source).split('#')[0]);
       if (!pd) continue;  // kein Prov-Dokument (z.B. image-only ohne Treffer) → keine Box
       for (const f of b.felderListe) {
         const m = matchProv(String(f.wert ?? ''), [pd]);
-        if (m) f.prov = { hash: m.hash, page: m.page, box: m.box };
+        if (m) { f.prov = { hash: m.hash, page: m.page, box: m.box };
+                 provByField.set(`${f.eCode}|${f.person}|${f.wert}`, m); }
       }
     }
+    // Aggregierte Felder (Dashboard-Viewer „im Beleg zeigen"): Box aus der
+    // eindeutigen Per-Beleg-Zuordnung übernehmen — kein Cross-Doc-Greifen. Nur
+    // wenn kein Beleg-Treffer (z.B. aggregiert abweichender Wert) global matchen.
+    fields = fields.map((f) => {
+      const byBeleg = provByField.get(`${f.eCode}|${f.person}|${String(f.wert)}`);
+      if (byBeleg) return { ...f, prov: byBeleg };
+      const m = matchProv(String(f.wert ?? ''), provDocs);
+      return m ? { ...f, prov: m } : f;
+    });
   } catch (e) {
     console.error('PROV', (e as Error).message);
   }
