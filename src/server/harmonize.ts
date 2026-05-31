@@ -17,9 +17,11 @@
  * Lauf:  npx tsx src/server/harmonize.ts [pfad/zu/master.json]
  */
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ATOMS_PATH = resolve(process.cwd(), 'src/verticals/elster-v3/data/atoms.json');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ATOMS_PATH = resolve(HERE, '../verticals/elster-v3/data/atoms.json');
 const DEFAULT_MASTER = resolve(process.cwd(), 'reports/abrechnung-kpi-2026-05-18T13-34-48/master.json');
 
 export interface Candidate {
@@ -141,4 +143,5 @@ function main() {
   console.log(`    davon Multi-Bucket (drucktext-Pick nötig): ${npMultiHit}/${npMulti} korrekt`);
 }
 
-main();
+// Nur als Skript ausführen, nicht beim Import (web/server.ts + mastercase.ts nutzen die Mapper).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

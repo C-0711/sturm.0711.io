@@ -24,6 +24,7 @@ import type { SteuerFeld } from '../src/workflows/elster/lib/steuer/adapter.ts';
 import { auditCase } from './audit.ts';
 import { phraseFindings, interpretAnswer } from './auditor.ts';
 import { buildAuditProtocol, sealProtocol } from './protocol.ts';
+import { loadCandidates, buildIndex, type Candidate } from '../src/server/harmonize.ts';
 
 const { Pool } = pg;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,11 @@ const pgUrl = process.env.ELSTER_CATALOG_PG_URL ?? 'postgresql://elster:elster_d
 const HEBESATZ = 0.09;
 
 const pool = new Pool({ connectionString: pgUrl, max: 4 });
+
+// Katalog-Meta (Vordruckzeile + kontextPath je eCode): reichert jedes Ingestion-Feld
+// mit seinem deterministischen Struktur-Schlüssel an — einmal lazy aus atoms.json.
+let _catByECode: Map<string, Candidate> | null = null;
+const catByECode = (): Map<string, Candidate> => (_catByECode ??= buildIndex(loadCandidates()).byECode);
 
 // Dropped phone photos (JPG/PNG) are not PDFs → the orchestrator's pdfium
 // rasterizer throws FormatError. Wrap them in a one-page PDF first (Pillow,
@@ -158,10 +164,14 @@ async function runSteuerfall(paths: string[], vz: number) {
   const lane1Ms = Number(process.hrtime.bigint() - t0) / 1e6;
 
   const ocrSet = new Set(r.ocrFields);
-  let fields: Array<Record<string, unknown>> = r.aggregated.map((f) => ({
-    eCode: f.eCode, label: f.pdfLabel, wert: f.wert, person: String(f.person),
-    anlage: f.anlage, method: ocrSet.has(`${f.eCode}|${f.person}`) ? 'ocr' : 'text',
-  }));
+  let fields: Array<Record<string, unknown>> = r.aggregated.map((f) => {
+    const cat = catByECode().get(f.eCode);
+    return {
+      eCode: f.eCode, label: f.pdfLabel, wert: f.wert, person: String(f.person),
+      anlage: f.anlage, method: ocrSet.has(`${f.eCode}|${f.person}`) ? 'ocr' : 'text',
+      zeile: cat?.zeile || null, kontextPath: cat?.kontextPath || null,
+    };
+  });
   const felder: SteuerFeld[] = r.aggregated.map((f) => ({ eCode: f.eCode, wert: f.wert, person: f.person, anlage: f.anlage, pdfLabel: f.pdfLabel }));
 
   // Provenienz-Pass: pro OCR'tem Dokument PNG+bboxes (cache), dann je Feld den

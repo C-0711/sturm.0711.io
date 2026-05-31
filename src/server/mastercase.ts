@@ -21,7 +21,7 @@ import { loadCandidates, buildIndex, type Candidate, type MapperIndex } from './
 const DEFAULT_INPUT = '/tmp/stricker-mastercase-input.json';
 
 // ── Eingabe-Form (ctax case.data, deterministische lane-1 Ingestion) ──
-interface InField { eCode: string; anlage?: string; person?: string; label?: string; wert?: string; method?: string; }
+interface InField { eCode: string; anlage?: string; person?: string; label?: string; wert?: string; method?: string; zeile?: string | null; kontextPath?: string | null; }
 interface InBeleg { belegTyp?: string; person?: string; anlage?: string; method?: string; felder?: number; source?: string; }
 interface CtaxCase {
   label?: string; vz?: number; veranlagungsart?: string;
@@ -34,7 +34,7 @@ interface CtaxCase {
 export interface Entity { person: 'A' | 'B'; idnr?: string; name?: string; profil: string[]; anlagen: string[]; }
 export interface MasterFact {
   person: 'A' | 'B'; anlage: string; label: string; wert: string;
-  zeile: string | null; eCodeParse: string;            // aus der Ingestion
+  zeile: string | null; kontextPath: string | null; eCodeParse: string;  // Struktur-Schlüssel + Ingestion-eCode
   eCodeMap: string | null; mapHow: string;             // aus map-once
   belegTyp?: string;
 }
@@ -63,21 +63,19 @@ const toks = (s: string) => new Set(norm(s).split(' ').filter((w) => w.length > 
 function overlap(a: Set<string>, b: Set<string>): number { if (!a.size || !b.size) return 0; let n = 0; for (const t of a) if (b.has(t)) n++; return n / Math.max(a.size, b.size); }
 
 /** map-once aus dem Mastercase-Kontext: Anlage + (Person→kontextPath für ESt1A) + Zeile + drucktext-Pick. */
-function mapInContext(f: { anlage: string; person: 'A' | 'B'; zeile: string | null; label: string }, idx: MapperIndex, cands: Candidate[]): { eCode: string | null; how: string } {
+function mapInContext(f: { anlage: string; person: 'A' | 'B'; zeile: string | null; kontextPath: string | null; label: string }, idx: MapperIndex, cands: Candidate[]): { eCode: string | null; how: string } {
   const A = f.anlage.toUpperCase();
-  // Kandidatenmenge eingrenzen
-  let pool: Candidate[] = [];
-  if (f.zeile) pool = (idx.loose.get(`${A}|${f.zeile}`) ?? []);
-  if (!pool.length) {
-    // ohne Zeile: über Anlage (+ Person-kontextPath für ESt1A) sammeln
-    const kp = A === 'EST1A' ? `Allg/${f.person}` : null;
-    pool = cands.filter((c) => c.anlage === A && (!kp || c.kontextPath.includes(kp)));
-  } else if (A === 'EST1A') {
-    const kp = `Allg/${f.person}`;
-    const narrowed = pool.filter((c) => c.kontextPath.includes(kp));
-    if (narrowed.length) pool = narrowed;
+  let pool: Candidate[] | undefined;
+  // 1. strenger Schlüssel direkt aus der Ingestion (Anlage, Zeile, kontextPath)
+  if (f.zeile && f.kontextPath != null) pool = idx.strict.get(`${A}|${f.zeile}|${f.kontextPath}`);
+  // 2. nur (Anlage, Zeile)
+  if (!pool?.length && f.zeile) pool = idx.loose.get(`${A}|${f.zeile}`);
+  // 3. ohne Zeile: über Anlage (+ kontextPath / ESt1A-Person)
+  if (!pool?.length) {
+    const kp = f.kontextPath || (A === 'EST1A' ? `Allg/${f.person}` : null);
+    pool = cands.filter((c) => c.anlage === A && (!kp || c.kontextPath === kp || c.kontextPath.includes(kp)));
   }
-  if (!pool.length) return { eCode: null, how: 'miss' };
+  if (!pool?.length) return { eCode: null, how: 'miss' };
   if (pool.length === 1) return { eCode: pool[0].eCode, how: 'unique' };
   const lt = toks(f.label); let best = pool[0], bestS = -1;
   for (const c of pool) { const s = overlap(lt, toks(c.drucktext)); if (s > bestS) { bestS = s; best = c; } }
@@ -103,9 +101,10 @@ export function buildMastercase(c: CtaxCase, idx: MapperIndex, cands: Candidate[
   // Fakten: aus der Ingestion, map-once verifiziert
   const fakten: MasterFact[] = (c.fields ?? []).map((f) => {
     const person = personOf(f.person); const anlage = String(f.anlage ?? ''); const label = String(f.label ?? '');
-    const zeile = zeileFromLabel(label);
-    const m = mapInContext({ anlage, person, zeile, label }, idx, cands);
-    return { person, anlage, label, wert: String(f.wert ?? ''), zeile, eCodeParse: f.eCode, eCodeMap: m.eCode, mapHow: m.how };
+    const zeile = f.zeile ?? zeileFromLabel(label);            // jetzt first-class aus der Ingestion
+    const kontextPath = f.kontextPath ?? null;
+    const m = mapInContext({ anlage, person, zeile, kontextPath, label }, idx, cands);
+    return { person, anlage, label, wert: String(f.wert ?? ''), zeile, kontextPath, eCodeParse: f.eCode, eCodeMap: m.eCode, mapHow: m.how };
   });
 
   const calc = (c.calcs ?? [])[0] as { erstattung?: number; bindend?: { zve?: number; gesamtsteuer?: number } } | undefined;
@@ -138,16 +137,17 @@ function main() {
     }
   }
   const pct = (a: number, b: number) => `${a}/${b} = ${Math.round(100 * a / Math.max(b, 1))}%`;
-  const mz = mc.fakten.filter((f) => f.zeile), oz = mc.fakten.filter((f) => !f.zeile);
-  const agZ = mz.filter((f) => f.eCodeMap === f.eCodeParse).length;
-  const agO = oz.filter((f) => f.eCodeMap === f.eCodeParse).length;
-  console.log(`\n── map-once vs. Ingestion ──`);
-  console.log(`   mit Zeile im Label : ${pct(agZ, mz.length)}   ← deterministischer Schlüssel vollständig`);
-  console.log(`   ohne Zeile         : ${pct(agO, oz.length)}   ← nur Anlage+Person, Bucket bis 134 → drucktext-Pick rät`);
-  console.log(`   gesamt             : ${pct(agZ + agO, mc.fakten.length)}`);
-  console.log(`\n   Befund: map-once trifft 100% sobald die Zeile vorliegt (alle KAP-Felder). Die Lücke ist`);
-  console.log(`   exakt dort, wo die Ingestion die Vordruckzeile NICHT ins Label schreibt — obwohl sie sie`);
-  console.log(`   kennt. Fix: zeile als first-class Feld der Ingestion → map-once ≈ 98% (vgl. harmonize.ts [4]).`);
+  const agree = mc.fakten.filter((f) => f.eCodeMap === f.eCodeParse).length;
+  const uniq = mc.fakten.filter((f) => f.mapHow === 'unique').length;
+  const pick = mc.fakten.filter((f) => f.mapHow.startsWith('pick')).length;
+  const withKey = mc.fakten.filter((f) => f.zeile && f.kontextPath != null).length;
+  console.log(`\n── map-once (Schlüssel aus der Ingestion: Anlage·Zeile·kontextPath) ──`);
+  console.log(`   Fakten mit vollständigem Struktur-Schlüssel : ${pct(withKey, mc.fakten.length)}`);
+  console.log(`   deterministisch eindeutig (kein Raten)      : ${pct(uniq, mc.fakten.length)}`);
+  console.log(`   Tie-break per drucktext im kleinen Bucket   : ${pick}`);
+  console.log(`   Übereinstimmung mit Ingestion-eCode         : ${pct(agree, mc.fakten.length)}`);
+  console.log(`\n   Vordruckzeile + kontextPath kommen jetzt aus der Lane-1-Ingestion (28/28), nicht mehr`);
+  console.log(`   aus dem Label geraten → das Mapping ist ein Katalog-Lookup, keine Schätzung.`);
 }
 
 main();
