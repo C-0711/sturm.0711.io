@@ -25,6 +25,8 @@ export interface AuditFinding {
   begruendung?: string;
   /** Vom Nutzer gelieferter/bestätigter Wert (Antwort-Interpretation). */
   wert?: string;
+  /** Erdung aus dem Fachkorpus (quantum-rag) — Zitat-Beleg für die Begründung. */
+  grounding?: { text: string; source: string | null; score: number };
   state: 'offen' | 'beantwortet' | 'erledigt' | 'uebersprungen';
 }
 

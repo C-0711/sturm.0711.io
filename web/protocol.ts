@@ -18,7 +18,7 @@ export interface AuditProtocol {
   vz: number;
   ergebnis: { erstattung: number | null; veranlagungsart: string | null };
   fingerprint: { fields: number; belege: number };
-  befunde: Array<{ kind: string; severity: string; frage: string; state: string; wert?: string; basis: { quelle: string; ref: string } }>;
+  befunde: Array<{ kind: string; severity: string; frage: string; state: string; wert?: string; basis: { quelle: string; ref: string }; belegstelle?: { quelle: string | null; zitat: string } }>;
 }
 
 export interface Seal { algo: 'blake2b-256'; hash: string; sealedAt: string; }
@@ -48,6 +48,9 @@ export function buildAuditProtocol(input: BuildInput): AuditProtocol {
       kind: f.kind, severity: f.severity, frage: f.frage ?? '', state: f.state,
       ...(f.wert ? { wert: String(f.wert) } : {}),
       basis: { quelle: f.basis.quelle, ref: f.basis.ref },
+      ...(f.grounding && f.grounding.text
+        ? { belegstelle: { quelle: f.grounding.source ?? null, zitat: f.grounding.text.slice(0, 160).replace(/\s+/g, ' ').trim() } }
+        : {}),
     })),
   };
 }

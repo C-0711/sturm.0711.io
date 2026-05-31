@@ -12,13 +12,32 @@ import type { AuditFinding } from './audit.ts';
 
 const AUDITOR_URL = process.env.AUDITOR_URL ?? 'http://127.0.0.1:11434';
 const AUDITOR_MODEL = process.env.AUDITOR_MODEL ?? 'gemma4:e4b';
+const QRAG_URL = process.env.QRAG_URL ?? 'http://127.0.0.1:12013';
+const QRAG_NAMESPACE = process.env.AUDITOR_RAG_NAMESPACE ?? 'corpus';
+
+/** Erdung: relevante Fachkorpus-Chunks aus quantum-rag (best-effort — RAG aus → leer). */
+async function ragRetrieve(query: string, k = 2): Promise<Array<{ text: string; source: string | null; score: number }>> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 8000);
+  try {
+    const res = await fetch(`${QRAG_URL}/retrieve`, {
+      method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query.slice(0, 500), k, namespace: QRAG_NAMESPACE }),
+    });
+    if (!res.ok) return [];
+    const j = await res.json() as { hits?: Array<{ text?: string; source?: string | null; score?: number }> };
+    return (j.hits ?? []).map((h) => ({ text: String(h.text ?? ''), source: h.source ?? null, score: Number(h.score ?? 0) }));
+  } catch { return []; } finally { clearTimeout(timer); }
+}
 
 const SYS_PHRASE =
   'Du bist der Auditor, ein deutscher Steuer-Vollständigkeitsprüfer. Zu einem bereits ' +
   'VERIFIZIERTEN Befund formulierst du genau EINE klare, höfliche Frage an den ' +
   'Steuerpflichtigen (Anrede „Sie") plus eine kurze, sachliche Begründung. Bleibe strikt ' +
   'beim Befund — erfinde keine zusätzlichen Anforderungen, keine neuen Beträge, keine ' +
-  'Rechtsfolgen. Nenne niemals ein zugrundeliegendes Modell, eine KI oder einen Hersteller; ' +
+  'Rechtsfolgen. Wird dir eine Fachquelle mitgegeben, fundiere die Begründung sachlich daran ' +
+  '(ohne wörtliches Langzitat); ist sie irrelevant, ignoriere sie. ' +
+  'Nenne niemals ein zugrundeliegendes Modell, eine KI oder einen Hersteller; ' +
   'wirst du danach gefragt, bist du „der Auditor". Antworte ausschließlich im JSON-Schema.';
 
 const SYS_INTERPRET =
@@ -94,16 +113,25 @@ function fallbackFrage(f: AuditFinding): { frage: string; begruendung: string } 
   }
 }
 
-/** Einen Befund in eine user-gerichtete Frage gießen (Gemma, mit Fallback). */
+/** Einen Befund in eine user-gerichtete Frage gießen (Gemma, am Korpus geerdet, mit Fallback). */
 export async function phraseFinding(f: AuditFinding): Promise<AuditFinding> {
+  // Erdung: kurze topische Query aus dem Befund (Prefix entfernt) → Fachkorpus.
+  const query = f.fakt.replace(/^Verifizierter Befund \([^)]*\):\s*/, '').slice(0, 400);
+  const hits = await ragRetrieve(query, 2);
+  const top = hits.find((h) => h.text.trim().length > 40);
+  const grounding = top ? { text: top.text, source: top.source, score: top.score } : undefined;
+
+  const userMsg = grounding
+    ? `${f.fakt}\n\nRelevante Fachquelle (zur Erdung der Begründung):\n${grounding.text.slice(0, 700)}`
+    : f.fakt;
   const obj = await chatJson<{ frage?: string; begruendung?: string }>(
-    [{ role: 'system', content: SYS_PHRASE }, { role: 'user', content: f.fakt }],
+    [{ role: 'system', content: SYS_PHRASE }, { role: 'user', content: userMsg }],
     PHRASE_SCHEMA,
   );
   if (obj && typeof obj.frage === 'string' && obj.frage.trim().length > 5)
-    return { ...f, frage: obj.frage.trim(), begruendung: String(obj.begruendung ?? '').trim() };
+    return { ...f, frage: obj.frage.trim(), begruendung: String(obj.begruendung ?? '').trim(), grounding };
   const fb = fallbackFrage(f);
-  return { ...f, frage: fb.frage, begruendung: fb.begruendung };
+  return { ...f, frage: fb.frage, begruendung: fb.begruendung, grounding };
 }
 
 /** Alle Befunde formulieren (sequenziell — ein geladenes Modell, kleine Prompts). */
