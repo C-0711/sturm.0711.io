@@ -520,7 +520,19 @@ async function answerFinding(id,antwort){ const a=active&&active.audit; if(!a||b
 }
 function auditUpload(id){ const inp=document.createElement('input'); inp.type='file'; inp.multiple=true; inp.accept='.pdf,.png,.jpg,.jpeg,.tif,.tiff';
   inp.onchange=async()=>{ if(!inp.files||!inp.files.length)return; try{ await addDocs(inp.files); }catch(_){} await runAudit(true); }; inp.click(); }
-function finishCase(){ if(!active||!active.audit||auditOpenBlockers())return; active.audit.finishedTs=Date.now(); persistActive(); renderAudit(); alert('Fall als geprüft markiert. (Revisionssichere Versiegelung folgt als nächster Schritt.)'); }
+async function finishCase(){ if(!active||!active.audit||auditOpenBlockers()||busy)return;
+  busy=true; updateChips();
+  try{
+    const r=await fetch('api/audit/seal',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({caseId:active.id,label:active.label,vz:active.vz,data:active.data,audit:{findings:active.audit.findings}})});
+    const j=await r.json(); if(!j.ok)throw new Error(j.error||'Seal fehlgeschlagen');
+    active.audit.protocol=j.protocol; active.audit.seal=j.seal; active.audit.finishedTs=Date.now();
+    busy=false; renderAudit(); updateChips(); persistActive();
+  }catch(e){ busy=false; updateChips(); alert('Abschluss: '+e.message); }
+}
+function downloadProtocol(){ const a=active&&active.audit; if(!a||!a.protocol)return;
+  const blob=new Blob([JSON.stringify({protocol:a.protocol,seal:a.seal},null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(blob); const el=document.createElement('a'); el.href=u; el.download=`audit-protokoll-${active.id}.json`; el.click(); setTimeout(()=>URL.revokeObjectURL(u),3000); }
 
 function renderAudit(){
   const a=active&&active.audit;
@@ -529,11 +541,12 @@ function renderAudit(){
     <button class="hbtn" id="audit-reaudit" style="margin-left:auto" ${busy?'disabled':''}>↻ Neu prüfen</button></div>`;
   if(!a||busy){ center.innerHTML=`<div class="docview">${head}<div class="audit-empty">${busy?'Der Auditor prüft den Fall…':'Noch nicht geprüft — „↻ Neu prüfen" startet den Auditor.'}</div></div>`; renderDocPanel(); return; }
   const erl=a.findings.filter(f=>f.state==='erledigt'||f.state==='uebersprungen').length, open=a.findings.length-erl, blk=auditOpenBlockers();
+  const sealed=a.seal;
   const sum=`<div class="audit-sum">
-    <div class="audit-ring ${blk?'blk':'ok'}"><b>${erl}</b><span>/ ${a.findings.length}</span></div>
-    <div><p class="audit-sum__t">${a.findings.length===0?'Keine offenen Punkte':blk?`${blk} Blocker offen`:'Keine Blocker offen'}</p>
-      <p class="audit-sum__s">Der Auditor fand ${a.findings.length} Punkt(e) · ${open} offen · ${erl} erledigt${a.finishedTs?' · ✓ abgeschlossen':''}</p></div>
-    <button class="audit-close ${blk?'':'go'}" id="audit-finish" ${blk?'disabled':''}>${a.finishedTs?'Abgeschlossen':'Fall abschließen'}</button></div>`;
+    <div class="audit-ring ${sealed||!blk?'ok':'blk'}"><b>${sealed?'✓':erl}</b><span>${sealed?'versiegelt':'/ '+a.findings.length}</span></div>
+    <div><p class="audit-sum__t">${sealed?'Fall geprüft & versiegelt':a.findings.length===0?'Keine offenen Punkte':blk?`${blk} Blocker offen`:'Keine Blocker offen'}</p>
+      <p class="audit-sum__s">Der Auditor fand ${a.findings.length} Punkt(e) · ${open} offen · ${erl} erledigt${sealed?` · <span style="font-family:var(--font-mono)">${esc(a.seal.algo)}:${esc(a.seal.hash.slice(0,12))}…</span> · ${esc(new Date(a.seal.sealedAt).toLocaleString('de-DE'))}`:''}</p></div>
+    ${sealed?`<button class="audit-close go" id="audit-export">Protokoll ↓</button>`:`<button class="audit-close ${blk?'':'go'}" id="audit-finish" ${blk?'disabled':''}>Fall abschließen</button>`}</div>`;
   const card=(f)=>{ const done=f.state==='erledigt',skip=f.state==='uebersprungen';
     const ctrl=done?`<span class="audit-state ok">✓ erledigt${f.wert?` · ${esc(String(f.wert))}`:''}</span>`
       :skip?`<span class="audit-state skip">übersprungen</span>`
@@ -554,6 +567,7 @@ center.addEventListener('click',e=>{
   if(e.target.closest('#audit-back')){ auditMode=false; render(); window.scrollTo({top:0,behavior:'smooth'}); return; }
   if(e.target.closest('#audit-reaudit')){ runAudit(true); return; }
   if(e.target.closest('#audit-finish')){ finishCase(); return; }
+  if(e.target.closest('#audit-export')){ downloadProtocol(); return; }
   const ab=e.target.closest('.ab'); if(!ab)return; const id=ab.getAttribute('data-id'),act=ab.getAttribute('data-act');
   if(act==='confirm') setFindingState(id,'erledigt');
   else if(act==='skip') setFindingState(id,'uebersprungen');

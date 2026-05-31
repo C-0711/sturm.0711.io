@@ -23,6 +23,7 @@ import { normalisiereSteuerfall } from '../src/workflows/elster/lib/steuer/falln
 import type { SteuerFeld } from '../src/workflows/elster/lib/steuer/adapter.ts';
 import { auditCase } from './audit.ts';
 import { phraseFindings, interpretAnswer } from './auditor.ts';
+import { buildAuditProtocol, sealProtocol } from './protocol.ts';
 
 const { Pool } = pg;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -290,6 +291,14 @@ createServer(async (req, res) => {
       if (!finding || typeof antwort !== 'string') return json(res, 400, { error: 'unvollständig' });
       const verdict = await interpretAnswer(finding, antwort);
       return json(res, 200, { ok: true, verdict });
+    }
+    // Gemeinsamer Abschluss: Audit-Protokoll bauen + blake2b-256 versiegeln.
+    if (req.method === 'POST' && url === '/api/audit/seal') {
+      const { caseId, label, vz, data, audit } = JSON.parse((await body(req)).toString('utf8'));
+      if (!data || !audit) return json(res, 400, { error: 'unvollständig' });
+      const protocol = buildAuditProtocol({ caseId: String(caseId ?? ''), label: String(label ?? ''), vz: Number(vz) || 0, data, audit });
+      const seal = sealProtocol(protocol, new Date().toISOString());
+      return json(res, 200, { ok: true, protocol, seal });
     }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found');
   } catch (e) {

@@ -23,6 +23,8 @@ export interface AuditFinding {
   /** Vom Auditor formuliert (user-facing) — von auditor.ts gefüllt. */
   frage?: string;
   begruendung?: string;
+  /** Vom Nutzer gelieferter/bestätigter Wert (Antwort-Interpretation). */
+  wert?: string;
   state: 'offen' | 'beantwortet' | 'erledigt' | 'uebersprungen';
 }
 
