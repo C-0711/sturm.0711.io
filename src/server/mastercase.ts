@@ -36,6 +36,7 @@ export interface MasterFact {
   person: 'A' | 'B'; anlage: string; label: string; wert: string;
   zeile: string | null; kontextPath: string | null; eCodeParse: string;  // Struktur-Schlüssel + Ingestion-eCode
   eCodeMap: string | null; mapHow: string;             // aus map-once
+  quelle: 'beleg' | 'household';                       // beleg-extrahiert oder aus household ergänzt
   belegTyp?: string;
 }
 export interface Mastercase {
@@ -53,6 +54,12 @@ const PROFIL_REGELN: Array<{ wenn: (anl: Set<string>, typ: Set<string>) => boole
   { wenn: (a) => a.has('G') || a.has('S'), profil: 'Selbständig/Gewerbe' },
   { wenn: (a) => a.has('V'), profil: 'Vermietung' },
 ];
+
+/** Stammdaten-Zielcodes je Person — aus household ergänzt, falls aus keinem Beleg extrahiert. */
+const STAMM: Record<'A' | 'B', Array<{ attr: 'idnr' | 'vorname' | 'nachname'; eCode: string }>> = {
+  A: [{ attr: 'idnr', eCode: 'E0100081' }, { attr: 'vorname', eCode: 'E0100301' }, { attr: 'nachname', eCode: 'E0100201' }],
+  B: [{ attr: 'idnr', eCode: 'E0100082' }, { attr: 'vorname', eCode: 'E0100801' }, { attr: 'nachname', eCode: 'E0100901' }],
+};
 
 const personOf = (p?: string): 'A' | 'B' => (String(p).toUpperCase() === 'B' ? 'B' : 'A');
 const zeileFromLabel = (label?: string): string | null => {
@@ -104,8 +111,24 @@ export function buildMastercase(c: CtaxCase, idx: MapperIndex, cands: Candidate[
     const zeile = f.zeile ?? zeileFromLabel(label);            // jetzt first-class aus der Ingestion
     const kontextPath = f.kontextPath ?? null;
     const m = mapInContext({ anlage, person, zeile, kontextPath, label }, idx, cands);
-    return { person, anlage, label, wert: String(f.wert ?? ''), zeile, kontextPath, eCodeParse: f.eCode, eCodeMap: m.eCode, mapHow: m.how };
+    return { person, anlage, label, wert: String(f.wert ?? ''), zeile, kontextPath, eCodeParse: f.eCode, eCodeMap: m.eCode, mapHow: m.how, quelle: 'beleg' as const };
   });
+
+  // Stammdaten aus household als mappbare Fakten ergänzen (z.B. Person B Vor-/Nachname,
+  // die in household stehen, aber aus keinem Beleg extrahiert wurden) — sonst kein ELSTER-Mapping.
+  const haveECode = new Set(fakten.map((f) => `${f.person}|${f.eCodeParse}`));
+  const hh: Record<'A' | 'B', Record<string, string> | undefined> = { A: c.household?.personA, B: c.household?.personB };
+  for (const p of ['A', 'B'] as const) {
+    if (!entitaeten.some((e) => e.person === p)) continue;
+    for (const { attr, eCode } of STAMM[p]) {
+      const wert = hh[p]?.[attr];
+      if (!wert || haveECode.has(`${p}|${eCode}`)) continue;
+      const cat = idx.byECode.get(eCode);
+      fakten.push({ person: p, anlage: 'ESt1A', label: cat?.drucktext || attr, wert: String(wert),
+        zeile: cat?.zeile ?? null, kontextPath: cat?.kontextPath ?? null,
+        eCodeParse: eCode, eCodeMap: eCode, mapHow: 'household', quelle: 'household' });
+    }
+  }
 
   const calc = (c.calcs ?? [])[0] as { erstattung?: number; bindend?: { zve?: number; gesamtsteuer?: number } } | undefined;
   return {
@@ -122,32 +145,33 @@ function main() {
   const cands = loadCandidates(); const idx = buildIndex(cands);
   const mc = buildMastercase(c, idx, cands);
 
-  console.log(`\n══ MASTERCASE: ${mc.label} (VZ ${mc.vz}, ${mc.veranlagungsart}) ══`);
+  console.log(`\n╔══ MASTERCASE (vor Mapping) · ${mc.label} · VZ ${mc.vz} ══`);
+  console.log(`veranlagung : ${mc.veranlagungsart}`);
+  if (mc.ergebnis) console.log(`ergebnis    : Erstattung ${mc.ergebnis.erstattung} € · zvE ${mc.ergebnis.zve} · Gesamtsteuer ${mc.ergebnis.gesamtsteuer}`);
+  console.log(`\nENTITÄTEN`);
   for (const e of mc.entitaeten)
-    console.log(`  Person ${e.person}: ${e.name ?? '?'}  [${e.profil.join(', ')}]  Anlagen: ${e.anlagen.join(',')}`);
-  if (mc.ergebnis) console.log(`  Ergebnis: Erstattung ${mc.ergebnis.erstattung} € · zvE ${mc.ergebnis.zve} · Gesamtsteuer ${mc.ergebnis.gesamtsteuer}`);
+    console.log(`  Person ${e.person} · ${e.name ?? '?'} · IdNr ${e.idnr ?? '?'}\n     profil  : ${e.profil.join(', ')}\n     anlagen : ${e.anlagen.join(', ')}`);
 
-  console.log(`\n── Fakten (${mc.fakten.length}) — Ingestion → map-once ──`);
+  console.log(`\nFAKTEN  (Anlage · Zeile · kontextPath · Wert — ⊕ = aus household ergänzt; eCode = Mapping-Ausgabe, hier weggelassen)`);
+  const ORDER = ['ESt1A', 'N', 'VOR', 'KAP'];
+  const num = (z: string | null) => (z && /^\d+$/.test(z) ? parseInt(z, 10) : 999);
   for (const p of ['A', 'B'] as const) {
-    const fs = mc.fakten.filter((f) => f.person === p); if (!fs.length) continue;
-    console.log(`  Person ${p}:`);
-    for (const f of fs) {
-      const ok = f.eCodeMap === f.eCodeParse ? '✓' : (f.eCodeMap ? '≠' : '·');
-      console.log(`    ${ok} ${f.anlage.padEnd(6)} ${f.zeile ? 'Z' + f.zeile : '  '}  ${f.wert.padStart(11)}  ${f.label.slice(0, 38).padEnd(38)}  parse=${f.eCodeParse} map=${f.eCodeMap ?? '—'} (${f.mapHow})`);
+    const rows = mc.fakten.filter((f) => f.person === p); if (!rows.length) continue;
+    console.log(`\n  ▸ Person ${p}`);
+    for (const a of ORDER) {
+      const ar = rows.filter((f) => f.anlage.toUpperCase() === a.toUpperCase()).sort((x, y) => num(x.zeile) - num(y.zeile));
+      if (!ar.length) continue;
+      console.log(`    ${a}`);
+      for (const f of ar)
+        console.log(`     ${f.quelle === 'household' ? '⊕' : ' '} ${('Z' + (f.zeile ?? '—')).padEnd(5)} ${(f.kontextPath ?? '∅').slice(0, 30).padEnd(31)} ${f.label.slice(0, 34).padEnd(35)} = ${f.wert}`);
     }
   }
-  const pct = (a: number, b: number) => `${a}/${b} = ${Math.round(100 * a / Math.max(b, 1))}%`;
-  const agree = mc.fakten.filter((f) => f.eCodeMap === f.eCodeParse).length;
+  const hhN = mc.fakten.filter((f) => f.quelle === 'household').length;
+  const aN = mc.fakten.filter((f) => f.person === 'A').length, bN = mc.fakten.filter((f) => f.person === 'B').length;
   const uniq = mc.fakten.filter((f) => f.mapHow === 'unique').length;
-  const pick = mc.fakten.filter((f) => f.mapHow.startsWith('pick')).length;
-  const withKey = mc.fakten.filter((f) => f.zeile && f.kontextPath != null).length;
-  console.log(`\n── map-once (Schlüssel aus der Ingestion: Anlage·Zeile·kontextPath) ──`);
-  console.log(`   Fakten mit vollständigem Struktur-Schlüssel : ${pct(withKey, mc.fakten.length)}`);
-  console.log(`   deterministisch eindeutig (kein Raten)      : ${pct(uniq, mc.fakten.length)}`);
-  console.log(`   Tie-break per drucktext im kleinen Bucket   : ${pick}`);
-  console.log(`   Übereinstimmung mit Ingestion-eCode         : ${pct(agree, mc.fakten.length)}`);
-  console.log(`\n   Vordruckzeile + kontextPath kommen jetzt aus der Lane-1-Ingestion (28/28), nicht mehr`);
-  console.log(`   aus dem Label geraten → das Mapping ist ein Katalog-Lookup, keine Schätzung.`);
+  const agree = mc.fakten.filter((f) => f.eCodeMap === f.eCodeParse).length;
+  console.log(`\n── ${mc.fakten.length} Fakten · A: ${aN} · B: ${bN} · davon ${hhN} aus household ergänzt (⊕) ──`);
+  console.log(`── map-once danach: ${uniq}/${mc.fakten.length} eindeutig · ${agree}/${mc.fakten.length} konsistent (Schlüssel aus Ingestion + household) ──`);
 }
 
 main();
