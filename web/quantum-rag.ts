@@ -17,13 +17,27 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve as pathResolve } from 'node:path';
 import { resolveRagIndex, type RagIndexHandle } from '../src/core/tools/resolvers/rag-index.ts';
-import { embedQueries } from '../src/lib/gemma-embed.ts';
+import { embedQueries, formatQuery, l2normalize } from '../src/lib/gemma-embed.ts';
 import type { RagIndexToolRef } from '../src/core/tools/types.ts';
 
 const PORT = Number(process.env.QRAG_PORT ?? 12013);
 const CPU_ONLY = process.env.QRAG_EMBED_CPU !== '0';
+const VLLM_URL = process.env.EMBED_VLLM_URL ?? 'http://127.0.0.1:11436';
+const VLLM_MODEL = process.env.EMBED_VLLM_MODEL ?? 'embeddinggemma';
+
+/** Query via vLLM-embeddinggemma (für Namespaces, die mit vLLM gebaut wurden). */
+async function vllmEmbedQuery(text: string): Promise<Float32Array> {
+  const res = await fetch(`${VLLM_URL}/v1/embeddings`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: VLLM_MODEL, input: [formatQuery(text).slice(0, 2900)] }),
+  });
+  if (!res.ok) throw new Error(`vLLM /v1/embeddings ${res.status}`);
+  const j = await res.json() as { data: Array<{ embedding: number[] }> };
+  return l2normalize(new Float32Array(j.data[0].embedding));
+}
 
 interface NamespaceDef {
+  embed: 'ollama' | 'vllm';
   ref: RagIndexToolRef;
   atomsPath: string;
   map: (atom: Record<string, any>, score: number, idx: number) => Record<string, unknown>;
@@ -41,8 +55,21 @@ const catalogRef = {
   },
 } as unknown as RagIndexToolRef;
 
+/** Korpus-Cascade (Lane-2 document chunks, mit vLLM-embeddinggemma gebaut). */
+const corpusRef = {
+  name: 'qrag-corpus', kind: 'rag-index', required: false, alwaysOn: false, roles: ['retrieve'],
+  config: {
+    containerId: '0711:ctax:gemma4-tq:corpus:v1',
+    manifest: 'var/quantum/corpus/corpus.cascade.json',
+    strategy: 'turboquant-cascade',
+    tiers: ['d256', 'd768', 'fp32'],
+    topK: { d256: 256, d768: 48, fp32: 16 },
+  },
+} as unknown as RagIndexToolRef;
+
 const NAMESPACES: Record<string, NamespaceDef> = {
   catalog: {
+    embed: 'ollama',
     ref: catalogRef,
     atomsPath: 'src/verticals/elster-v3/data/atoms.json',
     map: (a, score) => ({
@@ -51,7 +78,16 @@ const NAMESPACES: Record<string, NamespaceDef> = {
       meta: { field: a.field_name, anlage: a.metadata?.anlage, vordruckzeile: a.metadata?.vordruckzeile, drucktext: a.metadata?.drucktext, trust: a.trust_level },
     }),
   },
-  // corpus: { ref: corpusRef, atomsPath: 'var/quantum/corpus/chunks.json', map: (c, score) => ({ id:c.id, score, text:c.text, source:c.source, meta:{page:c.page} }) },
+  corpus: {
+    embed: 'vllm',
+    ref: corpusRef,
+    atomsPath: 'var/quantum/corpus/chunks.json',
+    map: (c, score) => ({
+      id: c.id, score, text: (c.text ?? '').slice(0, 800),
+      source: c.source ?? null,
+      meta: { doc_type: c.doc_type, legal_area: c.legal_area, year: c.year, parent: c.parent },
+    }),
+  },
 };
 
 const handleCache = new Map<string, Promise<RagIndexHandle>>();
@@ -75,7 +111,7 @@ async function retrieve(query: string, k: number, ns: string): Promise<unknown[]
   if (!def) throw new Error(`unbekannter Namespace: ${ns}`);
   const atoms = loadAtoms(ns);
   const handle = await getHandle(ns);
-  const [qv] = await embedQueries([query], { cpuOnly: CPU_ONLY });
+  const qv = def.embed === 'vllm' ? await vllmEmbedQuery(query) : (await embedQueries([query], { cpuOnly: CPU_ONLY }))[0];
   const hits = await handle.retrieve(Array.from(qv), { topK: k });
   return hits.map((h) => {
     const idx = Number(h.id);
