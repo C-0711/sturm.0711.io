@@ -97,7 +97,8 @@ interface FieldProv { hash: string; page: number; box: [number, number, number, 
 /** Zwei Durchgänge: erst EXAKT (Ziffern-Gleichheit bzw. Text==), dann lockeres
  *  Containment. Exakt zuerst verhindert, dass „0,24" in einem fremden Dokument
  *  als Substring vor dem echten Beleg greift. */
-function matchProv(value: string, docs: { hash: string; pages: ProvPage[] }[]): FieldProv | null {
+const boxKey = (hash: string, pi: number, box: [number, number, number, number]) => `${hash}:${pi}:${box.join(',')}`;
+function matchProv(value: string, docs: { hash: string; pages: ProvPage[] }[], used?: Set<string>): FieldProv | null {
   const v = (value || '').trim();
   if (v.length < 2) return null;
   const vd = digitsOf(v);
@@ -105,9 +106,11 @@ function matchProv(value: string, docs: { hash: string; pages: ProvPage[] }[]): 
   const scan = (pred: (rt: string, rd: string) => boolean): FieldProv | null => {
     for (const doc of docs)
       for (let pi = 0; pi < doc.pages.length; pi++)
-        for (const rec of doc.pages[pi].records)
+        for (const rec of doc.pages[pi].records) {
+          if (used && used.has(boxKey(doc.hash, pi, rec.bbox))) continue;  // schon vergebener Record → überspringen
           if (pred(rec.text || '', digitsOf(rec.text || '')))
             return { hash: doc.hash, page: pi, box: rec.bbox, pageW: doc.pages[pi].w, pageH: doc.pages[pi].h };
+        }
     return null;
   };
   // Dezimalbetrag ("7.532,00", "0,24"): NUR gegen einen Record matchen, der
@@ -189,9 +192,14 @@ async function runSteuerfall(paths: string[], vz: number) {
       if (!Array.isArray(b.felderListe)) continue;
       const pd = provBySource.get(String(b.source).split('#')[0]);
       if (!pd) continue;  // kein Prov-Dokument (z.B. image-only ohne Treffer) → keine Box
+      // Records pro Beleg verbrauchen: zwei Felder mit gleichem Wert (z.B. zwei
+      // „0,00") bekommen je einen EIGENEN Record-Treffer; nur wenn keiner mehr
+      // frei ist, teilen sie sich (Fallback) — statt beide auf denselben zu legen.
+      const used = new Set<string>();
       for (const f of b.felderListe) {
-        const m = matchProv(String(f.wert ?? ''), [pd]);
+        const m = matchProv(String(f.wert ?? ''), [pd], used) ?? matchProv(String(f.wert ?? ''), [pd]);
         if (m) { f.prov = { hash: m.hash, page: m.page, box: m.box };
+                 used.add(boxKey(m.hash, m.page, m.box));
                  provByField.set(`${f.eCode}|${f.person}|${f.wert}`, m); }
       }
     }
