@@ -531,7 +531,7 @@ function renderDocDetail(){
       // sitzt die Box über noch nicht geladenen Lazy-Seiten und der Offset stimmt nicht).
       return `${pl}<div class="docview__wrap"><img loading="${pi<=firstPg?'eager':'lazy'}" src="api/page?h=${esc(hash)}&p=${pi}" alt="Seite ${pi+1}" onerror="this.closest('.docview__wrap').classList.add('is-404')">${boxes}</div>`;}).join('');
     bodyHtml=`<div class="docview__doc docview--prov" id="dv-doc">${pages}</div>`;
-    badge=`<span class="chip ok" style="margin-left:auto">${mine.length?mine.length+(mine.length===1?' Feld':' Felder')+' markiert':'OCR-Dokument'}</span>`;
+    badge=`<span class="chip ok" id="dv-badge" style="margin-left:auto">${mine.length?mine.length+(mine.length===1?' Feld':' Felder')+' markiert':'OCR-Dokument'}</span>`;
   } else if(d._file){
     let url=null; try{ d._objUrl=URL.createObjectURL(d._file); url=d._objUrl; }catch(_){}
     bodyHtml=url?`<iframe class="docview__frame" src="${url}#toolbar=0&navpanes=0"></iframe>`:`<div class="docview__none">Vorschau nicht verfügbar.</div>`;
@@ -552,16 +552,26 @@ function renderDocDetail(){
   docpanel.innerHTML=`<div class="docpanel__head">
       <p class="docpanel__title"><span>Extrahiert</span><span class="docpanel__vz">${fields.length} Felder</span></p>
       <p class="docpanel__count" style="font-size:13px;color:var(--green)">${esc(d.badge||'verarbeitet')}</p>
-      ${boxed.length?'<p style="font-size:10px;color:var(--muted);margin:6px 0 0">'+boxed.length+' im Dokument markiert · Zeile überfahren → Box leuchtet</p>':''}</div>
+      ${boxed.length?'<p id="dv-note" style="font-size:10px;color:var(--muted);margin:6px 0 0">'+boxed.length+' im Dokument markiert · Zeile überfahren → Box leuchtet</p>':''}</div>
     <div class="docview__fields"><table class="et"><thead><tr><th style="padding-left:14px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th style="padding-right:14px">Anlage</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 
-  // Erste Box in den Scrollbereich holen, SOBALD alle Seiten bis zu ihr geladen
-  // sind (nur Container scrollen, nicht die Seite).
+  // Sobald alle Seiten bis zur ersten Box geladen sind: entweder dorthin scrollen
+  // — oder, wenn das Box-Seitenbild fehlt (404, z.B. Server-Cache geleert),
+  // „N markiert" ehrlich auf „Bild nicht im Cache" herunterstufen statt eine
+  // Markierung zu behaupten, die nirgends sichtbar ist.
   if(boxed.length){const sc=center.querySelector('.docview');
-    const go=()=>{const el=center.querySelector('.docview--prov .hlbox');if(sc&&el){const er=el.getBoundingClientRect(),sr=sc.getBoundingClientRect();sc.scrollTop+=er.top-sr.top-sr.height*0.32;}};
     const imgs=[...center.querySelectorAll('#dv-doc .docview__wrap img')].slice(0,firstPg+1);
+    const bImg=imgs[firstPg];  // Seite, auf der die erste Box liegt
+    const finish=()=>{
+      if(bImg&&bImg.naturalWidth===0){  // Bild fehlte → Box nicht sichtbar
+        const bd=center.querySelector('#dv-badge'); if(bd){bd.textContent='Bild nicht im Cache';bd.className='chip amber';bd.style.marginLeft='auto';}
+        const nt=docpanel.querySelector('#dv-note'); if(nt)nt.textContent='Beleg-Bild nicht mehr im Server-Cache — „↻ Neu berechnen"';
+        return;
+      }
+      const el=center.querySelector('.docview--prov .hlbox');if(sc&&el){const er=el.getBoundingClientRect(),sr=sc.getBoundingClientRect();sc.scrollTop+=er.top-sr.top-sr.height*0.32;}
+    };
     let pending=imgs.filter(im=>!im.complete).length;
-    if(!pending)go(); else imgs.forEach(im=>{if(im.complete)return;const done=()=>{if(--pending<=0)go();};im.addEventListener('load',done,{once:true});im.addEventListener('error',done,{once:true});});}
+    if(!pending)finish(); else imgs.forEach(im=>{if(im.complete)return;const done=()=>{if(--pending<=0)finish();};im.addEventListener('load',done,{once:true});im.addEventListener('error',done,{once:true});});}
 }
 /* Feld-Zeile (rechts) ↔ Box (Mitte) synchronisieren — über den eindeutigen
    Feld-Index data-bi (nicht die Box-Koordinaten, die bei Doppelwerten kollidieren). */
