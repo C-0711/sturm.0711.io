@@ -63,5 +63,37 @@ console.log('\n8. Widersprüchliche verankerte Jahre → low (Rückfrage)\n');
   assert('bester Tipp = 2023 (häufigste)', r.jahr === 2023, r);
 }
 
+console.log('\n9. REALER ELSTER-Druck: Steuerjahr aus Seitenfuß trotz „WISO Steuer 2024"-Rauschen\n');
+{
+  // Echtes OCR-Muster (Stricker 2023): Software-Banner „WISO Steuer 2024" und
+  // Ausfertigungsdatum 2025 als Rauschen; das echte Jahr steht im Seitenfuß.
+  const real = `Art der Erklärung
+Einkommensteuererklärung
+8 Geburtsdatum 27.05.1963
+WISO Steuer 2024, Buhl, Hannover
+der Ausfertigung: 11.11.2025
+2023 Seite 2 von 6
+... Anlage N ...
+WIS0 Steuer 2024, Buhl, Hannover
+der Ausfertigung: 11.11.2025
+2023 Seite 3 von 6`;
+  const r = detectDokumentJahr(real);
+  assert('jahr = 2023 (Seitenfuß schlägt WISO-2024-Rauschen)', r.jahr === 2023, r);
+  assert('confidence = high', r.confidence === 'high', r);
+}
+
+console.log('\n10. Fallback: Jahr aus dem Dateinamen, wenn der Text nichts hergibt\n');
+{
+  const r = detectDokumentJahr('Kontostand 0,00\nseitenweise nur Zahlen', '/tmp/x/Einkommensteuererklaerung_2023_Stricker.pdf');
+  assert('jahr = 2023 aus Dateiname', r.jahr === 2023, r);
+  assert('confidence = low (Dateiname ist nur suggestiv)', r.confidence === 'low', r);
+}
+
+console.log('\n11. Dateiname-Fallback greift NICHT, wenn der Text ein klares Jahr hat\n');
+{
+  const r = detectDokumentJahr('Lohnsteuerbescheinigung für 2024\nbis 31.12.2024', '/tmp/x/irgendwas_2023.pdf');
+  assert('Text-Jahr 2024 gewinnt über Dateiname 2023', r.jahr === 2024 && r.confidence === 'high', r);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

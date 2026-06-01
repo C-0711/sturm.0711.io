@@ -391,7 +391,7 @@ export async function runLane1(
     // Belegjahr erkennen — fremdjährige Belege (≠ VZ) dürfen NICHT in die
     // Berechnung; sie würden im aggregate() auf die VZ-Werte aufsummiert
     // (z.B. Bruttoarbeitslohn 2023 + 2024). Stattdessen Vorjahres-Kontext.
-    const jr = detectDokumentJahr(c.text);
+    const jr = detectDokumentJahr(c.text, c.source);
 
     // Ganze ausgefüllte Erklärung (multi-Anlage Druck) → Vordruckzeile-Anker
     // statt Einzel-Beleg-Schema. Felder tragen Person je E-Code/Section.

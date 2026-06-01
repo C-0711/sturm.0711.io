@@ -34,6 +34,10 @@ const PLAUSIBEL_MAX = 2099;
  * die evidence-Beschriftung).
  */
 const ANKER: Array<{ re: RegExp; label: string }> = [
+  // ELSTER-/Steuersoftware-Druck: Seitenfußzeile „<Steuerjahr> Seite N von M".
+  // Sehr verlässlich — steht auf jeder Seite und trägt das echte Veranlagungsjahr
+  // (im Gegensatz zum Software-Banner „WISO Steuer 2024" oder dem Ausfertigungsdatum).
+  { re: /\b(20\d{2})\s+Seite\s+\d+\s+von\s+\d+/gi, label: 'ELSTER-Seitenfuß' },
   { re: /Einkommensteuererkl[äa]rung\s+(20\d{2})/gi, label: 'Einkommensteuererklärung' },
   { re: /Lohnsteuerbescheinigung\s+f[üu]r\s+(?:das\s+(?:Kalender)?jahr\s+)?(20\d{2})/gi, label: 'Lohnsteuerbescheinigung für' },
   { re: /f[üu]r\s+das\s+(?:Kalender|Steuer|Leistungs)?jahr\s+(20\d{2})/gi, label: 'für das Jahr' },
@@ -63,39 +67,53 @@ function dominant(years: number[]): { jahr: number; eindeutig: boolean } {
  *
  * @param text  pdftotext-/OCR-Rohtext des Belegs (eine Section).
  */
-export function detectDokumentJahr(text: string): DokumentJahr {
-  if (!text || text.length < 4) return { jahr: null, confidence: 'none', evidence: null };
+export function detectDokumentJahr(text: string, source?: string): DokumentJahr {
+  if (text && text.length >= 4) {
+    // 1. Verankerte Treffer sammeln (Jahr + Quelle-Label, Reihenfolge = Stärke).
+    const hits: Array<{ jahr: number; label: string }> = [];
+    for (const a of ANKER) {
+      for (const m of text.matchAll(a.re)) {
+        const y = parseInt(m[1], 10);
+        if (plausibel(y)) hits.push({ jahr: y, label: a.label });
+      }
+    }
+    if (hits.length) {
+      const years = hits.map((h) => h.jahr);
+      const distinct = [...new Set(years)];
+      if (distinct.length === 1) {
+        const h = hits[0];
+        return { jahr: distinct[0], confidence: 'high', evidence: `${h.label} ${distinct[0]}` };
+      }
+      // Mehrere Jahre verankert → mehrdeutig. Bester Tipp = häufigstes/stärkstes.
+      const { jahr } = dominant(years);
+      return { jahr, confidence: 'low', evidence: `mehrdeutig: ${distinct.sort().join(', ')}` };
+    }
 
-  // 1. Verankerte Treffer sammeln (Jahr + Quelle-Label, Reihenfolge = Stärke).
-  const hits: Array<{ jahr: number; label: string }> = [];
-  for (const a of ANKER) {
-    for (const m of text.matchAll(a.re)) {
+    // 2. Kein Anker → blanke Jahreszahlen. Vorher Software-Banner („WISO Steuer
+    //    2024") und Druckdatum („der Ausfertigung: 11.11.2025") entfernen — sonst
+    //    überstimmt das Software-/Druckjahr das echte Steuerjahr. Dann sehr
+    //    zurückhaltend: nur wenn EIN plausibles Jahr klar dominiert.
+    const clean = text
+      .replace(/WIS0?\s+Steuer\s+20\d{2}[^\n]*/gi, ' ')
+      .replace(/der\s+Ausfertigung:[^\n]*/gi, ' ');
+    const bare = [...clean.matchAll(/\b(20\d{2})\b/g)].map((m) => parseInt(m[1], 10)).filter(plausibel);
+    if (bare.length >= 2) {
+      const { jahr, eindeutig } = dominant(bare);
+      const n = bare.filter((y) => y === jahr).length;
+      if (eindeutig && n >= 2) return { jahr, confidence: 'low', evidence: `häufigstes Jahr ${jahr} (${n}×, ohne Anker)` };
+    }
+  }
+
+  // 3. Fallback: Jahr aus dem Dateinamen (Belege werden oft „…2023….pdf" benannt).
+  //    Nur 'low' — der Dateiname ist suggestiv, nicht maßgeblich.
+  if (source) {
+    const base = String(source).split(/[\\/]/).pop() ?? '';
+    // Jahr ggf. von Unterstrichen umgeben („…_2023_…") → Nicht-Ziffer-Grenzen statt \b.
+    const m = base.match(/(?<!\d)(20\d{2})(?!\d)/);
+    if (m) {
       const y = parseInt(m[1], 10);
-      if (plausibel(y)) hits.push({ jahr: y, label: a.label });
+      if (plausibel(y)) return { jahr: y, confidence: 'low', evidence: `Dateiname „${base.slice(0, 40)}"` };
     }
-  }
-
-  if (hits.length) {
-    const years = hits.map((h) => h.jahr);
-    const distinct = [...new Set(years)];
-    if (distinct.length === 1) {
-      const h = hits[0];
-      return { jahr: distinct[0], confidence: 'high', evidence: `${h.label} ${distinct[0]}` };
-    }
-    // Mehrere Jahre verankert → mehrdeutig. Bester Tipp = häufigstes/stärkstes.
-    const { jahr } = dominant(years);
-    return { jahr, confidence: 'low', evidence: `mehrdeutig: ${distinct.sort().join(', ')}` };
-  }
-
-  // 2. Kein Anker → nur blanke Jahreszahlen. Sehr zurückhaltend: nur wenn EIN
-  //    plausibles Jahr klar dominiert (≥2× und mehr als alle anderen zusammen).
-  const bare = [...text.matchAll(/\b(20\d{2})\b/g)]
-    .map((m) => parseInt(m[1], 10))
-    .filter(plausibel);
-  if (bare.length >= 2) {
-    const { jahr, eindeutig } = dominant(bare);
-    const n = bare.filter((y) => y === jahr).length;
-    if (eindeutig && n >= 2) return { jahr, confidence: 'low', evidence: `häufigstes Jahr ${jahr} (${n}×, ohne Anker)` };
   }
 
   return { jahr: null, confidence: 'none', evidence: null };
