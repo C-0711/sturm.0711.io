@@ -110,6 +110,77 @@ Anlage Vorsorgeaufwand`;
     assert('Lohnsteuer OCR-Punkt gefixt: 6.720.00 → 6720 (NICHT 672000)', !!lst && /^6720(,00)?$/.test(lst.wert), lst);
   }
 
+  console.log('\n6. Volksbank-Erträgnisaufstellung (Realformat) durch die VOLLE Pipeline + Cross-Doc-Summierung\n');
+  {
+    // Echtes OCR-Layout (d25a6856.jpg, Maria Ute Stricker): Spaltenkopf „Höhe der
+    // Kapitalerträge" über zwei Zeilen zerlegt + Umlaute weg, Summe inline auf der
+    // „steuerpflichtigen Einzelerträge"-Zeile (Typo „Surmme"). Vor dem Fix: 0 Felder
+    // → Person Bs Kapitalertrag (319 €) ging verloren. Hier: durch detect → person →
+    // mapBeleg → aggregate, und gegen einen ZWEITEN B-Beleg (50) auf Summe geprüft.
+    const VOLKSBANK = `Volksbanken Raiffeisenbanken
+Erträgnisaufstellung für das Jahr 2024 für lhre privaten Kapitalerträge
+Für (Gläubiger) Frau Maria Ute Stricker
+Geschaftsdatum   Hohe der   Gewinne   Zeilen-Nr.
+Konto-Nr./   Art der Kapitalertrage   Kapitalertrage   (davon Aktiengewinne)   Anlage KAP
+28.03.2024 Zinsen Einlagen   4.06
+28.06.2024 Zinsen Einlagen   5,16   7
+30.12.2024 Zinsen Einlagen   293,75
+Summe zur vorstehenden Tabelle (siche auch auf der Steuerbescheinigung)   EUR/CT   Zeilen-Nr.
+Anlage KAP
+Ermittelt aus der Surmme der steuerpflichtigen Einzelertrage Gewinne/Veriuste   319,35`;
+    const imgVb = join(dir, 'volksbank.png'); writeFileSync(imgVb, 'x');
+    const imgB2 = join(dir, 'bankB2.png'); writeFileSync(imgB2, 'x');
+    const hh = structuredClone(household); hh.personB = { idnr: '54129386608', vorname: 'Maria Ute', nachname: 'Stricker' };
+    const parseImage = async (p: string) => (p.endsWith('volksbank.png') ? VOLKSBANK : BANK_B);
+    const r = await runLane1([imgVb, imgB2], { vz: 2024, pool, household: hh, parseImage });
+    const vb = r.belege.find((b) => String(b.source).endsWith('volksbank.png'));
+    assert('Volksbank belegTyp = Steuerbescheinigung_Bank', vb?.belegTyp === 'Steuerbescheinigung_Bank', vb);
+    assert('Volksbank mapped (≥1 Feld, NICHT 0)', vb?.status === 'mapped' && (vb?.felder ?? 0) >= 1, vb);
+    assert('Volksbank Person B (Maria Ute)', vb?.person === 'B', vb?.person);
+    // E1900701 B = 319 (Volksbank-Summe) + 50 (BANK_B) → cross-doc summiert
+    const capB = r.aggregated.find((f) => f.eCode === 'E1900701' && f.person === 'B');
+    assert('E1900701 B summiert: 319 + 50 = 369', capB?.wert === '369', capB);
+  }
+
+  console.log('\n7. Vorjahres-Erklärung (2023) im VZ-2024-Fall → NICHT in die Berechnung, als Vorjahres-Kontext\n');
+  {
+    // Kern-Bug: eine 2023er Einkommensteuererklärung neben 2024er Belegen darf
+    // NICHT mitgerechnet werden — sonst summiert aggregate() Bruttoarbeitslohn
+    // 2023 (50.000) + 2024 (60.000) = 110.000. Stattdessen: 2024 zählt, 2023
+    // wird zu Vorjahres-Kontext (Prefill für fehlende Stammdaten wie IBAN).
+    const ERKL_2023 = `Einkommensteuererklärung 2023
+8 Geburtsdatum   27.05.1963
+30 IBAN (inländisches Geldinstitut)   DE085735103001050569
+Anlage N (Steuerpflichtige Person / Ehemann / Person A)
+5 Bruttoarbeitslohn   50.000,00
+Anlage Vorsorgeaufwand`;
+    const ERKL_2024 = `Einkommensteuererklärung 2024
+8 Geburtsdatum   27.05.1963
+Anlage N (Steuerpflichtige Person / Ehemann / Person A)
+5 Bruttoarbeitslohn   60.000,00
+Anlage Vorsorgeaufwand`;
+    const vj = join(dir, 'erkl2023.png'); writeFileSync(vj, 'x');
+    const cur = join(dir, 'erkl2024.png'); writeFileSync(cur, 'x');
+    const parseImage = async (p: string) => (p.endsWith('erkl2023.png') ? ERKL_2023 : ERKL_2024);
+    const r = await runLane1([vj, cur], { vz: 2024, pool, household: structuredClone(household), parseImage });
+
+    const b2023 = r.belege.find((b) => String(b.source).endsWith('erkl2023.png'));
+    const b2024 = r.belege.find((b) => String(b.source).endsWith('erkl2024.png'));
+    assert('2023-Beleg als Vorjahr markiert (vorjahr=true, dokumentJahr=2023)', b2023?.vorjahr === true && b2023?.dokumentJahr === 2023, b2023);
+    assert('2024-Beleg ist NICHT Vorjahr', !b2024?.vorjahr && b2024?.dokumentJahr === 2024, b2024);
+
+    const brutto = r.aggregated.find((f) => f.anlage === 'N' && /Bruttoarbeitslohn/i.test(f.pdfLabel ?? ''));
+    assert('Bruttoarbeitslohn = 60000 (NUR 2024, NICHT 50000+60000=110000)', brutto?.wert === '60000', brutto);
+
+    // IBAN war nur 2023 da → darf NICHT in den Rechen-Feldern stehen …
+    assert('IBAN NICHT in aggregated (kein Vorjahres-Leak in die Berechnung)', !r.aggregated.some((f) => f.eCode === 'E0102102'), r.aggregated.filter((f) => f.eCode === 'E0102102'));
+    // … sondern als Vorjahres-Prefill angeboten werden.
+    assert('Vorjahr erkannt: jahr=2023', r.vorjahr?.jahr === 2023, r.vorjahr);
+    const ibanVj = r.vorjahr?.felder.find((f) => f.eCode === 'E0102102');
+    assert('IBAN als Vorjahres-Prefill (kind=prefill)', ibanVj?.kind === 'prefill', ibanVj);
+    assert('stats.vorjahrFelder > 0', (r.stats.vorjahrFelder ?? 0) > 0, r.stats.vorjahrFelder);
+  }
+
   await pool.end();
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

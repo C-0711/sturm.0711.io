@@ -43,6 +43,17 @@ const pool = new Pool({ connectionString: pgUrl, max: 4 });
 let _catByECode: Map<string, Candidate> | null = null;
 const catByECode = (): Map<string, Candidate> => (_catByECode ??= buildIndex(loadCandidates()).byECode);
 
+// Stammdaten-eCodes, die der Mastercase-Recalc aus dem harmonisierten Mastercase
+// übernehmen DARF (Identität/Adresse — vervollständigen die ELSTER-Form, steuer-
+// neutral). Einkommen (KAP/N/VOR) bleibt BEWUSST Pre-Calc: die rohen /extract-
+// Bank-Werte sind verrauscht (Bruttoarbeitslohn-Mis-Maps), würden die Steuer kippen.
+const MC_STAMMDATEN = new Set([
+  'E0100201', 'E0100301', 'E0100401', 'E0100081',  // Name, Vorname, Geburtsdatum, IdNr (A)
+  'E0100901', 'E0100801', 'E0101001', 'E0100082',  // Name, Vorname, Geburtsdatum, IdNr (B)
+  'E0101104', 'E0101206', 'E0100601', 'E0100602',  // Straße, Hausnr, PLZ, Ort
+  'E0100701', 'E0102102',                           // Verheiratet-seit, IBAN
+]);
+
 // Dropped phone photos (JPG/PNG) are not PDFs → the orchestrator's pdfium
 // rasterizer throws FormatError. Wrap them in a one-page PDF first (Pillow,
 // 200 dpi) so the OCR ensemble sees a page it can raster.
@@ -196,12 +207,16 @@ async function extractCached(path: string): Promise<ExtractOutput> {
  *  out = Pre-Calc-Ergebnis (liefert belege[].source + household); paths = roher
  *  Handler-Input (Fallback). Jeder Beleg isoliert: ein /extract-Fehler kippt den
  *  Job nicht, der Mastercase entsteht aus den erfolgreichen Belegen. */
-async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: string }>; household?: Household }, paths: string[]): Promise<void> {
+async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: string; vorjahr?: boolean }>; household?: Household }, paths: string[]): Promise<void> {
   await writeEnvelope({ caseId, status: 'pending', updatedAt: new Date().toISOString() });
+  // Fremdjährige (Vorjahres-)Belege gehören NICHT in den harmonisierten Mastercase
+  // — konsistent zur Berechnung, die sie ebenfalls ausschließt. Ihre Pfade werden
+  // sowohl aus den Beleg-Quellen als auch aus dem rohen paths-Fallback gefiltert.
+  const vorjahrPfade = new Set((out.belege ?? []).filter((b) => b.vorjahr).map((b) => String(b.source).split('#')[0]));
   // Beleg-Pfade: aus belege[].source (VaSt-Section-Suffix '#…' abschneiden),
-  // Fallback auf den rohen Handler-Input; uniq + existsSync.
-  const fromBelege = (out.belege ?? []).map((b) => String(b.source).split('#')[0]);
-  const candidates = [...new Set([...fromBelege, ...paths])].filter((p) => p && existsSync(p));
+  // Fallback auf den rohen Handler-Input; uniq + existsSync; ohne Vorjahr.
+  const fromBelege = (out.belege ?? []).filter((b) => !b.vorjahr).map((b) => String(b.source).split('#')[0]);
+  const candidates = [...new Set([...fromBelege, ...paths])].filter((p) => p && existsSync(p) && !vorjahrPfade.has(p));
   const outputs: ExtractOutput[] = [];
   for (const p of candidates) {
     try { outputs.push(await extractCached(p)); }
@@ -303,6 +318,9 @@ async function runSteuerfall(paths: string[], vz: number) {
     household: r.household, docs,
     veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
     warnings: [...(r.warnings ?? []), ...haushalt.warnungen], calcs,
+    // Fremdjährige Belege (≠ VZ): NICHT in der Berechnung — Quelle für Prefill +
+    // gezielte Rückfragen (vom Auditor zu Findings verarbeitet). null wenn keine.
+    vorjahr: r.vorjahr ?? null,
   };
 }
 

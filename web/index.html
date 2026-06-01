@@ -150,6 +150,7 @@
   .doccard__badge b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .doccard__badge--pending{background:color-mix(in srgb,var(--gold) 10%,transparent);color:var(--gold);border-color:color-mix(in srgb,var(--gold) 30%,transparent)}
   .doccard__badge--err{background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent)}
+  .doccard__badge--vorjahr{background:color-mix(in srgb,var(--gold) 12%,transparent);color:var(--gold-d);border-color:color-mix(in srgb,var(--gold) 34%,transparent)}
   .dot-spin{width:7px;height:7px;border-radius:50%;background:currentColor;animation:dotpulse 1s infinite}
   @keyframes dotpulse{0%,100%{opacity:.35}50%{opacity:1}}
 
@@ -211,6 +212,8 @@
   .bel-type.ocr{border-color:color-mix(in srgb,var(--blue) 30%,transparent);color:var(--blue)}
   .bel-type.text{border-color:color-mix(in srgb,var(--green) 30%,transparent);color:var(--green)}
   .bel-name{font-size:11px;color:var(--ink);margin-bottom:3px} .bel-src{font-size:9px;color:var(--dim)}
+  .bel-item.vorjahr{opacity:.9}
+  .bel-vj{display:inline-block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;border:1px solid color-mix(in srgb,var(--gold) 34%,transparent);color:var(--gold-d);background:color-mix(in srgb,var(--gold) 10%,transparent);padding:2px 6px;border-radius:2px;margin-top:7px}
   .et{width:100%;border-collapse:collapse;font-size:11px}
   .et th{text-align:left;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);padding:8px 10px;border-bottom:1px solid var(--line);font-weight:400}
   .et td{padding:7px 10px;border-bottom:1px solid var(--line);color:var(--muted);vertical-align:middle}
@@ -628,7 +631,9 @@ function applyBadges(){
     const typ=BELN[hits[0].belegTyp]||hits[0].belegTyp;
     const person=hits[0].person&&hits[0].person!=='unknown'?' · Person '+hits[0].person:'';
     const allDef=hits.every(h=>String(h.status).includes('deferred'));
+    d.vorjahr=hits.some(h=>h.vorjahr); d.dokumentJahr=(hits.find(h=>h.vorjahr)||{}).dokumentJahr;
     if(allDef&&felder===0){ d.state='err'; d.badge='nicht lesbar'; }
+    else if(d.vorjahr){ d.state='done'; d.badge=`Vorjahr ${d.dokumentJahr||''} · nicht in Berechnung · ${felder} Felder`; }
     else { d.state='done'; d.badge=`${typ}${person} · ${felder} Felder${hits.length>1?' ('+hits.length+'×)':''}`; }
   }
 }
@@ -777,7 +782,7 @@ function renderDocPanel(){
     const t=d.thumb||{kind:'pdf'};
     const thumb=t.kind==='img'&&t.url?`<div class="doccard__thumb"><img src="${t.url}" alt=""></div>`
       :`<div class="doccard__thumb doccard__thumb--${t.kind==='img'?'img':'pdf'}">${t.kind==='img'?'IMG':'PDF'}</div>`;
-    const badgeCls=d.state==='pending'?'doccard__badge--pending':d.state==='err'?'doccard__badge--err':'';
+    const badgeCls=d.state==='pending'?'doccard__badge--pending':d.state==='err'?'doccard__badge--err':d.vorjahr?'doccard__badge--vorjahr':'';
     const badge=d.state==='pending'?`<span class="doccard__badge doccard__badge--pending"><span class="dot-spin"></span>${esc(d.badge||'liest…')}</span>`
       :`<span class="doccard__badge ${badgeCls}"><b>${esc(d.badge||'verarbeitet')}</b></span>`;
     return `<div class="doccard" data-doc="${i}" title="Dokument ansehen">${thumb}<div class="doccard__body"><div class="doccard__name">${esc(d.name)}</div><div class="doccard__size">${kb(d.size)}</div>${badge}</div></div>`;
@@ -854,7 +859,7 @@ function renderDash(d){
     for(const f of d.fields.filter(x=>x.person===p)){const n=parseDe(f.wert);const show=(Number.isFinite(n)&&/[.,]\d|^\d{4,}/.test(String(f.wert)))?eur(n):esc(f.wert);rows+=ir(esc((f.label||f.eCode).slice(0,46)),show);}
     return `<div id="pc-${p}" class="pc${i===0?' active':''}">${rows||'<div class="ir"><div class="ir-k" style="font-style:italic">Keine Felder.</div></div>'}</div>`;};
   const personenCard=persons.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--gold)"></div>Personen · Haushalt</div><span class="chev open">▼</span></div><div class="card-body"><div class="ptabs">${tabs}</div>${persons.map((p,i)=>pane(p,i)).join('')}</div></div>`:'';
-  const belItems=d.belege.map(bg=>`<div class="bel-item"><span class="bel-type ${bg.method}">${esc(bg.method)}</span><div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div><div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div><div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div></div>`).join('');
+  const belItems=d.belege.map(bg=>`<div class="bel-item${bg.vorjahr?' vorjahr':''}"><span class="bel-type ${bg.method}">${esc(bg.method)}</span><div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div><div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div><div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div>${bg.vorjahr?`<div class="bel-vj">Vorjahr ${esc(bg.dokumentJahr||'')} · nicht in Berechnung</div>`:''}</div>`).join('');
   const belegeCard=`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Belege · ${d.belege.length} Dokumente</div><span class="chev open">▼</span></div><div class="card-body" style="padding:0"><div class="bel-grid">${belItems}</div></div></div>`;
   const anlCls=(a)=>{const k=String(a||'').toLowerCase();return ['kap','vor','n','est1a'].includes(k)?k:'';};
   const rows=d.fields.map(f=>{

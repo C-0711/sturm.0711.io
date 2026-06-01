@@ -6,7 +6,7 @@
  * Fragen; er erfindet keine Anforderungen. Korrektheit lebt hier, nicht im LLM.
  */
 
-import { pruefeSoll } from './soll-katalog.ts';
+import { pruefeSoll, SOLL_ECODES } from './soll-katalog.ts';
 
 export type FindingKind = 'missing_beleg' | 'open_question' | 'conflict' | 'confirm_value' | 'optimize';
 export type Severity = 'blocker' | 'empfohlen' | 'optional';
@@ -33,7 +33,12 @@ export interface AuditFinding {
 }
 
 interface Feld { eCode: string; label?: string; wert?: string; person?: string; anlage?: string; method?: string; prov?: unknown; }
-interface Beleg { source?: string; belegTyp?: string; person?: string; status?: string; felder?: number; method?: string; felderListe?: Feld[]; }
+interface Beleg { source?: string; belegTyp?: string; person?: string; status?: string; felder?: number; method?: string; felderListe?: Feld[]; vorjahr?: boolean; dokumentJahr?: number; }
+/** Ein fremdjähriges Feld (Beleg ≠ VZ) — von lane1 klassifiziert, nie in der Berechnung. */
+export interface VorjahrFeld {
+  eCode: string; anlage?: string; person?: string; wert?: string; pdfLabel?: string;
+  dokumentJahr: number; kind: 'prefill' | 'frage' | 'vorhanden'; vorhandenAktuell?: boolean;
+}
 export interface CaseData {
   fields?: Feld[];
   belege?: Beleg[];
@@ -41,6 +46,8 @@ export interface CaseData {
   calcs?: Array<{ person?: string; konflikte?: number; abgleich?: string | null }>;
   veranlagungsart?: string;
   household?: { personA?: Record<string, unknown>; personB?: Record<string, unknown> };
+  /** Vorjahres-Kontext (fremdjährige Belege): Prefill-Vorschläge + Rückfragen. */
+  vorjahr?: { jahr: number | null; felder?: VorjahrFeld[] } | null;
 }
 
 const val = (s?: string) => (s ?? '').trim();
@@ -68,6 +75,7 @@ export function auditCase(data: CaseData): AuditReport {
   // A) Provenienz-Lücken: OCR-Feld ohne Box → Wert konnte nicht lokalisiert werden.
   for (const b of belege) {
     if (b.method !== 'ocr') continue;
+    if (b.vorjahr) continue;  // Vorjahres-Belege: kein Rechenwert → §G, nicht Provenienz
     for (const f of b.felderListe ?? []) {
       if (f.prov || !isMoney(f.wert)) continue;
       push({
@@ -145,14 +153,46 @@ export function auditCase(data: CaseData): AuditReport {
       push({ kind: 'optimize', severity: 'optional', fakt: `${pre} — ${r.hinweis}`,
         frage: r.hinweis, basis, erwartet: { typ: 'text', eCode: it.eCodes[0] } });
     } else if (r.status === 'vorjahr') {
+      const vw = r.vorjahrWert ? ` Vorjahreswert: ${r.vorjahrWert}.` : '';
       push({ kind: 'confirm_value', severity: 'empfohlen', fakt: `${pre} ${r.hinweis}.`,
-        frage: `„${it.label}" aus der Vorjahres-Erklärung übernehmen?`,
+        frage: `„${it.label}" aus der Vorjahres-Erklärung übernehmen?${vw}`,
         basis, erwartet: { typ: 'boolean', eCode: it.eCodes[0] } });
     } else {
       const istAbzug = it.kategorie === 'Werbungskosten' || it.kategorie === 'Kapitalerträge';
       push({ kind: istAbzug ? 'optimize' : 'open_question', severity: it.severity,
         fakt: `${pre} fehlt im Fall (${it.herkunft}).`, frage: it.frage,
         basis, erwartet: { typ: istAbzug ? 'boolean' : 'value', eCode: it.eCodes[0] } });
+    }
+  }
+
+  // G) Vorjahres-Kontext: fremdjährige Belege (z.B. eine 2023er Erklärung in
+  //    einem VZ-2024-Fall) liefern KEINE Rechenwerte, aber Hinweise. Stabile
+  //    Stammdaten, die im aktuellen Jahr fehlen → übernehmen (confirm_value);
+  //    fehlende Beträge → gezielt nachfragen (open_question, Wert NIE auto-
+  //    übernommen). Kuratiert behandelte (Soll-Liste) und im aktuellen Jahr
+  //    bereits belegte eCodes werden übersprungen — kein Doppel-Befund.
+  const aktuelleECodes = new Set(fields.map((f) => f.eCode));
+  for (const v of data.vorjahr?.felder ?? []) {
+    if (v.kind === 'vorhanden' || v.vorhandenAktuell) continue;
+    if (SOLL_ECODES.has(v.eCode) || aktuelleECodes.has(v.eCode)) continue;
+    const wert = val(v.wert);
+    const label = v.pdfLabel || v.eCode;
+    if (v.kind === 'prefill') {
+      push({
+        kind: 'confirm_value', severity: 'empfohlen',
+        fakt: `Verifizierter Befund (Vorjahres-Kontext): „${label}" (${v.eCode}) = ${wert} stammt aus der Vorjahres-Erklärung (${v.dokumentJahr}) und ist im aktuellen Jahr nicht belegt. Stabile Stammdaten können übernommen werden — bitte bestätigen.`,
+        frage: `„${label}" aus dem Vorjahr (${v.dokumentJahr}) übernehmen? Wert: ${wert}.`,
+        basis: { quelle: 'rule', ref: `vorjahr:${v.eCode}` },
+        erwartet: { typ: 'boolean', eCode: v.eCode, person: v.person },
+      });
+    } else {
+      push({
+        kind: 'open_question', severity: 'optional',
+        fakt: `Verifizierter Befund (Vorjahres-Kontext): Im Vorjahr (${v.dokumentJahr}) war „${label}" (${v.eCode}) = ${wert} (Betrag); im aktuellen Jahr liegt dazu nichts vor. Der Vorjahreswert wird NICHT in die Berechnung übernommen — zu klären, ob ein entsprechender Betrag im Veranlagungszeitraum anfällt.`,
+        frage: `Im Vorjahr (${v.dokumentJahr}): „${label}" = ${wert}. Gibt es einen entsprechenden Betrag auch im aktuellen Jahr?`,
+        basis: { quelle: 'rule', ref: `vorjahr-betrag:${v.eCode}` },
+        erwartet: { typ: 'value', eCode: v.eCode, person: v.person },
+      });
     }
   }
 

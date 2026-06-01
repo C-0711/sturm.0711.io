@@ -39,6 +39,8 @@ import type pg from 'pg';
 import { mapBeleg, aggregate, detectBelegTyp, isFilledReturn } from './field-mapper/mapper.ts';
 import { loadVordruckMap, extractByVordruckzeile } from './field-mapper/extractor-vordruckzeile.ts';
 import type { VordruckMap } from './field-mapper/extractor-vordruckzeile.ts';
+import { detectDokumentJahr } from './field-mapper/dokument-jahr.ts';
+import type { DokumentJahr, JahrConfidence } from './field-mapper/dokument-jahr.ts';
 import { preValidate } from './field-mapper/pre-validate.ts';
 import type { ValidationReport } from './field-mapper/pre-validate.ts';
 import { buildE10XML } from './field-mapper/e10-xml.ts';
@@ -60,6 +62,7 @@ import type {
   MappedField,
   MappingResult,
   Person,
+  ValueType,
 } from './field-mapper/types.ts';
 
 // ─── Public API-Typen ────────────────────────────────────────────────────
@@ -119,6 +122,11 @@ export interface Lane1BelegOutcome {
     /** Provenienz: Box dieses Feldes IM EIGENEN Beleg-Dokument (vom Web-Server
      *  nachgerüstet, pro Beleg gematcht — treibt die Beleg-Detailansicht). */
     prov?: { hash: string; page: number; box: [number, number, number, number] } }[];
+  /** Erkanntes Steuerjahr des Belegs (Detektor; undefined wenn kein Signal). */
+  dokumentJahr?: number;
+  /** true = fremdjähriger Beleg (≠ VZ) → NICHT in der Berechnung, als
+   *  Vorjahres-Kontext geführt (Prefill/Rückfrage). */
+  vorjahr?: boolean;
 }
 
 /** MappedField[] → kompakte Web-Form für die Dokument-Detailansicht. */
@@ -129,11 +137,80 @@ function toFelderListe(felder: MappedField[]): NonNullable<Lane1BelegOutcome['fe
   }));
 }
 
+/** Beträge (aufsummierbar) vs. stabile Stammdaten — steuert prefill vs. frage. */
+const AMOUNT_TYPES = new Set<ValueType>(['int_euro', 'decimal_eur_cent']);
+const fieldKey = (f: { anlage?: string; kontextSubpath?: string; eCode: string; person: Person }): string =>
+  `${f.anlage ?? ''}|${f.kontextSubpath ?? ''}|${f.eCode}|${f.person}`;
+
+/**
+ * Klassifiziert die fremdjährigen Felder gegen das aktuelle Aggregat:
+ *   schon im aktuellen Jahr vorhanden  → 'vorhanden' (reiner Kontext)
+ *   fehlt + Betrag                     → 'frage'   (nachfragen, NICHT übernehmen)
+ *   fehlt + Stammdatum                 → 'prefill' (zum Übernehmen anbieten)
+ */
+function buildVorjahr(
+  sections: Array<{ source: string; belegTyp: BelegTyp; person: Person; jahr: number; confidence: JahrConfidence; felder: MappedField[] }>,
+  aktuell: MappedField[],
+): Lane1Vorjahr | undefined {
+  if (!sections.length) return undefined;
+  const curKeys = new Set(aktuell.map(fieldKey));
+  const felder: VorjahrFeld[] = [];
+  for (const s of sections) {
+    for (const f of s.felder) {
+      const vorhandenAktuell = curKeys.has(fieldKey(f));
+      const kind: VorjahrFeld['kind'] = vorhandenAktuell
+        ? 'vorhanden'
+        : AMOUNT_TYPES.has(f.valueType) ? 'frage' : 'prefill';
+      felder.push({
+        eCode: f.eCode, anlage: f.anlage ?? '', kontextSubpath: f.kontextSubpath,
+        person: f.person, wert: f.wert, pdfLabel: f.pdfLabel ?? '', valueType: f.valueType,
+        dokumentJahr: s.jahr, kind, vorhandenAktuell,
+      });
+    }
+  }
+  const jahre = [...new Set(sections.map((s) => s.jahr))];
+  return {
+    jahr: jahre.length === 1 ? jahre[0] : null,
+    belege: sections.map((s) => ({ source: s.source, belegTyp: s.belegTyp, jahr: s.jahr, confidence: s.confidence, felder: s.felder.length })),
+    felder,
+  };
+}
+
 export interface Lane1Deferred {
   source: string;
   reason: string;
   /** Welcher Lane gehört die Weiterverarbeitung? */
   route: 'lane2-ocr' | 'hitl';
+}
+
+/** Ein fremdjähriges Feld, klassifiziert nach Verwertung im aktuellen VZ. */
+export interface VorjahrFeld {
+  eCode: string;
+  anlage: string;
+  kontextSubpath?: string;
+  person: Person;
+  wert: string;
+  pdfLabel: string;
+  valueType: ValueType;
+  /** Jahr des Belegs, aus dem dieses Feld stammt. */
+  dokumentJahr: number;
+  /**
+   * prefill   — stabiles Stammdatum (IdNr, Konfession, IBAN, Geburtsdatum …),
+   *             im aktuellen Jahr NICHT vorhanden → zum Übernehmen anbieten.
+   * frage     — Betrag (int_euro/decimal), im aktuellen Jahr NICHT vorhanden →
+   *             nachfragen; Wert NIE automatisch in die Berechnung übernehmen.
+   * vorhanden — im aktuellen Jahr bereits belegt → reiner Kontext.
+   */
+  kind: 'prefill' | 'frage' | 'vorhanden';
+  vorhandenAktuell: boolean;
+}
+
+/** Vorjahres-Kontext: fremdjährige Belege/Felder, NIE Teil der Berechnung. */
+export interface Lane1Vorjahr {
+  /** Einheitliches Vorjahr, null wenn mehrere verschiedene Jahre. */
+  jahr: number | null;
+  belege: Array<{ source: string; belegTyp: BelegTyp; jahr: number; confidence: JahrConfidence; felder: number }>;
+  felder: VorjahrFeld[];
 }
 
 export interface Lane1Result {
@@ -153,6 +230,9 @@ export interface Lane1Result {
    *  Herkunfts-Markierung (text vs. ocr) im Report/JSON. */
   ocrFields: string[];
   warnings: string[];
+  /** Fremdjährige Belege/Felder (≠ VZ) — NIE Teil von aggregated/xml/calc;
+   *  Quelle für Prefill + gezielte Rückfragen. undefined wenn keine. */
+  vorjahr?: Lane1Vorjahr;
   /** Kompakte Statistik für Logging/Monitoring. */
   stats: {
     pdfs: number;
@@ -161,6 +241,7 @@ export interface Lane1Result {
     deferred: number;
     felderRaw: number;
     felderAggregated: number;
+    vorjahrFelder: number;
     xmlBytes: number;
   };
 }
@@ -270,7 +351,19 @@ export async function runLane1(
   const belege: Lane1BelegOutcome[] = [];
   const deferred: Lane1Deferred[] = [];
   const mappingResults: MappingResult[] = [];
+  const vorjahrSections: Array<{ source: string; belegTyp: BelegTyp; person: Person; jahr: number; confidence: JahrConfidence; felder: MappedField[] }> = [];
   const ocrFieldKeys = new Set<string>();
+
+  /** Gate: gehört der Beleg (Jahr j) in die VZ-Berechnung — oder als Vorjahres-
+   *  Kontext raus? high & abweichend → raus. low & abweichend → bei Voll-
+   *  Erklärungen (Bulk, hohe Wirkung) sicherheitshalber raus + Rückfrage; bei
+   *  Einzelbelegen drin (nur Warnung, sonst Datenverlust). kein/VZ-Jahr → drin. */
+  const gateVorjahr = (j: DokumentJahr, typ: BelegTyp): { raus: boolean; rueckfrage: boolean } => {
+    if (j.jahr == null || j.jahr === opts.vz) return { raus: false, rueckfrage: false };
+    if (j.confidence === 'high') return { raus: true, rueckfrage: false };
+    if (typ === 'Einkommensteuererklaerung') return { raus: true, rueckfrage: true };
+    return { raus: false, rueckfrage: true };
+  };
   let vordruckMap: VordruckMap | null = null; // lazy — nur wenn eine Voll-Erklärung auftaucht
 
   /** Person B aus einem Beleg lernen, wenn die VaSt nur ihre IdNr kannte. */
@@ -295,11 +388,33 @@ export async function runLane1(
       });
       continue;
     }
+    // Belegjahr erkennen — fremdjährige Belege (≠ VZ) dürfen NICHT in die
+    // Berechnung; sie würden im aggregate() auf die VZ-Werte aufsummiert
+    // (z.B. Bruttoarbeitslohn 2023 + 2024). Stattdessen Vorjahres-Kontext.
+    const jr = detectDokumentJahr(c.text);
+
     // Ganze ausgefüllte Erklärung (multi-Anlage Druck) → Vordruckzeile-Anker
     // statt Einzel-Beleg-Schema. Felder tragen Person je E-Code/Section.
     if (isFilledReturn(c.text)) {
       if (!vordruckMap) vordruckMap = await loadVordruckMap(opts.pool, opts.vz);
       const { felder } = extractByVordruckzeile(c.text, vordruckMap);
+      const gate = gateVorjahr(jr, 'Einkommensteuererklaerung');
+      if (gate.raus) {
+        // Vorjahres-Erklärung: NICHT in die Berechnung (sonst Aufsummierung auf
+        // die VZ-Werte). Als Vorjahres-Kontext (Prefill/Rückfrage) bereitstellen.
+        vorjahrSections.push({ source: c.source, belegTyp: 'Einkommensteuererklaerung', person: 'A', jahr: jr.jahr!, confidence: jr.confidence, felder });
+        belege.push({
+          source: c.source, belegTyp: 'Einkommensteuererklaerung', person: 'A',
+          status: 'mapped', felder: felder.length, method: c.method,
+          felderListe: toFelderListe(felder), dokumentJahr: jr.jahr!, vorjahr: true,
+        });
+        warnings.push(
+          `Vorjahres-Erklärung erkannt (${c.source}, Jahr ${jr.jahr} ≠ VZ ${opts.vz})` +
+          `${gate.rueckfrage ? ' — Jahr bitte bestätigen' : ''} → NICHT in die Berechnung übernommen; ` +
+          `${felder.length} Felder als Vorjahres-Kontext (Prefill/Rückfrage) bereitgestellt.`,
+        );
+        continue;
+      }
       mappingResults.push({
         belegTyp: 'Einkommensteuererklaerung', person: 'A',
         felder, missingExpected: [], unmatched: [], warnings: [],
@@ -308,12 +423,13 @@ export async function runLane1(
       belege.push({
         source: c.source, belegTyp: 'Einkommensteuererklaerung', person: 'A',
         status: 'mapped', felder: felder.length, method: c.method,
-        felderListe: toFelderListe(felder),
+        felderListe: toFelderListe(felder), dokumentJahr: jr.jahr ?? undefined,
       });
-      warnings.push(
-        `Voll-Erklärung erkannt (${c.source}) → Vordruckzeile-Extraktor: ${felder.length} Felder. ` +
-        `⚠ VZ/Steuerjahr prüfen — der Druck kann ein anderes Jahr betreffen als die Belege.`,
-      );
+      if (jr.jahr == null)
+        warnings.push(
+          `Voll-Erklärung erkannt (${c.source}) → Vordruckzeile-Extraktor: ${felder.length} Felder. ` +
+          `⚠ Steuerjahr nicht erkannt — als VZ ${opts.vz} angenommen.`,
+        );
       continue;
     }
 
@@ -366,20 +482,44 @@ export async function runLane1(
       belegTyp, person, rawText: c.text, source: { pdfPath: c.source },
     };
     const r = mapBeleg(input);
+    const gate = gateVorjahr(jr, belegTyp);
+    if (gate.raus) {
+      // Fremdjähriger Einzelbeleg (z.B. Vorjahres-Lohnsteuerbescheinigung):
+      // aus der Berechnung halten, als Vorjahres-Kontext führen.
+      vorjahrSections.push({ source: c.source, belegTyp, person, jahr: jr.jahr!, confidence: jr.confidence, felder: r.felder });
+      belege.push({
+        source: c.source, belegTyp, person,
+        status: 'mapped', felder: r.felder.length, method: c.method,
+        felderListe: toFelderListe(r.felder), dokumentJahr: jr.jahr!, vorjahr: true,
+      });
+      warnings.push(
+        `Vorjahres-Beleg erkannt (${c.source}, ${belegTyp}, Jahr ${jr.jahr} ≠ VZ ${opts.vz}) → ` +
+        `NICHT in die Berechnung übernommen; als Vorjahres-Kontext geführt.`,
+      );
+      continue;
+    }
     mappingResults.push(r);
     if (c.method === 'ocr') {
       for (const f of r.felder) ocrFieldKeys.add(`${f.eCode}|${f.person}`);
     }
+    if (gate.rueckfrage)
+      warnings.push(`Belegjahr unklar (${c.source}, Tipp ${jr.jahr} ≠ VZ ${opts.vz}) — als VZ behandelt; bitte prüfen.`);
     belege.push({
       source: c.source, belegTyp, person,
       status: 'mapped', felder: r.felder.length, method: c.method,
-      felderListe: toFelderListe(r.felder),
+      felderListe: toFelderListe(r.felder), dokumentJahr: jr.jahr ?? undefined,
     });
   }
 
   // ── 4. Aggregieren (Text- + OCR-Felder gemeinsam) ─────────────────────
+  //   NUR aktuelle-VZ-Felder: fremdjährige Sections sind bereits in
+  //   vorjahrSections abgezweigt und erreichen aggregate()/xml/calc nie.
   const felderRaw = mappingResults.reduce((s, r) => s + r.felder.length, 0);
   const aggregated = aggregate(mappingResults);
+
+  // ── 4b. Vorjahres-Kontext klassifizieren (prefill vs. frage) gegen das
+  //   aktuelle Aggregat. Diese Felder fließen NIE in Bescheid/XML. ─────────
+  const vorjahr = buildVorjahr(vorjahrSections, aggregated);
 
   // ── 5. Pre-Validate ─────────────────────────────────────────────────────
   const validation = await preValidate(aggregated, { pool: opts.pool, vz: opts.vz });
@@ -407,6 +547,7 @@ export async function runLane1(
     deferred,
     ocrFields: [...ocrFieldKeys],
     warnings,
+    vorjahr,
     stats: {
       pdfs: pdfPaths.length,
       sections: collected.length,
@@ -414,6 +555,7 @@ export async function runLane1(
       deferred: deferred.length,
       felderRaw,
       felderAggregated: aggregated.length,
+      vorjahrFelder: vorjahr?.felder.length ?? 0,
       xmlBytes: xml?.length ?? 0,
     },
   };

@@ -79,7 +79,12 @@ const SOLL: SollItem[] = [
     erwartetWenn: (c) => c.profile.has('Kapitalanleger'), berechenbar: guenstigerBerechnen, frage: 'Soll die Günstigerprüfung für die Kapitalerträge beantragt werden?', herkunft: 'Anlage KAP Z4/5' },
 ];
 
-export interface SollErgebnis { item: SollItem; status: RecoveryKind; hinweis: string; belegTyp?: string; }
+/** Alle von der Soll-Liste kuratierten eCodes. Der generische Vorjahres-Audit
+ *  (audit.ts §G) überspringt diese — sie werden hier mit konkretem Wert geführt,
+ *  damit dieselbe Angabe nicht doppelt abgefragt wird. */
+export const SOLL_ECODES: Set<string> = new Set(SOLL.flatMap((s) => s.eCodes));
+
+export interface SollErgebnis { item: SollItem; status: RecoveryKind; hinweis: string; belegTyp?: string; vorjahrWert?: string; }
 export interface SollReport {
   ergebnisse: SollErgebnis[];
   imBeleg: SollErgebnis[]; berechenbar: SollErgebnis[]; vorjahr: SollErgebnis[]; fehlt: SollErgebnis[];
@@ -118,8 +123,17 @@ export function pruefeSoll(data: CaseData): SollReport {
     // 3. berechenbar — aus den 2024-Daten ableitbar
     const ber = item.berechenbar?.(data);
     if (ber) { ergebnisse.push({ item, status: 'berechenbar', hinweis: ber.antwort }); continue; }
-    // 4. vorjahr — stabile Stammdaten aus der Vorjahres-Erklärung übernehmen
-    if (item.vorjahr) { ergebnisse.push({ item, status: 'vorjahr', hinweis: 'aus der Vorjahres-Erklärung übernehmbar' }); continue; }
+    // 4. vorjahr — stabile Stammdaten aus der Vorjahres-Erklärung übernehmen.
+    //    Liegt ein echter Vorjahres-Beleg vor (data.vorjahr), den konkreten Wert
+    //    zum Übernehmen anbieten statt nur generisch „übernehmbar".
+    if (item.vorjahr) {
+      const vj = (data.vorjahr?.felder ?? []).find((v) => item.eCodes.includes(v.eCode) && v.kind !== 'frage');
+      ergebnisse.push({
+        item, status: 'vorjahr', vorjahrWert: vj?.wert,
+        hinweis: vj ? `aus der Vorjahres-Erklärung (${vj.dokumentJahr}) übernehmbar: ${vj.wert}` : 'aus der Vorjahres-Erklärung übernehmbar',
+      });
+      continue;
+    }
     // 5. fehlt — in keiner Quelle, fragen
     ergebnisse.push({ item, status: 'fehlt', hinweis: 'in keiner Quelle vorhanden' });
   }
