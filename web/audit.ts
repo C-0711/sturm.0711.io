@@ -6,7 +6,7 @@
  * Fragen; er erfindet keine Anforderungen. Korrektheit lebt hier, nicht im LLM.
  */
 
-import { pruefeSoll, SOLL_ECODES } from './soll-katalog.ts';
+import { pruefeSoll } from './soll-katalog.ts';
 
 export type FindingKind = 'missing_beleg' | 'open_question' | 'conflict' | 'confirm_value' | 'optimize';
 export type Severity = 'blocker' | 'empfohlen' | 'optional';
@@ -165,36 +165,16 @@ export function auditCase(data: CaseData): AuditReport {
     }
   }
 
-  // G) Vorjahres-Kontext: fremdjährige Belege (z.B. eine 2023er Erklärung in
-  //    einem VZ-2024-Fall) liefern KEINE Rechenwerte, aber Hinweise. Stabile
-  //    Stammdaten, die im aktuellen Jahr fehlen → übernehmen (confirm_value);
-  //    fehlende Beträge → gezielt nachfragen (open_question, Wert NIE auto-
-  //    übernommen). Kuratiert behandelte (Soll-Liste) und im aktuellen Jahr
-  //    bereits belegte eCodes werden übersprungen — kein Doppel-Befund.
-  const aktuelleECodes = new Set(fields.map((f) => f.eCode));
-  for (const v of data.vorjahr?.felder ?? []) {
-    if (v.kind === 'vorhanden' || v.vorhandenAktuell) continue;
-    if (SOLL_ECODES.has(v.eCode) || aktuelleECodes.has(v.eCode)) continue;
-    const wert = val(v.wert);
-    const label = v.pdfLabel || v.eCode;
-    if (v.kind === 'prefill') {
-      push({
-        kind: 'confirm_value', severity: 'empfohlen',
-        fakt: `Verifizierter Befund (Vorjahres-Kontext): „${label}" (${v.eCode}) = ${wert} stammt aus der Vorjahres-Erklärung (${v.dokumentJahr}) und ist im aktuellen Jahr nicht belegt. Stabile Stammdaten können übernommen werden — bitte bestätigen.`,
-        frage: `„${label}" aus dem Vorjahr (${v.dokumentJahr}) übernehmen? Wert: ${wert}.`,
-        basis: { quelle: 'rule', ref: `vorjahr:${v.eCode}` },
-        erwartet: { typ: 'boolean', eCode: v.eCode, person: v.person },
-      });
-    } else {
-      push({
-        kind: 'open_question', severity: 'optional',
-        fakt: `Verifizierter Befund (Vorjahres-Kontext): Im Vorjahr (${v.dokumentJahr}) war „${label}" (${v.eCode}) = ${wert} (Betrag); im aktuellen Jahr liegt dazu nichts vor. Der Vorjahreswert wird NICHT in die Berechnung übernommen — zu klären, ob ein entsprechender Betrag im Veranlagungszeitraum anfällt.`,
-        frage: `Im Vorjahr (${v.dokumentJahr}): „${label}" = ${wert}. Gibt es einen entsprechenden Betrag auch im aktuellen Jahr?`,
-        basis: { quelle: 'rule', ref: `vorjahr-betrag:${v.eCode}` },
-        erwartet: { typ: 'value', eCode: v.eCode, person: v.person },
-      });
-    }
-  }
+  // G) Vorjahres-Kontext (fremdjährige Belege, z.B. eine 2023er Erklärung in
+  //    einem VZ-2024-Fall): die Felder sind WERTVOLL als Prefill-Quelle für das
+  //    aktuelle Jahr, fließen aber NIE in die Berechnung. Sie werden NICHT pro
+  //    Feld zu Auditor-Befunden gemacht — der Auditor formuliert jeden Befund
+  //    sequenziell über das LLM (~10 s/Stück); 30–50 Vorjahres-Felder würden die
+  //    Prüfung minutenlang blockieren. Stattdessen:
+  //      • die wenigen KURATIERTEN Carry-forwards (Geburtsdatum, IBAN, Adresse …)
+  //        kommen über die Soll-Liste (F) — gedeckelt, mit echtem Vorjahreswert;
+  //      • ALLE Vorjahres-Felder stehen als Daten in data.vorjahr und werden in
+  //        der UI als „Vorlage für <VZ>" gezeigt (kein LLM-Aufruf).
 
   const order: Record<Severity, number> = { blocker: 0, empfohlen: 1, optional: 2 };
   out.sort((a, b) => order[a.severity] - order[b.severity]);

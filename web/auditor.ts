@@ -121,6 +121,15 @@ export async function phraseFinding(f: AuditFinding): Promise<AuditFinding> {
   const top = hits.find((h) => h.text.trim().length > 40);
   const grounding = top ? { text: top.text, source: top.source, score: top.score } : undefined;
 
+  // Schon eine kuratierte, brauchbare Frage vorhanden (z.B. aus der Soll-Liste /
+  // Vorjahres-Carry-forward)? Dann NICHT durchs LLM jagen. Der Auditor formuliert
+  // sequenziell (~10 s/Befund); bei vielen Befunden (Vorjahres-Erklärung mit
+  // Dutzenden Feldern) wirkt die Prüfung sonst eingefroren. Die kuratierte Frage
+  // ist bereits sauberes Deutsch — wir übernehmen sie 1:1 (Erdung bleibt erhalten).
+  if (f.frage && f.frage.trim().length > 5) {
+    return { ...f, frage: f.frage.trim(), begruendung: fallbackFrage(f).begruendung, grounding };
+  }
+
   const userMsg = grounding
     ? `${f.fakt}\n\nRelevante Fachquelle (zur Erdung der Begründung):\n${grounding.text.slice(0, 700)}`
     : f.fakt;

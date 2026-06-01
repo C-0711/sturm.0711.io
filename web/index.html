@@ -869,7 +869,19 @@ function renderDash(d){
   }).join('');
   const elsterCard=`<div class="card" style="margin-bottom:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>ELSTER-Mapping · ${d.fields.length} Felder</div><span class="chev">▼</span></div><div class="card-body collapsed" style="padding:0"><table class="et"><thead><tr><th style="padding-left:20px">E-Code</th><th>Bezeichnung</th><th style="text-align:right">Wert</th><th>Pers</th><th>Anlage</th><th style="padding-right:20px">Quelle</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   const warn=(d.warnings&&d.warnings.length)?`<div class="warn"><b>Hinweise:</b> ${d.warnings.map(w=>esc(w)).join(' &nbsp;·&nbsp; ')}</div>`:'';
-  center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}<div class="g2">${calcCard}<div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
+  // Vorjahres-Erklärung: NICHT in der Berechnung — nur Information & Übernahme-Vorschläge fürs aktuelle Jahr.
+  const vj=d.vorjahr;
+  const vjCard=(vj&&vj.felder&&vj.felder.length)?(()=>{
+    const pre=vj.felder.filter(f=>f.kind==='prefill'), fra=vj.felder.filter(f=>f.kind==='frage'), vor=vj.felder.filter(f=>f.kind==='vorhanden');
+    const vrow=f=>ir(esc((f.pdfLabel||f.eCode).slice(0,46))+(f.person?` · ${esc(f.person)}`:''),esc(String(f.wert)));
+    const sec=(title,arr,note)=>arr.length?`<div class="slabel">${title} · ${arr.length}</div>${note?`<div class="bel-src" style="padding:0 0 6px">${note}</div>`:''}${arr.map(vrow).join('')}`:'';
+    return `<div class="card" style="margin-top:1px"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--gold)"></div>Vorjahr ${esc(vj.jahr||'')} · ${vj.felder.length} Felder · nicht in der Berechnung</div><span class="chev">▼</span></div><div class="card-body collapsed">
+      <div class="bel-src" style="padding:0 0 8px">Aus der Vorjahres-Erklärung — nur zur <b>Information &amp; Übernahme</b> ins aktuelle Jahr. Diese Werte fließen NICHT in den Bescheid.</div>
+      ${sec('Übernahme-Vorschläge — im aktuellen Jahr nicht belegt',pre,'Stabile Stammdaten / wiederkehrende Angaben (z.B. Pendlerpauschale) — prüfen und ggf. übernehmen.')}
+      ${sec('Beträge zur Prüfung',fra,'Vorjahres-Beträge — NICHT übernommen; nur Anhaltspunkt, ob es sie dieses Jahr ebenfalls gibt.')}
+      ${vor.length?`<div class="slabel">Bereits im aktuellen Jahr vorhanden · ${vor.length}</div>`:''}
+    </div></div>`;})():'';
+  center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}<div class="g2">${calcCard}<div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${vjCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
 }
 center.addEventListener('click',e=>{
   const head=e.target.closest('.card-head');
