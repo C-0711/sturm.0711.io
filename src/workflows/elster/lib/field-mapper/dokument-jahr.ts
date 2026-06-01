@@ -109,7 +109,9 @@ export function detectDokumentJahr(text: string, source?: string): DokumentJahr 
   if (source) {
     const base = String(source).split(/[\\/]/).pop() ?? '';
     // Jahr ggf. von Unterstrichen umgeben („…_2023_…") → Nicht-Ziffer-Grenzen statt \b.
-    const m = base.match(/(?<!\d)(20\d{2})(?!\d)/);
+    // ABER: kein ISO-Datum als Steuerjahr werten — „WhatsApp_Bild_2025-03-04…" ist
+    // das Foto-Datum, nicht das Veranlagungsjahr ((?!-\d\d-\d\d) schließt es aus).
+    const m = base.match(/(?<!\d)(20\d{2})(?!\d)(?!-\d{2}-\d{2})/);
     if (m) {
       const y = parseInt(m[1], 10);
       if (plausibel(y)) return { jahr: y, confidence: 'low', evidence: `Dateiname „${base.slice(0, 40)}"` };

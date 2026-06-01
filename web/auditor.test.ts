@@ -30,15 +30,15 @@ console.log('\n1. phraseFindings — deterministisch, netzfrei, kuratierte Frage
 {
   const findings = [
     mk({ kind: 'confirm_value', erwartet: { typ: 'boolean', eCode: 'E1900701' }, fakt: 'Verifizierter Befund (Provenienz): Wert E1900701 = 319 nicht lokalisiert.' }),
-    mk({ kind: 'missing_beleg', erwartet: { typ: 'upload', belegTyp: 'VaSt_LStB' } }),
+    mk({ kind: 'missing_beleg', erwartet: { typ: 'upload', belegTyp: 'VaSt_LStB' }, fakt: 'Verifizierter Befund (Regel): Beleg unlesbar.' }),
     mk({ kind: 'confirm_value', frage: 'Pendlerpauschale übernehmen? Vorjahreswert: 17.', erwartet: { typ: 'boolean' } }),
   ];
   const r = await phraseFindings(findings);
   assert('jede Frage gesetzt (>5 Zeichen)', r.every((f) => !!f.frage && f.frage.length > 5), r.map((f) => f.frage));
-  assert('jede Begründung gesetzt', r.every((f) => !!f.begruendung), r.map((f) => f.begruendung));
+  assert('confirm_value-Frage ist SPEZIFISCH (nennt den Sachverhalt)', /E1900701 = 319 nicht lokalisiert/.test(r[0].frage ?? ''), r[0].frage);
+  assert('… und keine doppelte Begründung', r[0].begruendung === '', JSON.stringify(r[0].begruendung));
+  assert('missing_beleg: Aktion als Frage + Sachverhalt als Begründung', /VaSt_LStB/.test(r[1].frage ?? '') && r[1].begruendung === 'Beleg unlesbar.', { f: r[1].frage, b: r[1].begruendung });
   assert('kuratierte Frage 1:1 erhalten', r[2].frage === 'Pendlerpauschale übernehmen? Vorjahreswert: 17.', r[2].frage);
-  assert('missing_beleg nennt den Belegtyp', /VaSt_LStB/.test(r[1].frage ?? ''), r[1].frage);
-  assert('Begründung = Sachverhalt ohne Präfix', r[0].begruendung === 'Wert E1900701 = 319 nicht lokalisiert.', r[0].begruendung);
 }
 
 console.log('\n2. interpretAnswer — deterministisch (ja/nein/Wert), netzfrei\n');

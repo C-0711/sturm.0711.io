@@ -29,37 +29,42 @@ const DEBUG = !!process.env.AUDIT_DEBUG;
 /** Sachverhalt ohne den „Verifizierter Befund (…):"-Präfix — die belastbare Begründung. */
 const kern = (f: AuditFinding): string => f.fakt.replace(/^Verifizierter Befund \([^)]*\):\s*/, '').trim();
 
-/** Deterministische, klare Frage DIREKT aus dem Befund (kein LLM nötig). */
-function templateFrage(f: AuditFinding): string {
-  // Kuratierte Frage (z.B. Soll-Liste / Vorjahres-Übernahme mit echtem Wert) gewinnt.
-  if (f.frage && f.frage.trim().length > 5) return f.frage.trim();
+/**
+ * Deterministische Frage + Begründung DIREKT aus dem Befund (kein LLM nötig).
+ * Die Frage ist spezifisch (nennt den konkreten Sachverhalt); um Dopplung in der
+ * UI zu vermeiden, bleibt die Begründung dann leer. Kuratierte Fragen (Soll-Liste)
+ * behalten ihren Wortlaut und zeigen den Sachverhalt zusätzlich als Begründung.
+ */
+function templateQA(f: AuditFinding): { frage: string; begruendung: string } {
   const k = kern(f);
+  if (f.frage && f.frage.trim().length > 5) return { frage: f.frage.trim(), begruendung: k };
   switch (f.kind) {
     case 'missing_beleg':
-      return `Bitte reichen Sie einen lesbaren Beleg „${f.erwartet.belegTyp ?? 'Beleg'}" nach.`;
+      // Aktion als Frage, Sachverhalt (das „warum") als Begründung darunter.
+      return { frage: `Bitte reichen Sie einen lesbaren Beleg „${f.erwartet.belegTyp ?? 'Beleg'}" nach.`, begruendung: k };
     case 'confirm_value':
-      return 'Bitte prüfen und bestätigen Sie diese Angabe.';
+      return { frage: `Bitte prüfen und bestätigen Sie: ${k}`, begruendung: '' };
     case 'conflict':
-      return 'Bitte prüfen Sie diesen Punkt und korrigieren Sie ihn bei Bedarf.';
+      return { frage: `Bitte prüfen und ggf. korrigieren: ${k}`, begruendung: '' };
     case 'optimize':
-      return k.length > 4 ? k : 'Möchten Sie diesen Punkt berücksichtigen?';
+      return { frage: k.length > 4 ? k : 'Möchten Sie diesen Punkt berücksichtigen?', begruendung: '' };
     case 'open_question':
     default:
-      return /\?\s*$/.test(k) ? k : 'Bitte klären Sie diesen Punkt.';
+      return { frage: /\?\s*$/.test(k) ? k : `Bitte klären Sie: ${k}`, begruendung: '' };
   }
 }
 
 /** Ein Befund → user-gerichtete Frage. Deterministisch; optionaler LLM-Feinschliff. */
 export async function phraseFinding(f: AuditFinding): Promise<AuditFinding> {
-  const frage = templateFrage(f);
-  const begruendung = kern(f);
+  const { frage, begruendung } = templateQA(f);
   // Default-Pfad: deterministisch, kein Netz. Kuratierte Frage nie „überpolieren".
   if (!LLM_POLISH || (f.frage && f.frage.trim().length > 5)) {
     return { ...f, frage, begruendung };
   }
   // Optionaler Feinschliff (best-effort, Fallback aufs Template).
+  const k = kern(f);
   try {
-    const hits = await ragRetrieve(begruendung.slice(0, 400), 2);
+    const hits = await ragRetrieve(k.slice(0, 400), 2);
     const top = hits.find((h) => h.text.trim().length > 40);
     const grounding = top ? { text: top.text, source: top.source, score: top.score } : undefined;
     const userMsg = grounding
@@ -69,7 +74,7 @@ export async function phraseFinding(f: AuditFinding): Promise<AuditFinding> {
       [{ role: 'system', content: SYS_PHRASE }, { role: 'user', content: userMsg }], PHRASE_SCHEMA, 25_000,
     );
     if (obj && typeof obj.frage === 'string' && obj.frage.trim().length > 5)
-      return { ...f, frage: obj.frage.trim(), begruendung: String(obj.begruendung ?? begruendung).trim() || begruendung, grounding };
+      return { ...f, frage: obj.frage.trim(), begruendung: String(obj.begruendung ?? '').trim() || k, grounding };
     return { ...f, frage, begruendung, grounding };
   } catch {
     return { ...f, frage, begruendung };
@@ -78,7 +83,7 @@ export async function phraseFinding(f: AuditFinding): Promise<AuditFinding> {
 
 /** Alle Befunde formulieren. Default: deterministisch (parallel, sofort). */
 export async function phraseFindings(findings: AuditFinding[]): Promise<AuditFinding[]> {
-  if (!LLM_POLISH) return findings.map((f) => ({ ...f, frage: templateFrage(f), begruendung: kern(f) }));
+  if (!LLM_POLISH) return findings.map((f) => ({ ...f, ...templateQA(f) }));
   return Promise.all(findings.map((f) => phraseFinding(f)));
 }
 

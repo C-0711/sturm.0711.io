@@ -362,7 +362,10 @@ export async function runLane1(
     if (j.jahr == null || j.jahr === opts.vz) return { raus: false, rueckfrage: false };
     if (j.confidence === 'high') return { raus: true, rueckfrage: false };
     if (typ === 'Einkommensteuererklaerung') return { raus: true, rueckfrage: true };
-    return { raus: false, rueckfrage: true };
+    // Einzelbeleg mit nur SCHWACHEM, abweichendem Jahressignal (oft ein Druck-/
+    // Foto-Datum wie „Ausfertigung 2025") → still als VZ behandeln, KEINE Rückfrage
+    // (sonst Rauschen). Echte Fremdjahre erkennt der high-confidence-Pfad oben.
+    return { raus: false, rueckfrage: false };
   };
   let vordruckMap: VordruckMap | null = null; // lazy — nur wenn eine Voll-Erklärung auftaucht
 
@@ -502,8 +505,6 @@ export async function runLane1(
     if (c.method === 'ocr') {
       for (const f of r.felder) ocrFieldKeys.add(`${f.eCode}|${f.person}`);
     }
-    if (gate.rueckfrage)
-      warnings.push(`Belegjahr unklar (${c.source}, Tipp ${jr.jahr} ≠ VZ ${opts.vz}) — als VZ behandelt; bitte prüfen.`);
     belege.push({
       source: c.source, belegTyp, person,
       status: 'mapped', felder: r.felder.length, method: c.method,

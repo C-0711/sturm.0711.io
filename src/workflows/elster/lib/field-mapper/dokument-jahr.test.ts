@@ -95,5 +95,11 @@ console.log('\n11. Dateiname-Fallback greift NICHT, wenn der Text ein klares Jah
   assert('Text-Jahr 2024 gewinnt über Dateiname 2023', r.jahr === 2024 && r.confidence === 'high', r);
 }
 
+console.log('\n12. Dateiname mit Foto-/ISO-Datum (2025-03-04) wird NICHT als Steuerjahr gewertet\n');
+{
+  const r = detectDokumentJahr('nur Zahlen 0,00 hier', '/tmp/x/WhatsApp_Bild_2025-03-04_um_17.28.52_9c7cfee2.jpg');
+  assert('kein Jahr aus Foto-Datum (2025-03-04)', r.jahr === null && r.confidence === 'none', r);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
