@@ -25,6 +25,9 @@ import { auditCase } from './audit.ts';
 import { phraseFindings, interpretAnswer } from './auditor.ts';
 import { buildAuditProtocol, sealProtocol } from './protocol.ts';
 import { loadCandidates, buildIndex, type Candidate } from '../src/server/harmonize.ts';
+import { extractBeleg, type ExtractOutput } from './extract-client.ts';
+import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
+import { rename } from 'node:fs/promises';
 
 const { Pool } = pg;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -157,6 +160,61 @@ function json(res: ServerResponse, code: number, obj: unknown): void {
   res.end(JSON.stringify(obj));
 }
 
+// ── Mastercase: asynchroner Hintergrund-Harmonizer (read-only ggü. Pre-Calc) ──
+// Die Pre-Calc-Antwort (runSteuerfall) geht SOFORT raus. Danach läuft fire-and-
+// forget ein Job, der JEDEN Beleg neu durch den ECHTEN deterministischen
+// Orchestrator-Extraktor (/api/v1/extract) schickt, die Felder harmonisiert
+// (Person-A/B-Split + Bank-/Gläubiger-Filter + Multi-Quellen-Vote) und das
+// Ergebnis als Sidecar-JSON je caseId persistiert. Der Browser pollt den
+// Mastercase via GET /api/mastercase nach. Kein Einfluss auf die Antwort-Latenz.
+const MASTERCASE_DIR = process.env.MASTERCASE_DIR ?? join(tmpdir(), 'sturm-mastercase');
+mkdirSync(MASTERCASE_DIR, { recursive: true });
+interface MastercaseEnvelope {
+  caseId: string; status: 'pending' | 'ready' | 'error';
+  updatedAt: string; mastercase?: Mastercase; error?: string;
+}
+// caseId härten (kein Path-Traversal) — gleiche Härtung wie /api/page + Upload-Name.
+const mcFile = (caseId: string) => join(MASTERCASE_DIR, (caseId.replace(/[^\w.-]/g, '_') || 'case') + '.json');
+// Atomar schreiben: erst .tmp, dann rename — das Polling liest nie eine halbe Datei.
+async function writeEnvelope(env: MastercaseEnvelope): Promise<void> {
+  const f = mcFile(env.caseId); const tmp = f + '.tmp';
+  writeFileSync(tmp, JSON.stringify(env));
+  await rename(tmp, f);
+}
+// Content-addressierter Cache der rohen /extract-Antworten (wie OCR-Cache):
+// Re-Compute eines Falls überspringt den Orchestrator-Roundtrip pro Beleg.
+const extractCacheFile = (p: string) => join(MASTERCASE_DIR, contentHash(p) + '.extract.json');
+async function extractCached(path: string): Promise<ExtractOutput> {
+  const cf = extractCacheFile(path);
+  if (existsSync(cf)) { try { return JSON.parse(readFileSync(cf, 'utf8')) as ExtractOutput; } catch { /* korrupt → neu holen */ } }
+  const out = await extractBeleg(path, { baseUrl });
+  try { writeFileSync(cf, JSON.stringify(out)); } catch { /* best-effort */ }
+  return out;
+}
+
+/** Hintergrund-Job: Belege → /extract → harmonize → Sidecar persistieren.
+ *  out = Pre-Calc-Ergebnis (liefert belege[].source + household); paths = roher
+ *  Handler-Input (Fallback). Jeder Beleg isoliert: ein /extract-Fehler kippt den
+ *  Job nicht, der Mastercase entsteht aus den erfolgreichen Belegen. */
+async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: string }>; household?: Household }, paths: string[]): Promise<void> {
+  await writeEnvelope({ caseId, status: 'pending', updatedAt: new Date().toISOString() });
+  // Beleg-Pfade: aus belege[].source (VaSt-Section-Suffix '#…' abschneiden),
+  // Fallback auf den rohen Handler-Input; uniq + existsSync.
+  const fromBelege = (out.belege ?? []).map((b) => String(b.source).split('#')[0]);
+  const candidates = [...new Set([...fromBelege, ...paths])].filter((p) => p && existsSync(p));
+  const outputs: ExtractOutput[] = [];
+  for (const p of candidates) {
+    try { outputs.push(await extractCached(p)); }
+    catch (e) { console.error('MASTERCASE/extract', basename(p), (e as Error).message); }
+  }
+  if (!outputs.length) {
+    await writeEnvelope({ caseId, status: 'error', updatedAt: new Date().toISOString(), error: 'kein Beleg extrahierbar' });
+    return;
+  }
+  const mastercase = harmonize(outputs, out.household ?? {});
+  await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase });
+}
+
 async function runSteuerfall(paths: string[], vz: number) {
   const t0 = process.hrtime.bigint();
   const orchUp = await pingOrchestrator(baseUrl);
@@ -281,10 +339,26 @@ createServer(async (req, res) => {
       return;
     }
     if (req.method === 'POST' && url === '/api/steuerfall') {
-      const { paths, vz } = JSON.parse((await body(req)).toString('utf8'));
+      const { paths, vz, caseId } = JSON.parse((await body(req)).toString('utf8'));
       if (!Array.isArray(paths) || paths.length === 0) return json(res, 400, { error: 'keine Dateien' });
+      const cid = String(caseId ?? ('c' + Date.now()));
       const out = await runSteuerfall(paths, Number(vz) || 2023);
-      return json(res, 200, out);
+      // Hintergrund-Harmonizer fire-and-forget: KEIN await → die Pre-Calc-Antwort
+      // geht sofort raus. Promise selbst mit .catch absichern, weil ein unhandled
+      // rejection nach gesendeter Antwort den Prozess kippen könnte (der Handler-
+      // try/catch greift dann nicht mehr).
+      void kickMastercase(cid, out, paths).catch((e) => console.error('MASTERCASE', (e as Error).message));
+      return json(res, 200, { ...out, caseId: cid, mastercaseStatus: 'pending' });
+    }
+    if (req.method === 'GET' && url === '/api/mastercase') {
+      // Polling-Endpoint (read-only): harmonisierter Mastercase je caseId.
+      // caseId härten wie /api/page → kein Path-Traversal.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const id = (q.get('id') ?? '').replace(/[^\w.-]/g, '_');
+      const f = id ? mcFile(id) : '';
+      if (!id || !existsSync(f)) return json(res, 200, { status: 'pending' });
+      try { return json(res, 200, JSON.parse(readFileSync(f, 'utf8'))); }
+      catch { return json(res, 200, { status: 'pending' }); }
     }
     // Auditor: gerechneter Fall → verifizierte Befunde (deterministisch) +
     // user-gerichtete Fragen (lokales Gemma, on-prem). „der Auditor" — das

@@ -334,11 +334,33 @@ async function uploadFile(f){
   const r=await fetch('api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
   const j=await r.json(); if(j.error) throw new Error(j.error); return j.path;
 }
-async function compute(paths,vz){
+async function compute(paths,vz,caseId){
   const t0=performance.now();
-  const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz})});
+  const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz,caseId})});
   const d=await r.json(); if(!d.ok) throw new Error(d.error||'Berechnung fehlgeschlagen');
   d._clientMs=Math.round(performance.now()-t0); return d;
+}
+
+/* ── Mastercase asynchron nachladen: die Pre-Calc-UI (Saldo/Bescheid) ist
+   sofort da; der harmonisierte Mastercase (Person-A/B + Bank-Filter + Vote)
+   poppt nach. Intervall-Polling (kein SSE) passt zum Sidecar-on-disk-Modell.
+   OCR ist GPU-serialisiert (~100–145ms/Seite) → Sicherheits-Timeout ~60s. */
+let mastercasePoll=null;
+function pollMastercase(caseId){
+  if(mastercasePoll)clearInterval(mastercasePoll);
+  if(!caseId)return;
+  let tries=0; const max=40;            // 40 × 1.5s ≈ 60s
+  mastercasePoll=setInterval(async()=>{
+    if(++tries>max||!active||active.id!==caseId){clearInterval(mastercasePoll);mastercasePoll=null;return;}
+    try{
+      const r=await fetch('api/mastercase?id='+encodeURIComponent(caseId));
+      const m=await r.json();
+      if(m.status==='ready'||m.status==='error'){
+        clearInterval(mastercasePoll);mastercasePoll=null;
+        if(active&&active.id===caseId){active.mastercase=m.mastercase||null;active.mastercaseError=m.error||null;persistActive();render();}
+      }
+    }catch(e){/* transient → weiter pollen */}
+  },1500);
 }
 
 /* ── thumbnails (echt: Bild=ObjectURL, PDF=pdf.js Seite 1) ── */
@@ -457,10 +479,12 @@ async function createCase(){
     const docs=[]; const paths=[];
     for(const f of files){ const path=await uploadFile(f); paths.push(path);
       docs.push({name:f.name,size:f.size,path,thumb:await makeThumb(f),badge:'',state:'pending',_file:f}); }
-    const data=await compute(paths,vz);
-    active={id:'c'+Date.now(),label:caseLabel(data),vz,paths,docs,data}; viewDoc=null;
+    const caseId='c'+Date.now();          // VOR compute minten → Server-Job + Poll teilen die id
+    const data=await compute(paths,vz,caseId);
+    active={id:caseId,label:caseLabel(data),vz,paths,docs,data}; viewDoc=null;
     applyBadges();
     busy=false; closeNcp(); render(); persistActive();
+    pollMastercase(caseId);
     window.scrollTo({top:0,behavior:'smooth'});
   }catch(e){ busy=false; renderNcp(); alert('Fehler: '+e.message); }
 }
@@ -474,9 +498,10 @@ async function addDocs(fileList){
   renderDocPanel();
   try{
     for(const d of active.docs){ if(d.state==='pending'&&d._file&&!d.path){ d.path=await uploadFile(d._file); active.paths.push(d.path); } }
-    active.data=await compute(active.paths,active.vz);
+    active.data=await compute(active.paths,active.vz,active.id);
     active.label=caseLabel(active.data);
     applyBadges(); busy=false; render(); persistActive();
+    pollMastercase(active.id);
   }catch(e){ busy=false; for(const d of active.docs){if(d.state==='pending'){d.state='err';d.badge='Fehler';}} renderDocPanel(); alert('Fehler: '+e.message); }
 }
 
@@ -487,10 +512,11 @@ async function recompute(){
   if(!active.paths||!active.paths.length){ alert('Dieser Fall hat keine gespeicherten Beleg-Pfade — bitte die Belege neu hochladen.'); return; }
   busy=true; updateChips();
   try{
-    const data=await compute(active.paths,active.vz);
+    const data=await compute(active.paths,active.vz,active.id);
     if(!(data.fields&&data.fields.length)) throw new Error('Belege nicht mehr auf dem Server verfügbar (Cache geleert) — bitte neu hochladen.');
     active.data=data; active.label=caseLabel(data); applyBadges();
     busy=false; render(); persistActive();
+    pollMastercase(active.id);
   }catch(e){ busy=false; updateChips(); alert('Neu berechnen: '+e.message); }
 }
 $('#recompute-btn').addEventListener('click',recompute);
