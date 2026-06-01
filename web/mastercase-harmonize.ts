@@ -26,7 +26,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { ExtractOutput, ExtractedField, WindowedField, PageRecord, BoxPx } from './extract-client.ts';
-import { extractAnchoredIncome, type IncomeFact } from './extract-anchors.ts';
+import { extractAnchoredIncome, extractLstbIncome, type IncomeFact } from './extract-anchors.ts';
 
 // ── Roster (aus dem übergebenen Household) ──────────────────────────────
 export interface RosterPerson { idnr?: string; vorname?: string; nachname?: string; }
@@ -218,6 +218,10 @@ function filterRoles(facts: RawFact[], roster: RosterIndex): FilterResult {
   const drop = (f: RawFact, grund: string) => dropped.push({ e_code: f.e_code, belegfeld_id: f.belegfeld_id, value: f.value, document: f.document, page: f.page, grund });
 
   for (const f of facts) {
+    // (0) Einkommens-eCodes RAUS aus dem Stammdaten-Pfad — KAP/N/VOR kommen verlässlich
+    //     über die Anker (KAP) bzw. LStB-Label (N/VOR); die Rust-extracted[]-Einkommenswerte
+    //     sind dort verrauscht (FSA-Beträge → bruttoarbeitslohn etc.).
+    if (/^E0[23]|^E19|^E20/.test(f.e_code)) { drop(f, 'einkommen-via-anker'); continue; }
     // (a) name_steuerpflichtiger mit Bank-/Gläubiger-Pattern → kein Person-Name.
     if (f.e_code === NAME_ECODE) {
       if (isBankName(f.value)) { drop(f, 'bank-name-pattern'); continue; }
@@ -337,7 +341,7 @@ export function harmonize(outputs: ExtractOutput[], household: Household): Maste
   const { kept, dropped } = filterRoles(raw, roster);
   const persons = assignPersons(kept, roster);
   const stammdaten = voteFacts(kept, persons);                                      // Stammdaten: Vote (stimmen überein)
-  const einkommen = sumIncome(outputs.flatMap((o) => extractAnchoredIncome(o, household)));  // Einkommen: SUMME (mehrere Banken)
+  const einkommen = sumIncome(outputs.flatMap((o) => [...extractAnchoredIncome(o, household), ...extractLstbIncome(o, household)]));  // KAP (Bank) + N/VOR (VaSt-LStB), summiert
   const fakten = [...stammdaten, ...einkommen];
   const seen = new Set<'A' | 'B'>(fakten.map((f) => f.person));
   const entitaeten = buildEntities(roster, seen, household);

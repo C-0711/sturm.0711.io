@@ -41,7 +41,24 @@ const CURRENCY_RE = /^\d{1,3}(?:\.\d{3})*(?:,\d{2})$|^\d+,\d{2}$/;
 
 const cx = (r: PageRecord) => r.bbox?.[0] ?? 0;
 const cy = (r: PageRecord) => r.bbox?.[1] ?? 0;
-const isMoney = (s: string) => CURRENCY_RE.test((s || '').trim());
+const clean = (s: string) => (s || '').replace(/€/g, '').replace(/\s/g, '').trim();  // "69.291,80 €" → "69.291,80"
+const isMoney = (s: string) => CURRENCY_RE.test(clean(s));
+
+/** LStB-Label → (eCode, Anlage, Label). OCR-tolerant. eCodes = LStB-SPEC
+ *  (extractor-lstb-zeilen): Nr.3→E0200201, 4→E0200301 … 22a→E2000801, 25→E2001203. */
+const LSTB_LABEL: Array<{ re: RegExp; eCode: string; anlage: string; label: string }> = [
+  { re: /bruttoarbeitslohn/i, eCode: 'E0200201', anlage: 'N', label: 'Bruttoarbeitslohn (Nr. 3 LStB)' },
+  { re: /einbehaltene lohnsteuer/i, eCode: 'E0200301', anlage: 'N', label: 'Lohnsteuer (Nr. 4 LStB)' },
+  { re: /einbehaltener solidarit/i, eCode: 'E0200401', anlage: 'N', label: 'Solidaritätszuschlag (Nr. 5 LStB)' },
+  { re: /kirchensteuer des arbeitnehmers/i, eCode: 'E0200501', anlage: 'N', label: 'KiSt Arbeitnehmer (Nr. 6 LStB)' },
+  { re: /kirchensteuer des partners/i, eCode: 'E0200601', anlage: 'N', label: 'KiSt Partner (Nr. 7 LStB)' },
+  { re: /entsch[äa]digungen/i, eCode: 'E0201806', anlage: 'N', label: 'Entschädigungen mehrere Jahre (Nr. 19 LStB)' },
+  { re: /arbeitgeberanteil.*(rentenvers|zukunftssich)/i, eCode: 'E2000801', anlage: 'VOR', label: 'AG-Anteil RV (Nr. 22a LStB)' },
+  { re: /arbeitnehmeranteil zur gesetzlichen rentenvers/i, eCode: 'E2000601', anlage: 'VOR', label: 'AN-Anteil RV (Nr. 23a LStB)' },
+  { re: /arbeitnehmerbeitr[äa]ge zur gesetzlichen krankenvers/i, eCode: 'E2001203', anlage: 'VOR', label: 'AN KV (Nr. 25 LStB)' },
+  { re: /arbeitnehmerbeitr[äa]ge zur sozialen pflegevers/i, eCode: 'E2001505', anlage: 'VOR', label: 'AN PV (Nr. 26 LStB)' },
+  { re: /arbeitnehmerbeitr[äa]ge zur gesetzlichen arbeitslosenvers/i, eCode: 'E2004403', anlage: 'VOR', label: 'AN ALV (Nr. 27 LStB)' },
+];
 
 /** page_records je Seite aus lane_two_pending bündeln + dedupen (wiederholen sich). */
 function pageRecordsOf(out: ExtractOutput): Map<number, PageRecord[]> {
@@ -95,7 +112,7 @@ export function extractAnchoredIncome(out: ExtractOutput, hh: Household): Income
       const cand = recs.filter((r) => Math.abs(cy(r) - y) <= 24 && cx(r) > 400 && isMoney(r.text));
       if (!cand.length) return null;
       cand.sort((a, b) => cx(b) - cx(a));
-      return cand[0].text.trim();
+      return clean(cand[0].text);
     };
     for (const r of recs) {
       let def: string | null = null;
@@ -115,6 +132,37 @@ export function extractAnchoredIncome(out: ExtractOutput, hh: Household): Income
   return facts;
 }
 
+/** N/VOR-Lohn aus der VaSt-LStB: Label → eCode (LSTB_LABEL), Wert auf der Label-
+ *  Zeile (rechte Spalte), Person = IdNr der Seite (Roster). */
+export function extractLstbIncome(out: ExtractOutput, hh: Household): IncomeFact[] {
+  const byPage = pageRecordsOf(out);
+  const idA = (hh.personA?.idnr ?? '').replace(/\D/g, '');
+  const idB = (hh.personB?.idnr ?? '').replace(/\D/g, '');
+  const facts: IncomeFact[] = [];
+  for (const [page, recs] of byPage) {
+    if (!recs.some((r) => /lohnsteuerbescheinigung|bruttoarbeitslohn/i.test(r.text))) continue;  // LStB-Kontext
+    let person: 'A' | 'B' | null = null;                                                          // Person via Seiten-IdNr
+    for (const r of recs) { const d = (r.text || '').replace(/\D/g, ''); if (idA && d.includes(idA)) { person = 'A'; break; } if (idB && d.includes(idB)) { person = 'B'; break; } }
+    if (!person) continue;
+    const valueOnLine = (y: number): string | null => {
+      const cand = recs.filter((r) => Math.abs(cy(r) - y) <= 12 && cx(r) > 500 && isMoney(r.text));
+      if (!cand.length) return null;
+      cand.sort((a, b) => cx(b) - cx(a));
+      return clean(cand[0].text);
+    };
+    const seen = new Set<string>();
+    for (const r of recs) for (const spec of LSTB_LABEL) {
+      if (!spec.re.test(r.text) || seen.has(spec.eCode)) continue;
+      const v = valueOnLine(cy(r));
+      if (v == null) continue;
+      seen.add(spec.eCode);
+      facts.push({ person, eCode: spec.eCode, anlage: spec.anlage, zeile: '', label: spec.label, value: v, document: out.document_sha256, page });
+      break;
+    }
+  }
+  return facts;
+}
+
 // ── Probe ───────────────────────────────────────────────────────────────
 const STRICKER: Household = {
   personA: { idnr: '85236749007', vorname: 'Rainer', nachname: 'Stricker' },
@@ -122,14 +170,14 @@ const STRICKER: Household = {
 };
 function main(): void {
   const dir = process.env.MC_SAMPLES ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'var', 'extract-samples');
-  const files = process.argv.slice(2).length ? process.argv.slice(2) : ['ex_b4', 'ex_b5', 'ex_b6', 'ex_b7', 'ex_b8'].map((n) => join(dir, `${n}.json`));
+  const files = process.argv.slice(2).length ? process.argv.slice(2) : ['ex_b4', 'ex_b5', 'ex_b6', 'ex_b7', 'ex_b8', 'ex_vast'].map((n) => join(dir, `${n}.json`));
   for (const f of files) {
     if (!existsSync(f)) { console.error(`fehlt: ${f}`); continue; }
     const out = JSON.parse(readFileSync(f, 'utf8')) as ExtractOutput;
-    const inc = extractAnchoredIncome(out, STRICKER);
+    const inc = [...extractAnchoredIncome(out, STRICKER), ...extractLstbIncome(out, STRICKER)];
     console.log(`\n── ${f.split('/').pop()} ──`);
-    for (const x of inc) console.log(`  Person ${x.person}  ${x.eCode}  KAP Z${x.zeile.padEnd(2)} ${x.label.slice(0, 34).padEnd(35)} = ${x.value}`);
-    if (!inc.length) console.log('  (keine KAP-Anker gefunden)');
+    for (const x of inc) console.log(`  Person ${x.person}  ${x.eCode}  ${x.anlage.padEnd(4)} ${x.label.slice(0, 36).padEnd(37)} = ${x.value}`);
+    if (!inc.length) console.log('  (keine Einkommens-Anker)');
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
