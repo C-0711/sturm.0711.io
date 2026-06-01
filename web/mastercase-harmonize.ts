@@ -26,6 +26,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { ExtractOutput, ExtractedField, WindowedField, PageRecord, BoxPx } from './extract-client.ts';
+import { extractAnchoredIncome, type IncomeFact } from './extract-anchors.ts';
 
 // ── Roster (aus dem übergebenen Household) ──────────────────────────────
 export interface RosterPerson { idnr?: string; vorname?: string; nachname?: string; }
@@ -312,12 +313,32 @@ function buildEntities(roster: RosterIndex, seen: Set<'A' | 'B'>, hh: Household)
 }
 
 // ── Schritt 5: orchestrieren ────────────────────────────────────────────
+// ── Einkommens-Pfad: KAP-Werte aus den page_records über Anker (extract-anchors),
+//    pro (Person, e_code) SUMMIERT über alle Belege (mehrere Banken → EINE Anlage KAP). ──
+function sumIncome(income: IncomeFact[]): MasterFact[] {
+  const parse = (s: string) => { const n = parseFloat(s.replace(/\./g, '').replace(',', '.')); return Number.isNaN(n) ? 0 : n; };
+  const fmt = (n: number) => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const g = new Map<string, IncomeFact[]>();
+  for (const f of income) { const k = `${f.person}|${f.eCode}`; (g.get(k) ?? g.set(k, []).get(k)!).push(f); }
+  const out: MasterFact[] = [];
+  for (const [k, fs] of g) {
+    const [person, e_code] = k.split('|') as ['A' | 'B', string];
+    const summe = fs.reduce((a, f) => a + parse(f.value), 0);
+    const docs = new Set(fs.map((f) => f.document));
+    out.push({ person, e_code, belegfeld_id: fs[0].label, value: fmt(summe), confidence: docs.size,
+      sources: fs.map((f) => ({ document: f.document, page: f.page, lane: 'rust-anchor', value: f.value, bbox: null })) });
+  }
+  return out;
+}
+
 export function harmonize(outputs: ExtractOutput[], household: Household): Mastercase {
   const roster = buildRoster(household);
   const raw = outputs.flatMap(flatten);
   const { kept, dropped } = filterRoles(raw, roster);
   const persons = assignPersons(kept, roster);
-  const fakten = voteFacts(kept, persons);
+  const stammdaten = voteFacts(kept, persons);                                      // Stammdaten: Vote (stimmen überein)
+  const einkommen = sumIncome(outputs.flatMap((o) => extractAnchoredIncome(o, household)));  // Einkommen: SUMME (mehrere Banken)
+  const fakten = [...stammdaten, ...einkommen];
   const seen = new Set<'A' | 'B'>(fakten.map((f) => f.person));
   const entitaeten = buildEntities(roster, seen, household);
   return { entitaeten, fakten, verworfen: dropped };

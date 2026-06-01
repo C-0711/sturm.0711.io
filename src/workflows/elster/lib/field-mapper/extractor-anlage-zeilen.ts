@@ -42,7 +42,7 @@ interface AnlageZeileSpec {
  * Steuerbescheinigung Muster I). Pro Zeile der PRIMÄRE E-Code (erste
  * Instanz; Person-B / Zweitkonto-Varianten via Label/Aggregation).
  */
-const ANLAGE_ZEILE_TO_FIELD: Record<string, AnlageZeileSpec> = {
+export const ANLAGE_ZEILE_TO_FIELD: Record<string, AnlageZeileSpec> = {
   // Kapitalerträge mit inl. Steuerabzug (Betr_lt_StBesch)
   'KAP:7': { eCode: 'E1900701', anlage: 'KAP', kontextSubpath: 'KapErt_inl_StAbz/Betr_lt_StBesch', valueType: 'int_euro', label: 'Höhe der Kapitalerträge (KAP Z.7)' },
   'KAP:8': { eCode: 'E1900901', anlage: 'KAP', kontextSubpath: 'KapErt_inl_StAbz/Betr_lt_StBesch', valueType: 'int_euro', label: 'Gewinne Aktienveräußerung (KAP Z.8)' },
