@@ -310,7 +310,10 @@ createServer(async (req, res) => {
   try {
     const url = (req.url ?? '/').split('?')[0];
     if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      // no-cache: Browser muss die HTML-Shell revalidieren → Deploys schlagen
+      // sofort durch (sonst hält der Browser eine alte index.html und neue
+      // Features wie der Mastercase-Poller laden nie).
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
       res.end(readFileSync(join(HERE, 'index.html'), 'utf8'));
       return;
     }
