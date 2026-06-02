@@ -506,8 +506,22 @@ createServer(async (req, res) => {
       const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
       const h = (q.get('h') ?? '').replace(/[^a-f0-9]/g, '').slice(0, 64);
       if (!h) return json(res, 400, { error: 'trace: ?h=<dochash> fehlt' });
+      // Bild-Belege (JPG/PNG/…) werden vor /extract zu einem asimg.pdf gerastert;
+      // tornado schlüsselt den Trace nach document_sha256 = sha DIESER Bytes, NICHT
+      // nach der Original-Datei-sha, die das Frontend als docs[].hash führt. Über den
+      // Extract-Cache (derselbe Aufruf, der auch den Trace erzeugt) Original-Hash →
+      // document_sha256 auflösen. PDFs: sha identisch → no-op; kein Cache → Original.
+      let traceHash = h;
       try {
-        const r = await fetch(`${baseUrl}/api/v1/trace/${h}`);
+        const ecf = join(MASTERCASE_DIR, h + '.extract.json');
+        if (existsSync(ecf)) {
+          const eo = JSON.parse(readFileSync(ecf, 'utf8')) as { document_sha256?: string };
+          const ds = (eo.document_sha256 ?? '').replace(/[^a-f0-9]/gi, '').toLowerCase();
+          if (ds.length === 64) traceHash = ds;
+        }
+      } catch { /* Cache fehlt/korrupt → Original-Hash versuchen */ }
+      try {
+        const r = await fetch(`${baseUrl}/api/v1/trace/${traceHash}`);
         const text = await r.text();
         res.writeHead(r.status, {
           'Content-Type': 'application/json; charset=utf-8',
