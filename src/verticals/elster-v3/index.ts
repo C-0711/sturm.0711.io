@@ -1070,7 +1070,10 @@ export function buildElsterV52RagWorkflow() {
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
       ocr: {
-        uses: 'mistral-ocr',
+        // Gemma-4 vision OCR (vLLM gemma4-mm). Mistral Small fires in parallel
+        // inside klassifizierung as the round-1 indication signal.
+        uses: 'gemma-vision-ocr',
+        config: { dpi: 200, maxTokens: 4096 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {
@@ -1287,7 +1290,10 @@ export function buildElsterV6VisionWorkflow() {
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
       ocr: {
-        uses: 'mistral-ocr',
+        // Gemma-4 vision OCR (vLLM gemma4-mm). Mistral Small fires in parallel
+        // inside klassifizierung as the round-1 indication signal.
+        uses: 'gemma-vision-ocr',
+        config: { dpi: 200, maxTokens: 4096 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
       klassifizierung: {
