@@ -275,7 +275,7 @@ export function createSchemaGenerateRouter(uploadsDir: string): Router {
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     const t0 = Date.now();
     let resolvedUrl: string | null = null;
