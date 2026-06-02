@@ -56,7 +56,7 @@ export function createOcrPreviewRouter(uploadsDir: string): Router {
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     send('ocr_start', { config, filename: req.file.originalname, size: req.file.size });
 
@@ -115,7 +115,7 @@ export function createOcrPreviewRouter(uploadsDir: string): Router {
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     const t0 = Date.now();
     send('batch_start', { variants: variants.map((v) => ({ id: v.id })), filename: req.file.originalname, size: req.file.size });

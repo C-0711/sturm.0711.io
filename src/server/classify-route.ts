@@ -60,7 +60,7 @@ export function createClassifyRouter(uploadsDir: string): Router {
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     try {
       const apiKey = process.env.MISTRAL_API_KEY;
