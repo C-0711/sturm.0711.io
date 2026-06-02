@@ -359,6 +359,27 @@ createServer(async (req, res) => {
       res.end(readFileSync(png));
       return;
     }
+    if (req.method === 'GET' && url === '/api/trace') {
+      // Prozess-Trace eines Runs für den Flow-Tab: reicht tornados
+      // GET /api/v1/trace/:dochash durch (Phasen 0–4 + Lane-2 vLLM-
+      // Prompts/Antworten + Timing). ?h=<dochash> (hex). Token-frei,
+      // gleicher Scope wie /api/page.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const h = (q.get('h') ?? '').replace(/[^a-f0-9]/g, '').slice(0, 64);
+      if (!h) return json(res, 400, { error: 'trace: ?h=<dochash> fehlt' });
+      try {
+        const r = await fetch(`${baseUrl}/api/v1/trace/${h}`);
+        const text = await r.text();
+        res.writeHead(r.status, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-cache',
+        });
+        res.end(text);
+      } catch (e) {
+        return json(res, 502, { error: 'tornado trace unreachable: ' + (e as Error).message });
+      }
+      return;
+    }
     if (req.method === 'POST' && url === '/api/steuerfall') {
       const { paths, vz, caseId } = JSON.parse((await body(req)).toString('utf8'));
       if (!Array.isArray(paths) || paths.length === 0) return json(res, 400, { error: 'keine Dateien' });

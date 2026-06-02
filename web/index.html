@@ -290,6 +290,22 @@
   .foot{margin-top:32px;padding-top:18px;border-top:1px solid var(--line);font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;text-align:center}
   .err{color:var(--red);padding:14px 16px;border:1px solid color-mix(in srgb,var(--red) 40%,transparent);border-radius:10px;background:color-mix(in srgb,var(--red) 8%,transparent);margin:14px 0;font-size:12px}
   ::-webkit-scrollbar{width:6px;height:6px} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+  /* ── Center-Tabs (Fall · Chat · Flow · Dokument) ── */
+  .centerwrap{display:flex;flex-direction:column;min-width:0}
+  .ctabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:8px 16px 0;position:sticky;top:56px;background:var(--bg);z-index:5}
+  .ctab{appearance:none;background:transparent;border:1px solid transparent;border-bottom:0;border-radius:8px 8px 0 0;padding:8px 16px;font-size:13px;font-family:var(--font-mono);color:var(--muted);cursor:pointer;margin-bottom:-1px}
+  .ctab:hover{color:var(--txt)} .ctab.on{color:var(--txt);border-color:var(--line);background:var(--bg2);border-bottom-color:var(--bg2)}
+  /* ── Flow-Tab (tornado Prozess-Trace) ── */
+  .flow-wrap{padding:16px}
+  .flow-bar{display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .flow-bar select{background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-family:var(--font-mono)}
+  .flow-meta{color:var(--dim);font-size:11px;font-family:var(--font-mono)}
+  .flow-sec{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin:14px 0 6px}
+  .flow-stage{border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg2)}
+  .flow-stage>summary{cursor:pointer;padding:8px 12px;font-family:var(--font-mono);font-size:12px;color:var(--txt);list-style:none}
+  .flow-stage-body{padding:0 12px 12px}
+  .flow-kv{margin-top:8px} .flow-kv>b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:3px}
+  .flow-stage pre{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;max-height:300px;font-size:11px;white-space:pre-wrap;word-break:break-word;margin:0;font-family:var(--font-mono)}
 </style>
 </head>
 <body>
@@ -311,7 +327,10 @@
       <div class="caselist" id="caselist"></div>
     </aside>
 
-    <main id="center"></main>
+    <div class="centerwrap">
+      <nav class="ctabs" id="ctabs"></nav>
+      <main id="center"></main>
+    </div>
 
     <aside class="docpanel" id="docpanel"></aside>
   </div>
@@ -320,7 +339,7 @@
 <script>
 if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=(s,r=document)=>r.querySelector(s);
-const app=$('#app'), center=$('#center'), docpanel=$('#docpanel'), caselistEl=$('#caselist'), ncpHost=$('#ncp-host');
+const app=$('#app'), center=$('#center'), docpanel=$('#docpanel'), caselistEl=$('#caselist'), ncpHost=$('#ncp-host'), ctabsEl=$('#ctabs');
 
 const eur=(n)=>Number(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -372,18 +391,44 @@ async function makeThumb(file){
   if((file.type||'').startsWith('image/')||/\.(png|jpe?g|tiff?|webp|bmp|gif)$/.test(name))
     return {kind:'img',url:URL.createObjectURL(file)};
   if(name.endsWith('.pdf')){
+    // Große (i.d.R. gescannte) PDFs NICHT clientseitig rastern: pdf.js dekodiert
+    // das hochauflösende Quellbild und blockiert den Main-Thread teils zehner-
+    // sekundenlang (der Canvas-Deckel unten begrenzt nur das Ausgabe-Bild, nicht
+    // das Quell-Decode). Über der Schwelle → generisches PDF-Icon; kleine digitale
+    // PDFs (VaSt, LStB …) rastern in <100 ms und behalten ihre Vorschau.
+    if((file.size||0) > 1200000) return {kind:'pdf'};
     try{
       if(window.pdfjsLib){
         const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
-        const page=await pdf.getPage(1); const vp=page.getViewport({scale:.5});
+        const page=await pdf.getPage(1);
+        // Thumbnail-Kante auf ~360px deckeln — sonst rastert pdf.js bei hoch-
+        // auflösenden Scans ein riesiges Canvas (mehrere Sekunden + großes
+        // toDataURL). Die Vorschau wird ohnehin winzig dargestellt.
+        const b=page.getViewport({scale:1});
+        const scale=Math.min(.5, 360/Math.max(b.width,b.height));
+        const vp=page.getViewport({scale});
         const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
         await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
-        return {kind:'img',url:c.toDataURL('image/png')};
+        return {kind:'img',url:c.toDataURL('image/jpeg',0.7)};
       }
     }catch(_){}
     return {kind:'pdf'};
   }
   return {kind:'pdf'};
+}
+
+/* Vorschaubilder NACH dem Bescheid nachladen — außerhalb des kritischen Pfads.
+   pdf.js-Rasterung großer Scans ist teuer und darf „Beleg rein → Bescheid raus"
+   nicht blockieren. Sequentiell (ein Render-Job zur Zeit, sonst ruckelt der
+   Main-Thread), nach jedem Treffer nur das Beleg-Panel neu zeichnen, am Ende
+   persistieren, damit ein Reload die Thumbs behält. */
+async function hydrateThumbs(caseObj){
+  if(!caseObj||!Array.isArray(caseObj.docs))return;
+  for(const d of caseObj.docs){
+    if(d.thumb||!d._file)continue;
+    try{ d.thumb=await makeThumb(d._file); }catch(_){ d.thumb={kind:'pdf'}; }
+    if(active===caseObj){ renderDocPanel(); persistActive(); }  // je Treffer sofort zeichnen + sichern
+  }
 }
 
 /* ── state ── */
@@ -480,13 +525,17 @@ async function createCase(){
   try{
     const vz=ncp.vz, files=ncp.files.slice();
     const docs=[]; const paths=[];
+    // Upload + Berechnung zuerst — Thumbnail NICHT im kritischen Pfad (lädt
+    // asynchron via hydrateThumbs nach). So steht der Bescheid in ~100 ms statt
+    // erst nach dem Rastern aller Vorschaubilder.
     for(const f of files){ const path=await uploadFile(f); paths.push(path);
-      docs.push({name:f.name,size:f.size,path,thumb:await makeThumb(f),badge:'',state:'pending',_file:f}); }
+      docs.push({name:f.name,size:f.size,path,thumb:null,badge:'',state:'pending',_file:f}); }
     const caseId='c'+Date.now();          // VOR compute minten → Server-Job + Poll teilen die id
     const data=await compute(paths,vz,caseId);
     active={id:caseId,label:caseLabel(data),vz,paths,docs,data}; viewDoc=null;
     applyBadges();
     busy=false; closeNcp(); render(); persistActive();
+    hydrateThumbs(active);
     pollMastercase(caseId);
     window.scrollTo({top:0,behavior:'smooth'});
   }catch(e){ busy=false; renderNcp(); alert('Fehler: '+e.message); }
@@ -497,13 +546,14 @@ async function addDocs(fileList){
   if(!active||busy)return;
   const files=[...fileList]; if(!files.length)return;
   busy=true;
-  for(const f of files){ active.docs.push({name:f.name,size:f.size,path:null,thumb:await makeThumb(f),badge:'liest…',state:'pending',_file:f}); }
+  for(const f of files){ active.docs.push({name:f.name,size:f.size,path:null,thumb:null,badge:'liest…',state:'pending',_file:f}); }
   renderDocPanel();
   try{
     for(const d of active.docs){ if(d.state==='pending'&&d._file&&!d.path){ d.path=await uploadFile(d._file); active.paths.push(d.path); } }
     active.data=await compute(active.paths,active.vz,active.id);
     active.label=caseLabel(active.data);
     applyBadges(); busy=false; render(); persistActive();
+    hydrateThumbs(active);
     pollMastercase(active.id);
   }catch(e){ busy=false; for(const d of active.docs){if(d.state==='pending'){d.state='err';d.badge='Fehler';}} renderDocPanel(); alert('Fehler: '+e.message); }
 }
@@ -639,10 +689,75 @@ function applyBadges(){
 }
 
 /* ── render ── */
-function render(){ renderCases(); updateChips();
+/* ── Center-Tabs: Fall · Chat · Flow · Dokument ──────────────────────────
+   Fall + Dokument behalten das bestehende Verhalten (Ergebnis / Audit /
+   Doc-Detail); Flow zeigt den tornado-Prozess-Trace, Chat den Kurator. */
+let activeTab='fall';
+const TABS=[['fall','Fall'],['chat','Chat'],['flow','Flow'],['dok','Dokument']];
+function renderTabs(){
+  if(!ctabsEl)return;
+  ctabsEl.innerHTML=TABS.map(([k,l])=>`<button class="ctab${k===activeTab?' on':''}" data-tab="${k}">${l}</button>`).join('');
+}
+ctabsEl&&ctabsEl.addEventListener('click',e=>{
+  const b=e.target.closest('.ctab'); if(!b)return;
+  if(activeTab!==b.dataset.tab){ activeTab=b.dataset.tab; render(); }
+});
+
+function render(){ renderCases(); updateChips(); renderTabs();
+  if(activeTab==='flow'){ renderFlow(); renderDocPanel(); return; }
+  if(activeTab==='chat'){ renderChat(); renderDocPanel(); return; }
+  // 'fall' + 'dok' → bestehendes Verhalten
   if(active&&auditMode) renderAudit();
   else if(active&&viewDoc!=null&&active.docs[viewDoc]) renderDocDetail();
   else { renderCenter(); renderDocPanel(); }
+}
+
+/* ── Flow: tornado-Prozess-Trace (api/trace → /api/v1/trace/:dochash) ── */
+let flowDocHash=null;
+function renderFlow(){
+  if(!active){ center.innerHTML='<div class="audit-empty">Kein Fall gewählt.</div>'; return; }
+  const data=active.data;
+  const docs=(data&&Array.isArray(data.docs))?data.docs.filter(d=>d&&d.hash):[];
+  if(!docs.length){ center.innerHTML='<div class="audit-empty">Noch kein Lauf mit Trace — berechne den Fall (↻ Neu berechnen).</div>'; return; }
+  if(!flowDocHash||!docs.some(d=>d.hash===flowDocHash)) flowDocHash=docs[0].hash;
+  const sel=docs.map(d=>`<option value="${esc(d.hash)}"${d.hash===flowDocHash?' selected':''}>${esc(d.name||d.hash.slice(0,8))}</option>`).join('');
+  center.innerHTML=`<div class="flow-wrap">
+    <div class="flow-bar"><label>Dokument <select id="flow-doc">${sel}</select></label><span id="flow-meta" class="flow-meta"></span></div>
+    <div id="flow-body"><div class="audit-empty">lädt…</div></div>
+  </div>`;
+  const dsel=$('#flow-doc'); dsel&&dsel.addEventListener('change',e=>{ flowDocHash=e.target.value; loadFlow(); });
+  loadFlow();
+}
+async function loadFlow(){
+  const body=$('#flow-body'), meta=$('#flow-meta'); if(!body)return;
+  try{
+    const r=await fetch('api/trace?h='+encodeURIComponent(flowDocHash));
+    if(!r.ok){ body.innerHTML='<div class="err">Trace HTTP '+r.status+' — '+esc((await r.text()).slice(0,200))+'</div>'; return; }
+    const t=await r.json();
+    const stages=t.stages||{}, keys=Object.keys(stages).sort();
+    const lane2=keys.filter(k=>k.indexOf('lane2-')===0), phases=keys.filter(k=>k.indexOf('lane2-')!==0);
+    if(meta) meta.textContent=keys.length+' Stages · '+lane2.length+' vLLM-Calls';
+    const block=(k)=>{
+      const v=stages[k]; let inner;
+      if(k.indexOf('lane2-')===0){
+        const resp=typeof v.response==='string'?v.response:JSON.stringify(v.response,null,2);
+        inner=`<div class="flow-meta">${v.ms!=null?v.ms+' ms · ':''}${v.ok?'ok':'fehler'}${v.request_id?' · '+esc(String(v.request_id).slice(0,12)):''}</div>
+          <div class="flow-kv"><b>System-Prompt</b><pre>${esc(v.system_prompt||'')}</pre></div>
+          <div class="flow-kv"><b>User-Prompt</b><pre>${esc(v.user_prompt||'')}</pre></div>
+          <div class="flow-kv"><b>Response (roh)</b><pre>${esc(resp||'')}</pre></div>`;
+      } else {
+        const s=JSON.stringify(v,null,2); inner=`<pre>${esc(s.length>3000?s.slice(0,3000)+'\n…':s)}</pre>`;
+      }
+      return `<details class="flow-stage"${k.indexOf('lane2-')===0?'':' open'}><summary>${esc(k)}</summary><div class="flow-stage-body">${inner}</div></details>`;
+    };
+    body.innerHTML='<div class="flow-sec">Phasen 0–4</div>'+(phases.length?phases.map(block).join(''):'<div class="audit-empty">keine Phasen-Dumps</div>')+
+      (lane2.length?('<div class="flow-sec">vLLM Lane-2 — Prompts &amp; Antworten ('+lane2.length+')</div>'+lane2.map(block).join('')):'');
+  }catch(e){ body.innerHTML='<div class="err">'+esc(e.message||String(e))+'</div>'; }
+}
+
+/* ── Chat: Kurator (folgt) ── */
+function renderChat(){
+  center.innerHTML='<div class="audit-empty"><div style="font-size:15px;color:var(--txt);margin-bottom:8px">Kurator-Chat</div><div>Opus-gestützter Fall-Chat: fragt den Fall ab, schlägt Optimierungen vor, vergleicht Vorjahr ↔ Fall-Jahr. Folgt.</div></div>';
 }
 
 /* Blob-URLs aller Belege freigeben (Leak-Schutz beim Wechseln/Verlassen). */
