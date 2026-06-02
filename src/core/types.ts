@@ -209,6 +209,10 @@ export interface StageResult {
   stageId: StageId;
   state: StageState;
   ms?: number;
+  /** ISO-Zeitstempel bei Stage-Start (für Zeitachse/Gantt der Prozessansicht). */
+  startedAt?: string;
+  /** ISO-Zeitstempel bei Stage-Ende. */
+  endedAt?: string;
   output?: unknown;
   error?: { message: string; stack?: string };
 }

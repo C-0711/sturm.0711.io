@@ -18,6 +18,7 @@
  */
 
 import { Agent, fetch as undiciFetch } from 'undici';
+import { recordTrace } from './trace.ts';
 
 const MISTRAL_API_BASE = 'https://api.mistral.ai/v1';
 const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
@@ -104,6 +105,41 @@ export async function chatJson<T = unknown>(
   opts: ChatJsonOptions = {},
 ): Promise<ChatJsonResult<T>> {
   const provider = opts.provider ?? (process.env.CHAT_PROVIDER as ChatProvider | undefined) ?? 'mistral';
+  const t0 = Date.now();
+  try {
+    const result = await dispatchChatJson<T>(provider, prompt, opts);
+    recordTrace({
+      kind: 'llm',
+      provider,
+      model: opts.model,
+      url: providerUrl(provider, opts),
+      request: { prompt, system: opts.system, jsonSchema: opts.jsonSchema?.name },
+      response: result.raw,
+      usage: result.usage,
+      ms: Date.now() - t0,
+      ok: true,
+    });
+    return result;
+  } catch (err) {
+    recordTrace({
+      kind: 'llm',
+      provider,
+      model: opts.model,
+      url: providerUrl(provider, opts),
+      request: { prompt, system: opts.system, jsonSchema: opts.jsonSchema?.name },
+      ms: Date.now() - t0,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+function dispatchChatJson<T>(
+  provider: ChatProvider,
+  prompt: string,
+  opts: ChatJsonOptions,
+): Promise<ChatJsonResult<T>> {
   switch (provider) {
     case 'mistral':
       return chatJsonMistral<T>(prompt, opts);
@@ -115,6 +151,17 @@ export async function chatJson<T = unknown>(
       return chatJsonAnthropic<T>(prompt, opts);
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);
+  }
+}
+
+/** Best-effort Endpoint-URL je Provider — nur fürs Trace-Logging. */
+function providerUrl(provider: ChatProvider, opts: ChatJsonOptions): string {
+  switch (provider) {
+    case 'mistral': return `${MISTRAL_API_BASE}/chat/completions`;
+    case 'anthropic': return `${ANTHROPIC_API_BASE}/messages`;
+    case 'vllm': return `${opts.vllmUrl ?? DEFAULT_VLLM_URL}/v1/chat/completions`;
+    case 'ollama': return `${opts.ollamaUrl ?? DEFAULT_OLLAMA_URL}/api/chat`;
+    default: return '';
   }
 }
 

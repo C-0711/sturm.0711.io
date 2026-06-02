@@ -6,6 +6,7 @@ import { createGitChainArtifactStore, type GitChainArtifactStore } from './artif
 import { getToolContainer } from './tools/tool-container.ts';
 import { NullToolContainer } from './tools/null-container.ts';
 import type { ToolContainerView } from './tools/types.ts';
+import { runWithTrace, type TraceCtx, type TraceEntry } from '../lib/trace.ts';
 import type {
   WorkflowDef,
   RunResult,
@@ -13,6 +14,7 @@ import type {
   StageContext,
   StageLogger,
   ArtifactStore,
+  EventEnvelope,
 } from './types.ts';
 
 const RUN_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -102,6 +104,11 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     bus.subscribe(e => opts.onEvent!(e.name, e.payload, e.stageId));
   }
 
+  // Event-Historie persistieren (Replay + Zeitachse der Prozessansicht).
+  // Reines In-Memory-Sammeln; geschrieben als _events.json am Run-Ende.
+  const eventLog: EventEnvelope[] = [];
+  bus.subscribe((e) => eventLog.push(e));
+
   // Resolve tool container once per run: bound by appId from runtimeOpts.
   // Standalone runs (no appId) → NullToolContainer; stages that try to
   // .get() will throw a helpful error. Boot-skip mode (appId present but
@@ -148,6 +155,13 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
       artifacts = createArtifactStore(opts.runsDir, def.id, runId);
     }
 
+    // Trace-Akkumulator: recordTrace(...) (in lib/llm-chat, vllmStreamExtract,
+    // BmfMcpClient) schreibt hier via AsyncLocalStorage pro Stage hinein.
+    const traceEntries: TraceEntry[] = [];
+    let traceSeq = 0;
+    const traceSink = (e: TraceEntry) => { traceEntries.push(e); };
+    const nextSeq = () => traceSeq++;
+
     const runStart = Date.now();
     bus.emit('run_start', { workflowId: def.id, input: sanitizeForLog(opts.input) });
 
@@ -182,6 +196,7 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
         }
         const resolved = resolveInputs(stageDef.inputs, stageOutputs, opts.input);
         const t0 = Date.now();
+        const startedAt = new Date().toISOString();
         bus.emit('stage_start', { uses: stageDef.uses }, stageId);
         const ctx: StageContext = {
           runId, workflowId: def.id, stageId,
@@ -197,10 +212,13 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           tools,
         };
         try {
-          const output = await impl.run(resolved, ctx);
+          // Trace-Kontext pro Stage: LLM-/MCP-Calls innerhalb impl.run schreiben
+          // via AsyncLocalStorage in traceEntries (Prompts, externe I/O, Usage).
+          const traceCtx: TraceCtx = { runId, workflowId: def.id, stageId, sink: traceSink, nextSeq };
+          const output = await runWithTrace(traceCtx, () => impl.run(resolved, ctx));
           const ms = Date.now() - t0;
           stageOutputs[stageId] = output;
-          stageResults[stageId] = { stageId, state: 'ok', ms, output: sanitizeForLog(output) };
+          stageResults[stageId] = { stageId, state: 'ok', ms, startedAt, endedAt: new Date().toISOString(), output: sanitizeForLog(output) };
           await artifacts.write(`${stageId}/output.json`, output);
           if (gitChainStore) {
             const stageName = stageDef.name ?? stageId;
@@ -213,7 +231,7 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
           const ms = Date.now() - t0;
           const e = err instanceof Error ? err : new Error(String(err));
           stageResults[stageId] = {
-            stageId, state: 'error', ms,
+            stageId, state: 'error', ms, startedAt, endedAt: new Date().toISOString(),
             error: { message: e.message, stack: e.stack },
           };
           bus.emit('stage_error', { ms, message: e.message }, stageId);
@@ -227,6 +245,11 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     const totalMs = Date.now() - runStart;
     const runResult: RunResult = { runId, workflowId: def.id, state: overallState, ms: totalMs, stages: stageResults };
     await artifacts.write('_result.json', runResult);
+    // Vollständiger Prozess-Trace (Prompts, externe Request/Response, Usage,
+    // Dauer) — Grundlage der ReactFlow-Prozessansicht (Tab 2).
+    await artifacts.write('_trace.json', {
+      runId, workflowId: def.id, count: traceEntries.length, entries: traceEntries,
+    });
 
     if (gitChainStore) {
       await gitChainStore.finalCommit(overallState).catch(e => {
@@ -239,6 +262,10 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     } else {
       bus.emit('run_error', { ms: totalMs });
     }
+    // Event-Historie persistieren (run_done/run_error sind hier bereits emittiert).
+    await artifacts.write('_events.json', {
+      runId, workflowId: def.id, count: eventLog.length, events: eventLog,
+    });
     bus.close();
     return runResult;
   })();

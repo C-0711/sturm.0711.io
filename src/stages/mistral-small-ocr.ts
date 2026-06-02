@@ -22,6 +22,7 @@
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { defineStage } from '../core/stage.ts';
+import { recordTrace } from '../lib/trace.ts';
 
 export type MistralSmallOcrMode = 'md' | 'table';
 
@@ -111,6 +112,7 @@ interface OcrCfgResolved {
 
 async function ocrOnePage(imageBytes: Buffer, cfg: OcrCfgResolved, signal: AbortSignal): Promise<string> {
   const b64 = imageBytes.toString('base64');
+  const t0 = Date.now();
   const body = {
     model: cfg.model,
     max_tokens: cfg.maxTokens,
@@ -139,7 +141,14 @@ async function ocrOnePage(imageBytes: Buffer, cfg: OcrCfgResolved, signal: Abort
     throw new Error(`mistral-small-ocr ${res.status}: ${text.slice(0, 200)}`);
   }
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  return data.choices?.[0]?.message?.content ?? '';
+  const content = data.choices?.[0]?.message?.content ?? '';
+  recordTrace({
+    kind: 'ocr', provider: 'mistral', model: cfg.model,
+    url: `${cfg.baseUrl}/v1/chat/completions`,
+    request: { prompt: cfg.prompt, image: 'inline-base64' },
+    response: content, ms: Date.now() - t0, ok: true,
+  });
+  return content;
 }
 
 // ─── Stage ────────────────────────────────────────────────────────────────

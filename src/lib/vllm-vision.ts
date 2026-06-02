@@ -9,6 +9,7 @@
  * Semantik gehört in `textInstructions` (siehe v6-Spike).
  */
 import { readFile } from 'node:fs/promises';
+import { recordTrace } from './trace.ts';
 
 export interface VllmVisionOptions {
   /** vLLM /v1 base URL. Example: 'http://host.docker.internal:11435' */
@@ -251,6 +252,14 @@ export async function callVllmVision<T = Record<string, string | null>>(
     );
   }
 
+  recordTrace({
+    kind: 'llm', provider: 'vllm', model: opts.model, stream: false,
+    url,
+    request: { textInstructions: opts.textInstructions, images: opts.imagePaths.length, jsonSchema: opts.jsonSchema.name },
+    response: content,
+    usage: { prompt_tokens: payload.usage?.prompt_tokens, completion_tokens: payload.usage?.completion_tokens },
+    ms: wallclockMs, ok: true,
+  });
   return {
     parsed,
     finishReason: choice?.finish_reason ?? 'unknown',

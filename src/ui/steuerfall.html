@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="/design-system/colors_and_type.css">
   <link rel="stylesheet" href="/design-system/sturm-app.css">
+  <link rel="stylesheet" href="https://esm.sh/reactflow@11.11.4/dist/style.css">
   <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -475,6 +476,127 @@
 
     .empty { color: var(--color-text-tertiary); font-size: 12.5px; padding: 12px 0; }
     .err { color: #ef4444; font-size: 12px; margin-top: 6px; }
+
+    /* ── 3-Spalten-Workspace (Tabs Fall·Chat·Flow·Dokument + Dokumente-Spalte) ── */
+    .fall-workspace { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+    .fall-rail-l, .fall-rail-r {
+      flex: 0 0 280px; width: 280px;
+      overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .fall-rail-l { border-right: 1px solid var(--color-border); }
+    .fall-rail-r { border-left: 1px solid var(--color-border); flex-basis: 320px; width: 320px; }
+    .fall-center { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .fall-tabs {
+      display: flex; gap: 4px; padding: 8px 20px 0; flex-shrink: 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .fall-tab {
+      appearance: none; background: transparent; cursor: pointer;
+      border: 1px solid transparent; border-bottom: 0;
+      padding: 8px 16px; border-radius: 8px 8px 0 0; margin-bottom: -1px;
+      font-size: 13px; font-weight: 500; color: var(--color-text-tertiary);
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+    .fall-tab i { width: 15px; height: 15px; }
+    .fall-tab:hover { color: var(--color-text-secondary); }
+    .fall-tab.is-active {
+      color: var(--color-text-primary);
+      border-color: var(--color-border);
+      background: var(--color-bg-card, var(--color-bg-primary));
+      border-bottom-color: var(--color-bg-card, var(--color-bg-primary));
+    }
+    .fall-panes { flex: 1; overflow-y: auto; padding: 20px; }
+    .fall-pane[hidden] { display: none; }
+    .fall-pane-ph {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; min-height: 320px; text-align: center;
+      color: var(--color-text-tertiary); border: 1px dashed var(--color-border);
+      border-radius: 12px; padding: 48px 32px;
+    }
+    .fall-pane-ph i { width: 28px; height: 28px; opacity: .6; }
+    .fall-pane-ph strong { color: var(--color-text-secondary); font-size: 14px; }
+    .fall-rail-head {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--color-text-tertiary); font-weight: 600;
+    }
+    .doc-list { display: flex; flex-direction: column; gap: 8px; }
+    .doc-item {
+      border: 1px solid var(--color-border); border-radius: 9px;
+      padding: 10px 12px; cursor: pointer; background: var(--color-bg-card, transparent);
+      transition: border-color .12s, background .12s;
+    }
+    .doc-item:hover { border-color: var(--color-accent); background: var(--color-bg-hover); }
+    .doc-item.is-active { border-color: var(--color-accent); }
+    .doc-item-name { font-size: 12.5px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-item-meta { font-size: 11px; color: var(--color-text-tertiary); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .doc-trust { display: inline-flex; gap: 3px; align-items: center; }
+    .doc-trust-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .doc-trust-dot.high { background: #059669; }
+    .doc-trust-dot.medium { background: #d97706; }
+    .doc-trust-dot.suspicious { background: #ef4444; }
+    .doc-trust-dot.low { background: var(--color-text-tertiary); }
+
+    /* ── Flow-Tab (ReactFlow-Prozessansicht) ──────────────────────────── */
+    .flow-toolbar { display:flex; align-items:center; gap:12px; margin-bottom:10px; font-size:12.5px; color:var(--color-text-secondary); flex-wrap:wrap; }
+    .flow-toolbar select { background:var(--color-bg-card,transparent); color:var(--color-text-primary); border:1px solid var(--color-border); border-radius:6px; padding:4px 8px; font-size:12px; }
+    .flow-meta { color:var(--color-text-tertiary); font-size:11.5px; font-family:ui-monospace,monospace; }
+    .flow-split { display:flex; gap:12px; height:72vh; min-height:420px; }
+    .flow-mount { flex:1; min-width:0; border:1px solid var(--color-border); border-radius:10px; overflow:hidden; background:var(--color-bg-primary,#0b0d12); }
+    .flow-detail { flex:0 0 340px; width:340px; overflow-y:auto; border:1px solid var(--color-border); border-radius:10px; padding:12px; font-size:12px; }
+    .flow-detail-head { font-size:13px; color:var(--color-text-primary); margin-bottom:8px; word-break:break-word; }
+    .flow-detail-section { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--color-text-tertiary); margin:10px 0 6px; }
+    .flow-call { border:1px solid var(--color-border); border-radius:7px; margin-bottom:6px; }
+    .flow-call > summary { cursor:pointer; padding:7px 9px; font-size:11.5px; list-style:none; }
+    .flow-call-kind { font-family:ui-monospace,monospace; color:var(--color-accent); text-transform:uppercase; }
+    .flow-call-body { padding:0 9px 9px; }
+    .flow-kv { font-size:11px; margin-top:6px; }
+    .flow-kv > b { display:block; color:var(--color-text-tertiary); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
+    .flow-kv pre { background:var(--color-bg-hover); padding:7px; border-radius:5px; overflow:auto; max-height:240px; font-size:11px; white-space:pre-wrap; word-break:break-word; margin:0; }
+    .err-inline { color:#ef4444; }
+    .flow-node { background:var(--color-bg-card,#141925); border:1px solid #9ca3af; border-radius:9px; padding:8px 11px; min-width:130px; box-shadow:0 4px 12px -6px rgba(0,0,0,.6); }
+    .flow-node-top { display:flex; align-items:center; gap:6px; }
+    .flow-node-state { width:8px; height:8px; border-radius:50%; flex:none; }
+    .flow-node-id { font-size:12px; font-weight:600; color:var(--color-text-primary); }
+    .flow-node-meta { font-size:10px; color:var(--color-text-tertiary); margin-top:3px; font-family:ui-monospace,monospace; }
+
+    /* ── Dokument-Tab (Quellseiten + Felder mit used-Markierung) ──────── */
+    .dok-head { margin-bottom: 12px; }
+    .dok-head strong { font-size: 14px; color: var(--color-text-primary); }
+    .dok-head-meta { font-size: 11.5px; color: var(--color-text-tertiary); margin-left: 8px; }
+    .dok-split { display: flex; gap: 14px; height: 70vh; min-height: 420px; }
+    .dok-source { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .dok-pager { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--color-text-secondary); }
+    .dok-pager .fall-btn { padding: 3px 10px; }
+    .dok-page-wrap { flex: 1; overflow: auto; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg-primary, #0b0d12); display: flex; justify-content: center; align-items: flex-start; padding: 10px; }
+    .dok-page-wrap img { max-width: 100%; height: auto; border-radius: 4px; }
+    .dok-fields { flex: 0 0 380px; width: 380px; overflow-y: auto; }
+    .dok-section { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-tertiary); margin: 8px 0 6px; }
+    .dok-field { display: grid; grid-template-columns: 80px 1fr auto; gap: 8px; align-items: baseline; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 7px; margin-bottom: 5px; font-size: 12px; }
+    .dok-field.used { border-left: 3px solid #059669; }
+    .dok-field.overridden { border-left: 3px solid #d97706; opacity: .85; }
+    .dok-field-ecode { font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-text-tertiary); }
+    .dok-field-label { color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dok-field-anlage { color: var(--color-text-tertiary); font-size: 10.5px; margin-left: 6px; }
+    .dok-field-value { font-family: ui-monospace, monospace; color: var(--color-gold, #f1c878); }
+    .dok-field-mark { font-size: 10.5px; color: var(--color-text-tertiary); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .dok-field.used .dok-field-mark { color: #059669; }
+    .dok-field.overridden .dok-field-mark { color: #d97706; }
+
+    /* ── Chat-Tab (Kurator) ───────────────────────────────────────────── */
+    .chat-wrap { display: flex; flex-direction: column; height: 72vh; min-height: 420px; }
+    .chat-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px; }
+    .chat-msg { display: flex; }
+    .chat-msg.user { justify-content: flex-end; }
+    .chat-bubble { max-width: 78%; padding: 9px 13px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .chat-msg.user .chat-bubble { background: var(--color-accent); color: var(--color-bg-primary, #000); }
+    .chat-msg.assistant .chat-bubble { background: var(--color-bg-card, var(--color-bg-hover)); border: 1px solid var(--color-border); color: var(--color-text-primary); }
+    .chat-cursor { animation: chat-blink 1s steps(2) infinite; }
+    @keyframes chat-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+    .chat-tool { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, monospace; margin-top: 4px; }
+    .chat-err { color: #ef4444; }
+    .chat-composer { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+    .chat-composer textarea { flex: 1; resize: none; background: var(--color-bg-card, transparent); color: var(--color-text-primary); border: 1px solid var(--color-border); border-radius: 8px; padding: 9px 11px; font-size: 13px; font-family: inherit; }
   </style>
 </head>
 <body>
@@ -493,24 +615,9 @@
         </div>
       </header>
 
-      <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; align-items:center;">
-        <div class="fall-wrap">
-          <div class="fall-head">
-            <div>
-              <h1 id="case-display">…</h1>
-              <div class="meta" id="case-meta">…</div>
-            </div>
-            <div class="fall-actions">
-              <div class="mcp-dots" id="mcp-dots" title="MCP-Health"></div>
-              <a class="fall-btn" id="btn-pro-abrechnung" target="_blank"><i data-lucide="file-text"></i><span>Pro-Abrechnung</span></a>
-              <a class="fall-btn" id="btn-dl-master" hidden download><i data-lucide="file-down"></i><span>master.json</span></a>
-              <a class="fall-btn" id="btn-dl-eric" hidden download><i data-lucide="file-code"></i><span>eric.xml</span></a>
-              <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
-              <button class="fall-btn primary" id="btn-export" disabled><i data-lucide="send"></i><span>An ELSTER</span></button>
-            </div>
-          </div>
-
-          <section class="panel">
+      <div class="fall-workspace">
+        <aside class="fall-rail-l">
+          <section class="panel" style="margin-bottom:0;">
             <h3>Belege hochladen</h3>
             <p class="panel-sub">Alle Belege des Falls auf einmal hochladen — Lohnsteuerbescheinigung, Spendenquittungen, Versicherungs-Bescheinigungen etc. Pro Datei läuft ein eigener Extraction-Workflow parallel; am Ende wird der Gesamt-Layer aller Belege zusammengeführt.</p>
             <label class="drop" id="drop">
@@ -526,6 +633,36 @@
             <div id="bulk-queue" hidden style="margin-top: 12px;"></div>
             <div class="err" id="upload-err"></div>
           </section>
+          <section class="panel" style="margin-bottom:0;">
+            <h3>Fälle</h3>
+            <p class="panel-sub">Andere Steuerfälle öffnen oder einen neuen Fall anlegen.</p>
+            <a class="fall-btn" href="/anwendungen.html" style="justify-content:center; width:100%;"><i data-lucide="folder"></i><span>Alle Fälle</span></a>
+          </section>
+        </aside>
+
+        <div class="fall-center">
+          <div class="fall-head" style="padding: 14px 20px 0; margin: 0;">
+            <div>
+              <h1 id="case-display">…</h1>
+              <div class="meta" id="case-meta">…</div>
+            </div>
+            <div class="fall-actions">
+              <div class="mcp-dots" id="mcp-dots" title="MCP-Health"></div>
+              <a class="fall-btn" id="btn-pro-abrechnung" target="_blank"><i data-lucide="file-text"></i><span>Pro-Abrechnung</span></a>
+              <a class="fall-btn" id="btn-dl-master" hidden download><i data-lucide="file-down"></i><span>master.json</span></a>
+              <a class="fall-btn" id="btn-dl-eric" hidden download><i data-lucide="file-code"></i><span>eric.xml</span></a>
+              <button class="fall-btn" id="btn-seal" disabled><i data-lucide="lock"></i><span>Versiegeln</span></button>
+              <button class="fall-btn primary" id="btn-export" disabled><i data-lucide="send"></i><span>An ELSTER</span></button>
+            </div>
+          </div>
+          <div class="fall-tabs" role="tablist">
+            <button class="fall-tab is-active" role="tab" data-tab="fall" aria-selected="true"><i data-lucide="layout-dashboard"></i><span>Fall</span></button>
+            <button class="fall-tab" role="tab" data-tab="chat" aria-selected="false"><i data-lucide="messages-square"></i><span>Chat</span></button>
+            <button class="fall-tab" role="tab" data-tab="flow" aria-selected="false"><i data-lucide="git-fork"></i><span>Flow</span></button>
+            <button class="fall-tab" role="tab" data-tab="dok" aria-selected="false"><i data-lucide="file-text"></i><span>Dokument</span></button>
+          </div>
+          <div class="fall-panes">
+            <div class="fall-pane is-active" data-pane="fall">
 
           <section class="panel" id="aggregate-panel" hidden>
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;">
@@ -587,8 +724,46 @@
               <tbody id="layer-rows"></tbody>
             </table>
           </section>
-        </div>
-      </div>
+            </div><!-- /fall-pane fall -->
+
+            <div class="fall-pane" data-pane="chat" hidden>
+              <div class="chat-wrap">
+                <div class="chat-msgs" id="chat-msgs"><div class="empty">Frag den Kurator etwas zum Fall — Optimierungen, fehlende Belege, Vorjahresvergleich.</div></div>
+                <div class="chat-composer">
+                  <textarea id="chat-input" rows="2" placeholder="Frage zum Steuerfall… (Cmd/Ctrl+Enter sendet)"></textarea>
+                  <button class="fall-btn primary" id="chat-send"><i data-lucide="send"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="fall-pane" data-pane="flow" hidden>
+              <div class="flow-toolbar">
+                <label>Run <select id="flow-run-select"></select></label>
+                <span id="flow-run-meta" class="flow-meta"></span>
+              </div>
+              <div class="flow-split">
+                <div id="flow-mount" class="flow-mount"></div>
+                <div id="flow-detail" class="flow-detail"><div class="empty">Knoten anklicken für Details — Prompt · externe Request/Response · Tokens · Dauer.</div></div>
+              </div>
+            </div>
+
+            <div class="fall-pane" data-pane="dok" hidden>
+              <div id="dok-pane-body">
+                <div class="fall-pane-ph">
+                  <i data-lucide="file-text"></i>
+                  <div><strong>Dokument-Ansicht</strong></div>
+                  <div>Wähle rechts ein Dokument — Quellseiten + extrahierte Felder mit „verwendet"-Markierung.</div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /fall-panes -->
+        </div><!-- /fall-center -->
+
+        <aside class="fall-rail-r">
+          <div class="fall-rail-head">Dokumente</div>
+          <div class="doc-list" id="doc-list"><div class="empty">Noch keine Dokumente.</div></div>
+        </aside>
+      </div><!-- /fall-workspace -->
     </div>
   </div>
 
@@ -706,6 +881,11 @@
       document.getElementById('case-meta').textContent =
         `${instance.caseId} · Mandant ${instance.mandantId || '—'} · ${instance.veranlagungsjahr ?? '—'} · ${instance.status}`;
       renderRuns();
+      renderDocList(instance.documents || []);
+      // Flow-Tab nachziehen, falls beim Laden bereits aktiv (Reload in Tab "flow").
+      if (window.sturmFlow && document.querySelector('.fall-tab.is-active')?.dataset.tab === 'flow') {
+        window.sturmFlow.activate(instance);
+      }
       // Buttons-Logik
       const canSeal = instance.runs.length > 0 && instance.status === 'in_bearbeitung';
       const canExport = instance.status === 'versiegelt';
@@ -1392,6 +1572,7 @@
     }
 
     function renderAggregate(data) {
+      lastAggregate = data;
       const sub = document.getElementById('aggregate-sub');
       sub.textContent = `${data.stats.docs} Beleg${data.stats.docs === 1 ? '' : 'e'} · ${data.stats.eCodes} eCodes · ${data.stats.conflicts} Konflikt${data.stats.conflicts === 1 ? '' : 'e'}`;
 
@@ -1610,6 +1791,187 @@
       }
     });
 
+    // ── Tabs (Fall·Chat·Flow·Dokument) + Dokumente-Liste ───────────────
+    function switchTab(tab) {
+      document.querySelectorAll('.fall-tab').forEach(b => {
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      document.querySelectorAll('.fall-pane').forEach(p => {
+        const on = p.dataset.pane === tab;
+        p.hidden = !on;
+        p.classList.toggle('is-active', on);
+      });
+      if (tab === 'flow' && window.sturmFlow) window.sturmFlow.activate(instance);
+      try { localStorage.setItem('sturm-fall-tab', tab); } catch { /* ignore */ }
+    }
+
+    let selectedDocSha = null;
+    function renderDocList(docs) {
+      const host = document.getElementById('doc-list');
+      if (!host) return;
+      if (!Array.isArray(docs) || docs.length === 0) {
+        host.innerHTML = '<div class="empty">Noch keine Dokumente.</div>';
+        return;
+      }
+      host.innerHTML = docs.map(d => {
+        const tb = d.trustBreakdown;
+        const dots = tb ? ['high','medium','suspicious','low']
+          .filter(k => tb[k]).map(k => `<span class="doc-trust-dot ${k}" title="${tb[k]} ${k}"></span>`).join('') : '';
+        const trustHtml = dots ? `<span class="doc-trust">${dots}</span>` : '';
+        return `<div class="doc-item${d.sha256 === selectedDocSha ? ' is-active' : ''}" data-sha="${escapeHtml(d.sha256 || '')}" data-name="${escapeHtml(d.filename || '')}">
+          <div class="doc-item-name" title="${escapeHtml(d.filename || '')}">${escapeHtml(d.filename || '(unbenannt)')}</div>
+          <div class="doc-item-meta">
+            <span>${(d.anlagen || []).slice(0, 3).map(escapeHtml).join(', ') || '—'}</span>
+            <span>· ${d.fieldsExtracted ?? 0} Felder</span>
+            ${trustHtml}
+          </div>
+        </div>`;
+      }).join('');
+      host.querySelectorAll('.doc-item').forEach(el => {
+        el.addEventListener('click', () => {
+          selectedDocSha = el.dataset.sha || null;
+          host.querySelectorAll('.doc-item').forEach(x => x.classList.toggle('is-active', x === el));
+          switchTab('dok');
+          const doc = (instance && instance.documents || []).find(d => d.sha256 === selectedDocSha);
+          renderDocumentTab(doc);
+        });
+      });
+    }
+
+    // ── Dokument-Tab: Quellseiten + Felder mit "verwendet"-Markierung ───
+    let lastAggregate = null;
+    let dokPage = 1;
+    function renderDocumentTab(doc) {
+      const host = document.getElementById('dok-pane-body');
+      if (!host) return;
+      if (!doc) { host.innerHTML = '<div class="fall-pane-ph"><div>Dokument nicht gefunden.</div></div>'; return; }
+      dokPage = 1;
+      // Felder dieses Belegs aus dem Aggregat ableiten: verwendet (gewonnen im
+      // merged_layer) vs. überstimmt (Konflikt-Kandidat, anderer Beleg gewann).
+      const agg = lastAggregate;
+      const runId = doc.runId;
+      const used = [];
+      const overridden = [];
+      if (agg) {
+        for (const [eCode, m] of Object.entries(agg.merged_layer || {})) {
+          if ((m.confirmed_by || []).some(s => s.runId === runId)) {
+            used.push({ eCode, drucktext: m.drucktext, value: m.value, anlage: m.anlage, trust: m.trust });
+          }
+        }
+        for (const c of (agg.conflicts || [])) {
+          for (const cand of (c.candidates || [])) {
+            const fromThis = (cand.sources || []).some(s => s.runId === runId || s.filename === doc.filename);
+            if (fromThis && cand.value !== c.winner) {
+              overridden.push({ eCode: c.eCode, drucktext: c.drucktext, value: cand.value, winner: c.winner });
+            }
+          }
+        }
+      }
+      const trustDot = (t) => t ? `<span class="doc-trust-dot ${escapeHtml(t)}"></span>` : '';
+      const usedRows = used.length === 0
+        ? '<div class="empty">Keine Felder dieses Belegs im Gesamt-Layer (evtl. Vorjahr/ausgeschlossen, oder Aggregation noch nicht gelaufen).</div>'
+        : used.map(f => `<div class="dok-field used">
+            <span class="dok-field-ecode">${escapeHtml(f.eCode)}</span>
+            <span class="dok-field-label" title="${escapeHtml(f.drucktext || '')}">${escapeHtml(f.drucktext || '')}<span class="dok-field-anlage">${escapeHtml(f.anlage || '')}</span></span>
+            <span class="dok-field-value">${escapeHtml(String(f.value ?? ''))}</span>
+            <span class="dok-field-mark" title="im Gesamt-Layer verwendet">${trustDot(f.trust)}✓ verwendet</span>
+          </div>`).join('');
+      const ovBlock = overridden.length === 0 ? '' :
+        `<div class="dok-section">Überstimmt (${overridden.length})</div>` +
+        overridden.map(f => `<div class="dok-field overridden">
+            <span class="dok-field-ecode">${escapeHtml(f.eCode)}</span>
+            <span class="dok-field-label" title="${escapeHtml(f.drucktext || '')}">${escapeHtml(f.drucktext || '')}</span>
+            <span class="dok-field-value">${escapeHtml(String(f.value ?? ''))}</span>
+            <span class="dok-field-mark" title="ein anderer Beleg gewann">→ ${escapeHtml(String(f.winner ?? ''))}</span>
+          </div>`).join('');
+      const sha = doc.sha256 || '';
+      host.innerHTML = `
+        <div class="dok-head"><strong>${escapeHtml(doc.filename || '')}</strong>
+          <span class="dok-head-meta">${(doc.anlagen || []).map(escapeHtml).join(', ') || '—'} · ${doc.fieldsExtracted ?? 0} Felder</span></div>
+        <div class="dok-split">
+          <div class="dok-source">
+            <div class="dok-pager">
+              <button class="fall-btn" id="dok-prev">‹ zurück</button>
+              <span id="dok-page-label">Seite 1</span>
+              <button class="fall-btn" id="dok-next">weiter ›</button>
+            </div>
+            <div class="dok-page-wrap"><img id="dok-page-img" alt="Quellseite" src="/api/source-page/${encodeURIComponent(sha)}/1" /></div>
+          </div>
+          <div class="dok-fields">
+            <div class="dok-section">Verwendete Werte (${used.length})</div>
+            ${usedRows}
+            ${ovBlock}
+          </div>
+        </div>`;
+      const img = document.getElementById('dok-page-img');
+      const lbl = document.getElementById('dok-page-label');
+      const setPage = (n) => { if (n < 1) n = 1; dokPage = n; lbl.textContent = `Seite ${n}`; img.src = `/api/source-page/${encodeURIComponent(sha)}/${n}`; };
+      document.getElementById('dok-prev').addEventListener('click', () => setPage(dokPage - 1));
+      document.getElementById('dok-next').addEventListener('click', () => setPage(dokPage + 1));
+      // Seite jenseits der letzten → PNG 404 → eine Seite zurück.
+      img.addEventListener('error', () => { if (dokPage > 1) setPage(dokPage - 1); });
+      window.lucide && window.lucide.createIcons();
+    }
+
+    // ── Chat-Tab: Kurator (streamt vom Orchestrator-Endpoint) ───────────
+    const chatHistory = [];
+    let chatBusy = false;
+    async function chatSend() {
+      const input = document.getElementById('chat-input');
+      const msgs = document.getElementById('chat-msgs');
+      const text = (input.value || '').trim();
+      if (!text || chatBusy) return;
+      chatBusy = true;
+      input.value = '';
+      if (chatHistory.length === 0) msgs.innerHTML = '';
+      chatHistory.push({ role: 'user', content: text });
+      msgs.insertAdjacentHTML('beforeend', `<div class="chat-msg user"><div class="chat-bubble">${escapeHtml(text)}</div></div>`);
+      const asst = document.createElement('div');
+      asst.className = 'chat-msg assistant';
+      asst.innerHTML = '<div class="chat-bubble"><span class="chat-cursor">▊</span></div>';
+      msgs.appendChild(asst);
+      const bubble = asst.querySelector('.chat-bubble');
+      msgs.scrollTop = msgs.scrollHeight;
+      let acc = '';
+      try {
+        const res = await fetch('/api/orchestrator/chat-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+          body: JSON.stringify({ appId: APP_ID, caseId: CASE_ID, messages: chatHistory }),
+        });
+        if (res.status === 404) { bubble.innerHTML = '<span class="chat-err">Kurator nicht aktiv (kein Chat-LLM erreichbar).</span>'; chatBusy = false; return; }
+        if (!res.ok || !res.body) { bubble.innerHTML = `<span class="chat-err">Fehler ${res.status}.</span>`; chatBusy = false; return; }
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split('\n\n');
+          buf = parts.pop() ?? '';
+          for (const part of parts) {
+            const evM = /^event:\s*(.+)$/m.exec(part);
+            const dtM = /^data:\s*([\s\S]+)$/m.exec(part);
+            if (!dtM) continue;
+            let payload; try { payload = JSON.parse(dtM[1]); } catch { continue; }
+            const name = evM ? evM[1].trim() : '';
+            if (name === 'token' || name === 'token_chunk') { acc += payload.delta ?? payload.text ?? ''; bubble.textContent = acc; }
+            else if (name === 'tool_call') { bubble.insertAdjacentHTML('beforeend', `<div class="chat-tool">⚙ ${escapeHtml(payload.name || 'tool')}</div>`); }
+            else if (name === 'error') { acc += `\n[Fehler: ${payload.message || ''}]`; bubble.textContent = acc; }
+            msgs.scrollTop = msgs.scrollHeight;
+          }
+        }
+        if (acc.trim()) chatHistory.push({ role: 'assistant', content: acc });
+        else bubble.textContent = '(keine Antwort)';
+      } catch (e) {
+        bubble.innerHTML = `<span class="chat-err">Netzwerk-Fehler: ${escapeHtml(e && e.message || String(e))}</span>`;
+      }
+      chatBusy = false;
+    }
+
     // Sidebar einmal rendern, Context-Refresh wenn die Instance da ist.
     import('/nav.js').then(({ renderSturmNav, contextRendererSteuerfall }) => {
       let lastInstance = null;
@@ -1645,8 +2007,211 @@
       });
       // Dedup-Toggle
       document.getElementById('layer-show-all').addEventListener('change', paintLayer);
+      // Tab-Navigation Fall·Chat·Flow·Dokument
+      document.querySelectorAll('.fall-tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+      try {
+        const savedTab = localStorage.getItem('sturm-fall-tab');
+        if (savedTab && document.querySelector(`.fall-pane[data-pane="${savedTab}"]`)) switchTab(savedTab);
+      } catch { /* ignore */ }
+      // Kurator-Chat: Senden per Button + Cmd/Ctrl+Enter
+      const chatSendBtn = document.getElementById('chat-send');
+      const chatInput = document.getElementById('chat-input');
+      if (chatSendBtn) chatSendBtn.addEventListener('click', chatSend);
+      if (chatInput) chatInput.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); chatSend(); }
+      });
     });
     } // end else-Branch (APP_ID && CASE_ID gegeben)
+  </script>
+
+  <!-- ── Flow-Tab: ReactFlow-Prozessansicht (eigenes ES-Modul) ──────────── -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react-dom": "https://esm.sh/react-dom@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+      "reactflow": "https://esm.sh/reactflow@11.11.4?external=react,react-dom",
+      "htm": "https://esm.sh/htm@3.1.1"
+    }
+  }
+  </script>
+  <script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import ReactFlow, { Background, Controls, MarkerType, Handle, Position } from "reactflow";
+    import htm from "htm";
+    const html = htm.bind(React.createElement);
+
+    const p = new URLSearchParams(location.search);
+    const APP_ID = p.get('app');
+    const CASE_ID = p.get('case');
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+    // DAG → Spalten (Kahn-Layering). Stages einer Schicht laufen parallel.
+    function layersOf(stageIds, edges) {
+      const indeg = new Map(stageIds.map(s => [s, 0]));
+      const adj = new Map(stageIds.map(s => [s, []]));
+      for (const [a, b] of (edges || [])) {
+        if (adj.has(a) && indeg.has(b)) { adj.get(a).push(b); indeg.set(b, indeg.get(b) + 1); }
+      }
+      const layers = [];
+      let frontier = stageIds.filter(s => (indeg.get(s) || 0) === 0);
+      const placed = new Set();
+      let guard = 0;
+      while (frontier.length && guard++ < 1000) {
+        layers.push(frontier);
+        frontier.forEach(s => placed.add(s));
+        const next = [];
+        for (const s of frontier) for (const t of (adj.get(s) || [])) {
+          indeg.set(t, indeg.get(t) - 1);
+          if (indeg.get(t) === 0) next.push(t);
+        }
+        frontier = next;
+      }
+      const orphans = stageIds.filter(s => !placed.has(s));
+      if (orphans.length) layers.push(orphans);
+      return layers;
+    }
+
+    const stateColor = (st) => st === 'ok' ? '#059669' : st === 'error' ? '#ef4444' : st === 'skipped' ? '#6b7280' : '#9ca3af';
+
+    function buildGraph(data) {
+      const wf = data.workflow || { stages: {}, edges: [] };
+      const stageIds = Object.keys(wf.stages || {});
+      const resultStages = (data.result && data.result.stages) || {};
+      const traceByStage = {};
+      for (const e of (data.trace && data.trace.entries) || []) {
+        (traceByStage[e.stageId] = traceByStage[e.stageId] || []).push(e);
+      }
+      const layers = layersOf(stageIds, wf.edges || []);
+      const nodes = [];
+      layers.forEach((layer, li) => layer.forEach((sid, pi) => {
+        const r = resultStages[sid] || {};
+        nodes.push({
+          id: sid,
+          position: { x: li * 250, y: pi * 104 },
+          data: { sid, state: r.state || 'idle', ms: r.ms, uses: (wf.stages[sid] || {}).uses, calls: (traceByStage[sid] || []).length },
+          type: 'stageNode',
+        });
+      }));
+      const rfEdges = (wf.edges || []).map(([a, b], i) => ({
+        id: 'e' + i, source: a, target: b, animated: false,
+        style: { stroke: '#42506e', strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#42506e' },
+      }));
+      return { nodes, edges: rfEdges };
+    }
+
+    function StageNode({ data }) {
+      const color = stateColor(data.state);
+      return html`<div class="flow-node" style=${{ borderColor: color }}>
+        <${Handle} type="target" position=${Position.Left} />
+        <div class="flow-node-top">
+          <span class="flow-node-state" style=${{ background: color }}></span>
+          <span class="flow-node-id">${data.sid}</span>
+        </div>
+        <div class="flow-node-meta">${data.uses || ''}${data.ms != null ? ` · ${data.ms} ms` : ''}${data.calls ? ` · ${data.calls} calls` : ''}</div>
+        <${Handle} type="source" position=${Position.Right} />
+      </div>`;
+    }
+    const nodeTypes = { stageNode: StageNode };
+
+    function FlowApp({ data, onSelect }) {
+      const g = React.useMemo(() => buildGraph(data), [data]);
+      return html`<${ReactFlow}
+          nodes=${g.nodes} edges=${g.edges} nodeTypes=${nodeTypes}
+          fitView minZoom=${0.2} maxZoom=${1.6}
+          nodesDraggable=${true} proOptions=${{ hideAttribution: true }}
+          onNodeClick=${(_, n) => onSelect(n.id)}>
+        <${Background} gap=${22} size=${1} color="#202a3c" />
+        <${Controls} showInteractive=${false} />
+      <//>`;
+    }
+
+    function fmtJson(v) {
+      let s;
+      try { s = typeof v === 'string' ? v : JSON.stringify(v, null, 2); } catch { s = String(v); }
+      if (s == null) return '';
+      return s.length > 4000 ? s.slice(0, 4000) + `\n…(+${s.length - 4000} Zeichen)` : s;
+    }
+
+    function renderDetail(data, stageId) {
+      const host = document.getElementById('flow-detail');
+      if (!host) return;
+      const r = ((data.result && data.result.stages) || {})[stageId] || {};
+      const entries = ((data.trace && data.trace.entries) || []).filter(e => e.stageId === stageId);
+      const head = `<div class="flow-detail-head"><strong>${esc(stageId)}</strong> · ${esc(r.state || '?')}${r.ms != null ? ` · ${r.ms} ms` : ''}${r.startedAt ? `<br><span class="flow-meta">${esc(r.startedAt)}</span>` : ''}</div>`;
+      const errBlk = r.error && r.error.message ? `<div class="err">${esc(r.error.message)}</div>` : '';
+      const calls = entries.length === 0
+        ? '<div class="empty">Keine externen Calls (LLM/OCR/MCP) in dieser Stage.</div>'
+        : entries.map(e => `<details class="flow-call">
+            <summary><span class="flow-call-kind">${esc(e.kind)}</span> ${esc(e.provider || '')} ${esc(e.model || '')}${e.stream ? ' · stream' : ''} · ${e.ms != null ? e.ms + ' ms' : '?'}${e.ok === false ? ' · <span class="err-inline">Fehler</span>' : ''}</summary>
+            <div class="flow-call-body">
+              ${e.url ? `<div class="flow-kv"><b>URL</b>${esc(e.url)}</div>` : ''}
+              <div class="flow-kv"><b>Request</b><pre>${esc(fmtJson(e.request))}</pre></div>
+              <div class="flow-kv"><b>Response</b><pre>${esc(fmtJson(e.response))}</pre></div>
+              ${e.usage ? `<div class="flow-kv"><b>Usage</b><pre>${esc(fmtJson(e.usage))}</pre></div>` : ''}
+              ${e.error ? `<div class="flow-kv"><b>Error</b><pre>${esc(e.error)}</pre></div>` : ''}
+            </div>
+          </details>`).join('');
+      const out = r.output !== undefined
+        ? `<details class="flow-call"><summary>Stage-Output (gekürzt)</summary><div class="flow-call-body"><pre>${esc(fmtJson(r.output))}</pre></div></details>`
+        : '';
+      host.innerHTML = head + errBlk + `<div class="flow-detail-section">Externe Calls (${entries.length})</div>` + calls + out;
+    }
+
+    let rootInst = null;
+    let activated = false;
+    let lastRunIds = [];
+
+    function mountFlow(data) {
+      const mountEl = document.getElementById('flow-mount');
+      if (!mountEl) return;
+      if (!rootInst) rootInst = createRoot(mountEl);
+      rootInst.render(html`<${FlowApp} data=${data} onSelect=${(id) => renderDetail(data, id)} />`);
+      const det = document.getElementById('flow-detail');
+      if (det) det.innerHTML = '<div class="empty">Knoten anklicken für Details — Prompt · externe Request/Response · Tokens · Dauer.</div>';
+    }
+
+    async function loadRun(runId) {
+      const meta = document.getElementById('flow-run-meta');
+      if (meta) meta.textContent = 'lädt…';
+      try {
+        const r = await fetch(`/api/applications/${encodeURIComponent(APP_ID)}/instances/${encodeURIComponent(CASE_ID)}/runs/${encodeURIComponent(runId)}/trace`);
+        if (!r.ok) { if (meta) meta.textContent = `Fehler ${r.status}`; return; }
+        const data = await r.json();
+        const tc = ((data.trace && data.trace.entries) || []).length;
+        if (meta) meta.textContent = `${data.workflowId} · ${data.result?.state ?? '?'} · ${data.result?.ms ?? '?'} ms · ${tc} Calls`;
+        mountFlow(data);
+      } catch (e) {
+        if (meta) meta.textContent = 'Fehler: ' + (e?.message || e);
+      }
+    }
+
+    // Wird vom Inline-Script aufgerufen, sobald der Flow-Tab aktiviert wird.
+    window.sturmFlow = {
+      activate(instance) {
+        const sel = document.getElementById('flow-run-select');
+        const runs = ((instance && instance.runs) || []).slice().reverse(); // neueste zuerst
+        const changed = runs.length !== lastRunIds.length || runs.some((r, i) => r !== lastRunIds[i]);
+        if (sel && changed) {
+          sel.innerHTML = runs.map((rid, i) => `<option value="${esc(rid)}">Run ${runs.length - i} · ${esc(rid)}</option>`).join('');
+          lastRunIds = runs;
+        }
+        if (runs.length === 0) {
+          const meta = document.getElementById('flow-run-meta');
+          if (meta) meta.textContent = 'Noch keine Runs — lade ein Dokument hoch.';
+          return;
+        }
+        if (!activated) { activated = true; loadRun(runs[0]); }
+      },
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const sel = document.getElementById('flow-run-select');
+      if (sel) sel.addEventListener('change', () => loadRun(sel.value));
+    });
   </script>
 </body>
 </html>

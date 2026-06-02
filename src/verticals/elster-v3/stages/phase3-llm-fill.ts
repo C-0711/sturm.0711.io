@@ -20,6 +20,7 @@
  */
 import { defineStage } from '../../../core/stage.ts';
 import { onpremFetch, type ChatProvider } from '../../../lib/llm-chat.ts';
+import { recordTrace } from '../../../lib/trace.ts';
 import type { LlmHandle } from '../../../core/tools/handles.ts';
 import {
   loadContainerBrief,
@@ -81,6 +82,7 @@ async function vllmStreamExtract(
   onField: (e: { eCode: string; value: string | null }) => void,
 ): Promise<Record<string, string | null>> {
   const baseUrl = opts.vllmUrl ?? 'http://localhost:11435';
+  const t0 = Date.now();
   const safeSchema = stripUnsafeSchemaConstraints(opts.jsonSchema.schema);
   const body = {
     model: opts.model,
@@ -191,6 +193,12 @@ async function vllmStreamExtract(
     clearTimeout(timer);
     opts.signal?.removeEventListener('abort', onParentAbort);
   }
+  recordTrace({
+    kind: 'llm', provider: 'vllm', model: opts.model, stream: true,
+    url: `${baseUrl}/v1/chat/completions`,
+    request: { prompt, jsonSchema: opts.jsonSchema.name },
+    response: accumulated, ms: Date.now() - t0, ok: true,
+  });
   const stripped = accumulated.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
   const start = stripped.indexOf('{');
   const end = stripped.lastIndexOf('}');

@@ -9,6 +9,7 @@
 
 import * as fs from 'node:fs/promises';
 import type { DocumentChunk, MistralOcrRequest, MistralOcrResponse } from './types.ts';
+import { recordTrace } from '../trace.ts';
 
 const OCR_URL = 'https://api.mistral.ai/v1/ocr';
 const FILES_URL = 'https://api.mistral.ai/v1/files';
@@ -84,6 +85,7 @@ export async function callMistralOcrWithFallback(
     signal: opts.signal,
   });
 
+  const t0 = Date.now();
   let resp = await send(req);
   let raw = await resp.text();
 
@@ -114,7 +116,14 @@ export async function callMistralOcrWithFallback(
     throw new MistralOcrError(`Mistral OCR HTTP ${resp.status}`, resp.status, raw.slice(0, 800));
   }
   try {
-    return { response: JSON.parse(raw) as MistralOcrResponse };
+    const parsedResp = JSON.parse(raw) as MistralOcrResponse;
+    recordTrace({
+      kind: 'ocr', provider: 'mistral', model: (req as { model?: string }).model,
+      url: finalUrl,
+      request: { model: (req as { model?: string }).model, note: 'document (base64) ausgelassen' },
+      response: parsedResp, ms: Date.now() - t0, ok: true,
+    });
+    return { response: parsedResp };
   } catch {
     throw new MistralOcrError('Mistral OCR returned invalid JSON', resp.status, raw.slice(0, 400));
   }

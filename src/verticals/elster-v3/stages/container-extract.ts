@@ -22,6 +22,7 @@
  */
 import { defineStage } from '../../../core/stage.ts';
 import { chatJson, type ChatProvider } from '../../../lib/llm-chat.ts';
+import { recordTrace } from '../../../lib/trace.ts';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Streaming vLLM helper — extracts per-field events as tokens arrive
@@ -56,6 +57,7 @@ async function chatJsonVllmStreaming(
   onField: (e: StreamFieldEvent) => void,
 ): Promise<{ parsed: Record<string, string | null>; raw: string }> {
   const baseUrl = opts.vllmUrl ?? 'http://localhost:11435';
+  const t0 = Date.now();
   const body = {
     model: opts.model,
     temperature: opts.temperature,
@@ -126,6 +128,12 @@ async function chatJsonVllmStreaming(
     }
   }
 
+  recordTrace({
+    kind: 'llm', provider: 'vllm', model: opts.model, stream: true,
+    url: `${baseUrl}/v1/chat/completions`,
+    request: { prompt, jsonSchema: opts.jsonSchema.name },
+    response: accumulated, ms: Date.now() - t0, ok: true,
+  });
   // Final-Parse: vollständige akkumulierte Antwort.
   const stripped = accumulated.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
   const start = stripped.indexOf('{');

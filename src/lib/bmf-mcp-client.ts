@@ -12,6 +12,8 @@
  * Env-Override: BMF_MCP_URL (Default `http://localhost:12010/mcp`)
  */
 
+import { recordTrace } from './trace.ts';
+
 export interface BmfMcpClientOptions {
   url?: string;
   timeoutMs?: number;
@@ -93,19 +95,36 @@ export class BmfMcpClient {
 
   /** Generischer Tool-Call mit JSON-RPC-Wrapping. */
   async callTool<T>(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
-    const r = await this.rpc<{ content: Array<{ type: string; text: string }>; isError?: boolean }>(
-      'tools/call',
-      { name, arguments: args },
-      signal,
-    );
-    if (r.isError) {
-      throw new Error(`BMF-MCP tool ${name} returned isError=true`);
+    const t0 = Date.now();
+    try {
+      const r = await this.rpc<{ content: Array<{ type: string; text: string }>; isError?: boolean }>(
+        'tools/call',
+        { name, arguments: args },
+        signal,
+      );
+      if (r.isError) {
+        throw new Error(`BMF-MCP tool ${name} returned isError=true`);
+      }
+      const txt = r.content?.[0]?.text;
+      if (typeof txt !== 'string') {
+        throw new Error(`BMF-MCP tool ${name}: no content text`);
+      }
+      const result = JSON.parse(txt) as T;
+      recordTrace({
+        kind: 'mcp', provider: 'bmf', url: this.url,
+        request: { tool: name, arguments: args },
+        response: result, ms: Date.now() - t0, ok: true,
+      });
+      return result;
+    } catch (err) {
+      recordTrace({
+        kind: 'mcp', provider: 'bmf', url: this.url,
+        request: { tool: name, arguments: args },
+        ms: Date.now() - t0, ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
     }
-    const txt = r.content?.[0]?.text;
-    if (typeof txt !== 'string') {
-      throw new Error(`BMF-MCP tool ${name}: no content text`);
-    }
-    return JSON.parse(txt) as T;
   }
 
   /** Low-level JSON-RPC mit SSE-Response-Parse. MCP liefert genau EINEN

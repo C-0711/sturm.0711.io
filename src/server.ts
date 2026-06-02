@@ -1201,6 +1201,65 @@ app.get(
   },
 );
 
+// ── GET /api/applications/:appId/instances/:caseId/runs/:runId/trace ──
+// Vollständiger Prozess-Trace eines Runs für die Flow-Ansicht (Tab 2):
+//   _result.json (Stages + Start/Ende-Zeitstempel + ms)
+//   _trace.json  (LLM-Prompts, externe Request/Response, Token-Usage, Dauer)
+//   _events.json (Event-Historie für Zeitachse/Replay)
+//   + Workflow-DAG (stages/edges) aus der Registry für das Knoten-Layout.
+// Token-frei (gleicher Scope wie /summary + /progress). Run-Dir wird robust
+// aufgelöst (extraction-Workflow zuerst, dann Scan — ein Fall kann Runs aus
+// v5_2-rag UND v6-vision enthalten).
+app.get(
+  '/api/applications/:appId/instances/:caseId/runs/:runId/trace',
+  async (req, res) => {
+    const { appId, caseId, runId } = req.params;
+    const app_ = getApplication(appId);
+    if (!app_) return res.status(404).json({ error: `application not found: ${appId}` });
+    const inst = await loadInstanceFile(APPLICATIONS_DIR, appId, caseId);
+    if (!inst) return res.status(404).json({ error: `case not found: ${caseId}` });
+    if (!inst.runs.includes(runId)) {
+      return res.status(404).json({ error: 'run not in case' });
+    }
+    const candidates: string[] = [];
+    if (app_.workflows.extraction) candidates.push(app_.workflows.extraction);
+    try {
+      const wfDirs = await fs.promises.readdir(RUNS_DIR, { withFileTypes: true });
+      for (const d of wfDirs) if (d.isDirectory() && !candidates.includes(d.name)) candidates.push(d.name);
+    } catch { /* RUNS_DIR fehlt */ }
+
+    let runDir: string | null = null;
+    let workflowId: string | null = null;
+    for (const wfId of candidates) {
+      const dir = path.join(RUNS_DIR, wfId, runId);
+      try { await fs.promises.access(path.join(dir, '_result.json')); runDir = dir; workflowId = wfId; break; }
+      catch { /* nächster Kandidat */ }
+    }
+    if (!runDir || !workflowId) return res.status(404).json({ error: 'run not found' });
+
+    async function readJson(rel: string): Promise<unknown | null> {
+      try { return JSON.parse(await fs.promises.readFile(path.join(runDir as string, rel), 'utf-8')); }
+      catch { return null; }
+    }
+    const [result, trace, events] = await Promise.all([
+      readJson('_result.json'),
+      readJson('_trace.json'),
+      readJson('_events.json'),
+    ]);
+    const def = getWorkflow(workflowId);
+    const workflow = def
+      ? {
+          id: def.id,
+          stages: Object.fromEntries(
+            Object.entries(def.stages).map(([id, s]) => [id, { uses: s.uses, name: s.name ?? id }]),
+          ),
+          edges: def.edges,
+        }
+      : { id: workflowId, stages: {}, edges: [] as Array<[string, string]> };
+    res.json({ runId, workflowId, result, trace, events, workflow });
+  },
+);
+
 // ── GET /api/applications/:appId/instances/:caseId/download/:artifact ──
 // Liefert die versiegelten Artefakte des Falls zum Download. Wir erlauben
 // genau zwei: master.json (signierter Snapshot, master.signed-Variante aus
