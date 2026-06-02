@@ -275,7 +275,12 @@ export function createSchemaGenerateRouter(uploadsDir: string): Router {
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    // Node emits IncomingMessage 'close' once the request has been completed,
+    // even if the SSE response is still streaming. Abort only when the client
+    // closes the response before we finished writing it.
+    res.on('close', () => {
+      if (!res.writableEnded) ac.abort();
+    });
 
     const t0 = Date.now();
     let resolvedUrl: string | null = null;
