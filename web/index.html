@@ -306,6 +306,29 @@
   .flow-stage-body{padding:0 12px 12px}
   .flow-kv{margin-top:8px} .flow-kv>b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:3px}
   .flow-stage pre{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;max-height:300px;font-size:11px;white-space:pre-wrap;word-break:break-word;margin:0;font-family:var(--font-mono)}
+  /* ── Kurator-Chat ── */
+  .chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 104px);min-height:360px}
+  .chat-log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+  .chat-empty{color:var(--muted);text-align:center;margin:auto;max-width:440px;line-height:1.55}
+  .chat-empty .ce-h{font-size:15px;color:var(--txt);margin-bottom:8px}
+  .chat-sugs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}
+  .chat-sug{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:7px 13px;font-size:12px;color:var(--muted);cursor:pointer;text-align:left}
+  .chat-sug:hover{color:var(--txt);border-color:var(--green)}
+  .msg{max-width:82%;padding:10px 13px;border-radius:12px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .msg.user{align-self:flex-end;background:var(--green);color:#04130a;border-bottom-right-radius:4px}
+  .msg.bot{align-self:flex-start;background:var(--bg2);border:1px solid var(--line);color:var(--txt);border-bottom-left-radius:4px}
+  .msg .cursor{color:var(--green);animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .chat-err{align-self:center;color:var(--red);font-size:12px;text-align:center;max-width:80%}
+  .chat-bar{display:flex;gap:8px;align-items:flex-end;padding:12px 16px;border-top:1px solid var(--line);background:var(--bg)}
+  .km{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;height:40px;flex:none}
+  .km button{background:var(--bg2);border:0;color:var(--muted);font-size:11px;padding:0 11px;cursor:pointer;font-family:var(--font-mono);white-space:nowrap}
+  .km button.on{background:var(--green);color:#04130a;font-weight:700}
+  .km button:not(.on):hover{color:var(--txt)}
+  .chat-bar textarea{flex:1;resize:none;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--txt);font-family:inherit;font-size:13.5px;max-height:140px;min-height:40px;line-height:1.45}
+  .chat-bar textarea:focus{outline:none;border-color:var(--green)}
+  .chat-bar button{background:var(--green);color:#04130a;border:0;border-radius:10px;padding:0 18px;font-weight:600;cursor:pointer;font-family:var(--font-mono)}
+  .chat-bar button:disabled{opacity:.45;cursor:default}
 </style>
 </head>
 <body>
@@ -455,6 +478,7 @@ function persistActive(){
   const entry={id:active.id,label:active.label,vz:active.vz,ts:Date.now(),
     saldo:c?c.erstattung:0,refund:c?c.erstattung>=0:true,veranlagung:active.data.veranlagungsart,
     data:active.data,paths:active.paths,audit:active.audit||null,
+    chat:active.chat||null,kuratorModel:active.kuratorModel||null,
     docs:active.docs.map(d=>({name:d.name,size:d.size,path:d.path||null,badge:d.badge,state:d.state,fields:d.fields||[],thumbUrl:(d.thumb&&typeof d.thumb.url==='string'&&d.thumb.url.indexOf('data:')===0)?d.thumb.url:null,isImg:!!(d.thumb&&d.thumb.kind==='img')}))};
   const arr=loadCases().filter(x=>x.id!==active.id&&x.label!==active.label);
   arr.unshift(entry); storeCases(arr); renderCases();
@@ -479,13 +503,14 @@ caselistEl.addEventListener('click',e=>{
   revokeObjUrls();
   active={id:c.id,label:c.label,vz:c.vz,paths:c.paths||[],
     docs:(c.docs||[]).map(d=>({name:d.name,size:d.size,path:d.path||null,badge:d.badge,state:d.state,fields:d.fields||[],
-      thumb:d.thumbUrl?{kind:'img',url:d.thumbUrl}:{kind:d.isImg?'img':'pdf'}})),data:c.data,audit:c.audit||null};
+      thumb:d.thumbUrl?{kind:'img',url:d.thumbUrl}:{kind:d.isImg?'img':'pdf'}})),data:c.data,audit:c.audit||null,
+    chat:Array.isArray(c.chat)?c.chat:[],kuratorModel:c.kuratorModel||'gemma'};
   viewDoc=null; auditMode=false; closeNcp(); render(); window.scrollTo({top:0,behavior:'smooth'});
 });
 
 /* ── Neuer-Fall-Panel ── */
 let ncp=null; // {vz, files:[File]}
-function openNcp(){ ncp={vz:'',files:[]}; renderNcp(); }
+function openNcp(){ ncp={vz:'',files:[],kurator:'gemma'}; renderNcp(); }
 function closeNcp(){ ncp=null; ncpHost.innerHTML=''; }
 function renderNcp(){
   if(!ncp){ ncpHost.innerHTML=''; return; }
@@ -504,6 +529,14 @@ function renderNcp(){
       ${ncp.vz?'':'<div class="ncp__hint">Zuerst oben das Steuerjahr wählen.</div>'}
       <div class="ncp__staged">${ncp.files.map(f=>`<div class="ncp__file"><b>${esc(f.name)}</b><span>${kb(f.size)}</span></div>`).join('')}</div>
     </div>
+    <div class="ncp__step">
+      <div class="ncp__lbl"><span class="ncp__n">3</span> Kurator-Modell</div>
+      <div class="km ncp__km" id="ncp-km" style="margin-top:6px">
+        <button data-km="gemma" class="${ncp.kurator!=='opus'?'on':''}">Gemma</button>
+        <button data-km="opus" class="${ncp.kurator==='opus'?'on':''}">Opus 4.8</button>
+      </div>
+      <div class="ncp__hint">Gemma läuft on-prem (sofort verfügbar). Opus 4.8 braucht einen gültigen API-Key. Jederzeit im Chat umschaltbar.</div>
+    </div>
     <div class="ncp__actions">
       <button class="ncp__go" id="ncp-go" ${canGo?'':'disabled'}>${busy?'rechnet…':'Fall anlegen →'}</button>
       <button class="ncp__cancel" id="ncp-cancel">Abbrechen</button>
@@ -512,6 +545,7 @@ function renderNcp(){
 }
 ncpHost.addEventListener('click',e=>{
   const yr=e.target.closest('[data-yr]'); if(yr){ncp.vz=yr.getAttribute('data-yr');renderNcp();return;}
+  const km=e.target.closest('[data-km]'); if(km){ncp.kurator=km.getAttribute('data-km');renderNcp();return;}
   if(e.target.closest('#ncp-drop')){ if(ncp.vz) $('#ncp-input').click(); return; }
   if(e.target.closest('#ncp-cancel')){ closeNcp(); return; }
   if(e.target.closest('#ncp-go')){ createCase(); return; }
@@ -532,7 +566,7 @@ async function createCase(){
       docs.push({name:f.name,size:f.size,path,thumb:null,badge:'',state:'pending',_file:f}); }
     const caseId='c'+Date.now();          // VOR compute minten → Server-Job + Poll teilen die id
     const data=await compute(paths,vz,caseId);
-    active={id:caseId,label:caseLabel(data),vz,paths,docs,data}; viewDoc=null;
+    active={id:caseId,label:caseLabel(data),vz,paths,docs,data,chat:[],kuratorModel:ncp.kurator||'gemma'}; viewDoc=null;
     applyBadges();
     busy=false; closeNcp(); render(); persistActive();
     hydrateThumbs(active);
@@ -755,9 +789,85 @@ async function loadFlow(){
   }catch(e){ body.innerHTML='<div class="err">'+esc(e.message||String(e))+'</div>'; }
 }
 
-/* ── Chat: Kurator (folgt) ── */
+/* ── Chat: Kurator (ganzer Fall im Kontext, gestreamt via api/chat) ── */
+let chatBusy=false, chatErr='';
+const KM_LABEL={gemma:'Gemma',opus:'Opus 4.8'};
+function kuratorOf(){ return (active&&active.kuratorModel)||'gemma'; }
 function renderChat(){
-  center.innerHTML='<div class="audit-empty"><div style="font-size:15px;color:var(--txt);margin-bottom:8px">Kurator-Chat</div><div>Opus-gestützter Fall-Chat: fragt den Fall ab, schlägt Optimierungen vor, vergleicht Vorjahr ↔ Fall-Jahr. Folgt.</div></div>';
+  chatErr='';
+  if(!active||!active.data){ center.innerHTML='<div class="audit-empty">Kein berechneter Fall — lege einen Fall an oder wähle einen aus der Liste.</div>'; return; }
+  if(!Array.isArray(active.chat)) active.chat=[];
+  const km=kuratorOf();
+  center.innerHTML=`<div class="chat-wrap">
+    <div class="chat-log" id="chat-log"></div>
+    <div class="chat-bar">
+      <div class="km" id="km" title="Kurator-Modell für diesen Fall">
+        <button data-km="gemma" class="${km==='gemma'?'on':''}">Gemma</button>
+        <button data-km="opus" class="${km==='opus'?'on':''}">Opus 4.8</button>
+      </div>
+      <textarea id="chat-in" rows="1" placeholder="Frag den Kurator zum Fall – Optimierungen, Vorjahresvergleich, fehlende Belege… (Enter sendet)"></textarea>
+      <button id="chat-send" ${chatBusy?'disabled':''}>Senden</button>
+    </div>
+  </div>`;
+  renderChatLog();
+  const ta=$('#chat-in'), btn=$('#chat-send'), kmEl=$('#km');
+  const grow=()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,140)+'px'; };
+  ta&&ta.addEventListener('input',grow);
+  ta&&ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendChat(); } });
+  btn&&btn.addEventListener('click',sendChat);
+  kmEl&&kmEl.addEventListener('click',e=>{ const b=e.target.closest('[data-km]'); if(!b||chatBusy)return;
+    active.kuratorModel=b.dataset.km; persistActive();
+    kmEl.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.km===active.kuratorModel)); });
+  ta&&ta.focus();
+}
+function renderChatLog(){
+  const log=$('#chat-log'); if(!log||!active)return;
+  if(!active.chat||!active.chat.length){
+    const hasVj=!!(active.data&&active.data.vorjahr);
+    log.innerHTML=`<div class="chat-empty"><div class="ce-h">Kurator · ${esc(KM_LABEL[kuratorOf()]||'Gemma')}</div>
+      <div>Ich habe den ganzen Fall im Blick — Felder, Bescheid, Haushalt${hasVj?' und die Vorjahresbelege':''}. Frag mich nach Optimierungen oder Auffälligkeiten.</div>
+      <div class="chat-sugs">
+        <button class="chat-sug">Fasse den Fall zusammen und nenne die größten Optimierungshebel.</button>
+        <button class="chat-sug">Vergleiche Vorjahr und Fall-Jahr — was fehlt oder weicht ab?</button>
+        <button class="chat-sug">Welche Belege oder Angaben fehlen für eine optimale Erklärung?</button>
+      </div></div>`;
+    log.querySelectorAll('.chat-sug').forEach(s=>s.addEventListener('click',()=>{ const ta=$('#chat-in'); if(ta){ta.value=s.textContent;} sendChat(); }));
+    return;
+  }
+  log.innerHTML=active.chat.map(m=>`<div class="msg ${m.role==='user'?'user':'bot'}">${esc(m.content)}${m.streaming?'<span class="cursor">▋</span>':''}</div>`).join('')
+    +(chatErr?`<div class="chat-err">${esc(chatErr)}</div>`:'');
+  log.scrollTop=log.scrollHeight;
+}
+async function sendChat(){
+  if(chatBusy||!active||!active.data)return;
+  const ta=$('#chat-in'); const text=(ta?ta.value:'').trim(); if(!text)return;
+  if(!Array.isArray(active.chat)) active.chat=[];
+  chatErr=''; active.chat.push({role:'user',content:text});
+  const bot={role:'assistant',content:'',streaming:true}; active.chat.push(bot);
+  if(ta){ ta.value=''; ta.style.height='auto'; }
+  chatBusy=true; const sb=$('#chat-send'); if(sb)sb.disabled=true;
+  renderChatLog();
+  try{
+    const send=active.chat.slice(0,-1).map(m=>({role:m.role,content:m.content}));   // leere Bot-Msg nicht mitsenden
+    const r=await fetch('api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:send,case:active.data,model:kuratorOf()})});
+    if(!r.ok||!r.body) throw new Error('HTTP '+r.status+' '+(await r.text().catch(()=>'' )).slice(0,160));
+    const reader=r.body.getReader(), dec=new TextDecoder(); let buf='';
+    for(;;){ const {value,done}=await reader.read(); if(done)break;
+      buf+=dec.decode(value,{stream:true}); let nl;
+      while((nl=buf.indexOf('\n'))>=0){ const line=buf.slice(0,nl).trim(); buf=buf.slice(nl+1);
+        if(!line.startsWith('data:'))continue; const p=line.slice(5).trim(); if(!p)continue;
+        try{ const ev=JSON.parse(p);
+          if(ev.delta){ bot.content+=ev.delta; renderChatLog(); }
+          else if(ev.error){ chatErr=ev.error; }
+        }catch(_){/* ping */}
+      }
+    }
+  }catch(e){ chatErr='Kurator nicht erreichbar: '+(e.message||e); }
+  bot.streaming=false;
+  if(!bot.content){ active.chat.pop(); if(!chatErr) chatErr='Keine Antwort erhalten.'; }
+  chatBusy=false; { const sb2=$('#chat-send'); if(sb2)sb2.disabled=false; }
+  renderChatLog(); persistActive();
 }
 
 /* Blob-URLs aller Belege freigeben (Leak-Schutz beim Wechseln/Verlassen). */

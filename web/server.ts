@@ -324,6 +324,145 @@ async function runSteuerfall(paths: string[], vz: number) {
   };
 }
 
+// ── Kurator-Chat: LLM über den GANZEN Fall (Optimierung + Jahresvergleich) ──
+// Provider-agnostisch. Default: vLLM gemma4-mm (OpenAI-kompatibel, on-prem,
+// 65K Kontext) — läuft sofort, kein Mock. Sobald ein gültiger Opus-Key
+// vorliegt: KURATOR_MODEL=claude-… + KURATOR_API_KEY setzen → Anthropic-Pfad.
+// Der zugrundeliegende Modellname erscheint NIE im UI ("der Kurator").
+// Gemma-Pfad (on-prem, Default): OpenAI-kompatibel via vLLM.
+const KURATOR_URL = process.env.KURATOR_URL ?? 'http://127.0.0.1:11435/v1/chat/completions';
+const KURATOR_MODEL = process.env.KURATOR_MODEL ?? 'gemma4-mm';
+// Opus-Pfad (Anthropic): nur aktiv, wenn der Client „opus" wählt UND ein
+// gültiger Key vorliegt. Modell-ID env-überschreibbar (kein Modellname im UI).
+const KURATOR_OPUS_MODEL = process.env.KURATOR_OPUS_MODEL ?? 'claude-opus-4-8';
+const KURATOR_KEY = process.env.KURATOR_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? '';
+const KURATOR_ANTHROPIC_URL = process.env.KURATOR_ANTHROPIC_URL ?? 'https://api.anthropic.com/v1/messages';
+const KURATOR_MAX_TOKENS = Number(process.env.KURATOR_MAX_TOKENS ?? 1500);
+
+const KURATOR_SYSTEM = [
+  'Du bist „der Kurator" — ein erfahrener deutscher Steuerberater, der einen',
+  'konkreten, bereits berechneten Steuerfall ganzheitlich prüft. Du bekommst',
+  'den vollständigen Fall als JSON (Felder mit E-Codes/Werten, Bescheide/',
+  'Erstattung, Haushalt, Veranlagungsart, Warnungen) und — falls vorhanden —',
+  'die Belege des VORJAHRES als Vergleichsbasis.',
+  '',
+  'Deine Aufgaben:',
+  '• Beantworte Fragen zum Fall präzise und in klarem Deutsch, mit Bezug auf',
+  '  die konkreten Werte/Felder (nenne E-Codes/Beträge, wenn es hilft).',
+  '• Schlage konkrete steuerliche OPTIMIERUNGEN vor (nicht ausgeschöpfte',
+  '  Pauschalen, Werbungskosten, Sonderausgaben, …) — immer begründet.',
+  '• Vergleiche VORJAHR ↔ Fall-Jahr: benenne auffällige Abweichungen und',
+  '  Posten, die letztes Jahr da waren und diesmal fehlen; leite daraus',
+  '  gezielte Rückfragen ab.',
+  '• Fehlen Daten, fordere genau die fehlende Information an.',
+  '',
+  'Wichtig: Du gibst Hinweise, keine verbindliche Rechtsberatung — sag das bei',
+  'Grenzfällen. Erfinde keine Werte; was nicht im Fall steht, benennst du als',
+  'unbekannt. Antworte kompakt und strukturiert (kurze Absätze/Listen).',
+].join('\n');
+
+// Kompakter Fall-Kontext fürs Modell: nur entscheidungsrelevante Felder,
+// keine schweren Blobs (PNG-Seiten, Box-Listen). Vorjahr separat ausgewiesen.
+function kuratorContext(data: Record<string, unknown> | null | undefined): string {
+  if (!data || typeof data !== 'object') return '{}';
+  const d = data as Record<string, any>;
+  const slim = {
+    veranlagungsjahr: d.vz ?? null,
+    veranlagungsart: d.veranlagungsart ?? null,
+    begruendung: d.begruendung ?? null,
+    haushalt: d.household ?? null,
+    bescheide: Array.isArray(d.calcs) ? d.calcs.map((c: any) => ({
+      einheit: c.einheit, erstattung: c.erstattung, angerechnet: c.angerechnet,
+      bindend: c.bindend, abgleich: c.abgleich ?? null,
+    })) : [],
+    felder: Array.isArray(d.fields) ? d.fields.map((f: any) => ({
+      eCode: f.eCode, label: f.label, wert: f.wert, person: f.person, anlage: f.anlage,
+    })) : [],
+    warnungen: d.warnings ?? [],
+    vorjahr: d.vorjahr ?? null,
+  };
+  try { return JSON.stringify(slim); } catch { return '{}'; }
+}
+
+// SSE-Streaming des Kurators an den Browser. Normalisiert beide Provider auf
+// EIN Wire-Format: `data: {"delta":"…"}` je Token, Abschluss `data: {"done":true}`,
+// Fehler `data: {"error":"…"}`. Der Client bleibt dadurch provider-agnostisch.
+async function streamKurator(
+  res: ServerResponse,
+  messages: Array<{ role: string; content: string }>,
+  caseData: Record<string, unknown> | null,
+  choice: string,
+): Promise<void> {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  let closed = false;
+  res.on('close', () => { closed = true; });
+  const ctx = kuratorContext(caseData);
+  const useOpus = choice === 'opus';                       // Modellwahl des Clients
+  const model = useOpus ? KURATOR_OPUS_MODEL : KURATOR_MODEL;
+  const turns = messages
+    .filter((m) => m && typeof m.content === 'string' && m.content.trim())
+    .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+  try {
+    let r: Response;
+    if (useOpus) {
+      if (!KURATOR_KEY) { send({ error: 'Opus 4.8: kein gültiger API-Key gesetzt (KURATOR_API_KEY/ANTHROPIC_API_KEY). Auf „Gemma" umschalten.' }); send({ done: true }); return void res.end(); }
+      r = await fetch(KURATOR_ANTHROPIC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': KURATOR_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: KURATOR_MAX_TOKENS, stream: true,
+          system: `${KURATOR_SYSTEM}\n\nFALL (JSON):\n${ctx}`, messages: turns }),
+      });
+    } else {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (KURATOR_KEY) headers.Authorization = `Bearer ${KURATOR_KEY}`;
+      r = await fetch(KURATOR_URL, {
+        method: 'POST', headers,
+        body: JSON.stringify({ model, max_tokens: KURATOR_MAX_TOKENS, temperature: 0.3, stream: true,
+          messages: [{ role: 'system', content: `${KURATOR_SYSTEM}\n\nFALL (JSON):\n${ctx}` }, ...turns] }),
+      });
+    }
+    if (!r.ok || !r.body) {
+      const detail = r.ok ? 'kein Stream' : `HTTP ${r.status}`;
+      send({ error: `Kurator-LLM nicht verfügbar (${detail}).` }); send({ done: true }); return void res.end();
+    }
+    // Web-Stream-Reader (versions-robust, kein for-await auf res.body nötig).
+    const reader = (r.body as ReadableStream<Uint8Array>).getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      if (closed) { try { await reader.cancel(); } catch { /* socket weg */ } break; }
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith('data:')) continue;            // SSE: nur data-Zeilen
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]' || !payload) continue;     // OpenAI-Sentinel
+        try {
+          const ev = JSON.parse(payload);
+          const delta = useOpus
+            ? (ev.type === 'content_block_delta' ? ev.delta?.text : '')   // Anthropic
+            : ev.choices?.[0]?.delta?.content;                            // OpenAI/vLLM
+          if (delta) send({ delta });
+        } catch { /* Ping/Keep-alive-Zeile → ignorieren */ }
+      }
+    }
+    send({ done: true });
+  } catch (e) {
+    send({ error: 'Kurator nicht erreichbar: ' + (e as Error).message }); send({ done: true });
+  }
+  res.end();
+}
+
 createServer(async (req, res) => {
   try {
     const url = (req.url ?? '/').split('?')[0];
@@ -425,6 +564,20 @@ createServer(async (req, res) => {
       const protocol = buildAuditProtocol({ caseId: String(caseId ?? ''), label: String(label ?? ''), vz: Number(vz) || 0, data, audit });
       const seal = sealProtocol(protocol, new Date().toISOString());
       return json(res, 200, { ok: true, protocol, seal });
+    }
+    // Kurator-Chat (SSE): ganzer Fall + Verlauf → gestreamte Antwort. Modell
+    // on-prem (vLLM), per Env auf Opus umstellbar. Siehe streamKurator.
+    if (req.method === 'POST' && url === '/api/chat') {
+      let payload: { messages?: Array<{ role: string; content: string }>; case?: Record<string, unknown>; model?: string };
+      try { payload = JSON.parse((await body(req)).toString('utf8')); }
+      catch { return json(res, 400, { error: 'kein JSON' }); }
+      const messages = Array.isArray(payload?.messages)
+        ? payload.messages.filter((m) => m && typeof m.content === 'string').slice(-20)
+        : [];
+      if (!messages.length) return json(res, 400, { error: 'keine Nachricht' });
+      const choice = payload?.model === 'opus' ? 'opus' : 'gemma';
+      await streamKurator(res, messages, payload?.case ?? null, choice);
+      return;
     }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found');
   } catch (e) {
