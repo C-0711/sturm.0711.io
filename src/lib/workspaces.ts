@@ -646,7 +646,7 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     const uuid = randomUUID();
     const ext = extOf(req.file.originalname);
@@ -885,7 +885,7 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
     };
 
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     try {
       const apiKey = process.env.MISTRAL_API_KEY;
@@ -1330,7 +1330,7 @@ export function createWorkspacesRouter(workspacesDir: string, canonicalsDir: str
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
     const ac = new AbortController();
-    req.on('close', () => ac.abort());
+    res.on('close', () => { if (!res.writableEnded) ac.abort(); });
 
     try {
       const apiKey = process.env.MISTRAL_API_KEY;
