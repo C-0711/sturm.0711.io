@@ -28,6 +28,7 @@ import { loadCandidates, buildIndex, type Candidate } from '../src/server/harmon
 import { extractBeleg, type ExtractOutput } from './extract-client.ts';
 import { parseVorauszahlungen } from './extract-vorauszahlung.ts';
 import { parseKvPvBasis, parse35aBasis, parseSpenden } from './extract-sonderausgaben.ts';
+import { parseSpendenVision } from './extract-spenden-vision.ts';
 import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
 import { rename } from 'node:fs/promises';
 
@@ -315,7 +316,14 @@ async function runSteuerfall(paths: string[], vz: number) {
     if (!txt) continue;
     if (!saKvPv) saKvPv = parseKvPvBasis(txt);
     if (!sa35a) sa35a = parse35aBasis(txt);
-    if (!saSpenden) saSpenden = parseSpenden(txt);
+    if (!saSpenden) {
+      saSpenden = parseSpenden(txt);
+      // Verstümmelter Spenden-Scan → Vision-OCR-Fallback (on-prem gemma4-mm).
+      if (!saSpenden && /Zuwendung|Spende/i.test(txt)) {
+        try { const v = await parseSpendenVision(p); if (v?.betrag) saSpenden = { betrag: v.betrag }; }
+        catch (e) { console.error('SPENDEN-VISION', basename(p), (e as Error).message); }
+      }
+    }
   }
   const deSA = (n: number) => n.toFixed(2).replace('.', ',');
   if (saKvPv?.kv) felder.push({ eCode: 'E0202504', wert: deSA(saKvPv.kv), person: 'A', anlage: 'VOR', pdfLabel: 'KV-Basisbeitrag' });
