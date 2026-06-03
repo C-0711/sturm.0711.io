@@ -27,6 +27,7 @@ import { buildAuditProtocol, sealProtocol } from './protocol.ts';
 import { loadCandidates, buildIndex, type Candidate } from '../src/server/harmonize.ts';
 import { extractBeleg, type ExtractOutput } from './extract-client.ts';
 import { parseVorauszahlungen } from './extract-vorauszahlung.ts';
+import { parseKvPvBasis, parse35aBasis, parseSpenden } from './extract-sonderausgaben.ts';
 import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
 import { rename } from 'node:fs/promises';
 
@@ -246,6 +247,23 @@ async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: s
   await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase });
 }
 
+// Text eines Belegs für die Zusatz-Parser: Text-PDF → pdftotext, Bild → OCR-Cache.
+function docText(p: string): string {
+  // OCR-Cache ZUERST: gescannte Belege (.pdf-Scans wie die §35a-Bescheinigung)
+  // haben oft nur einen dünnen, unbrauchbaren Text-Layer, aber den VOLLEN Inhalt
+  // im OCR-Cache. Text-PDFs (z.B. PKV-eDaten) sind nicht ge-OCRt → Cache leer →
+  // Fallback auf pdftotext.
+  try {
+    const f = cacheFile(p);
+    if (existsSync(f)) {
+      const rt = String((JSON.parse(readFileSync(f, 'utf8')) as { rawText?: string }).rawText ?? '');
+      if (rt.trim().length > 20) return rt;
+    }
+  } catch { /* miss */ }
+  try { return execFileSync('pdftotext', ['-layout', p, '-'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }); }
+  catch { return ''; }
+}
+
 async function runSteuerfall(paths: string[], vz: number) {
   const t0 = process.hrtime.bigint();
   const orchUp = await pingOrchestrator(baseUrl);
@@ -282,6 +300,28 @@ async function runSteuerfall(paths: string[], vz: number) {
       break;
     }
   }
+  // A2/A3/A4 — KV/PV-Basis, §35a-Arbeitslohnanteil, Spenden aus Belegen, die der
+  // Haupt-Extraktor offen lässt → kanonische E-Codes (BMF-MCP-Module vorsorge/
+  // haushaltsnahe_35a/spenden_10b). Erster Treffer je Typ (kein Doppel über mehrere
+  // Belege), rein strukturell geparst — kein Case-Hardcode.
+  let saKvPv: ReturnType<typeof parseKvPvBasis> = null;
+  let sa35a: ReturnType<typeof parse35aBasis> = null;
+  let saSpenden: ReturnType<typeof parseSpenden> = null;
+  for (const p of paths) {
+    let txt = ''; try { txt = docText(p); } catch { /* best-effort */ }
+    // Dünner/kein Text-Layer (gescannter Beleg) → OCR erzwingen (cached), damit
+    // §35a-/Spenden-Bescheinigungen ihren vollen Inhalt liefern.
+    if (txt.trim().length < 200) { try { txt = await parseImage(p); } catch { /* OCR-Fehler → skip */ } }
+    if (!txt) continue;
+    if (!saKvPv) saKvPv = parseKvPvBasis(txt);
+    if (!sa35a) sa35a = parse35aBasis(txt);
+    if (!saSpenden) saSpenden = parseSpenden(txt);
+  }
+  const deSA = (n: number) => n.toFixed(2).replace('.', ',');
+  if (saKvPv?.kv) felder.push({ eCode: 'E0202504', wert: deSA(saKvPv.kv), person: 'A', anlage: 'VOR', pdfLabel: 'KV-Basisbeitrag' });
+  if (saKvPv?.pv) felder.push({ eCode: 'E0202604', wert: deSA(saKvPv.pv), person: 'A', anlage: 'VOR', pdfLabel: 'Pflege-Pflichtbeitrag' });
+  if (sa35a?.haushaltsnah) felder.push({ eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), person: 'A', anlage: 'HA', pdfLabel: 'haushaltsnahe Dienstleistungen §35a' });
+  if (saSpenden?.betrag) felder.push({ eCode: 'E0108701', wert: deSA(saSpenden.betrag), person: 'A', anlage: 'SA', pdfLabel: 'Spenden §10b' });
 
   // Provenienz-Pass: pro OCR'tem Dokument PNG+bboxes (cache), dann je Feld den
   // Record mit passendem Wert finden → prov (Box im Bild). Best-effort: ein
