@@ -67,6 +67,8 @@ const ECODE_KIST_ABZUG = new Set(['E0200501', 'E0200503', 'E0200601']);
 // anlage_r.rente_brutto (MCP) + Extraktor-Codes:
 const ECODE_RENTE = new Set(['E2400103', 'E2400203', 'E1800301', 'E1803102']);
 const ECODE_RENTENBEGINN = new Set(['E2400107', 'E2400207', 'E1800501', 'E1803202']);
+// Rentenanpassungsbetrag (voll steuerpflichtig) → festgeschriebener Rentenfreibetrag.
+const ECODE_RENTEN_ANPASSUNG = new Set(['E1800606', 'E2400106', 'E2400206']);
 const ECODE_KAP_ERTRAG = new Set(['E1900701']);
 const ECODE_KAP_STEUER = new Set(['E1904701']);
 // Geleistete Vorauszahlungen (intern, aus der Steuerkontoabfrage injiziert) —
@@ -93,6 +95,7 @@ interface PersonAkku {
   kist: number;
   rente: number;
   rentenbeginn: number | null;
+  rentenAnpassung: number;
   kapErtrag: number;
   kapSteuer: number;
   altersvorsorge: number;
@@ -102,7 +105,7 @@ interface PersonAkku {
 }
 const emptyAkku = (): PersonAkku => ({
   bruttolohn: [], lohnsteuer: 0, soli: 0, kist: 0, rente: 0,
-  rentenbeginn: null, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, vorauszahlung: 0,
+  rentenbeginn: null, rentenAnpassung: 0, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, vorauszahlung: 0,
 });
 
 export interface AdapterErgebnis {
@@ -133,6 +136,7 @@ export function bausteineAusFelder(
     else if (ECODE_KIST_ABZUG.has(f.eCode)) { if (n) p.kist += n; }
     else if (ECODE_VORAUSZAHLUNG.has(f.eCode)) { if (n) p.vorauszahlung += n; }
     else if (ECODE_RENTE.has(f.eCode)) { if (n) p.rente += n; }
+    else if (ECODE_RENTEN_ANPASSUNG.has(f.eCode)) { if (n) p.rentenAnpassung += n; }
     else if (ECODE_RENTENBEGINN.has(f.eCode)) {
       const yr = parseInt((f.wert.match(/(19|20)\d{2}/) ?? [])[0] ?? '', 10);
       if (yr) p.rentenbeginn = p.rentenbeginn ? Math.min(p.rentenbeginn, yr) : yr;
@@ -157,7 +161,11 @@ export function bausteineAusFelder(
       }
     }
     const renten = a.rente > 0
-      ? [{ jahresbetrag: a.rente, besteuerungsanteil: besteuerungsanteil(a.rentenbeginn ?? 2005) }]
+      ? [{ jahresbetrag: a.rente, besteuerungsanteil: besteuerungsanteil(a.rentenbeginn ?? 2005),
+           // Festgeschriebener Rentenfreibetrag (§22): steuerpflichtig = Brutto −
+           // (1−Anteil)×(Brutto − Anpassungsbetrag). Ohne Anpassung kollabiert das
+           // zur reinen Besteuerungsanteil-Formel (= bisheriges Verhalten).
+           steuerpflichtigerAnteil: round2(a.rente - (1 - besteuerungsanteil(a.rentenbeginn ?? 2005)) * Math.max(0, a.rente - a.rentenAnpassung)) }]
       : [];
     if (renten.length) notes.push(`Person ${who}: Rente ${a.rente} × Besteuerungsanteil(${a.rentenbeginn ?? 2005})=${besteuerungsanteil(a.rentenbeginn ?? 2005).toFixed(2)}.`);
     return {
