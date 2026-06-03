@@ -1,0 +1,6 @@
+                 "kv_beitraege": float(bmf_inputs.get("kv_beitraege", 0)),
+                 "pv_beitraege": float(bmf_inputs.get("pv_beitraege", 0)),
+-                "krankengeldanspruch": bmf_inputs.get("krankengeldanspruch", True),
++                "krankengeldanspruch": bmf_inputs.get("krankengeldanspruch", float(bruttolohn) > float(bmf_inputs.get("versorgungsbezuege_1_betrag", 0) or 0)),  # Arbeitnehmer (aktiver Lohn > Versorgung) -> Krankengeld; Rentner/Versorgung -> nein
+                 "ist_arbeitnehmer": True,
+                 # drv_zuschuss_gesamt = §106 SGB VI für RENTNER, nicht rv_beitraege_ag!

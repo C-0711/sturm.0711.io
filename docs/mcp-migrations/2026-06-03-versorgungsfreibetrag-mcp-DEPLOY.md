@@ -77,3 +77,24 @@ bmf_calculator_mcp_server.py.bak, versorgung_db.sql).
 - **§35a-Vokabular:** Flow nutzt E0107301 (wirkt), GT-Fixture E0107208 (wirkt nicht
   im MCP) — angleichen.
 - Tafel **2023/2024** nach WachstumschancenG verifizieren + ergänzen.
+
+---
+
+## Nachtrag: KV-Krankengeld-Kürzung (§10 Abs.1 Nr.3 Satz 4) — krankengeldanspruch
+
+**Problem:** Der MCP kürzte die KV-Basisbeiträge unbedingt auf 96 % (4%-Krankengeld-
+Kürzung), weil `bmf_calculator_mcp_server.py:976` `krankengeldanspruch` pauschal
+auf `True` defaultete (Arbeitnehmer-Annahme). Für Rentner/Versorgungsempfänger
+(private KV, kein Krankengeld) ist das falsch → KV nur zu 96 % statt 100 %
+abzugsfähig (Hildburg: 71 € zvE zu hoch).
+
+**Fix (1 Zeile + Rebuild):** Die bedingte Formel war schon da
+(`kv_kuerzung_betrag = IF(krankengeldanspruch, …, 0)`). Default jetzt ABGELEITET:
+`krankengeldanspruch = aktiver Lohn > Versorgungsbezüge` → Arbeitnehmer (Lohn >
+Versorgung) behält die 96%-Kürzung, Rentner/Versorgungsempfänger bekommen 100 %.
+
+**Verifiziert:** Hildburg `kv_kuerzung_betrag=0,00`, KV 1.781,98 voll abzugsfähig,
+Vorsorge 2.554,66 = In-Process; zvE 44.704 = In-Process (zveDelta −0,34). Arbeit-
+nehmer (Lohn 50k) behält 96 %.
+
+**Revert:** `docker tag ctaxv1-lane1-bmf:before-krankengeld ctaxv1-lane1-bmf:latest && docker compose up -d lane1-bmf`
