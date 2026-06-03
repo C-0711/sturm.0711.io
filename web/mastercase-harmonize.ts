@@ -246,13 +246,21 @@ function assignPersons(facts: RawFact[], roster: RosterIndex): Map<RawFact, 'A' 
   const byPage = new Map<string, RawFact[]>();
   for (const f of facts) { const k = pageKey(f); (byPage.get(k) ?? byPage.set(k, []).get(k)!).push(f); }
   const pageOf = new Map<string, 'A' | 'B'>();
+  const docOf = new Map<string, 'A' | 'B'>();   // document → eindeutige Person (Anker auf IRGENDEINER Seite)
+  const docAmbig = new Set<string>();           // Dokument mit widersprüchlichen Seiten-Ankern → kein Dok-Fallback
   for (const [k, fs] of byPage) {
     // direkter IdNr-Wert auf der Seite?
     let p: 'A' | 'B' | null = null;
     for (const f of fs) if (f.e_code === IDNR_ECODE) { const d = digits(f.value); if (roster.byIdnr.has(d)) { p = roster.byIdnr.get(d)!; break; } }
     // sonst der Anker im rohen page_record ('Ehepartner: Identifikationsnummer' …)
     if (!p && fs[0]?.records.length) p = pagePerson(fs[0].records, roster);
-    if (p) pageOf.set(k, p);
+    if (p) {
+      pageOf.set(k, p);
+      // Dokument-Anker: nur nutzen, wenn das ganze Dokument eindeutig EINER Person gehört.
+      const doc = fs[0].document;
+      if (docOf.has(doc) && docOf.get(doc) !== p) docAmbig.add(doc);
+      else docOf.set(doc, p);
+    }
   }
   const out = new Map<RawFact, 'A' | 'B'>();
   for (const f of facts) {
@@ -260,7 +268,10 @@ function assignPersons(facts: RawFact[], roster: RosterIndex): Map<RawFact, 'A' 
     let p = personFromValue(f.value, f.e_code, roster);
     // (2) Seite trägt die Person (gleiche Seite = gleiche Person)
     if (!p) p = pageOf.get(pageKey(f)) ?? null;
-    // (3) Einzelveranlagung → alles Person A
+    // (3) Dokument trägt die Person (andere Seite desselben Belegs war eindeutig geankert)
+    if (!p && !docAmbig.has(f.document)) p = docOf.get(f.document) ?? null;
+    // (4) Single-Mandant (genau eine IdNr/ein Name im Haushalt) → alles Person A.
+    //     Zwei Personen, kein Anker → Default A (statt 'unknown' offen zu lassen).
     if (!p) p = single ?? 'A';
     out.set(f, p);
   }
@@ -316,6 +327,68 @@ function buildEntities(roster: RosterIndex, seen: Set<'A' | 'B'>, hh: Household)
   return ents;
 }
 
+// ── Schritt 4b: DOKUMENT-DEDUP — dasselbe Dokument zweimal (ELSTER-PDF ↔ Scan) ──
+/** Versorgungsbezüge etc. dürfen nicht doppelt summiert werden, wenn derselbe
+ *  Beleg zweimal vorliegt (z.B. „Witwen Pension.pdf" = gescanntes Original der
+ *  LBV-LStB mit IDENTISCHEN Beträgen). Wir bilden je Beleg einen Fingerprint aus
+ *  der GESAMTEN Feldmenge (eCode → normalisierter Betrag) und behandeln Belege
+ *  mit (nahezu) identischem Fingerprint als EINE Quelle. Der Fingerprint stützt
+ *  sich auf Feld-INHALTE, nicht auf den Dateinamen.
+ *
+ *  Schutz gegen Fehl-Merge zweier legitim verschiedener Belege mit zufällig
+ *  gleichem Einzelwert: ein Treffer reicht NICHT — nötig sind ≥3 übereinstimmende
+ *  eCode/Wert-Paare ODER ein dominanter (größter) Betrag, der bei BEIDEN Belegen
+ *  der Spitzenwert ist und ≥50 % ihrer Felder mit-überlappt. */
+function dedupeIncomeDocuments(income: IncomeFact[]): { kept: IncomeFact[]; dropped: Mastercase['verworfen'] } {
+  const num = (s: string) => { const n = parseFloat((s || '').replace(/\./g, '').replace(',', '.')); return Number.isNaN(n) ? null : n; };
+  // Reihenfolge der Dokumente stabil halten (erstes bleibt kanonisch).
+  const order: string[] = [];
+  const factsByDoc = new Map<string, IncomeFact[]>();
+  for (const f of income) {
+    if (!factsByDoc.has(f.document)) { factsByDoc.set(f.document, []); order.push(f.document); }
+    factsByDoc.get(f.document)!.push(f);
+  }
+  // Fingerprint je Beleg: eCode → normalisierter Betrag (letzter Wert je eCode gewinnt).
+  const fp = new Map<string, Map<string, number>>();
+  for (const doc of order) {
+    const m = new Map<string, number>();
+    for (const f of factsByDoc.get(doc)!) { const v = num(f.value); if (v != null) m.set(f.eCode, v); }
+    fp.set(doc, m);
+  }
+  const eq = (a: number, b: number) => Math.abs(a - b) <= 0.005 + 0.001 * Math.max(Math.abs(a), Math.abs(b)); // Cent-tolerant
+  const maxVal = (m: Map<string, number>) => { let x = -Infinity; for (const v of m.values()) if (Math.abs(v) > Math.abs(x)) x = v; return x; };
+  /** Sind zwei Belege dasselbe Dokument? Gesamte Feldmenge vergleichen. */
+  const isDuplicate = (a: Map<string, number>, b: Map<string, number>): boolean => {
+    if (!a.size || !b.size) return false;
+    let matched = 0;
+    for (const [ec, va] of a) { const vb = b.get(ec); if (vb != null && eq(va, vb)) matched++; }
+    if (matched === 0) return false;
+    const frac = matched / Math.min(a.size, b.size);
+    if (matched >= 3) return true;                              // viele Paare → eindeutig derselbe Beleg
+    if (matched >= 2 && frac >= 0.8) return true;               // hohe Überlappung
+    // dominanter Betrag: Spitzenwert BEIDER Belege ist derselbe (+ ≥50 % Überlappung)
+    const ma = maxVal(a), mb = maxVal(b);
+    if (matched >= 1 && eq(ma, mb) && frac >= 0.5) return true;
+    return false;
+  };
+  const kept: IncomeFact[] = [];
+  const dropped: Mastercase['verworfen'] = [];
+  const droppedDocs = new Set<string>();
+  const canonicalDocs: string[] = [];                          // bereits akzeptierte Belege (Repräsentanten)
+  for (const doc of order) {
+    const dup = canonicalDocs.find((c) => isDuplicate(fp.get(doc)!, fp.get(c)!));
+    if (dup) {
+      droppedDocs.add(doc);
+      for (const f of factsByDoc.get(doc)!)
+        dropped.push({ e_code: f.eCode, belegfeld_id: f.label, value: f.value, document: f.document, page: f.page, grund: 'duplikat-dokument' });
+    } else {
+      canonicalDocs.push(doc);
+    }
+  }
+  for (const f of income) if (!droppedDocs.has(f.document)) kept.push(f);
+  return { kept, dropped };
+}
+
 // ── Schritt 5: orchestrieren ────────────────────────────────────────────
 // ── Einkommens-Pfad: KAP-Werte aus den page_records über Anker (extract-anchors),
 //    pro (Person, e_code) SUMMIERT über alle Belege (mehrere Banken → EINE Anlage KAP). ──
@@ -341,11 +414,15 @@ export function harmonize(outputs: ExtractOutput[], household: Household): Maste
   const { kept, dropped } = filterRoles(raw, roster);
   const persons = assignPersons(kept, roster);
   const stammdaten = voteFacts(kept, persons);                                      // Stammdaten: Vote (stimmen überein)
-  const einkommen = sumIncome(outputs.flatMap((o) => [...extractAnchoredIncome(o, household), ...extractLstbIncome(o, household)]));  // KAP (Bank) + N/VOR (VaSt-LStB), summiert
+  // Einkommens-Rohfakten ziehen, dann VOR der Summe Duplikat-Dokumente entfernen
+  // (sonst würde z.B. eine doppelt vorliegende LStB die Versorgungsbezüge doppelt zählen).
+  const incomeRaw = outputs.flatMap((o) => [...extractAnchoredIncome(o, household), ...extractLstbIncome(o, household)]);  // KAP (Bank) + N/VOR (VaSt-LStB)
+  const { kept: incomeKept, dropped: incomeDup } = dedupeIncomeDocuments(incomeRaw);
+  const einkommen = sumIncome(incomeKept);                                          // pro (Person, e_code) über DISTINCT Belege summiert
   const fakten = [...stammdaten, ...einkommen];
   const seen = new Set<'A' | 'B'>(fakten.map((f) => f.person));
   const entitaeten = buildEntities(roster, seen, household);
-  return { entitaeten, fakten, verworfen: dropped };
+  return { entitaeten, fakten, verworfen: [...dropped, ...incomeDup] };
 }
 
 // ── optionales main(): Real-Samples laden + drucken ─────────────────────

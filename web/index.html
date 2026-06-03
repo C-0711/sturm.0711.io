@@ -523,7 +523,20 @@ function openNcp(){ ncp={vz:'',files:[],kurator:'gemma'}; renderNcp(); }
 function closeNcp(){ ncp=null; ncpHost.innerHTML=''; }
 function renderNcp(){
   if(!ncp){ ncpHost.innerHTML=''; return; }
-  const canGo=ncp.vz&&ncp.files.length>0&&!busy;
+  // Während busy (Upload + Rechnung) KEIN interaktives Panel zeigen — sonst wirkt
+  // es eingefroren (tote Inputs, alte Eingaben). Stattdessen ein klarer Fortschritt;
+  // ncp.vz/ncp.files bleiben im State erhalten (für den Fehlerfall → Eingaben zurück).
+  if(busy){
+    ncpHost.innerHTML=`<div class="ncp">
+      <div class="ncp__step">
+        <div class="ncp__lbl"><span class="dot-spin"></span> Fall wird angelegt · VZ ${esc(ncp.vz||'')}</div>
+        <div class="ncp__hint" style="margin-top:0">Lädt ${ncp.files.length} Beleg${ncp.files.length===1?'':'e'} hoch und rechnet den Bescheid …</div>
+        <div class="ncp__staged">${ncp.files.map(f=>`<div class="ncp__file"><b>${esc(f.name)}</b><span>${kb(f.size)}</span></div>`).join('')}</div>
+      </div>
+    </div>`;
+    return;
+  }
+  const canGo=ncp.vz&&ncp.files.length>0;
   ncpHost.innerHTML=`<div class="ncp">
     <div class="ncp__step">
       <div class="ncp__lbl"><span class="ncp__n">1</span> Veranlagungszeitraum</div>
@@ -547,7 +560,7 @@ function renderNcp(){
       <div class="ncp__hint">Gemma läuft on-prem (sofort verfügbar). Opus 4.8 braucht einen gültigen API-Key. Jederzeit im Chat umschaltbar.</div>
     </div>
     <div class="ncp__actions">
-      <button class="ncp__go" id="ncp-go" ${canGo?'':'disabled'}>${busy?'rechnet…':'Fall anlegen →'}</button>
+      <button class="ncp__go" id="ncp-go" ${canGo?'':'disabled'}>Fall anlegen →</button>
       <button class="ncp__cancel" id="ncp-cancel">Abbrechen</button>
     </div>
   </div>`;
@@ -611,6 +624,7 @@ async function recompute(){
     const data=await compute(active.paths,active.vz,active.id);
     if(!(data.fields&&data.fields.length)) throw new Error('Belege nicht mehr auf dem Server verfügbar (Cache geleert) — bitte neu hochladen.');
     active.data=data; active.label=caseLabel(data); applyBadges();
+    viewDoc=null; auditMode=false;            // nach Neu-Berechnen zurück auf den Bescheid (nicht in Doc-Detail/Audit hängen)
     busy=false; render(); persistActive();
     pollMastercase(active.id);
   }catch(e){ busy=false; updateChips(); alert('Neu berechnen: '+e.message); }
@@ -690,7 +704,7 @@ function renderAudit(){
   renderDocPanel();
 }
 center.addEventListener('click',e=>{
-  if(e.target.closest('#audit-back')){ auditMode=false; render(); window.scrollTo({top:0,behavior:'smooth'}); return; }
+  if(e.target.closest('#audit-back')){ activeTab='fall'; auditMode=false; render(); window.scrollTo({top:0,behavior:'smooth'}); return; }
   if(e.target.closest('#audit-reaudit')){ runAudit(true); return; }
   if(e.target.closest('#audit-finish')){ finishCase(); return; }
   if(e.target.closest('#audit-export')){ downloadProtocol(); return; }
