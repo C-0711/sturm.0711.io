@@ -175,43 +175,64 @@ export interface SteuerEingabe {
   art?: Veranlagungsart;
   /** Kirchensteuer-Hebesatz (0, 0.08, 0.09). Default 0 (kein Mitglied). */
   kirchensteuerHebesatz?: number;
+  /** § 35a Abs. 2 — Aufwendungen für haushaltsnahe Dienstleistungen/Pflege
+   *  (Bemessungsbasis). 20 % davon, höchstens 4.000 €, mindern die ESt. */
+  haushaltsnahe35aBasis?: number;
 }
 
 export interface SteuerErgebnis {
   vz: number;
   art: Veranlagungsart;
   zvE: number;
+  /** Tarifliche ESt nach §32a (vor Steuerermäßigungen). */
+  tariflicheEinkommensteuer: number;
+  /** § 35a Abs. 2 — angesetzte Steuerermäßigung (20 %, max 4.000 €). */
+  steuerermaessigung35a: number;
+  /** Festzusetzende ESt = tariflich − §35a (≥ 0). */
   einkommensteuer: number;
   solidaritaetszuschlag: number;
   kirchensteuer: number;
-  /** ESt + Soli + KiSt. */
+  /** festzusetzende ESt + Soli + KiSt. */
   gesamtsteuer: number;
-  /** Durchschnittssteuersatz = ESt / zvE. */
+  /** Durchschnittssteuersatz = festzusetzende ESt / zvE. */
   durchschnittssteuersatz: number;
-  /** Grenzsteuersatz an der Stelle zvE (numerische Ableitung über 1 €). */
+  /** Grenzsteuersatz an der Stelle zvE (numerische Ableitung über 100 €). */
   grenzsteuersatz: number;
+}
+
+/** § 35a Abs. 2 EStG — Steuerermäßigung 20 % der Aufwendungen, höchstens
+ *  4.000 €, gedeckelt auf die tarifliche ESt (nicht ins Negative). */
+export function steuerermaessigung35a(basis: number, tariflicheEst: number): number {
+  if (!(basis > 0) || tariflicheEst <= 0) return 0;
+  return round2(Math.min(0.20 * basis, 4000, tariflicheEst));
 }
 
 /** Vollständige Tarifberechnung über ein bereits ermitteltes zvE. */
 export function berechneSteuer(input: SteuerEingabe): SteuerErgebnis {
   const art = input.art ?? 'einzeln';
   const zvE = Math.floor(Math.max(0, input.zvE));
-  const est = einkommensteuer(zvE, input.vz, art);
+  const tariflich = einkommensteuer(zvE, input.vz, art);
+  // § 35a mindert die tarifliche ESt VOR Soli/KiSt (diese bemessen sich an der
+  // festzusetzenden ESt nach Steuerermäßigung).
+  const ermaessigung35a = steuerermaessigung35a(input.haushaltsnahe35aBasis ?? 0, tariflich);
+  const est = round2(Math.max(0, tariflich - ermaessigung35a));
   const soli = solidaritaetszuschlag(est, input.vz, art);
   const kist = kirchensteuer(est, input.kirchensteuerHebesatz ?? 0);
-  // Grenzsteuersatz über ein 100-€-Fenster — ein 1-€-Schritt wird von der
-  // Euro-Abrundung des §32a-Tarifs (Satz 6) verschluckt und ergäbe 0/1.
-  const estPlus = einkommensteuer(zvE + 100, input.vz, art);
+  // Grenzsteuersatz (tariflich) über ein 100-€-Fenster — ein 1-€-Schritt wird
+  // von der Euro-Abrundung des §32a-Tarifs (Satz 6) verschluckt.
+  const tariflichPlus = einkommensteuer(zvE + 100, input.vz, art);
   return {
     vz: input.vz,
     art,
     zvE,
+    tariflicheEinkommensteuer: tariflich,
+    steuerermaessigung35a: ermaessigung35a,
     einkommensteuer: est,
     solidaritaetszuschlag: soli,
     kirchensteuer: kist,
     gesamtsteuer: round2(est + soli + kist),
     durchschnittssteuersatz: zvE > 0 ? est / zvE : 0,
-    grenzsteuersatz: Math.max(0, (estPlus - est) / 100),
+    grenzsteuersatz: Math.max(0, (tariflichPlus - tariflich) / 100),
   };
 }
 

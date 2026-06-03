@@ -36,6 +36,8 @@ export interface SteuerfallRechnung extends SteuerfallEingabe {
   kirchensteuerHebesatz?: number;
   /** Bereits einbehaltene Abzugsteuern für die Anrechnung. */
   anrechnung?: Anrechnung;
+  /** § 35a Abs. 2 — Bemessungsbasis haushaltsnahe Dienstleistungen/Pflege. */
+  haushaltsnahe35aBasis?: number;
 }
 
 export interface SteuerbescheidErgebnis {
@@ -62,6 +64,7 @@ export function berechneSteuerfall(input: SteuerfallRechnung): SteuerbescheidErg
     vz: input.vz,
     art: input.art,
     kirchensteuerHebesatz: input.kirchensteuerHebesatz ?? 0,
+    haushaltsnahe35aBasis: input.haushaltsnahe35aBasis ?? 0,
   });
 
   const a = input.anrechnung ?? {};

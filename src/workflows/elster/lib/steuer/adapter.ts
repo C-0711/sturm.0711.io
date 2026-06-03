@@ -61,6 +61,10 @@ export function besteuerungsanteil(rentenbeginnJahr: number): number {
 //   konsumieren In-Process-Kern und MCP DASSELBE Vokabular (Conformance-
 //   Befund: ungleiche Codes waren ~90% der zvE-Divergenz).
 const ECODE_BRUTTOLOHN = new Set(['E0200201', 'E0200204', 'E0200203']); // tarif_32a.bruttolohn
+// §19 Abs.2 Versorgungsbezüge (Nr. 8 LStB) + maßgebendes Kj des Versorgungs-
+// beginns (Nr. 30 LStB) → festgeschriebene Versorgungsfreibetrags-Kohorte.
+const ECODE_VERSORGUNG_BEZUG = new Set(['E0200801']);
+const ECODE_VERSORGUNG_BEGINN = new Set(['E0201307', 'E0201904']);
 const ECODE_LOHNSTEUER = new Set(['E0200301', 'E0200303']);
 const ECODE_SOLI_ABZUG = new Set(['E0200401', 'E0200403']);
 const ECODE_KIST_ABZUG = new Set(['E0200501', 'E0200503', 'E0200601']);
@@ -87,9 +91,14 @@ const ECODE_KV_PV_BASIS = new Set([
   'E0202504', 'E2001203', 'E2004003', 'E2003104', // kv_beitraege (MCP)
   'E0202604', 'E2001505', 'E2004103', 'E2003202', // pv_beitraege (MCP)
 ]);
+// § 35a Abs. 2 — haushaltsnahe Dienstleistungen/Pflege (Bemessungsbasis;
+// 20 % davon, max 4.000 € mindern die Steuer). Extraktor- + MCP-Variante.
+const ECODE_35A_BASIS = new Set(['E0107301', 'E0107208', 'E0107201']);
 
 interface PersonAkku {
   bruttolohn: number[];
+  versorgungBezug: number[];
+  versorgungBeginn: number | null;
   lohnsteuer: number;
   soli: number;
   kist: number;
@@ -104,7 +113,7 @@ interface PersonAkku {
   geburtsjahr?: number;
 }
 const emptyAkku = (): PersonAkku => ({
-  bruttolohn: [], lohnsteuer: 0, soli: 0, kist: 0, rente: 0,
+  bruttolohn: [], versorgungBezug: [], versorgungBeginn: null, lohnsteuer: 0, soli: 0, kist: 0, rente: 0,
   rentenbeginn: null, rentenAnpassung: 0, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, vorauszahlung: 0,
 });
 
@@ -112,6 +121,8 @@ export interface AdapterErgebnis {
   eingabe: SteuerfallEingabe;
   anrechnung: Anrechnung;
   kirchensteuerHebesatz: number;
+  /** § 35a Abs. 2 — Bemessungsbasis haushaltsnahe Dienstleistungen/Pflege. */
+  haushaltsnahe35aBasis: number;
   notes: string[];
 }
 
@@ -126,11 +137,17 @@ export function bausteineAusFelder(
 ): AdapterErgebnis {
   const akku: Record<'A' | 'B', PersonAkku> = { A: emptyAkku(), B: emptyAkku() };
   const notes: string[] = [];
+  let haushaltsnahe35a = 0; // § 35a Abs. 2 — Bemessungsbasis (haushaltsweit)
 
   for (const f of felder) {
     const p = akku[f.person] ?? akku.A;
     const n = parseEuro(f.wert);
     if (ECODE_BRUTTOLOHN.has(f.eCode)) { if (n && n > 0) p.bruttolohn.push(n); }
+    else if (ECODE_VERSORGUNG_BEZUG.has(f.eCode)) { if (n && n > 0) p.versorgungBezug.push(n); }
+    else if (ECODE_VERSORGUNG_BEGINN.has(f.eCode)) {
+      const yr = parseInt((f.wert.match(/(19|20)\d{2}/) ?? [])[0] ?? '', 10);
+      if (yr) p.versorgungBeginn = p.versorgungBeginn ? Math.min(p.versorgungBeginn, yr) : yr;
+    }
     else if (ECODE_LOHNSTEUER.has(f.eCode)) { if (n) p.lohnsteuer += n; }
     else if (ECODE_SOLI_ABZUG.has(f.eCode)) { if (n) p.soli += n; }
     else if (ECODE_KIST_ABZUG.has(f.eCode)) { if (n) p.kist += n; }
@@ -145,6 +162,7 @@ export function bausteineAusFelder(
     else if (ECODE_KAP_STEUER.has(f.eCode)) { if (n) p.kapSteuer += n; }
     else if (ECODE_ALTERSVORSORGE.has(f.eCode)) { if (n) p.altersvorsorge += n; }
     else if (ECODE_KV_PV_BASIS.has(f.eCode)) { if (n) p.kvPv += n; }
+    else if (ECODE_35A_BASIS.has(f.eCode)) { if (n && n > haushaltsnahe35a) haushaltsnahe35a = n; }
     else if (f.eCode === 'E0100401' || f.eCode === 'E0100801') {
       const yr = parseInt((f.wert.match(/(19|20)\d{2}/) ?? [])[0] ?? '', 10);
       if (yr) p.geburtsjahr = yr;
@@ -152,13 +170,25 @@ export function bausteineAusFelder(
   }
 
   const toPerson = (a: PersonAkku, who: string): PersonenEinkommen => {
-    // Konflikt: mehrere Bruttolohn-Werte → größter (Volljahr schlägt Teiljahr).
-    let lohn = 0;
+    // §19 Abs.2 — Versorgungsbezüge (Nr. 8 LStB): Summe der ausgewiesenen Bezüge.
+    const versorgungBrutto = round2(a.versorgungBezug.reduce((s, x) => s + x, 0));
+    // Bruttolohn (Nr. 3): mehrere Werte → größter (Volljahr schlägt Teiljahr).
+    let lohnGesamt = 0;
     if (a.bruttolohn.length > 0) {
-      lohn = Math.max(...a.bruttolohn);
+      lohnGesamt = Math.max(...a.bruttolohn);
       if (a.bruttolohn.length > 1) {
-        notes.push(`Person ${who}: ${a.bruttolohn.length} Bruttolohn-Werte ${JSON.stringify(a.bruttolohn)} → größter (${lohn}) gewählt.`);
+        notes.push(`Person ${who}: ${a.bruttolohn.length} Bruttolohn-Werte ${JSON.stringify(a.bruttolohn)} → größter (${lohnGesamt}) gewählt.`);
       }
+    }
+    // §19 Abs.1 AKTIVER Lohn = Bruttolohn OHNE den Versorgungsanteil. Bei einer
+    // reinen Pension (Versorgung ≥ Bruttolohn) bleibt 0; die Versorgung trägt die
+    // §19-Einkunft (inkl. weiterer Versorgungsquellen, die nur über Nr. 8 kommen).
+    const aktiverLohn = Math.max(0, round2(lohnGesamt - Math.min(versorgungBrutto, lohnGesamt)));
+    const versorgungsbezuege = versorgungBrutto > 0
+      ? [{ brutto: versorgungBrutto, beginnJahr: a.versorgungBeginn ?? undefined }]
+      : undefined;
+    if (versorgungsbezuege) {
+      notes.push(`Person ${who}: Versorgungsbezüge ${versorgungBrutto} €${a.versorgungBeginn ? `, Beginn ${a.versorgungBeginn}` : ' (Beginn unbekannt — Nr. 30 LStB fehlt)'} → §19 Abs.2 Versorgungsfreibetrag; aktiver Lohn ${aktiverLohn} €.`);
     }
     const renten = a.rente > 0
       ? [{ jahresbetrag: a.rente, besteuerungsanteil: besteuerungsanteil(a.rentenbeginn ?? 2005),
@@ -169,7 +199,8 @@ export function bausteineAusFelder(
       : [];
     if (renten.length) notes.push(`Person ${who}: Rente ${a.rente} × Besteuerungsanteil(${a.rentenbeginn ?? 2005})=${besteuerungsanteil(a.rentenbeginn ?? 2005).toFixed(2)}.`);
     return {
-      bruttoarbeitslohn: lohn,
+      bruttoarbeitslohn: aktiverLohn,
+      versorgungsbezuege,
       altersvorsorgeaufwand: a.altersvorsorge,
       kvPvBasisbeitrag: a.kvPv,
       renten,
@@ -194,6 +225,7 @@ export function bausteineAusFelder(
     eingabe: { vz: opts.vz, art, personA, personB: bHatEinkunft ? personB : undefined },
     anrechnung,
     kirchensteuerHebesatz: opts.kirchensteuerHebesatz ?? 0,
+    haushaltsnahe35aBasis: round2(haushaltsnahe35a),
     notes,
   };
 }

@@ -155,10 +155,10 @@ export async function berechneSteuerfallAuthoritativ(
 
   // 1. In-Process-Vorschau (immer, schnell).
   const tV0 = process.hrtime.bigint();
-  const { eingabe, anrechnung } = bausteineAusFelder(input.felder, {
+  const { eingabe, anrechnung, haushaltsnahe35aBasis } = bausteineAusFelder(input.felder, {
     vz: input.vz, art: input.art, kirchensteuerHebesatz: hebesatz,
   });
-  const vorschau = berechneSteuerfall({ ...eingabe, anrechnung, kirchensteuerHebesatz: hebesatz });
+  const vorschau = berechneSteuerfall({ ...eingabe, anrechnung, kirchensteuerHebesatz: hebesatz, haushaltsnahe35aBasis });
   const tV1 = process.hrtime.bigint();
   const vorschauMs = Number(tV1 - tV0) / 1e6;
 
