@@ -327,8 +327,8 @@
   .km button:not(.on):hover{color:var(--txt)}
   .chat-bar textarea{flex:1;resize:none;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--txt);font-family:inherit;font-size:13.5px;max-height:140px;min-height:40px;line-height:1.45}
   .chat-bar textarea:focus{outline:none;border-color:var(--green)}
-  .chat-bar button{background:var(--green);color:#04130a;border:0;border-radius:10px;padding:0 18px;font-weight:600;cursor:pointer;font-family:var(--font-mono)}
-  .chat-bar button:disabled{opacity:.45;cursor:default}
+  .chat-bar > button{background:var(--green);color:#04130a;border:0;border-radius:10px;padding:0 18px;font-weight:600;cursor:pointer;font-family:var(--font-mono)}
+  .chat-bar > button:disabled{opacity:.45;cursor:default}
 </style>
 </head>
 <body>
@@ -816,8 +816,9 @@ function renderChat(){
   ta&&ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendChat(); } });
   btn&&btn.addEventListener('click',sendChat);
   kmEl&&kmEl.addEventListener('click',e=>{ const b=e.target.closest('[data-km]'); if(!b||chatBusy)return;
-    active.kuratorModel=b.dataset.km; persistActive();
-    kmEl.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.km===active.kuratorModel)); });
+    active.kuratorModel=b.dataset.km; chatErr=''; persistActive();
+    kmEl.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.km===active.kuratorModel));
+    renderChatLog(); });
   ta&&ta.focus();
 }
 function renderChatLog(){
