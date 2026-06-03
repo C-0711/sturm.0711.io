@@ -31,6 +31,7 @@ import { parseVorauszahlungen } from './extract-vorauszahlung.ts';
 import { parseKvPvBasis, parse35aBasis, parseSpenden } from './extract-sonderausgaben.ts';
 import { parseSpendenVision } from './extract-spenden-vision.ts';
 import { parseVersorgungsbeginn } from './extract-versorgungsbeginn.ts';
+import { parseKapital } from './extract-kapital.ts';
 import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
 import { rename } from 'node:fs/promises';
 
@@ -290,6 +291,10 @@ async function runSteuerfall(paths: string[], vz: number) {
   // interne Anrechnungs-Felder injizieren → der Adapter rechnet sie auf die
   // Festsetzung an. Rein strukturell geparst, kein Case-Hardcode; nur die
   // Quartals-VZ des VZ (Vorjahres-Reste ausgeschlossen). Eine Abfrage je Fall.
+  // Belege, deren Daten erst über die dedizierten Parser (VZ/§35a/Spenden/Kapital)
+  // erfasst werden, dem QUELL-Beleg zuordnen → die Beleg-Karte zeigt Typ + Felder
+  // statt „Unbekannt · 0 Felder".
+  const attributionen: Array<{ src: string; typ: string; eCode: string; wert: string; label: string }> = [];
   for (const p of paths) {
     let vzp: ReturnType<typeof parseVorauszahlungen> = null;
     try { vzp = parseVorauszahlungen(p, vz); } catch (e) { console.error('VZ-PARSE', basename(p), (e as Error).message); }
@@ -300,6 +305,7 @@ async function runSteuerfall(paths: string[], vz: number) {
         { eCode: 'VZ_SOLZ', wert: de(vzp.solz), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Solidaritätszuschlag' },
         { eCode: 'VZ_KIST', wert: de(vzp.kist), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Kirchensteuer' },
       );
+      attributionen.push({ src: p, typ: 'Steuerkontoabfrage', eCode: 'VZ_EST', wert: de(vzp.est), label: `Vorauszahlung ESt ${de(vzp.est)} € (+ SolZ/KiSt)` });
       break;
     }
   }
@@ -311,6 +317,9 @@ async function runSteuerfall(paths: string[], vz: number) {
   let sa35a: ReturnType<typeof parse35aBasis> = null;
   let saSpenden: ReturnType<typeof parseSpenden> = null;
   let versBeginn: number | null = null; // §19 Abs.2 — frühester Versorgungsbeginn (Nr. 30 LStB)
+  let darlehenZinsen = 0, darlehenSrc: string | null = null; // §20 Wohnstift-Darlehnszinsen
+  let sa35aSrc: string | null = null, spendenSrc: string | null = null;
+  let spendenVisionCand: string | null = null; // Beleg für den Spenden-Vision-Fallback
   for (const p of paths) {
     let txt = ''; try { txt = docText(p); } catch { /* best-effort */ }
     // Dünner/kein Text-Layer (gescannter Beleg) → OCR erzwingen (cached), damit
@@ -318,29 +327,65 @@ async function runSteuerfall(paths: string[], vz: number) {
     if (txt.trim().length < 200) { try { txt = await parseImage(p); } catch { /* OCR-Fehler → skip */ } }
     if (!txt) continue;
     if (!saKvPv) saKvPv = parseKvPvBasis(txt);
-    if (!sa35a) sa35a = parse35aBasis(txt);
+    if (!sa35a) { sa35a = parse35aBasis(txt); if (sa35a) sa35aSrc = p; }
     // §19 Abs.2: maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB) —
     // über ALLE LStB das FRÜHESTE Jahr (höchster Freibetrag). Bestimmt die Kohorte.
     const vb = parseVersorgungsbeginn(txt);
     if (vb && (versBeginn === null || vb < versBeginn)) versBeginn = vb;
-    if (!saSpenden) {
-      saSpenden = parseSpenden(txt);
-      // Verstümmelter Spenden-Scan → Vision-OCR-Fallback (on-prem gemma4-mm).
-      if (!saSpenden && /Zuwendung|Spende/i.test(txt)) {
-        try { const v = await parseSpendenVision(p); if (v?.betrag) saSpenden = { betrag: v.betrag }; }
-        catch (e) { console.error('SPENDEN-VISION', basename(p), (e as Error).message); }
-      }
+    if (!saSpenden) { saSpenden = parseSpenden(txt); if (saSpenden) spendenSrc = p; }
+    // Den Spenden-Beleg für den Vision-Fallback merken — der Dateiname ist das
+    // stärkste Signal (handschriftliche Zahlscheine OCR'en zu Müll, ihr Text
+    // enthält oft kein „Spende"). NUR der Spendenbeleg, nicht die großen
+    // 2023-Belege, die „Spende" zufällig im Text führen.
+    if (!spendenVisionCand && /spend|zuwendung/i.test(basename(p))) spendenVisionCand = p;
+    // §20 Kapitalerträge — Wohnstift-/Privatdarlehnszinsen (ohne Steuerabzug) +
+    // Bank-Steuerbescheinigungen. Bank-Beträge sind meist schon über den
+    // Freistellungsauftrag erfasst → nur Darlehnszinsen injizieren; beide Belege
+    // werden aber attribuiert (Karte zeigt „Kapitalerträge").
+    const kap = parseKapital(txt);
+    if (kap && kap.betrag > 0) {
+      if (kap.art === 'darlehenszinsen' && darlehenZinsen === 0) { darlehenZinsen = kap.betrag; darlehenSrc = p; }
+      attributionen.push({ src: p, typ: 'Kapitalerträge', eCode: 'E1900701', wert: kap.betrag.toFixed(2).replace('.', ','), label: `Kapitalerträge ${kap.betrag.toFixed(2).replace('.', ',')} €${kap.art === 'darlehenszinsen' ? ' (Darlehnszinsen)' : ''}` });
     }
+  }
+  // Spenden-Vision GENAU EINMAL, gezielt auf den Spenden-Beleg (on-prem gemma4-mm),
+  // wenn der Text-Parser nichts fand (verstümmelter/handschriftlicher Scan).
+  if (!saSpenden && spendenVisionCand) {
+    try { const v = await parseSpendenVision(spendenVisionCand); if (v?.betrag) { saSpenden = { betrag: v.betrag }; spendenSrc = spendenVisionCand; } }
+    catch (e) { console.error('SPENDEN-VISION', basename(spendenVisionCand), (e as Error).message); }
   }
   const deSA = (n: number) => n.toFixed(2).replace('.', ',');
   if (saKvPv?.kv) felder.push({ eCode: 'E0202504', wert: deSA(saKvPv.kv), person: 'A', anlage: 'VOR', pdfLabel: 'KV-Basisbeitrag' });
   if (saKvPv?.pv) felder.push({ eCode: 'E0202604', wert: deSA(saKvPv.pv), person: 'A', anlage: 'VOR', pdfLabel: 'Pflege-Pflichtbeitrag' });
-  if (sa35a?.haushaltsnah) felder.push({ eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), person: 'A', anlage: 'HA', pdfLabel: 'haushaltsnahe Dienstleistungen §35a' });
-  if (saSpenden?.betrag) felder.push({ eCode: 'E0108701', wert: deSA(saSpenden.betrag), person: 'A', anlage: 'SA', pdfLabel: 'Spenden §10b' });
+  if (sa35a?.haushaltsnah) {
+    felder.push({ eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), person: 'A', anlage: 'HA', pdfLabel: 'haushaltsnahe Dienstleistungen §35a' });
+    if (sa35aSrc) attributionen.push({ src: sa35aSrc, typ: 'Haushaltsnahe Dienstleistungen', eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), label: `§35a-Basis ${deSA(sa35a.haushaltsnah)} €` });
+  }
+  if (saSpenden?.betrag) {
+    felder.push({ eCode: 'E0108701', wert: deSA(saSpenden.betrag), person: 'A', anlage: 'SA', pdfLabel: 'Spenden §10b' });
+    if (spendenSrc) attributionen.push({ src: spendenSrc, typ: 'Spenden / Zuwendungen', eCode: 'E0108701', wert: deSA(saSpenden.betrag), label: `Spenden §10b ${deSA(saSpenden.betrag)} €` });
+  }
   // §19 Abs.2: Versorgungsbeginn (Nr. 30 LStB) → E0201307. Der BMF-MCP mappt
   // versorgungsbezuege_1_beginn ← E0201307 und wählt damit die richtige
   // Versorgungsfreibetrags-Kohorte (statt auf 2005 zu defaulten).
   if (versBeginn) felder.push({ eCode: 'E0201307', wert: String(versBeginn), person: 'A', anlage: 'N', pdfLabel: 'Maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB)' });
+  // §20: Wohnstift-/Privatdarlehnszinsen (ohne inländischen Steuerabzug). I.d.R.
+  // unter dem Sparer-Pauschbetrag → 0 € Steuer, wird aber erfasst + ausgewiesen.
+  if (darlehenZinsen > 0) felder.push({ eCode: 'E1900701', wert: deSA(darlehenZinsen), person: 'A', anlage: 'KAP', pdfLabel: 'Kapitalerträge — Wohnstift-Darlehnszinsen (§20)' });
+  void darlehenSrc;
+
+  // Attribution: Treffer der dedizierten Parser dem QUELL-Beleg zuordnen → die
+  // Beleg-Karte zeigt Typ + Felder statt „Unbekannt · 0 Felder". Echte Lane-1-
+  // Treffer (status=mapped mit Feldern) werden NICHT überschrieben.
+  for (const a of attributionen) {
+    const b = (r.belege ?? []).find((x) => String(x.source).split('#')[0] === a.src);
+    if (!b || (b.status === 'mapped' && (b.felder ?? 0) > 0)) continue;
+    const bb = b as unknown as { belegTyp: string; status: string; felder: number; felderListe: Array<Record<string, string>> };
+    bb.belegTyp = a.typ;
+    bb.status = 'mapped';
+    bb.felder = (bb.felder ?? 0) + 1;
+    bb.felderListe = [...(bb.felderListe ?? []), { eCode: a.eCode, label: a.label, wert: a.wert, person: 'A', anlage: '' }];
+  }
 
   // Steuerzahler-Profil — DETERMINISTISCH aus den vollständigen Feldern (kein
   // LLM, kein Hardcode). Beschreibt den Fall (Versorgungsbezüge? Rente? aktiver
