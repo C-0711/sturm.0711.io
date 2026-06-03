@@ -1168,6 +1168,13 @@ function renderDash(d){
     <div class="cr total"><div><div class="cr-lbl"><strong>festzusetzende Einkommensteuer</strong></div></div><div class="cr-val">${eur(auf.steuer.einkommensteuer)}</div></div>
     <div class="cr"><div><div class="cr-lbl">Solidaritätszuschlag</div></div><div class="cr-val ${auf.steuer.solidaritaetszuschlag?'':'zero'}">${eur(auf.steuer.solidaritaetszuschlag)}</div></div>
     <div class="cr"><div><div class="cr-lbl">Kirchensteuer</div></div><div class="cr-val ${auf.steuer.kirchensteuer?'':'zero'}">${eur(auf.steuer.kirchensteuer)}</div></div>
+    <div class="cr total"><div><div class="cr-lbl"><strong>festgesetzte Gesamtsteuer</strong></div><div class="cr-code">ESt + SolZ + KiSt</div></div><div class="cr-val">${eur(auf.steuer.gesamtsteuer)}</div></div>
+    ${auf.anrechnung?(()=>{const a=auf.anrechnung;const row=(l,v)=>v?`<div class="cr"><div><div class="cr-lbl">${l}</div></div><div class="cr-val green">− ${eur(v)}</div></div>`:'';
+      const erst=Math.round((a.summe-auf.steuer.gesamtsteuer)*100)/100, ref=erst>=0;
+      return `<div class="slabel">Anrechnung &amp; Saldo</div>
+      ${row('einbehaltene Lohnsteuer',a.lohnsteuer)}${row('einbehaltene Kirchensteuer',a.kirchensteuer)}${row('einbehaltener Solidaritätszuschlag',a.solidaritaetszuschlag)}${row('Kapitalertragsteuer',a.kapitalertragsteuer)}${row('geleistete Vorauszahlungen (ESt/SolZ/KiSt)',a.vorauszahlungen)}
+      <div class="cr"><div><div class="cr-lbl">Summe angerechnet</div></div><div class="cr-val green">− ${eur(a.summe)}</div></div>
+      <div class="cr result"><div><div class="cr-lbl"><strong>${ref?'Erstattung':'Nachzahlung'}</strong></div><div class="cr-code">${eur(a.summe)} − ${eur(auf.steuer.gesamtsteuer)}</div></div><div class="cr-val ${ref?'green':'amber'}">${eur(Math.abs(erst))}</div></div>`;})():''}
     ${(auf.einkommen.hinweise&&auf.einkommen.hinweise.length)?`<div class="warn" style="margin-top:10px"><b>Noch zu klären:</b> ${auf.einkommen.hinweise.map(h=>esc(h)).join(' &nbsp;·&nbsp; ')}</div>`:''}
   </div></div>`:'';
   center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}${profilCard}<div class="g2"><div>${ekCard}${calcCard}</div><div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${vjCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;

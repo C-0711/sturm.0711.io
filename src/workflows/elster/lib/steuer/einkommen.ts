@@ -295,7 +295,15 @@ export function aggregiereZvE(input: SteuerfallEingabe): ZvEKomponenten {
     trace.push({ schritt: 'Werbungskosten-Pauschbetrag Versorgung', betrag: -v.werbungskostenPauschbetrag, rechtsgrundlage: '§9a Satz 1 Nr.1b EStG' });
     trace.push({ schritt: '= Einkünfte §19 Abs.2 (Versorgungsbezüge)', betrag: v.einkuenfte });
   }
-  if (renten > 0) trace.push({ schritt: 'Einkünfte §22 Nr.1 (Renten, steuerpflichtig nach WK)', betrag: renten, rechtsgrundlage: '§22 Nr.1, §9a Nr.3 EStG' });
+  if (renten > 0) {
+    const rPost = personen.flatMap((p) => p.renten ?? []);
+    const rBrutto = round2(rPost.reduce((s, r) => s + r.jahresbetrag, 0));
+    const rStpfl = round2(rPost.reduce((s, r) => s + (typeof r.steuerpflichtigerAnteil === 'number' ? r.steuerpflichtigerAnteil : r.jahresbetrag * (r.besteuerungsanteil ?? 0)), 0));
+    trace.push({ schritt: 'Renten brutto (§22 Nr.1)', betrag: rBrutto, rechtsgrundlage: '§22 Nr.1 EStG' });
+    if (rBrutto - rStpfl > 0.005) trace.push({ schritt: 'steuerfreier Teil der Rente (Rentenfreibetrag)', betrag: -round2(rBrutto - rStpfl), rechtsgrundlage: '§22 Nr.1 Satz 3 EStG' });
+    trace.push({ schritt: 'Werbungskosten-Pauschbetrag Renten', betrag: -RENTEN_WK_PAUSCHBETRAG, rechtsgrundlage: '§9a Satz 1 Nr.3 EStG' });
+    trace.push({ schritt: '= steuerpflichtige Renteneinkünfte', betrag: renten });
+  }
 
   const summeEinkuenfte = round2(arbeit + versorgung + renten + kapital);
   trace.push({ schritt: 'Summe der Einkünfte', betrag: summeEinkuenfte });

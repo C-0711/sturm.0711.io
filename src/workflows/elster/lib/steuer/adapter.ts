@@ -87,10 +87,14 @@ const ECODE_ALTERSVORSORGE = new Set([
   'E2000601', 'E2000501',           // Extraktor-Varianten
 ]);
 // vorsorgeaufwand: kv_beitraege + pv_beitraege (§10 Abs.1 Nr.3):
-const ECODE_KV_PV_BASIS = new Set([
-  'E0202504', 'E2001203', 'E2004003', 'E2003104', // kv_beitraege (MCP)
-  'E0202604', 'E2001505', 'E2004103', 'E2003202', // pv_beitraege (MCP)
-]);
+// § 10 Abs.1 Nr.3 — KV/PV-Basisbeiträge. DIESELBE KV erscheint unter mehreren
+// Codes (parseKvPvBasis-Injektion E0202504 + Lane-1 E2003104/E2001203). NICHT
+// summieren (sonst Doppelzählung) — die Werte sind PRIORITÄTSGEORDNET, der erste
+// vorhandene gewinnt. Injektion zuerst (verlässlicher KV-Basis-Wert).
+const ECODE_KV = ['E0202504', 'E2001203', 'E2004003', 'E2003104'];
+const ECODE_PV = ['E0202604', 'E2001505', 'E2004103', 'E2003202'];
+const ECODE_KV_SET = new Set(ECODE_KV);
+const ECODE_PV_SET = new Set(ECODE_PV);
 // § 35a Abs. 2 — haushaltsnahe Dienstleistungen/Pflege (Bemessungsbasis;
 // 20 % davon, max 4.000 € mindern die Steuer). Extraktor- + MCP-Variante.
 const ECODE_35A_BASIS = new Set(['E0107301', 'E0107208', 'E0107201']);
@@ -110,14 +114,15 @@ interface PersonAkku {
   kapErtrag: number;
   kapSteuer: number;
   altersvorsorge: number;
-  kvPv: number;
+  kvByCode: Record<string, number>;
+  pvByCode: Record<string, number>;
   spenden: number;
   vorauszahlung: number;
   geburtsjahr?: number;
 }
 const emptyAkku = (): PersonAkku => ({
   bruttolohn: [], versorgungBezug: [], versorgungBeginn: null, lohnsteuer: 0, soli: 0, kist: 0, rente: 0,
-  rentenbeginn: null, rentenAnpassung: 0, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, spenden: 0, vorauszahlung: 0,
+  rentenbeginn: null, rentenAnpassung: 0, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvByCode: {}, pvByCode: {}, spenden: 0, vorauszahlung: 0,
 });
 
 export interface AdapterErgebnis {
@@ -164,7 +169,8 @@ export function bausteineAusFelder(
     else if (ECODE_KAP_ERTRAG.has(f.eCode)) { if (n) p.kapErtrag += n; }
     else if (ECODE_KAP_STEUER.has(f.eCode)) { if (n) p.kapSteuer += n; }
     else if (ECODE_ALTERSVORSORGE.has(f.eCode)) { if (n) p.altersvorsorge += n; }
-    else if (ECODE_KV_PV_BASIS.has(f.eCode)) { if (n) p.kvPv += n; }
+    else if (ECODE_KV_SET.has(f.eCode)) { if (n) p.kvByCode[f.eCode] = (p.kvByCode[f.eCode] ?? 0) + n; }
+    else if (ECODE_PV_SET.has(f.eCode)) { if (n) p.pvByCode[f.eCode] = (p.pvByCode[f.eCode] ?? 0) + n; }
     else if (ECODE_35A_BASIS.has(f.eCode)) { if (n && n > haushaltsnahe35a) haushaltsnahe35a = n; }
     else if (ECODE_SPENDEN.has(f.eCode)) { if (n) p.spenden += n; }
     else if (f.eCode === 'E0100401' || f.eCode === 'E0100801') {
@@ -202,11 +208,13 @@ export function bausteineAusFelder(
            steuerpflichtigerAnteil: round2(a.rente - (1 - besteuerungsanteil(a.rentenbeginn ?? 2005)) * Math.max(0, a.rente - a.rentenAnpassung)) }]
       : [];
     if (renten.length) notes.push(`Person ${who}: Rente ${a.rente} × Besteuerungsanteil(${a.rentenbeginn ?? 2005})=${besteuerungsanteil(a.rentenbeginn ?? 2005).toFixed(2)}.`);
+    // KV + PV je nach Priorität (erster vorhandener Code), NICHT summiert.
+    const kvPvBasis = round2(ersterWert(a.kvByCode, ECODE_KV) + ersterWert(a.pvByCode, ECODE_PV));
     return {
       bruttoarbeitslohn: aktiverLohn,
       versorgungsbezuege,
       altersvorsorgeaufwand: a.altersvorsorge,
-      kvPvBasisbeitrag: a.kvPv,
+      kvPvBasisbeitrag: kvPvBasis,
       spenden: a.spenden,
       renten,
       geburtsjahr: a.geburtsjahr,
@@ -237,4 +245,11 @@ export function bausteineAusFelder(
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/** Wert des ERSTEN in `prio` vorhandenen (positiven) Codes — dedupliziert
+ *  dieselbe Größe über mehrere E-Codes (Injektion vor Lane-1), ohne zu summieren. */
+function ersterWert(byCode: Record<string, number>, prio: string[]): number {
+  for (const c of prio) if ((byCode[c] ?? 0) > 0) return byCode[c];
+  return 0;
 }
