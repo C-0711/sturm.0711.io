@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import pg from 'pg';
 import { runLane1 } from '../src/workflows/elster/lib/lane1.ts';
+import { ableiteProfil } from '../src/workflows/elster/lib/steuer/profil.ts';
 import { ocrEnsembleFromPath, pingOrchestrator } from '../src/workflows/elster/lib/field-mapper/ocr-ensemble-client.ts';
 import { ocrEnsembleToRawText } from '../src/workflows/elster/lib/field-mapper/lane2-adapter.ts';
 import { berechneHaushaltAuthoritativ } from '../src/workflows/elster/lib/steuer/authoritative.ts';
@@ -331,6 +332,12 @@ async function runSteuerfall(paths: string[], vz: number) {
   if (sa35a?.haushaltsnah) felder.push({ eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), person: 'A', anlage: 'HA', pdfLabel: 'haushaltsnahe Dienstleistungen §35a' });
   if (saSpenden?.betrag) felder.push({ eCode: 'E0108701', wert: deSA(saSpenden.betrag), person: 'A', anlage: 'SA', pdfLabel: 'Spenden §10b' });
 
+  // Steuerzahler-Profil — DETERMINISTISCH aus den vollständigen Feldern (kein
+  // LLM, kein Hardcode). Beschreibt den Fall (Versorgungsbezüge? Rente? aktiver
+  // Lohn? privat/gesetzl. versichert? Alter? Konfession?) und macht im Fall-Tab
+  // sichtbar, WELCHE Regeln greifen. Wird VOR der Berechnung ermittelt.
+  const profil = ableiteProfil(felder, { vz, hebesatzProzent: Math.round(HEBESATZ * 100) });
+
   // Provenienz-Pass: pro OCR'tem Dokument PNG+bboxes (cache), dann je Feld den
   // Record mit passendem Wert finden → prov (Box im Bild). Best-effort: ein
   // Fehler hier darf den Bescheid nie kippen.
@@ -395,6 +402,14 @@ async function runSteuerfall(paths: string[], vz: number) {
     quelle: bx.res.quelle, bindend: bx.res.bindend,
     angerechnet: bx.res.angerechnet, erstattung: bx.res.erstattung,
     abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
+    // Zeilengenaue, profil-adaptive Aufstellung (In-Process): jede Position der
+    // Einkommensermittlung mit Rechtsgrundlage + die Steuerfestsetzung inkl.
+    // §35a — treibt die vollständige Bescheid-Ansicht im Fall-Tab.
+    aufstellung: {
+      einkommen: bx.res.vorschau.einkommen,
+      steuer: bx.res.vorschau.steuer,
+      anrechnung: bx.res.vorschau.anrechnung,
+    },
   }));
   // A0 — Coverage-Lücken sichtbar machen: jeder Beleg, der eingelesen, aber mit
   // 0 Feldern gemappt wurde, wird als Warnung geführt (kein stiller Verlust).
@@ -406,6 +421,8 @@ async function runSteuerfall(paths: string[], vz: number) {
     ok: true, vz, lane1Ms: Math.round(lane1Ms),
     belege: r.belege, fields, ocrCount: r.belege.filter((b) => b.method === 'ocr').length,
     household: r.household, docs,
+    // Deterministisches Steuerzahler-Profil (beschreibt den Fall + steuert die Regeln).
+    profil,
     veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
     warnings: [...(r.warnings ?? []), ...haushalt.warnungen, ...coverageGaps], calcs,
     // Fremdjährige Belege (≠ VZ): NICHT in der Berechnung — Quelle für Prefill +

@@ -1145,7 +1145,32 @@ function renderDash(d){
       ${sec('Beträge zur Prüfung',fra,'Vorjahres-Beträge — NICHT übernommen; nur Anhaltspunkt, ob es sie dieses Jahr ebenfalls gibt.')}
       ${vor.length?`<div class="slabel">Bereits im aktuellen Jahr vorhanden · ${vor.length}</div>`:''}
     </div></div>`;})():'';
-  center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}<div class="g2">${calcCard}<div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${vjCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
+  // ── Steuerzahler-Profil (deterministisch aus den Feldern) — beschreibt den
+  //    Fall und macht sichtbar, WELCHE Regeln greifen. ────────────────────────
+  const pf=d.profil;
+  const eqn=(q,lbl)=>q&&q.vorhanden?ir(lbl,eur(q.brutto)+(q.beginnJahr?` · Beginn ${esc(q.beginnJahr)}`:(/Versorgung/.test(lbl)?' · <span class="zero">Beginn unbekannt</span>':''))):'';
+  const profilCard=pf?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--blue)"></div>Steuerzahler-Profil · deterministisch aus den Belegen</div><span class="chev open">▼</span></div><div class="card-body">
+    <div class="bel-src" style="padding:0 0 10px">${esc(pf.beschreibung)}</div>
+    ${(pf.personen||[]).map(p=>`<div class="slabel">Person ${esc(p.person)} · ${esc(p.typ)}${p.geburtsjahr?` · geb. ${esc(p.geburtsjahr)}`:''} · ${esc(p.krankenversicherung)} versichert</div>
+      ${eqn(p.versorgungsbezuege,'Versorgungsbezüge §19 Abs.2')}${eqn(p.gesetzlicheRente,'gesetzliche Rente §22')}${eqn(p.betriebsrente,'Betriebsrente §22')}${eqn(p.aktiverArbeitslohn,'aktiver Arbeitslohn §19 Abs.1')}${eqn(p.kapitalertraege,'Kapitalerträge §20')}
+      <div class="bel-src" style="padding:8px 0 2px;font-weight:600">Angewandte Regeln</div>
+      ${(p.regeln||[]).map(rg=>`<div class="ir"><div class="ir-k" style="font-size:.84em;font-style:normal">${esc(rg)}</div></div>`).join('')}`).join('')}
+  </div></div>`:'';
+  // ── Einkommensermittlung zeilengenau (profil-adaptiv, In-Process) — jede
+  //    Position mit Rechtsgrundlage; §35a + Hinweise. ─────────────────────────
+  const auf=c&&c.aufstellung;
+  const ekCard=auf?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--gold)"></div>Einkommensermittlung · zeilengenau · §§2/10/19/22 EStG</div><span class="chev open">▼</span></div><div class="card-body">
+    ${(auf.einkommen.trace||[]).map(t=>{const neg=t.betrag<0;const sum=/^(=|Summe|Gesamtbetrag|Einkommen$|zu versteuern)/.test(t.schritt)||/zvE/.test(t.schritt);
+      return `<div class="cr${sum?' total':''}"><div><div class="cr-lbl"${sum?' style="font-weight:600"':''}>${esc(t.schritt)}</div>${t.rechtsgrundlage?`<div class="cr-code">${esc(t.rechtsgrundlage)}</div>`:''}</div><div class="cr-val${neg?' green':''}">${neg?'− ':''}${eur(Math.abs(t.betrag))}</div></div>`;}).join('')}
+    <div class="slabel">Steuerfestsetzung</div>
+    <div class="cr"><div><div class="cr-lbl">tarifliche Einkommensteuer</div><div class="cr-code">§32a EStG</div></div><div class="cr-val">${eur(auf.steuer.tariflicheEinkommensteuer)}</div></div>
+    ${auf.steuer.steuerermaessigung35a?`<div class="cr"><div><div class="cr-lbl">Steuerermäßigung haushaltsnahe Leistungen</div><div class="cr-code">§35a Abs.2 EStG</div></div><div class="cr-val green">− ${eur(auf.steuer.steuerermaessigung35a)}</div></div>`:''}
+    <div class="cr total"><div><div class="cr-lbl"><strong>festzusetzende Einkommensteuer</strong></div></div><div class="cr-val">${eur(auf.steuer.einkommensteuer)}</div></div>
+    <div class="cr"><div><div class="cr-lbl">Solidaritätszuschlag</div></div><div class="cr-val ${auf.steuer.solidaritaetszuschlag?'':'zero'}">${eur(auf.steuer.solidaritaetszuschlag)}</div></div>
+    <div class="cr"><div><div class="cr-lbl">Kirchensteuer</div></div><div class="cr-val ${auf.steuer.kirchensteuer?'':'zero'}">${eur(auf.steuer.kirchensteuer)}</div></div>
+    ${(auf.einkommen.hinweise&&auf.einkommen.hinweise.length)?`<div class="warn" style="margin-top:10px"><b>Noch zu klären:</b> ${auf.einkommen.hinweise.map(h=>esc(h)).join(' &nbsp;·&nbsp; ')}</div>`:''}
+  </div></div>`:'';
+  center.innerHTML=`<div class="reveal"><div class="kpi-row">${kpis}</div>${hero}${profilCard}<div class="g2"><div>${ekCard}${calcCard}</div><div>${veranlCard}${kapCard}</div></div><div class="g2">${personenCard}${belegeCard}</div>${elsterCard}${vjCard}${warn}<div class="foot">STURM · VZ ${esc(d.vz)} · Extraktion ${d.lane1Ms} ms · BMF-MCP ${verb?'bindend':'Fallback'} · gesamt ${d._clientMs||'—'} ms</div></div>`;
 }
 center.addEventListener('click',e=>{
   const head=e.target.closest('.card-head');
