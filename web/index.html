@@ -303,6 +303,15 @@
   .flow-sec{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin:14px 0 6px}
   .flow-stage{border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg2)}
   .flow-stage>summary{cursor:pointer;padding:8px 12px;font-family:var(--font-mono);font-size:12px;color:var(--txt);list-style:none}
+  .flow-stage>summary::-webkit-details-marker{display:none}
+  .flow-stage>summary::before{content:'▸ ';color:var(--dim)}
+  .flow-stage[open]>summary::before{content:'▾ '}
+  .flow-hint{font-size:11px;color:var(--muted);margin:-2px 0 8px;line-height:1.5}
+  .flow-stage>summary .l2-code{color:var(--dim)}
+  .flow-stage>summary .l2-val{color:var(--green);font-weight:700}
+  .flow-stage>summary .l2-null{color:var(--dim);font-style:italic}
+  .flow-stage>summary .l2-ms{color:var(--dim)}
+  .flow-stage>summary .l2-err{color:var(--red)}
   .flow-stage-body{padding:0 12px 12px}
   .flow-kv{margin-top:8px} .flow-kv>b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:3px}
   .flow-stage pre{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;max-height:300px;font-size:11px;white-space:pre-wrap;word-break:break-word;margin:0;font-family:var(--font-mono)}
@@ -771,21 +780,27 @@ async function loadFlow(){
     const stages=t.stages||{}, keys=Object.keys(stages).sort();
     const lane2=keys.filter(k=>k.indexOf('lane2-')===0), phases=keys.filter(k=>k.indexOf('lane2-')!==0);
     if(meta) meta.textContent=keys.length+' Stages · '+lane2.length+' vLLM-Calls';
+    // Wert aus einer lane2-Response ziehen (value_parsed bevorzugt) → Summary + Statistik
+    const l2val=(v)=>{ try{ const rr=typeof v.response==='string'?JSON.parse(v.response):v.response; if(rr&&typeof rr==='object'){ const x=(rr.value_parsed!=null?rr.value_parsed:rr.value_raw); return (x==null||x==='')?null:x; } }catch(_){} return null; };
     const block=(k)=>{
-      const v=stages[k]; let inner;
+      const v=stages[k]; let inner, summary=esc(k);
       if(k.indexOf('lane2-')===0){
         const resp=typeof v.response==='string'?v.response:JSON.stringify(v.response,null,2);
-        inner=`<div class="flow-meta">${v.ms!=null?v.ms+' ms · ':''}${v.ok?'ok':'fehler'}${v.request_id?' · '+esc(String(v.request_id).slice(0,12)):''}</div>
+        const val=l2val(v), field=v.belegfeld_id?esc(v.belegfeld_id):'';
+        const valLbl=val==null?'<span class="l2-null">kein Wert</span>':'<span class="l2-val">'+esc(String(val))+'</span>';
+        summary=`<span class="l2-code">${esc(v.e_code||k.replace('lane2-',''))}</span>${field?' · '+field:''} · → ${valLbl}${v.ms!=null?' · <span class="l2-ms">'+v.ms+' ms</span>':''}${v.ok?'':' · <span class="l2-err">Fehler</span>'}`;
+        inner=`<div class="flow-meta">${v.ok?'ok':'fehler'}${v.request_id?' · req '+esc(String(v.request_id).slice(0,12)):''}</div>
           <div class="flow-kv"><b>System-Prompt</b><pre>${esc(v.system_prompt||'')}</pre></div>
           <div class="flow-kv"><b>User-Prompt</b><pre>${esc(v.user_prompt||'')}</pre></div>
           <div class="flow-kv"><b>Response (roh)</b><pre>${esc(resp||'')}</pre></div>`;
       } else {
         const s=JSON.stringify(v,null,2); inner=`<pre>${esc(s.length>3000?s.slice(0,3000)+'\n…':s)}</pre>`;
       }
-      return `<details class="flow-stage"${k.indexOf('lane2-')===0?'':' open'}><summary>${esc(k)}</summary><div class="flow-stage-body">${inner}</div></details>`;
+      return `<details class="flow-stage"${k.indexOf('lane2-')===0?'':' open'}><summary>${summary}</summary><div class="flow-stage-body">${inner}</div></details>`;
     };
+    const l2wv=lane2.filter(k=>l2val(stages[k])!=null).length;
     body.innerHTML='<div class="flow-sec">Phasen 0–4</div>'+(phases.length?phases.map(block).join(''):'<div class="audit-empty">keine Phasen-Dumps</div>')+
-      (lane2.length?('<div class="flow-sec">vLLM Lane-2 — Prompts &amp; Antworten ('+lane2.length+')</div>'+lane2.map(block).join('')):'');
+      (lane2.length?('<div class="flow-sec">vLLM Lane-2 — vom Modell nachgeschlagene Felder ('+l2wv+'/'+lane2.length+' mit Wert)</div><div class="flow-hint">Felder, die der deterministische Extraktor offen ließ. Jede Zeile = ein Modell-Aufruf; „kein Wert" heißt: steht nicht in diesem Dokument. Zeile aufklappen zeigt Prompt + Antwort.</div>'+lane2.map(block).join('')):'');
   }catch(e){ body.innerHTML='<div class="err">'+esc(e.message||String(e))+'</div>'; }
 }
 
