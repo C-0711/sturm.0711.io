@@ -1,0 +1,23 @@
+1015c1015,1017
+<             _wk_default = 1230 if bruttolohn > 0 else 0
+---
+>             _versorgung_summe = (Decimal(str(bmf_inputs.get("versorgungsbezuege_1_betrag", 0) or 0)) + Decimal(str(bmf_inputs.get("versorgungsbezuege_2_betrag", 0) or 0)) + Decimal(str(bmf_inputs.get("versorgungsbezuege_3_betrag", 0) or 0)))
+>             bruttolohn_aktiv = max(bruttolohn - _versorgung_summe, Decimal("0"))
+>             _wk_default = 1230 if bruttolohn_aktiv > 0 else 0
+1029c1031
+<             zve = bruttolohn - werbungskosten - absetzbare_vorsorge - kirchensteuer_sa - sonderausgaben_pauschbetrag
+---
+>             zve = bruttolohn_aktiv - werbungskosten - absetzbare_vorsorge - kirchensteuer_sa - sonderausgaben_pauschbetrag
+1054c1056
+<             if _rente_brutto_in > 0:
+---
+>             if _rente_brutto_in > 0 or _versorgung_summe > 0:
+1063c1065
+<                     "versorgungsbezuege_1_betrag": 0.0, "leibrente_brutto": 0.0,
+---
+>                     "versorgungsbezuege_1_betrag": float(_versorgung_summe), "versorgungsbezuege_1_beginn": int(bmf_inputs.get("versorgungsbezuege_1_beginn") or 2005), "versorgungsbezuege_2_betrag": 0.0, "versorgungsbezuege_3_betrag": 0.0, "versorgungsbezuege_2_beginn": 0, "versorgungsbezuege_3_beginn": 0, "leibrente_brutto": 0.0,
+1074a1077,1080
+>                 _vers_stpfl = Decimal(str(_r_data.get("para19_versorgung", _r_data.get("versorgung_nach_werbungskosten", 0)) or 0))
+>                 if _vers_stpfl > 0:
+>                     zve += _vers_stpfl
+>                     self.logger.info("anlage_r Versorgung: %.2f Summe -> %.2f steuerpflichtig (Paragraf 19 Abs.2 Freibetrag+Zuschlag+102) -> ZvE" % (float(_versorgung_summe), float(_vers_stpfl)))
