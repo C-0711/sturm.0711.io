@@ -1048,6 +1048,15 @@ const field=(d,p,c)=>d.fields.find(f=>f.person===p&&f.eCode===c);
 const fval=(d,p,c)=>{const f=field(d,p,c);return f?f.wert:null;};
 const feur=(d,p,c)=>{const v=fval(d,p,c);if(v==null)return null;const n=parseDe(v);return Number.isFinite(n)?eur(n):esc(v);};
 const idnr=(s)=>{const t=String(s||'').replace(/\D/g,'');return t.length===11?t.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/,'$1 $2 $3 $4'):esc(s||'—');};
+/* Typgerechte Feld-Anzeige: NUR Geld-Felder (Katalog-Datentyp 'currency') bekommen €;
+   Datum→dd.MM.yyyy; IdNr/PLZ/Jahr/Text roh. Fallback ohne Katalog-Typ: nur explizite
+   Cent-Beträge als € — niemals nackte Ganzzahlen (sonst würde IdNr/Jahr zu „€"). */
+const dateDE=(v)=>{const s=String(v==null?'':v).trim();const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}.${m[2]}.${m[1]}`:esc(s);};
+const fmt=(f)=>{const v=f.wert;if(v==null||String(v).trim()==='')return '—';
+  if(f.format==='currency'){const n=parseDe(v);return Number.isFinite(n)?eur(n):esc(v);}
+  if(f.format==='date')return dateDE(v);
+  if(f.format)return esc(v);
+  return /\d[.,]\d{2}$/.test(String(v).trim())?eur(parseDe(v)):esc(v);};
 
 function renderDash(d){
   const c=primaryCalc(d); const zus=d.veranlagungsart==='zusammen';
@@ -1097,7 +1106,7 @@ function renderDash(d){
   const pName={A:nA||'Person A',B:nB||'Person B'};
   const tabs=persons.map((p,i)=>`<div class="ptab${i===0?' active':''}" data-pc="pc-${p}"><div class="ptab-name">${esc(pName[p])}</div><div class="ptab-role">Person ${p}${p==='A'?' · Haupt':' · Ehegatte'}</div></div>`).join('');
   const pane=(p,i)=>{const hh=d.household?(p==='A'?d.household.personA:d.household.personB):null;let rows='';if(hh&&hh.idnr)rows+=ir('Steuer-ID',idnr(hh.idnr));
-    for(const f of d.fields.filter(x=>x.person===p)){const n=parseDe(f.wert);const show=(Number.isFinite(n)&&/[.,]\d|^\d{4,}/.test(String(f.wert)))?eur(n):esc(f.wert);rows+=ir(esc((f.label||f.eCode).slice(0,46)),show);}
+    for(const f of d.fields.filter(x=>x.person===p)){rows+=ir(esc((f.label||f.eCode).slice(0,46)),fmt(f));}
     return `<div id="pc-${p}" class="pc${i===0?' active':''}">${rows||'<div class="ir"><div class="ir-k" style="font-style:italic">Keine Felder.</div></div>'}</div>`;};
   const personenCard=persons.length?`<div class="card"><div class="card-head"><div class="card-title"><div class="ctdot" style="--dot-c:var(--gold)"></div>Personen · Haushalt</div><span class="chev open">▼</span></div><div class="card-body"><div class="ptabs">${tabs}</div>${persons.map((p,i)=>pane(p,i)).join('')}</div></div>`:'';
   const belItems=d.belege.map(bg=>`<div class="bel-item${bg.vorjahr?' vorjahr':''}"><span class="bel-type ${bg.method}">${esc(bg.method)}</span><div class="bel-name">${esc(BELN[bg.belegTyp]||bg.belegTyp)}</div><div class="bel-src">${esc(bg.belegTyp)} · ${bg.felder} Felder</div><div class="bel-src">Person ${esc(bg.person)} · ${esc(bg.status)}</div>${bg.vorjahr?`<div class="bel-vj">Vorjahr ${esc(bg.dokumentJahr||'')} · nicht in Berechnung</div>`:''}</div>`).join('');

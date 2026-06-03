@@ -258,6 +258,9 @@ async function runSteuerfall(paths: string[], vz: number) {
       eCode: f.eCode, label: f.pdfLabel, wert: f.wert, person: String(f.person),
       anlage: f.anlage, method: ocrSet.has(`${f.eCode}|${f.person}`) ? 'ocr' : 'text',
       zeile: cat?.zeile || null, kontextPath: cat?.kontextPath || null,
+      // Feld-Datentyp aus dem ELSTER-Katalog ('currency' | 'date' | 'string') →
+      // typgerechte Anzeige im Frontend (nur 'currency' bekommt €). Kein Hardcode.
+      format: cat?.datentyp || null,
     };
   });
   const felder: SteuerFeld[] = r.aggregated.map((f) => ({ eCode: f.eCode, wert: f.wert, person: f.person, anlage: f.anlage, pdfLabel: f.pdfLabel }));
@@ -327,12 +330,18 @@ async function runSteuerfall(paths: string[], vz: number) {
     angerechnet: bx.res.angerechnet, erstattung: bx.res.erstattung,
     abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
   }));
+  // A0 — Coverage-Lücken sichtbar machen: jeder Beleg, der eingelesen, aber mit
+  // 0 Feldern gemappt wurde, wird als Warnung geführt (kein stiller Verlust).
+  // Rein strukturell über die Felderzahl — kein Belegtyp/keine Case-Daten hartcodiert.
+  const coverageGaps = (r.belege ?? [])
+    .filter((b) => Number(b.felder ?? 0) === 0)
+    .map((b) => `Coverage-Lücke: „${basename(String(b.source).split('#')[0])}" (Typ ${b.belegTyp ?? 'Unbekannt'}, ${b.method ?? '?'}) → 0 Felder extrahiert; Werte fehlen in der Berechnung.`);
   return {
     ok: true, vz, lane1Ms: Math.round(lane1Ms),
     belege: r.belege, fields, ocrCount: r.belege.filter((b) => b.method === 'ocr').length,
     household: r.household, docs,
     veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
-    warnings: [...(r.warnings ?? []), ...haushalt.warnungen], calcs,
+    warnings: [...(r.warnings ?? []), ...haushalt.warnungen, ...coverageGaps], calcs,
     // Fremdjährige Belege (≠ VZ): NICHT in der Berechnung — Quelle für Prefill +
     // gezielte Rückfragen (vom Auditor zu Findings verarbeitet). null wenn keine.
     vorjahr: r.vorjahr ?? null,
