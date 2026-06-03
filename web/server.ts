@@ -319,7 +319,7 @@ async function runSteuerfall(paths: string[], vz: number) {
   let versBeginn: number | null = null; // §19 Abs.2 — frühester Versorgungsbeginn (Nr. 30 LStB)
   let darlehenZinsen = 0, darlehenSrc: string | null = null; // §20 Wohnstift-Darlehnszinsen
   let sa35aSrc: string | null = null, spendenSrc: string | null = null;
-  let spendenVisionCand: string | null = null; // Beleg für den Spenden-Vision-Fallback
+  let spendenVisionCand: string | null = null, spendenCandPerDatei = false; // Spenden-Vision-Fallback
   for (const p of paths) {
     let txt = ''; try { txt = docText(p); } catch { /* best-effort */ }
     // Dünner/kein Text-Layer (gescannter Beleg) → OCR erzwingen (cached), damit
@@ -333,11 +333,18 @@ async function runSteuerfall(paths: string[], vz: number) {
     const vb = parseVersorgungsbeginn(txt);
     if (vb && (versBeginn === null || vb < versBeginn)) versBeginn = vb;
     if (!saSpenden) { saSpenden = parseSpenden(txt); if (saSpenden) spendenSrc = p; }
-    // Den Spenden-Beleg für den Vision-Fallback merken — der Dateiname ist das
-    // stärkste Signal (handschriftliche Zahlscheine OCR'en zu Müll, ihr Text
-    // enthält oft kein „Spende"). NUR der Spendenbeleg, nicht die großen
-    // 2023-Belege, die „Spende" zufällig im Text führen.
-    if (!spendenVisionCand && /spend|zuwendung/i.test(basename(p))) spendenVisionCand = p;
+    // Spenden-Beleg für den Vision-Fallback wählen. Dateiname = stärkstes Signal
+    // (handschriftliche Zahlscheine OCR'en zu Müll, ihr Text enthält oft kein
+    // „Spende"). Fallback für anders benannte Belege: ein lane1-UNBEKANNTER Beleg
+    // mit STARKEN Zuwendungs-Markern — bewusst NICHT die großen Bescheide/
+    // Erklärungen, die „Spende" nur erwähnen (die sind lane1-mapped).
+    if (/spend|zuwendung/i.test(basename(p))) {
+      if (!spendenCandPerDatei) { spendenVisionCand = p; spendenCandPerDatei = true; }
+    } else if (!spendenVisionCand
+      && ((r.belege ?? []).find((b) => String(b.source).split('#')[0] === p)?.status ?? '') !== 'mapped'
+      && /zuwendungsbest|gemeinn[üu]tzig|f[öo]rderverein|hospiz|zuwendung im sinne/i.test(txt)) {
+      spendenVisionCand = p;
+    }
     // §20 Kapitalerträge — Wohnstift-/Privatdarlehnszinsen (ohne Steuerabzug) +
     // Bank-Steuerbescheinigungen. Bank-Beträge sind meist schon über den
     // Freistellungsauftrag erfasst → nur Darlehnszinsen injizieren; beide Belege

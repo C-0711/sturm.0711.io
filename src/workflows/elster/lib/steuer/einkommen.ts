@@ -71,6 +71,8 @@ export interface PersonenEinkommen {
    *  mit Krankengeld): kürzt die KV-Beiträge auf 96 %. Privat Versicherte und
    *  Rentner OHNE Krankengeld: false/undefined → 100 % abzugsfähig. */
   krankengeldAnspruch?: boolean;
+  /** § 10b — geleistete Spenden/Zuwendungen (abziehbar bis 20 % des GdE). */
+  spenden?: number;
   /** Geburtsjahr — für den Altersentlastungsbetrag (§ 24a). */
   geburtsjahr?: number;
 }
@@ -259,8 +261,9 @@ export function aggregiereZvE(input: SteuerfallEingabe): ZvEKomponenten {
   const hinweise: string[] = [];
   const versorgungDetails: VersorgungDetail[] = [];
 
-  let arbeit = 0, versorgung = 0, renten = 0, kapital = 0, aev = 0, vorsorge = 0;
+  let arbeit = 0, versorgung = 0, renten = 0, kapital = 0, aev = 0, vorsorge = 0, spendenSumme = 0;
   for (const p of personen) {
+    spendenSumme += Math.max(0, p.spenden ?? 0);
     const eArbeit = einkuenfteArbeit(p, vz);
     const vDetail = einkuenfteVersorgung(p);
     const eRenten = einkuenfteRenten(p);
@@ -302,8 +305,11 @@ export function aggregiereZvE(input: SteuerfallEingabe): ZvEKomponenten {
   trace.push({ schritt: 'Gesamtbetrag der Einkünfte', betrag: gesamtbetragEinkuenfte });
 
   const saPausch = SONDERAUSGABEN_PAUSCHBETRAG * (art === 'zusammen' ? 2 : 1);
-  const sonderausgaben = round2(vorsorge + saPausch);
+  // § 10b — Spenden/Zuwendungen, abziehbar bis 20 % des Gesamtbetrags der Einkünfte.
+  const spendenAbzug = round2(Math.min(spendenSumme, 0.20 * gesamtbetragEinkuenfte));
+  const sonderausgaben = round2(vorsorge + saPausch + spendenAbzug);
   if (vorsorge > 0) trace.push({ schritt: 'Vorsorgeaufwendungen (KV/PV-Basis, Altersvorsorge)', betrag: -vorsorge, rechtsgrundlage: '§10 Abs.1 Nr.2+3 EStG' });
+  if (spendenAbzug > 0) trace.push({ schritt: 'Spenden / Zuwendungen', betrag: -spendenAbzug, rechtsgrundlage: '§10b EStG' });
   trace.push({ schritt: 'Sonderausgaben-Pauschbetrag', betrag: -saPausch, rechtsgrundlage: '§10c EStG' });
 
   const einkommen = round2(Math.max(0, gesamtbetragEinkuenfte - sonderausgaben));

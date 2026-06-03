@@ -94,6 +94,8 @@ const ECODE_KV_PV_BASIS = new Set([
 // § 35a Abs. 2 — haushaltsnahe Dienstleistungen/Pflege (Bemessungsbasis;
 // 20 % davon, max 4.000 € mindern die Steuer). Extraktor- + MCP-Variante.
 const ECODE_35A_BASIS = new Set(['E0107301', 'E0107208', 'E0107201']);
+// § 10b — Spenden/Zuwendungen (Sonderausgaben, bis 20 % des GdE).
+const ECODE_SPENDEN = new Set(['E0108701', 'E0108405', 'E0108702']);
 
 interface PersonAkku {
   bruttolohn: number[];
@@ -109,12 +111,13 @@ interface PersonAkku {
   kapSteuer: number;
   altersvorsorge: number;
   kvPv: number;
+  spenden: number;
   vorauszahlung: number;
   geburtsjahr?: number;
 }
 const emptyAkku = (): PersonAkku => ({
   bruttolohn: [], versorgungBezug: [], versorgungBeginn: null, lohnsteuer: 0, soli: 0, kist: 0, rente: 0,
-  rentenbeginn: null, rentenAnpassung: 0, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, vorauszahlung: 0,
+  rentenbeginn: null, rentenAnpassung: 0, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, spenden: 0, vorauszahlung: 0,
 });
 
 export interface AdapterErgebnis {
@@ -163,6 +166,7 @@ export function bausteineAusFelder(
     else if (ECODE_ALTERSVORSORGE.has(f.eCode)) { if (n) p.altersvorsorge += n; }
     else if (ECODE_KV_PV_BASIS.has(f.eCode)) { if (n) p.kvPv += n; }
     else if (ECODE_35A_BASIS.has(f.eCode)) { if (n && n > haushaltsnahe35a) haushaltsnahe35a = n; }
+    else if (ECODE_SPENDEN.has(f.eCode)) { if (n) p.spenden += n; }
     else if (f.eCode === 'E0100401' || f.eCode === 'E0100801') {
       const yr = parseInt((f.wert.match(/(19|20)\d{2}/) ?? [])[0] ?? '', 10);
       if (yr) p.geburtsjahr = yr;
@@ -203,6 +207,7 @@ export function bausteineAusFelder(
       versorgungsbezuege,
       altersvorsorgeaufwand: a.altersvorsorge,
       kvPvBasisbeitrag: a.kvPv,
+      spenden: a.spenden,
       renten,
       geburtsjahr: a.geburtsjahr,
     };
