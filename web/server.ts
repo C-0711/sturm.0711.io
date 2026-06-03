@@ -30,6 +30,7 @@ import { extractBeleg, type ExtractOutput } from './extract-client.ts';
 import { parseVorauszahlungen } from './extract-vorauszahlung.ts';
 import { parseKvPvBasis, parse35aBasis, parseSpenden } from './extract-sonderausgaben.ts';
 import { parseSpendenVision } from './extract-spenden-vision.ts';
+import { parseVersorgungsbeginn } from './extract-versorgungsbeginn.ts';
 import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
 import { rename } from 'node:fs/promises';
 
@@ -309,6 +310,7 @@ async function runSteuerfall(paths: string[], vz: number) {
   let saKvPv: ReturnType<typeof parseKvPvBasis> = null;
   let sa35a: ReturnType<typeof parse35aBasis> = null;
   let saSpenden: ReturnType<typeof parseSpenden> = null;
+  let versBeginn: number | null = null; // §19 Abs.2 — frühester Versorgungsbeginn (Nr. 30 LStB)
   for (const p of paths) {
     let txt = ''; try { txt = docText(p); } catch { /* best-effort */ }
     // Dünner/kein Text-Layer (gescannter Beleg) → OCR erzwingen (cached), damit
@@ -317,6 +319,10 @@ async function runSteuerfall(paths: string[], vz: number) {
     if (!txt) continue;
     if (!saKvPv) saKvPv = parseKvPvBasis(txt);
     if (!sa35a) sa35a = parse35aBasis(txt);
+    // §19 Abs.2: maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB) —
+    // über ALLE LStB das FRÜHESTE Jahr (höchster Freibetrag). Bestimmt die Kohorte.
+    const vb = parseVersorgungsbeginn(txt);
+    if (vb && (versBeginn === null || vb < versBeginn)) versBeginn = vb;
     if (!saSpenden) {
       saSpenden = parseSpenden(txt);
       // Verstümmelter Spenden-Scan → Vision-OCR-Fallback (on-prem gemma4-mm).
@@ -331,6 +337,10 @@ async function runSteuerfall(paths: string[], vz: number) {
   if (saKvPv?.pv) felder.push({ eCode: 'E0202604', wert: deSA(saKvPv.pv), person: 'A', anlage: 'VOR', pdfLabel: 'Pflege-Pflichtbeitrag' });
   if (sa35a?.haushaltsnah) felder.push({ eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), person: 'A', anlage: 'HA', pdfLabel: 'haushaltsnahe Dienstleistungen §35a' });
   if (saSpenden?.betrag) felder.push({ eCode: 'E0108701', wert: deSA(saSpenden.betrag), person: 'A', anlage: 'SA', pdfLabel: 'Spenden §10b' });
+  // §19 Abs.2: Versorgungsbeginn (Nr. 30 LStB) → E0201307. Der BMF-MCP mappt
+  // versorgungsbezuege_1_beginn ← E0201307 und wählt damit die richtige
+  // Versorgungsfreibetrags-Kohorte (statt auf 2005 zu defaulten).
+  if (versBeginn) felder.push({ eCode: 'E0201307', wert: String(versBeginn), person: 'A', anlage: 'N', pdfLabel: 'Maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB)' });
 
   // Steuerzahler-Profil — DETERMINISTISCH aus den vollständigen Feldern (kein
   // LLM, kein Hardcode). Beschreibt den Fall (Versorgungsbezüge? Rente? aktiver
