@@ -8,7 +8,7 @@
  *   ELSTER_CATALOG_PG_URL=… TORNADO_ORCHESTRATOR_URL=… npx tsx web/server.ts
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname, extname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -201,6 +201,21 @@ async function extractCached(path: string): Promise<ExtractOutput> {
   const out = await extractBeleg(path, { baseUrl });
   try { writeFileSync(cf, JSON.stringify(out)); } catch { /* best-effort */ }
   return out;
+}
+
+// Cache-Eviction für die INITIALE Fall-Rechnung: verwirft ALLE datei-bezogenen
+// Caches eines Belegs (OCR-Roh, tornado-/extract, Provenienz-PNG+Boxen +
+// In-Memory). Dadurch wird garantiert frisch ge-OCRt und neu extrahiert (inkl.
+// frischer Flow-Trace-Dumps) — nichts Stale aus früheren Läufen oder anderen
+// Fällen (alle Caches sind content-addressiert per Datei-sha).
+function evictCaches(path: string): void {
+  try {
+    const h = contentHash(path);
+    rmSync(join(OCR_CACHE_DIR, h + '.json'), { force: true });            // OCR-Rohtext
+    rmSync(join(MASTERCASE_DIR, h + '.extract.json'), { force: true });   // tornado /extract
+    rmSync(join(PROV_CACHE_DIR, h), { recursive: true, force: true });    // Provenienz-PNG + Boxen
+    provMem.delete(h);                                                    // In-Memory-Provenienz
+  } catch (e) { console.error('EVICT', basename(path), (e as Error).message); }
 }
 
 /** Hintergrund-Job: Belege → /extract → harmonize → Sidecar persistieren.
@@ -534,8 +549,13 @@ createServer(async (req, res) => {
       return;
     }
     if (req.method === 'POST' && url === '/api/steuerfall') {
-      const { paths, vz, caseId } = JSON.parse((await body(req)).toString('utf8'));
+      const { paths, vz, caseId, fresh } = JSON.parse((await body(req)).toString('utf8'));
       if (!Array.isArray(paths) || paths.length === 0) return json(res, 400, { error: 'keine Dateien' });
+      // Initiale Rechnung (fresh=true vom Client beim Fall-Anlegen): JEDEN Beleg-
+      // Cache verwerfen, BEVOR gerechnet wird → garantiert frische OCR + tornado-
+      // Extraktion (+ frische Flow-Dumps). „Neu berechnen"/Belege-Hinzufügen lassen
+      // fresh weg und nutzen den dann frisch befüllten Cache (schnell, konsistent).
+      if (fresh) { let n = 0; for (const p of paths) { if (typeof p === 'string' && existsSync(p)) { evictCaches(p); n++; } } console.log(`[fresh] ${n} Beleg-Caches verworfen für Fall ${caseId ?? '(neu)'}`); }
       const cid = String(caseId ?? ('c' + Date.now()));
       const out = await runSteuerfall(paths, Number(vz) || 2023);
       // Hintergrund-Harmonizer fire-and-forget: KEIN await → die Pre-Calc-Antwort

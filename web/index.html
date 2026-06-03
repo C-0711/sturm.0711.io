@@ -388,9 +388,9 @@ async function uploadFile(f){
   const r=await fetch('api/upload',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:await f.arrayBuffer()});
   const j=await r.json(); if(j.error) throw new Error(j.error); return j.path;
 }
-async function compute(paths,vz,caseId){
+async function compute(paths,vz,caseId,fresh){
   const t0=performance.now();
-  const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz,caseId})});
+  const r=await fetch('api/steuerfall',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,vz,caseId,fresh:!!fresh})});
   const d=await r.json(); if(!d.ok) throw new Error(d.error||'Berechnung fehlgeschlagen');
   d._clientMs=Math.round(performance.now()-t0); return d;
 }
@@ -574,7 +574,7 @@ async function createCase(){
     for(const f of files){ const path=await uploadFile(f); paths.push(path);
       docs.push({name:f.name,size:f.size,path,thumb:null,badge:'',state:'pending',_file:f}); }
     const caseId='c'+Date.now();          // VOR compute minten → Server-Job + Poll teilen die id
-    const data=await compute(paths,vz,caseId);
+    const data=await compute(paths,vz,caseId,true);   // initiale Rechnung: fresh → keine Caches
     active={id:caseId,label:caseLabel(data),vz,paths,docs,data,chat:[],kuratorModel:ncp.kurator||'gemma'}; viewDoc=null;
     applyBadges();
     busy=false; closeNcp(); render(); persistActive();
