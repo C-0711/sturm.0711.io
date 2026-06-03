@@ -69,6 +69,10 @@ const ECODE_RENTE = new Set(['E2400103', 'E2400203', 'E1800301', 'E1803102']);
 const ECODE_RENTENBEGINN = new Set(['E2400107', 'E2400207', 'E1800501', 'E1803202']);
 const ECODE_KAP_ERTRAG = new Set(['E1900701']);
 const ECODE_KAP_STEUER = new Set(['E1904701']);
+// Geleistete Vorauszahlungen (intern, aus der Steuerkontoabfrage injiziert) —
+// ESt/SolZ/KiSt; werden wie einbehaltene Abzugsteuern auf die Festsetzung
+// angerechnet. Keine ELSTER-Deklarationsfelder, daher interne Codes.
+const ECODE_VORAUSZAHLUNG = new Set(['VZ_EST', 'VZ_SOLZ', 'VZ_KIST']);
 // vorsorgeaufwand: rv_beitraege + ruerup + av (§10 Abs.1 Nr.2):
 const ECODE_ALTERSVORSORGE = new Set([
   'E0202204', 'E2000401',           // rv_beitraege (MCP)
@@ -93,11 +97,12 @@ interface PersonAkku {
   kapSteuer: number;
   altersvorsorge: number;
   kvPv: number;
+  vorauszahlung: number;
   geburtsjahr?: number;
 }
 const emptyAkku = (): PersonAkku => ({
   bruttolohn: [], lohnsteuer: 0, soli: 0, kist: 0, rente: 0,
-  rentenbeginn: null, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0,
+  rentenbeginn: null, kapErtrag: 0, kapSteuer: 0, altersvorsorge: 0, kvPv: 0, vorauszahlung: 0,
 });
 
 export interface AdapterErgebnis {
@@ -126,6 +131,7 @@ export function bausteineAusFelder(
     else if (ECODE_LOHNSTEUER.has(f.eCode)) { if (n) p.lohnsteuer += n; }
     else if (ECODE_SOLI_ABZUG.has(f.eCode)) { if (n) p.soli += n; }
     else if (ECODE_KIST_ABZUG.has(f.eCode)) { if (n) p.kist += n; }
+    else if (ECODE_VORAUSZAHLUNG.has(f.eCode)) { if (n) p.vorauszahlung += n; }
     else if (ECODE_RENTE.has(f.eCode)) { if (n) p.rente += n; }
     else if (ECODE_RENTENBEGINN.has(f.eCode)) {
       const yr = parseInt((f.wert.match(/(19|20)\d{2}/) ?? [])[0] ?? '', 10);
@@ -173,6 +179,7 @@ export function bausteineAusFelder(
     solidaritaetszuschlag: round2(akku.A.soli + akku.B.soli),
     kirchensteuer: round2(akku.A.kist + akku.B.kist),
     kapitalertragsteuer: round2(akku.A.kapSteuer + akku.B.kapSteuer),
+    vorauszahlungen: round2(akku.A.vorauszahlung + akku.B.vorauszahlung),
   };
 
   return {

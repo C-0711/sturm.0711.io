@@ -26,6 +26,9 @@ export interface Anrechnung {
   kirchensteuer?: number;
   /** Kapitalertragsteuer (Abgeltung), falls in die Veranlagung einbezogen. */
   kapitalertragsteuer?: number;
+  /** Geleistete Vorauszahlungen (ESt+SolZ+KiSt) aus der Steuerkontoabfrage —
+   *  werden wie einbehaltene Abzugsteuern auf die Festsetzung angerechnet. */
+  vorauszahlungen?: number;
 }
 
 export interface SteuerfallRechnung extends SteuerfallEingabe {
@@ -67,13 +70,15 @@ export function berechneSteuerfall(input: SteuerfallRechnung): SteuerbescheidErg
     solidaritaetszuschlag: a.solidaritaetszuschlag ?? 0,
     kirchensteuer: a.kirchensteuer ?? 0,
     kapitalertragsteuer: a.kapitalertragsteuer ?? 0,
+    vorauszahlungen: a.vorauszahlungen ?? 0,
     summe: 0,
   };
   anrechnung.summe = round2(
     anrechnung.lohnsteuer +
       anrechnung.solidaritaetszuschlag +
       anrechnung.kirchensteuer +
-      anrechnung.kapitalertragsteuer,
+      anrechnung.kapitalertragsteuer +
+      anrechnung.vorauszahlungen,
   );
 
   const festgesetzt = steuer.gesamtsteuer;

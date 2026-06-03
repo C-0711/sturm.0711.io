@@ -126,6 +126,9 @@ export function feldateToElsterFelder(
     elsterFelder[mcp] = out;
   };
   for (const [code, vals] of byCode) {
+    // Interne Anrechnungs-Codes (Vorauszahlungen) sind KEINE ELSTER-Deklarations-
+    // felder → nie an den BMF-MCP senden (sie betreffen nur die Anrechnung).
+    if (code.startsWith('VZ_')) continue;
     if (vals.length === 1) { emit(code, vals[0]); continue; }
     const parsed = vals.map((v) => ({ v, n: parseEuro(v) }));
     const allNum = parsed.every((p) => p.n !== null);

@@ -26,6 +26,7 @@ import { phraseFindings, interpretAnswer } from './auditor.ts';
 import { buildAuditProtocol, sealProtocol } from './protocol.ts';
 import { loadCandidates, buildIndex, type Candidate } from '../src/server/harmonize.ts';
 import { extractBeleg, type ExtractOutput } from './extract-client.ts';
+import { parseVorauszahlungen } from './extract-vorauszahlung.ts';
 import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
 import { rename } from 'node:fs/promises';
 
@@ -264,6 +265,23 @@ async function runSteuerfall(paths: string[], vz: number) {
     };
   });
   const felder: SteuerFeld[] = r.aggregated.map((f) => ({ eCode: f.eCode, wert: f.wert, person: f.person, anlage: f.anlage, pdfLabel: f.pdfLabel }));
+  // A1+B2 — Vorauszahlungen aus einer Steuerkontoabfrage (falls vorhanden) als
+  // interne Anrechnungs-Felder injizieren → der Adapter rechnet sie auf die
+  // Festsetzung an. Rein strukturell geparst, kein Case-Hardcode; nur die
+  // Quartals-VZ des VZ (Vorjahres-Reste ausgeschlossen). Eine Abfrage je Fall.
+  for (const p of paths) {
+    let vzp: ReturnType<typeof parseVorauszahlungen> = null;
+    try { vzp = parseVorauszahlungen(p, vz); } catch (e) { console.error('VZ-PARSE', basename(p), (e as Error).message); }
+    if (vzp) {
+      const de = (n: number) => n.toFixed(2).replace('.', ',');
+      felder.push(
+        { eCode: 'VZ_EST', wert: de(vzp.est), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Einkommensteuer' },
+        { eCode: 'VZ_SOLZ', wert: de(vzp.solz), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Solidaritätszuschlag' },
+        { eCode: 'VZ_KIST', wert: de(vzp.kist), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Kirchensteuer' },
+      );
+      break;
+    }
+  }
 
   // Provenienz-Pass: pro OCR'tem Dokument PNG+bboxes (cache), dann je Feld den
   // Record mit passendem Wert finden → prov (Box im Bild). Best-effort: ein
