@@ -9,6 +9,9 @@ logs/
 runs/
 uploads/
 
+# Beleg-API Lauf-Ordner (sensible Beleg-Daten — nie committen)
+/beleg-api-data/
+
 # User-defined workflows (designer-authored) — kept local
 workflows-user/
 

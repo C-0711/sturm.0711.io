@@ -1,3 +1,5 @@
+const path = require('path');
+
 module.exports = {
   apps: [
     {
@@ -16,6 +18,23 @@ module.exports = {
       time: true,
       // start.sh sourced .env (lokal oder Fallback aus cb-ctax), damit
       // MISTRAL_API_KEY / ANTHROPIC_API_KEY automatisch gesetzt sind.
+    },
+    {
+      // Eigenständiger Hintergrund-Daemon — entkoppelt von 'sturm'.
+      // Belege rein (Ordner-Drop oder POST), perfekte JSON + MD raus.
+      name: 'beleg-api',
+      cwd: __dirname,
+      script: 'src/beleg-api/index.ts',
+      interpreter: path.join(__dirname, 'node_modules/.bin/tsx'),
+      env: {
+        NODE_ENV: 'production',
+        BELEG_PORT: 7810,
+      },
+      max_memory_restart: '1G',
+      out_file: './logs/beleg-api.out.log',
+      error_file: './logs/beleg-api.err.log',
+      merge_logs: true,
+      time: true,
     },
   ],
 };
