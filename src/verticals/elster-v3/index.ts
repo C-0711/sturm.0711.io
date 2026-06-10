@@ -48,6 +48,7 @@ import { finalizeExtractionStage } from './stages/finalize-extraction.ts';
 // deterministische Constraint-Propagation
 import { lohnsteuerbescheidMapperStage } from './stages/lohnsteuerbescheid-mapper-stage.ts';
 import { einkommensteuererklaerungMapperStage } from './stages/einkommensteuererklaerung-mapper-stage.ts';
+import { systemReadinessCheckStage } from './stages/system-readiness-check.ts';
 
 export const ELSTER_V3_VERTICAL_META = {
   standardId: 'elster-v3',
@@ -108,6 +109,8 @@ export function registerElsterV3Stages(): void {
   // Ratio Math + Spatial Zoning + Label-Adjacency + embeddinggemma-Cascade +
   // Lane 1 §32a-Verifier). Backend: tools/elster-inverse-solver/inverse_solver.py.
   registerStage(einkommensteuererklaerungMapperStage);
+  // Pre-Flight Health-Check: Lane 1 / Ollama / FP32 / atoms.json
+  registerStage(systemReadinessCheckStage);
 }
 
 /**
@@ -1602,34 +1605,54 @@ export function buildElsterV5_4ConditionalWorkflow() {
       'einen Pfad — 3× schneller als v5_2-rag, ohne Cross-Contamination zwischen den Pfaden.',
     input: { type: 'file', accept: ['pdf', 'png', 'jpg', 'jpeg'], maxSizeMb: 50 },
     stages: {
-      // 1. OCR + Document-Zoning in einem Stage (zwei vLLM-Calls):
-      //    (a) per-Seite Gemma-4 Vision → Markdown
-      //    (b) text-only Gemma-4 mit strict json_schema → erkannte_dokumente[]
-      //        mit { dokumenten_typ, gehoert_zu_person, start_zeile, end_zeile }
+      // 0. Pre-Flight Health-Check: Lane 1 / Ollama / Gemma4 / FP32-Cascade /
+      //    atoms.json — alle externen Dependencies ping'en + per-Welle
+      //    Capability-Status. Im Pipeline-Runner ZUERST sichtbar.
+      systemReadiness: {
+        uses: 'elster-v3/system-readiness-check',
+        config: {
+          lane1Url: 'http://host.docker.internal:12010/health',
+          ollamaUrl: 'http://host.docker.internal:11434',
+          atomsJsonPath: 'src/verticals/elster-v3/data/atoms.json',
+          cascadeFp32Path: 'src/verticals/elster-v3/data/embeddings.gemma4.fp32.bin',
+        },
+        inputs: {},
+      },
+      // 1. OCR + Document-Zoning in EINEM Gemma-4 Vision Call (strict json_schema):
+      //    → erkannte_dokumente[{dokumenten_typ, gehoert_zu_person, ocr_zeilen[]}]
+      //    Person-A/B-Suffix unverrückbar fest ab Frame 1.
       ocr: {
         uses: 'gemma-vision-ocr-zoning',
-        config: { dpi: 200, maxTokens: 4096, zoningMaxTokens: 2000, ocrConcurrency: 4 },
+        config: { dpi: 200, maxTokens: 8192 },
         inputs: { filePath: '${input.filePath}', filename: '${input.filename}' },
       },
-      // 2. Klassifizierung: leitet doc_type aus ocr.erkannte_dokumente[] ab
-      //    (statt eigener Regex-Heuristik). Wenn keine Zonen → fallback auf Regex.
+      // 2. Klassifizierung: doc_type + steuerjahr aus erkannte_dokumente[]
+      //    (Hauptvordruck_ESt1A → einkommensteuererklaerung,
+      //     Lohnsteuerbescheinigung ohne ESt1A → vast_bundle, sonst einzelbeleg).
       klassifizierung: {
         uses: 'elster/klassifizierung',
         config: { llmFallbackWhen: 'zero' },
         inputs: { text: '${ocr.text}', erkannte_dokumente: '${ocr.erkannte_dokumente}' },
       },
       // ── PFAD A: vast_bundle ──────────────────────────────────────────
-      labelValueParser: {
-        uses: 'elster-v3/label-value-parser',
-        inputs: { text: '${ocr.text}' },
-        skipWhen: '${klassifizierung.doc_type} != "vast_bundle"',
-      },
+      // LStB-Mapper konsumiert erkannte_dokumente DIREKT (kein label-value-parser
+      // mehr — der heuristische Splitter wurde durch Vision-Zoning ersetzt).
+      // caseContext.nested.hauptvordruck.person_a/b.idnr seedet Person-A/B-
+      // Disambig hart (statt nur first-seen-Heuristik).
       lohnsteuerbescheidMapper: {
         uses: 'elster-v3/lohnsteuerbescheid-mapper',
-        inputs: { belege: '${labelValueParser.belege}' },
+        inputs: {
+          erkannte_dokumente: '${ocr.erkannte_dokumente}',
+          caseContext: '${input.caseContext}',
+        },
         skipWhen: '${klassifizierung.doc_type} != "vast_bundle"',
       },
       // ── PFAD B: einkommensteuererklaerung ────────────────────────────
+      // ESE-Mapper konsumiert ocr.text DIREKT als plain stream — der Stricker-
+      // Solver (inverse_solver.py) erwartet flachen OCR-Text und nutzt
+      // ANLAGE_RE-regex für Anlagen-Detection in seiner eigenen Welle 0.
+      // Vision-Zoning (erkannte_dokumente) wird in der Klassifizierung für
+      // doc_type-Routing genutzt — der Solver braucht sie nicht.
       einkommensteuererklaerungMapper: {
         uses: 'elster-v3/einkommensteuererklaerung-mapper',
         config: { runLane1Verifier: true, runCascadeFallback: true },
@@ -1666,6 +1689,9 @@ export function buildElsterV5_4ConditionalWorkflow() {
         skipWhen: '${klassifizierung.doc_type} != "einzelbeleg"',
       },
       // Finalize: merget alle 3 Pfade — pro Run ist nur 1 nicht-undefined.
+      // Zusätzlich: caseContext.daueranschnitte (Vorjahres-Pendlerpauschale
+      // etc.) werden als "vorjahr_daueranschnitt"-eCodes eingemischt — nur
+      // dort wo der aktuelle Beleg den eCode nicht selbst liefert (conf 0.5).
       finalize: {
         uses: 'elster-v3/finalize-extraction',
         config: {},
@@ -1674,13 +1700,20 @@ export function buildElsterV5_4ConditionalWorkflow() {
           ecodes_ese: '${einkommensteuererklaerungMapper.ecodes}',
           ecodes_einzel: '${phase3LlmFill.per_anlage}',
           anlagen: '${klassifizierung.erkannte_anlagen}',
+          caseContext: '${input.caseContext}',
         },
       },
     },
     edges: [
+      // systemReadiness ist Pre-Flight: alle nachgelagerten Stages hängen
+      // visuell daran (auch wenn sie systemReadiness.* nicht lesen). Damit
+      // erscheint die Stage als echter Entry-Point im React-Flow Graph
+      // statt disconnected oben links zu schweben.
+      ['systemReadiness', 'ocr'],
       ['ocr', 'klassifizierung'],
-      ['klassifizierung', 'labelValueParser'],
-      ['labelValueParser', 'lohnsteuerbescheidMapper'],
+      ['ocr', 'lohnsteuerbescheidMapper'],
+      ['klassifizierung', 'lohnsteuerbescheidMapper'],
+      ['ocr', 'einkommensteuererklaerungMapper'],
       ['klassifizierung', 'einkommensteuererklaerungMapper'],
       ['klassifizierung', 'felderKatalog'],
       ['felderKatalog', 'phase1Regex'],

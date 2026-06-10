@@ -90,6 +90,21 @@ export interface FinalizeExtractionInput {
   ecodes_ese?: Record<string, string | number>;
   /** v5_4 Pfad C: Einzelbeleg via phase3-llm-fill (per-Anlage-Shape). */
   ecodes_einzel?: Record<string, Phase3AnlageResult>;
+  /** v5_4 + CaseContext: Daueranschnitte aus Vorjahres-Erklärung (Pendlerpauschale,
+   *  Kontoführungsgebühren, Rechtsschutzversicherung-Beruflicher-Anteil etc.).
+   *  Werden als "vorschlag_vorjahr"-eCodes mit niedrigerer Confidence (0.5)
+   *  eingemischt — überschreiben NIE einen aus dem aktuellen Beleg extrahierten
+   *  Wert (cascadeDirect/llmDisambig haben Priorität). */
+  caseContext?: {
+    daueranschnitte?: Array<{
+      eCode: string;
+      label?: string;
+      wert: number | string;
+      einheit?: string;
+      quelle?: string;
+      status?: string;
+    }>;
+  };
 }
 
 export interface FinalizeExtractionConfig {
@@ -197,6 +212,46 @@ export const finalizeExtractionStage = defineStage<
     }
     const effectiveAccepted: AcceptedField[] =
       acceptedFromInput.length > 0 ? acceptedFromInput : acceptedFromMultiSource;
+
+    // Vorjahres-Daueranschnitte einmischen — NUR für eCodes die der aktuelle
+    // Beleg nicht selbst liefert. Niedrigere Confidence (0.5) und expliziter
+    // sourceLabel macht im UI sichtbar dass das ein "Vorschlag aus 2023" ist.
+    const daueranschnitte = input.caseContext?.daueranschnitte ?? [];
+    if (daueranschnitte.length > 0) {
+      const alreadyKnown = new Set(effectiveAccepted.map((a) => a.ecode));
+      const addedFromVorjahr: AcceptedField[] = [];
+      for (const d of daueranschnitte) {
+        if (alreadyKnown.has(d.eCode)) continue;
+        addedFromVorjahr.push({
+          ecode: d.eCode,
+          drucktext: d.label ?? '',
+          anlage: '',
+          vordruckzeile: '',
+          datentyp: 'string',
+          pflicht: false,
+          method: 'cascade-direct',
+          cosine: 0.5,
+          confidence: 0.5,
+          rawValue: String(d.wert),
+          normalizedValue: String(d.wert),
+          source: {
+            belegIdx: -1,
+            chunkIdx: -1,
+            lineIndex: -1,
+            label: `vorjahr_daueranschnitt:${d.quelle ?? 'unbekannt'}`,
+          },
+        });
+      }
+      if (addedFromVorjahr.length > 0) {
+        effectiveAccepted.push(...addedFromVorjahr);
+        ctx.emit('vorjahr_daueranschnitte_merged', {
+          added: addedFromVorjahr.length,
+          skipped_already_known: daueranschnitte.length - addedFromVorjahr.length,
+          ecodes: addedFromVorjahr.map((a) => a.ecode),
+        });
+      }
+    }
+
     const effectiveRejected: RejectedField[] = input.rejected ?? [];
 
     // ── 1. canonical_layer: flach (codes) + nested per Anlage ─────────────

@@ -23,6 +23,7 @@ import {
   buildElsterV52RagEnsembleWorkflow,
   buildElsterV6VisionWorkflow,
   buildElsterV4StrickerWorkflow,
+  buildElsterV5_4ConditionalWorkflow,
 } from '../verticals/elster-v3/index.ts';
 import { registerStage } from '../core/registry.ts';
 import { phase3VisionFillStage } from '../verticals/elster-v3/stages/phase3-vision-fill.ts';
@@ -52,6 +53,12 @@ export function registerAllWorkflows(): void {
   registerStage(phase3VisionFillStage);
   registerWorkflow(buildElsterV6VisionWorkflow());
   registerWorkflow(buildElsterV4StrickerWorkflow());
+  // v5_4: Klassifizierung-driven Hybrid via skipWhen-Routing.
+  // OCR+Zoning (Gemma-4 strict json_schema) → klassifizierung → 1 von 3 Pfaden:
+  //   vast_bundle → lohnsteuerbescheidMapper (erkannte_dokumente direkt)
+  //   einkommensteuererklaerung → einkommensteuererklaerungMapper (Solver + Lane-1)
+  //   einzelbeleg → felderKatalog → phase1Regex → phase3LlmFill (klassisch)
+  registerWorkflow(buildElsterV5_4ConditionalWorkflow());
   registerElsterV3MultiStages();
   registerWorkflow(buildElsterV3MultiWorkflowWithSchema());
   registerWorkflow(buildOcrShootoutWorkflow());

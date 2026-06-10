@@ -150,11 +150,20 @@ export class LohnsteuerbescheidMapper {
    * @param containerAtoms All atoms from the ELSTER atoms.json container.
    * @param ratioThreshold Levenshtein-Ratio cutoff for the fallback path
    *   (default 0.85 — empirically optimal for German BMF drucktexts).
+   * @param seedPersonAIdNr Optional ground-truth IdNr from Vorjahres-Kontext
+   *   (caseContext.nested.hauptvordruck.person_a.idnr). Wenn gesetzt: hartes
+   *   Override für Person-A-Erkennung — robust gegen Beleg-Reihenfolge.
+   * @param seedPersonBIdNr Analog für Person B.
    */
   constructor(
     private containerAtoms: Atom[],
     private ratioThreshold: number = 0.85,
-  ) {}
+    seedPersonAIdNr?: string | null,
+    seedPersonBIdNr?: string | null,
+  ) {
+    if (seedPersonAIdNr) this.primaryIdNr = seedPersonAIdNr;
+    if (seedPersonBIdNr) this.secondaryIdNr = seedPersonBIdNr;
+  }
 
   /** German notation "1.234,56 €" → 123456 cents. */
   private normalizeCurrency(val: string): number {

@@ -22,12 +22,32 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineStage } from '../../../core/stage.ts';
 
+// Container-Quellen (single source of truth):
+//   atoms.json         → 0711:elster:bmf:jahresdok-2024:v2 (2287 eCodes)
+//   paragraph_estg.json → §-Lookup für Statutory-Constants
+// Beide liegen im Repo unter src/verticals/elster-v3/data/ (eingechecktes
+// Container-Snapshot, von loadCatalog() in elster-catalog.ts gelesen).
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_ATOMS_PATH = resolve(__dirname, '../data/atoms.json');
+const DEFAULT_PARAGRAPHS_PATH = resolve(__dirname, '../data/paragraph_estg.json');
+
 export interface ESEMapperInput {
-  /** Roher OCR-Volltext einer Einkommensteuererklärung (alle Anlagen). */
-  ocrText: string;
+  /** Legacy: roher OCR-Volltext einer Einkommensteuererklärung. */
+  ocrText?: string;
+  /** v5_4: strukturierte Block-Liste von gemma-vision-ocr-zoning. Wenn
+   *  vorhanden + ocrText leer, wird intern ein strukturierter Text mit
+   *  Block-Headern ("=== Anlage_N (Person A) ===") generiert und an den
+   *  Solver gegeben. Vorteil: Solver-Spatial-Zoning bekommt explizite
+   *  Anlage-Person-Marker statt heuristisch suchen zu müssen. */
+  erkannte_dokumente?: Array<{
+    dokumenten_typ: string;
+    gehoert_zu_person?: string;
+    ocr_zeilen?: Array<{ zeilen_nr: number; text: string }>;
+  }>;
   /** Veranlagungszeitraum (für statutory constants + Lane 1 call). */
   steuerjahr?: number;
 }
@@ -109,10 +129,22 @@ export const einkommensteuererklaerungMapperStage = defineStage<
 
   async run(input, ctx) {
     const t0 = Date.now();
-    if (!input?.ocrText) {
-      ctx.logger.warn('einkommensteuererklaerung-mapper: leerer OCR-Text');
+    // Input-Auflösung: ocrText (legacy) bevorzugt; sonst aus erkannte_dokumente
+    // (v5_4) ein strukturierter Text mit Block-Headern bauen.
+    let ocrText: string = input?.ocrText ?? '';
+    if (!ocrText && (input?.erkannte_dokumente?.length ?? 0) > 0) {
+      ocrText = erkannteDokumenteToStructuredText(input!.erkannte_dokumente!);
+      ctx.emit('ese_mapper_text_from_zoning', {
+        blockCount: input!.erkannte_dokumente!.length,
+        chars: ocrText.length,
+      });
+    }
+    if (!ocrText) {
+      ctx.logger.warn('einkommensteuererklaerung-mapper: leerer OCR-Text + keine erkannte_dokumente');
       return { locks: {}, ecodes: {}, lockCount: 0, convergenceCount: 0, ms: 0 };
     }
+    // Re-bind input für rest des Codes (ocrText jetzt garantiert non-empty).
+    input = { ...(input ?? {}), ocrText };
 
     const solverPath =
       ctx.config?.solverPath ??
@@ -129,21 +161,63 @@ export const einkommensteuererklaerungMapperStage = defineStage<
       );
     }
 
-    // Write OCR to temp file, run Python solver, read JSON output
+    // Write OCR to temp file, run Python solver, read JSON output.
+    // Wenn erkannte_dokumente vorhanden ist: schreibe das Vision-Zoning auch
+    // als JSON-Datei und gib --zoning an den Solver. Der nutzt dann die per-
+    // Block (anlage, person)-Information DIREKT statt sie aus dem flachen Text
+    // per Regex zurückzuparsen. Wirkung: math-locks pro Block isoliert →
+    // keine PV/AV-Verwechslung mehr (selbe Zahl in mehreren Blöcken sicher
+    // disambiguiert).
     const workDir = mkdtempSync(join(tmpdir(), 'elster-solver-'));
     const ocrFile = join(workDir, 'input.ocr.txt');
     const outFile = join(workDir, 'solver_result.json');
-    writeFileSync(ocrFile, input.ocrText);
+    const zoningFile = join(workDir, 'zoning.json');
+    writeFileSync(ocrFile, ocrText);
+    // Persistiere den exakten OCR-Text der dem Solver übergeben wird im
+    // Run-Dir (statt /tmp, das pro Run überschrieben wurde). So kann man
+    // den Solver-Lauf jederzeit von der CLI reproduzieren:
+    //   docker exec sturm python3 inverse_solver.py --ocr <runs/.../solver-input.ocr.txt>
+    try {
+      await ctx.artifacts.write(`${ctx.stageId}/solver-input.ocr.txt`, ocrText);
+    } catch { /* best-effort */ }
+    // Zoning-JSON nur schreiben wenn explizit aktiviert. Defaults FALSE weil
+    // die globale line_no-Synchronisation zwischen ocrText und zoning_map
+    // noch nicht fertig kalibriert ist (block-lokale zeilen_nr kollidieren
+    // beim Lookup). Solver fällt zurück auf Regex-Parse-Pfad → liefert volle
+    // Welle-1-Math-Locks (RV/KV/PV/AV).
+    const hasZoning = (ctx.config as { enableZoningHandoff?: boolean })?.enableZoningHandoff === true
+      && (input?.erkannte_dokumente?.length ?? 0) > 0;
+    if (hasZoning) {
+      writeFileSync(zoningFile, JSON.stringify(input!.erkannte_dokumente, null, 2));
+      ctx.emit('ese_mapper_zoning_handed_to_solver', {
+        blockCount: input!.erkannte_dokumente!.length,
+        zoningFile,
+      });
+    }
 
     try {
+      const atomsPath = process.env.ELSTER_ATOMS_PATH ?? DEFAULT_ATOMS_PATH;
+      const paragraphsPath = process.env.ELSTER_PARAGRAPHS_PATH ?? DEFAULT_PARAGRAPHS_PATH;
+      if (!existsSync(atomsPath)) {
+        throw new Error(
+          `atoms.json not found at ${atomsPath}. Container 0711:elster:bmf:jahresdok-2024:v2 ` +
+            `muss als Snapshot unter src/verticals/elster-v3/data/atoms.json deployed sein.`,
+        );
+      }
       const args = [
         solverPath,
         '--ocr', ocrFile,
         '--output', outFile,
+        '--atoms', atomsPath,
+        '--paragraphs', paragraphsPath,
         '--steuerjahr', String(input.steuerjahr ?? 2023),
       ];
+      if (hasZoning) args.push('--zoning', zoningFile);
       if (ctx.config?.runLane1Verifier !== false) args.push('--lane1-verify');
-      if (ctx.config?.runCascadeFallback === true) args.push('--cascade-fallback');
+      // Cascade default-on (Welle 4 ist Teil der vollen 5-Wellen-Pipeline).
+      // Nur opt-out wenn explizit false. Lane 1 + Cascade symmetrisch.
+      if (ctx.config?.runCascadeFallback !== false) args.push('--cascade-fallback');
+      ctx.emit('ese_mapper_solver_args', { args, env: { OLLAMA_URL: process.env.OLLAMA_URL ?? '<default>', LANE1_URL: process.env.LANE1_URL ?? '<default>' } });
 
       await runSubprocess(pythonBin, args, timeoutSec * 1000, ctx);
 
@@ -157,7 +231,19 @@ export const einkommensteuererklaerungMapperStage = defineStage<
         const l = lock as ESELock;
         locks[key] = l;
         const baseEcode = l.ecode;
-        if (!(baseEcode in ecodes)) ecodes[baseEcode] = l.value;
+        // ecodes-Map mit Person-A/B-Erhaltung: wenn dasselbe Base-eCode
+        // mehrfach vorkommt (z.B. KAP-Steuern pro Person — typisch bei
+        // verheirateten Veranlagungen), bleibt der erste Eintrag flach
+        // (`E1904701`) und weitere kriegen das Person-Suffix als
+        // Path-Variante (`E1904701/B`). Damit landen Person-B-Werte nicht
+        // mehr im Datenleck → finalize-extraction.canonical_layer.codes
+        // zeigt 36 Felder statt 33.
+        const suffix = key.includes('__') ? key.split('__').pop() : null;
+        if (!(baseEcode in ecodes)) {
+          ecodes[baseEcode] = l.value;
+        } else if (suffix && !(`${baseEcode}/${suffix}` in ecodes)) {
+          ecodes[`${baseEcode}/${suffix}`] = l.value;
+        }
         if (l.confidence === 1.0) convergenceCount++;
       }
 
@@ -185,30 +271,88 @@ export const einkommensteuererklaerungMapperStage = defineStage<
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 
-function runSubprocess(
+/**
+ * Konvertiert die Block-Liste von gemma-vision-ocr-zoning in einen
+ * strukturierten OCR-Text mit expliziten Block-Markern. Der Python-Solver
+ * kann seine Spatial-Zoning-Logik (Welle 2) damit präzise auf die echten
+ * Anlagen-Person-Zonen anwenden, statt sie heuristisch aus dem flachen
+ * OCR-Text zu suchen.
+ *
+ * Output-Format (Block-Header + Zeilen mit [NNN] Präfix):
+ *   === HAUPTVORDRUCK_ESTA1 (Person A) ===
+ *   [001] Steuernummer 02/171/51864
+ *   [002] ...
+ *
+ *   === ANLAGE_N (Person A) ===
+ *   [047] 5. Bruttoarbeitslohn 63.559,90 €
+ *   ...
+ */
+function erkannteDokumenteToStructuredText(
+  blocks: NonNullable<ESEMapperInput['erkannte_dokumente']>,
+): string {
+  const parts: string[] = [];
+  for (const b of blocks) {
+    const person = b.gehoert_zu_person ?? 'Unbekannt';
+    const header = `=== ${b.dokumenten_typ.toUpperCase()} (Person ${person}) ===`;
+    parts.push(header);
+    for (const z of b.ocr_zeilen ?? []) {
+      const tag = `[${String(z.zeilen_nr).padStart(3, '0')}]`;
+      parts.push(`${tag} ${z.text}`);
+    }
+    parts.push(''); // Leerzeile zwischen Blöcken für Spatial-Zoning-Trennung
+  }
+  return parts.join('\n');
+}
+
+async function runSubprocess(
   bin: string,
   args: string[],
   timeoutMs: number,
-  ctx: { logger: { info: (m: string) => void; error: (m: string) => void } },
+  ctx: {
+    stageId: string;
+    logger: { info: (m: string) => void; error: (m: string) => void };
+    artifacts: { write: (p: string, data: unknown) => Promise<void> };
+  },
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const { stdout, stderr, exitCode } = await new Promise<{ stdout: string; stderr: string; exitCode: number | null }>((resolve, reject) => {
+    // OLLAMA_URL für welle4_cascade.py + LANE1_URL für Welle 5: env-default,
+    // fallback auf host.docker.internal für Container-Deployments
+    // (sturm-mandanten: localhost im Container ist NICHT die Host-Bridge).
+    const childEnv = {
+      ...process.env,
+      OLLAMA_URL: process.env.OLLAMA_URL ?? 'http://host.docker.internal:11434/api/embed',
+      LANE1_URL: process.env.LANE1_URL ?? 'http://host.docker.internal:12010/mcp',
+    };
+    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], env: childEnv });
     let stderr = '';
+    let stdout = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new Error(`solver timeout after ${timeoutMs}ms`));
     }, timeoutMs);
 
     child.stdout.on('data', (chunk) => {
-      ctx.logger.info(`solver: ${chunk.toString().trim()}`);
+      const s = chunk.toString();
+      stdout += s;
+      ctx.logger.info(`solver: ${s.trim()}`);
     });
     child.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
     child.on('exit', (code) => {
       clearTimeout(timer);
-      if (code === 0) resolve();
-      else reject(new Error(`solver exit ${code}: ${stderr}`));
+      resolve({ stdout, stderr, exitCode: code });
     });
   });
+  // Persistieren in das Run-Artefakt-Verzeichnis (NICHT /tmp). Damit ist
+  // der Solver-Lauf pro runId nachvollziehbar, auch lange nach dem Run.
+  // best-effort: artifacts-write darf den Stage nicht zum Fehlschlagen
+  // bringen, falls FS-Permissions wackeln.
+  try {
+    await ctx.artifacts.write(`${ctx.stageId}/solver.stdout.log`, stdout);
+    await ctx.artifacts.write(`${ctx.stageId}/solver.stderr.log`, stderr);
+    await ctx.artifacts.write(`${ctx.stageId}/solver.args.json`, { args, exitCode });
+  } catch { /* best-effort */ }
+  if (exitCode === 0) return;
+  throw new Error(`solver exit ${exitCode}: ${stderr.slice(0, 500)}`);
 }

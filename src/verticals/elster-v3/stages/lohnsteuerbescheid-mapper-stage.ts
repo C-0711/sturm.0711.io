@@ -37,6 +37,13 @@ export interface LStBMapperInput {
     gehoert_zu_person?: string;
     ocr_zeilen?: Array<{ zeilen_nr: number; text: string }>;
   }>;
+  /** v5_4 + CaseContext: Vorjahres-Kontext mit Person-A/B-IdNr. Wenn vorhanden,
+   *  wird der Mapper mit den IdNrs aus der Vorjahres-Erklärung geseedet —
+   *  das macht die Person-A/B-Zuordnung robust gegen Beleg-Reihenfolge. */
+  caseContext?: {
+    person_a?: { idnr?: string };
+    person_b?: { idnr?: string };
+  };
 }
 
 export interface LStBMapperConfig {
@@ -263,7 +270,15 @@ export const lohnsteuerbescheidMapperStage = defineStage<
     const atoms = await loadAtomsForLStB();
     ctx.logger.info(`Loaded ${atoms.length} LStB-relevant atoms (N/VOR/AV/ESt1A/KAP)`);
 
-    const mapper = new LohnsteuerbescheidMapper(atoms, threshold);
+    const seedA = input?.caseContext?.person_a?.idnr;
+    const seedB = input?.caseContext?.person_b?.idnr;
+    if (seedA || seedB) {
+      ctx.emit('lstb_mapper_seeded_from_vorjahr', {
+        seedPersonA: seedA ? seedA.slice(0, 3) + '…' : null,
+        seedPersonB: seedB ? seedB.slice(0, 3) + '…' : null,
+      });
+    }
+    const mapper = new LohnsteuerbescheidMapper(atoms, threshold, seedA, seedB);
     const perBeleg: LStBMapperOutput['perBeleg'] = [];
 
     for (const beleg of belege) {
