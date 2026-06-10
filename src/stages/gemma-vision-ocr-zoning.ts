@@ -70,6 +70,13 @@ export type DokumentenTyp =
   | 'Mitteilung_Kapitalertraege'
   | 'Spendenquittung'
   | 'Rentenbezugsmitteilung'
+  // Erweiterung: vollständige 11-Datenarten-Abdeckung der VaSt (ERiC §9.9)
+  | 'Beitragsmitteilung_KV'             // VaSt_KRV — KV/PV-Beiträge vom Versicherer
+  | 'Riester_Bescheinigung'             // VaSt_RIE — § 10a EStG
+  | 'Basisrenten_Bescheinigung'         // VaSt_RUE — Rürup
+  | 'Lohnersatzleistungen_Mitteilung'   // VaSt_LErsL — ALG/KUG/Krankengeld
+  | 'VWL_Bescheinigung'                 // VaSt_VWL — Vermögenswirksame Leistungen
+  | 'Behindertenmerkmale_Mitteilung'    // VaSt_GDB — Grad der Behinderung
   | 'Unbekanntes_Dokument';
 
 export interface OcrZeile {
@@ -152,6 +159,13 @@ const SCHEMA = {
                 'Mitteilung_Kapitalertraege',
                 'Spendenquittung',
                 'Rentenbezugsmitteilung',
+                // Vollständige VaSt-Abdeckung (ERiC §9.9):
+                'Beitragsmitteilung_KV',
+                'Riester_Bescheinigung',
+                'Basisrenten_Bescheinigung',
+                'Lohnersatzleistungen_Mitteilung',
+                'VWL_Bescheinigung',
+                'Behindertenmerkmale_Mitteilung',
                 'Unbekanntes_Dokument',
               ],
             },
