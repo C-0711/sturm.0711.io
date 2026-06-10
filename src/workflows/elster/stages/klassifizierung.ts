@@ -254,17 +254,46 @@ export const klassifizierungStage = defineStage<
       /\btransfer-?ticket\b/i,
       /\bsteuer[- ]?abruf\b/i,
       /\bsteuer-?konto[ -]?abruf\b/i,
+      /\bsteuer-?konto[- ]?(abfrage|abruf)\b/i,
       /\bempfangs[- ]?bestätigung\b/i,
       /\bquittung\s+über\s+den\s+abruf\b/i,
       /\babruf[- ]?bescheinigung\b/i,
     ];
     const metaHits = META_DOC_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
-    // Zusätzlich: sehr kurze Dokumente OHNE typische Wertspalten (€-Zeichen,
-    // Beträge mit Komma+Cent) sind selten Belege.
-    const hasCurrency = /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) || /\d+,\d{2}\s*€/.test(input.text);
-    const isMetaDoc = metaHits.length > 0 && (!hasCurrency || input.text.length < 1200);
+    // Currency-Detektion: € optional, da viele ELSTER-/Behoerden-PDFs (z.B.
+    // Lohnsteuerbescheinigung, Rentenbezugsmitteilung) Betraege ohne €-Zeichen
+    // drucken. Wir akzeptieren deutsches Tausender-Format mit Cent-Komma.
+    const hasCurrency =
+      /\b\d{1,3}(?:\.\d{3})*,\d{2}\s*€/.test(input.text) ||
+      /\d+,\d{2}\s*€/.test(input.text) ||
+      /\b\d{1,3}(?:\.\d{3})+,\d{2}\b/.test(input.text); // 4.019,16 ohne €
+    // Anti-Indikatoren: starke Beleg-Felder. Wenn diese im Text stehen,
+    // ist das Dokument KEIN Meta-Doc, auch wenn z.B. "Transferticket" als
+    // Header der ELSTER-Druckausgabe vorkommt.
+    const STRONG_BELEG_PATTERNS = [
+      /Bruttoarbeitslohn/i,
+      /\bLohnsteuer\b/i,
+      /Steuerklasse\s*[1-6]/i,
+      /\bKirchensteuer\b/i,
+      /\bSozialversicherung\b/i,
+      /\bBemessungsgrundlage\b/i,
+      /\bKapitalertr[aä]ge\b/i,
+      /\bRentenbezug/i,
+      /\bVersorgungsbezug/i,
+      /\bBeitr[aä]ge\s+zur\s+(privaten|gesetzlichen)\s+(Kranken|Pflege)/i,
+      /Identifikationsnummer\s*:?\s*\d{2}\s*\d{3}\s*\d{3}\s*\d{3}/i,
+      /\beTIN\b/,
+      /Anlage\s*[NKSGVRL]\b/i,
+      /Leistung\s+gem[aä]ß\s+§\s*22/i,
+    ];
+    const belegSignalHits = STRONG_BELEG_PATTERNS.filter((re) => re.test(input.text)).map((re) => re.source);
+    const hasBelegSignal = belegSignalHits.length > 0;
+    // Nur dann Meta-Doc wenn: Meta-Pattern UND kein Beleg-Signal
+    // UND (keine Currency ODER sehr kurz).
+    const isMetaDoc =
+      metaHits.length > 0 && !hasBelegSignal && (!hasCurrency || input.text.length < 1200);
     if (isMetaDoc) {
-      ctx.emit('meta_doc_detected', { patterns: metaHits, hasCurrency, textLen: input.text.length });
+      ctx.emit('meta_doc_detected', { patterns: metaHits, hasCurrency, hasBelegSignal, belegSignalHits, textLen: input.text.length });
       ctx.logger.info('Meta-Dokument erkannt — keine Beleg-Extraktion', {
         patterns: metaHits,
         hasCurrency,
