@@ -24,6 +24,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ApplicationInstance } from './applications.ts';
+import { deriveSteuerjahrFromRuns } from './derive-steuerjahr.ts';
 
 export interface CaseMasterOptions {
   runsDir: string;
@@ -76,8 +77,12 @@ export async function writeCaseMaster(
         ),
       );
       const client = new BmfMcpClient({ timeoutMs: 15_000 });
+      const erklaerungsjahr =
+        inst.veranlagungsjahr ??
+        (await deriveSteuerjahrFromRuns(opts.runsDir, opts.extractionWorkflowId, inst.runs)) ??
+        new Date().getFullYear() - 1;
       bmf = await client.berechneVollstaendigeSteuerV2({
-        erklaerungsjahr: inst.veranlagungsjahr ?? 2024,
+        erklaerungsjahr,
         elster_felder: felder,
       });
     } catch (err) {

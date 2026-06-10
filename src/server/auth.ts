@@ -50,11 +50,48 @@ export function requireBearerToken(req: Request, res: Response, next: NextFuncti
   // Distinguish HTML-page hits (return a friendly minimal page) from API hits.
   const wantsHtml = (req.headers['accept'] ?? '').toString().includes('text/html');
   if (wantsHtml) {
+    // Wenn der Browser schon mal ein Token in localStorage hat (z.B. via
+    // erstmaligem Besuch auf `/`), redirecten wir automatisch mit ?token=…
+    // an dieselbe URL — danach matched extractToken() und der zweite Hit
+    // ist authenticated. So funktioniert Token-Persistence cross-page,
+    // ohne dass der User auf jeder Subpage ?token=… nachreichen muss.
+    const safeUrl = (req.originalUrl || req.url || '/').replace(/['"<>]/g, '');
     res.status(401).type('text/html').send(
       `<!doctype html><html><head><meta charset="utf-8"><title>STURM · 401</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 20px;color:#333">
 <h1 style="margin:0 0 12px;font-size:20px">401 — Token required</h1>
-<p>Set <code>?token=…</code> in the URL once. It will be stored locally and stripped from the URL.</p>
+<p id="msg">Checking local token …</p>
+<p id="hint" style="display:none">Set <code>?token=…</code> in the URL once. It will be stored locally and stripped from the URL.</p>
+<script>
+(function(){
+  try {
+    var t = localStorage.getItem('sturm-token');
+    if (t && t.length > 0) {
+      var url = new URL(${JSON.stringify(safeUrl)}, window.location.origin);
+      // Wenn das aktuelle 401 von genau diesem Token kam, nicht erneut redirecten
+      // (sonst Endlosschleife bei abgelaufenem/falschem Token).
+      var attempted = sessionStorage.getItem('sturm-token-attempted');
+      if (attempted !== t) {
+        sessionStorage.setItem('sturm-token-attempted', t);
+        url.searchParams.set('token', t);
+        window.location.replace(url.toString());
+        return;
+      }
+      // Token war bereits versucht und abgelehnt → entfernen + Hint zeigen
+      localStorage.removeItem('sturm-token');
+      sessionStorage.removeItem('sturm-token-attempted');
+      document.getElementById('msg').textContent = 'Local token rejected. Please re-issue.';
+      document.getElementById('hint').style.display = '';
+      return;
+    }
+    document.getElementById('msg').style.display = 'none';
+    document.getElementById('hint').style.display = '';
+  } catch (e) {
+    document.getElementById('msg').style.display = 'none';
+    document.getElementById('hint').style.display = '';
+  }
+})();
+</script>
 </body></html>`,
     );
     return;
