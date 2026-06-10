@@ -7,6 +7,8 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
+    "beleg-api": "tsx src/beleg-api/index.ts",
+    "beleg-api:dev": "tsx watch src/beleg-api/index.ts",
     "typecheck": "tsc --noEmit",
     "test:codec": "tsx src/lib/mistral-ocr/codec.test.ts",
     "test:schema": "tsx src/server/schema-generate.test.ts",

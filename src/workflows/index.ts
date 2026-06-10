@@ -31,6 +31,14 @@ import { registerPentacamKcStages, buildPentacamKcWorkflow } from './pentacam-kc
 import { registerMyopiaStages, buildMyopiaWorkflow } from './myopia-progression/index.ts';
 import { registerSealStages, buildSteuerfallSealWorkflow } from './steuerfall-seal/index.ts';
 
+import {
+  registerCtxBootstrapStages,
+  ctxBootstrapWorkflow,
+} from './ctx-bootstrap/index.ts';
+import {
+  registerProjectContextStages,
+  projectContextWorkflow,
+} from './project-context/index.ts';
 export function registerAllWorkflows(): void {
   registerWorkflow(helloOcrWorkflow);
   registerLegacyElsterStages();
@@ -64,6 +72,15 @@ export function registerAllWorkflows(): void {
   // Steuerfall-Versiegelung: HMAC-Snapshot + Merkle + Anchor.
   registerSealStages();
   registerWorkflow(buildSteuerfallSealWorkflow());
+  // CTX-Bootstrap: transcript → atoms → quantum index → /ctx/* HTTP surface.
+  // Drop-in context container for cross-LLM consumption (ChatGPT, Claude, Cursor, Gemini).
+  registerCtxBootstrapStages();
+  registerWorkflow(ctxBootstrapWorkflow);
+  // Project-Context: wraps a whole Git repo as a quantum container with
+  // append-only event log. Workflow input: { projectGitUrl, branch?, query? }.
+  // Roadmap C1: completes the L1 project-context wireing per CTX_HANDOVER §4.4.
+  registerProjectContextStages();
+  registerWorkflow(projectContextWorkflow);
 }
 
 export { helloOcrWorkflow };

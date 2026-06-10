@@ -1831,11 +1831,16 @@ app.get('/anwendungen.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'anwe
 app.get('/steuerfall.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'steuerfall.html')));
 app.get('/orchestrator', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
 app.get('/orchestrator.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'orchestrator.html')));
+app.get('/gateway', (_req, res) => res.sendFile(path.join(UI_DIR, 'gateway.html')));
 app.get('/abrechnung.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'abrechnung.html')));
 app.get('/ctx-demo.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-demo.html')));
+app.get('/ctx-doku', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-doku.html')));
+app.get('/ctx-doku.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'ctx-doku.html')));
 app.get('/studio-ocr.html', (_req, res) => res.sendFile(path.join(UI_DIR, 'studio-ocr.html')));
 app.get('/fleet', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.html')));
 app.get('/api/fleet/data', (_req, res) => res.sendFile(path.join(UI_DIR, '0711-fleet.data.json')));
+// /v6/ is served by express.static below (default index.html lookup);
+// /v6 (no trailing slash) gets a redirect to /v6/ via static's default `redirect: true`.
 app.use(express.static(UI_DIR));
 
 // Docs: /docs/WORKFLOW_TEMPLATE.md direkt ausliefern (plain text)

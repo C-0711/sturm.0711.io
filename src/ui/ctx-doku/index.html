@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CTX · Context Base Container — Production Roadmap</title>
+  <style>
+    :root {
+      --bg:        #0a0b0e;
+      --surface:   #111318;
+      --surface2:  #181b22;
+      --border:    #1e2230;
+      --accent:    #4f8cff;
+      --accent2:   #7c3aed;
+      --green:     #22c55e;
+      --yellow:    #eab308;
+      --red:       #ef4444;
+      --orange:    #f97316;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --mono:      'JetBrains Mono', 'Fira Code', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #0d1117 0%, #161b27 50%, #0d1117 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 40px 36px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(79,140,255,.12);
+      border: 1px solid rgba(79,140,255,.3);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .08em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.15;
+    }
+    h1 span {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-top: 10px;
+      font-size: 15px;
+      max-width: 680px;
+    }
+    .meta-row {
+      display: flex;
+      gap: 20px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+    .meta-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .meta-pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .dot-green  { background: var(--green); }
+    .dot-yellow { background: var(--yellow); }
+    .dot-red    { background: var(--red); }
+    .dot-accent { background: var(--accent); }
+    /* ── LAYOUT ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 40px 80px; }
+    /* ── SECTION ── */
+    section { margin-top: 52px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .icon-blue   { background: rgba(79,140,255,.15); }
+    .icon-purple { background: rgba(124,58,237,.15); }
+    .icon-green  { background: rgba(34,197,94,.15); }
+    .icon-orange { background: rgba(249,115,22,.15); }
+    .icon-red    { background: rgba(239,68,68,.15); }
+    .icon-yellow { background: rgba(234,179,8,.15); }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    /* ── ARCHITECTURE GRID ── */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .arch-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .arch-card h4 {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .arch-card p { font-size: 13px; color: var(--muted); }
+    /* ── PHASE / TIMELINE ── */
+    .phase { margin-bottom: 32px; }
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .phase-num {
+      min-width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .phase-1 { background: rgba(79,140,255,.2); color: var(--accent); border: 1px solid rgba(79,140,255,.4); }
+    .phase-2 { background: rgba(124,58,237,.2); color: #a78bfa; border: 1px solid rgba(124,58,237,.4); }
+    .phase-3 { background: rgba(249,115,22,.2); color: var(--orange); border: 1px solid rgba(249,115,22,.4); }
+    .phase-4 { background: rgba(34,197,94,.2); color: var(--green); border: 1px solid rgba(34,197,94,.4); }
+    .phase-5 { background: rgba(234,179,8,.2); color: var(--yellow); border: 1px solid rgba(234,179,8,.4); }
+    .phase-meta { flex: 1; }
+    .phase-meta h3 { font-size: 17px; font-weight: 700; }
+    .phase-meta .phase-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .phase-tag {
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: 3px 9px;
+      border-radius: 4px;
+    }
+    .tag-critical { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+    .tag-high     { background: rgba(249,115,22,.15); color: var(--orange); border: 1px solid rgba(249,115,22,.3); }
+    .tag-medium   { background: rgba(234,179,8,.15); color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
+    .tag-launch   { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+    /* ── TASK TABLE ── */
+    .task-list { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .task-row {
+      display: grid;
+      grid-template-columns: 28px 1fr 90px 80px 80px;
+      gap: 12px;
+      align-items: start;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .task-row:last-child { border-bottom: none; }
+    .task-row:hover { background: rgba(255,255,255,.02); }
+    .task-header {
+      background: var(--surface2);
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .task-id {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      padding-top: 2px;
+    }
+    .task-body h4 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .task-body p  { font-size: 12px; color: var(--muted); }
+    .task-body code {
+      font-family: var(--mono);
+      font-size: 11px;
+      background: rgba(79,140,255,.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--accent);
+    }
+    .status-pill {
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .s-open    { background: rgba(79,140,255,.12);  color: var(--accent);  border: 1px solid rgba(79,140,255,.25); }
+    .s-bug     { background: rgba(239,68,68,.12);   color: var(--red);     border: 1px solid rgba(239,68,68,.25); }
+    .s-done    { background: rgba(34,197,94,.12);   color: var(--green);   border: 1px solid rgba(34,197,94,.25); }
+    .s-blocked { background: rgba(234,179,8,.12);   color: var(--yellow);  border: 1px solid rgba(234,179,8,.25); }
+    .s-mr      { background: rgba(124,58,237,.12);  color: #a78bfa;        border: 1px solid rgba(124,58,237,.25); }
+    .owner-tag {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+      padding-top: 3px;
+    }
+    .effort-tag {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+      padding-top: 3px;
+    }
+    /* ── PRIORITY MATRIX ── */
+    .matrix {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .matrix-cell {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .matrix-cell h4 {
+      font-size: 12px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 12px;
+    }
+    .matrix-cell ul { list-style: none; }
+    .matrix-cell li {
+      font-size: 13px;
+      color: var(--muted);
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .matrix-cell li:last-child { border-bottom: none; }
+    .matrix-cell li::before { content: '→'; color: var(--accent); font-size: 12px; }
+    /* ── CALLOUT ── */
+    .callout {
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .callout-red    { background: rgba(239,68,68,.08);  border: 1px solid rgba(239,68,68,.2); }
+    .callout-yellow { background: rgba(234,179,8,.08);  border: 1px solid rgba(234,179,8,.2); }
+    .callout-green  { background: rgba(34,197,94,.08);  border: 1px solid rgba(34,197,94,.2); }
+    .callout-blue   { background: rgba(79,140,255,.08); border: 1px solid rgba(79,140,255,.2); }
+    .callout-icon { font-size: 18px; line-height: 1; padding-top: 1px; }
+    .callout-body h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .callout-body p  { font-size: 13px; color: var(--muted); }
+    .callout-body code {
+      font-family: var(--mono);
+      font-size: 11px;
+      background: rgba(255,255,255,.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    /* ── PROGRESS BAR ── */
+    .progress-wrap { margin: 20px 0 8px; }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--muted); margin-bottom: 8px;
+    }
+    .progress-bar {
+      height: 6px; border-radius: 3px; background: var(--surface2);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+    }
+    /* ── FOOTER ── */
+    footer {
+      margin-top: 72px;
+      padding: 28px 40px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    footer p { font-size: 12px; color: var(--muted); }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    /* ── RESPONSIVE ── */
+    @media (max-width: 700px) {
+      header, .container { padding-left: 20px; padding-right: 20px; }
+      .task-row { grid-template-columns: 24px 1fr; }
+      .task-row > *:nth-child(3),
+      .task-row > *:nth-child(4),
+      .task-row > *:nth-child(5) { display: none; }
+      .matrix { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════ HEADER ════════════════════════════════ -->
+<header>
+  <div class="badge">0711 INTELLIGENCE · GITCHAIN PLATFORM · CTX v1.0</div>
+  <h1><span>CTX</span> Context Base Container<br>Production Roadmap</h1>
+  <p class="subtitle">
+    Blockchain-verified, versioned context units for AI injection. Full production readiness
+    tracker for the GitChain CTX layer — architecture, bug triage, launch gates, and release milestones.
+  </p>
+  <div class="meta-row">
+    <div class="meta-pill"><span class="dot dot-red"></span> 7 critical blockers</div>
+    <div class="meta-pill"><span class="dot dot-yellow"></span> 11 high-priority tasks</div>
+    <div class="meta-pill"><span class="dot dot-green"></span> 4 completed</div>
+    <div class="meta-pill"><span class="dot dot-accent"></span> Target: launch-ready in 5 phases</div>
+    <div class="meta-pill"><span class="dot" style="background:#64748b"></span>Last updated: 2026-05-24</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ═══════════ OPERATION CTX-PROD SPRINT TRACKER ═══════════ -->
+  <section id="operation-ctx-prod">
+    <div class="section-header">
+      <div class="section-icon icon-blue">⚡</div>
+      <h2>OPERATION CTX-PROD — Active Sprint</h2>
+      <span class="phase-tag tag-launch" style="margin-left:auto">LIVE · 2026-05-24</span>
+    </div>
+    <div class="callout callout-green">
+      <div class="callout-icon">💣</div>
+      <div class="callout-body">
+        <h4>Bombas is on Phase C1 — encode-gemma-quantum-container.ts refactor</h4>
+        <p>B6+B7 merged, Architect approved, Operator confirmed infra live. Next: Phase C — deep refactor of the Gemma quantum container encoder.</p>
+      </div>
+    </div>
+
+    <!-- PHASE A -->
+    <div id="phase-a" class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-4">A</div>
+        <div class="phase-meta">
+          <h3>Phase A — Core CTX Layer</h3>
+          <div class="phase-label">PR #3 · bombas/ctx-prod-phase-a · base: main</div>
+        </div>
+        <span class="phase-tag tag-launch">DONE ✓</span>
+      </div>
+      <div class="task-list">
+        <div class="task-row task-header">
+          <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">A1–A5</div>
+          <div class="task-body">
+            <h4>CTX server foundation, container CRUD, visibility ACL, atom serving, events append</h4>
+            <p>Core <code>/ctx/:id</code> API — retrieve, atom fetch, events write, ACL controls. Foundation for all downstream phases.</p>
+          </div>
+          <div><span class="status-pill s-done">DONE ✓</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHASE B -->
+    <div id="phase-b" class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-4">B</div>
+        <div class="phase-meta">
+          <h3>Phase B — Preamble + Audit</h3>
+          <div class="phase-label">PR #4 · bombas/ctx-prod-phase-b-6-7 · stacked on #3 · commit <code>5a0d9db</code></div>
+        </div>
+        <span class="phase-tag tag-launch">DONE ✓ · 60 min</span>
+      </div>
+      <div class="task-list">
+        <div class="task-row task-header">
+          <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">B6</div>
+          <div class="task-body">
+            <h4>Preamble Endpoint</h4>
+            <p><code>GET /ctx/:id/preamble?surface=&lt;generic|chatgpt|claude|cursor|gemini|curl&gt;</code> — ready-to-paste system-prompt + curl example + OpenAPI URL + surface-specific config snippet. Claude/Cursor also return MCP-config JSON for <code>claude_desktop_config.json</code> / <code>~/.config/cursor/mcp.json</code>. 6 surfaces × tailored prompt templates, all HTTP 200.</p>
+            <p style="margin-top:6px">New module: <code>src/lib/ctx-preamble.ts</code> (200 lines)</p>
+          </div>
+          <div><span class="status-pill s-done">DONE ✓</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">~30m</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">B7</div>
+          <div class="task-body">
+            <h4>Audit Log Schema</h4>
+            <p>Locks the <code>events.jsonl</code> schema. New module <code>src/lib/ctx-events.ts</code> (122 lines) emits canonical event types from every state-changing or read-tracked code path:</p>
+            <p style="margin-top:5px; font-family: var(--mono); font-size:11px; color:var(--muted)">
+              retrieved · retrieved_empty · retrieved_403 · retrieved_404<br>
+              preamble_fetched · atom_fetched · events_appended<br>
+              rate_limit_hit · acl_changed · visibility_changed<br>
+              created · deleted · anchored
+            </p>
+            <p style="margin-top:6px">Privacy: raw IPs + queries hashed sha256[:16] before logging. Schema doc: <code>docs/CTX_EVENTS_SCHEMA.md</code> (94 lines). Best-effort writes — never blocks user requests. All <code>ctx-server.ts</code> routes wired.</p>
+          </div>
+          <div><span class="status-pill s-done">DONE ✓</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">~30m</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHASE B9 -->
+    <div id="phase-b9" class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-4">B9</div>
+        <div class="phase-meta">
+          <h3>Phase B9 — Per-Container .git via gitchain-service</h3>
+          <div class="phase-label">Branch: bombas/ctx-prod-phase-b-9 · commit <code>bcfcc37</code> · MANDATORY</div>
+        </div>
+        <span class="phase-tag tag-launch">DONE ✓</span>
+      </div>
+      <div class="task-list">
+        <div class="task-row task-header">
+          <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">B9</div>
+          <div class="task-body">
+            <h4>gitchain-service enforces .git on every container creation</h4>
+            <p>Every container creation through the gitchain-service now automatically runs <code>git init → git add . → git commit</code>. Addresses G1 at the service layer. No future container can be created without a git repo. C’s MANDATORY decree from 2026-05-24 is now enforced at the code level.</p>
+          </div>
+          <div><span class="status-pill s-done">DONE ✓</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHASE C -->
+    <div id="phase-c" class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-4">C</div>
+        <div class="phase-meta">
+          <h3>Phase C — Workflows + Crypto</h3>
+          <div class="phase-label">PRs #5 + #6 · bombas/ctx-prod-phase-c-1 + c-2 · commits 76d9897 + ba86567</div>
+        </div>
+        <span class="phase-tag tag-launch">C1+C2 DONE ✓ · C3–C6 pending</span>
+      </div>
+      <div class="task-list">
+        <div class="task-row task-header">
+          <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">C1</div>
+          <div class="task-body">
+            <h4>Register project-context workflow</h4>
+            <p><code>POST /api/workflows/project-context/run</code> live. Wired 6 existing stages (project-attach, project-atomize, project-quantum-encode, project-quantum-retrieve, agent-turn, project-push-out) into <code>workflows/index.ts</code>. 22 workflows total.</p>
+          </div>
+          <div><span class="status-pill s-done">DONE ✓</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">14 min</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">C2</div>
+          <div class="task-body">
+            <h4>Ed25519 issuer signing for ctx containers</h4>
+            <p><code>GET /ctx/:id/signature</code> → Ed25519-signed manifest envelope. CLI verifier: <code>tsx scripts/verify-ctx.ts &lt;containerDir&gt;</code>. 3 crypto properties smoke-tested end-to-end on REACTOR:</p>
+            <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:5px">
+              ✅ Legit signature verifies against published pubkey<br>
+              ✅ Tampered manifest → sha256 drift → signature rejected<br>
+              ✅ Impostor signature → ed25519 verify fails (forgery-resistant)
+            </p>
+            <p style="margin-top:5px">4 files, +441 lines. Reuses canonical-bytes pattern from 0711-quantum-tax seal (same scheme that anchored 13 tax containers on Base mainnet).</p>
+          </div>
+          <div><span class="status-pill s-done">DONE ✓</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">~30 min</div>
+        </div>
+        <div class="task-row">
+          <div class="task-id">C3–C6</div>
+          <div class="task-body">
+            <h4>GitChain anchor + container listing + etc.</h4>
+            <p>Gitchain on-chain anchor, container listing API, remaining sealing pipeline tasks per CTX_HANDOVER §4.4.</p>
+          </div>
+          <div><span class="status-pill s-open">OPEN</span></div>
+          <div class="owner-tag">Bombas</div>
+          <div class="effort-tag">TBD</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PROGRESS ═══════════ -->
+  <section>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Overall Production Readiness</span><span>58 / 100</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:58%"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Data Integrity</span><span>55 / 100</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:55%; background: linear-gradient(90deg,#ef4444,#f97316)"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Security &amp; Auth</span><span>55 / 100</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:55%; background: linear-gradient(90deg,var(--yellow),var(--orange))"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Infrastructure Stability</span><span>72 / 100</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:72%; background: linear-gradient(90deg,#f97316,var(--yellow))"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>API &amp; Delivery Layer</span><span>88 / 100</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:88%; background: linear-gradient(90deg,#4f8cff,#22c55e)"></div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════ ARCHITECTURE ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-blue">🏗️</div>
+      <h2>System Architecture</h2>
+    </div>
+    <div class="arch-grid">
+      <div class="arch-card">
+        <h4>ctx-container</h4>
+        <p>Sealed, versioned unit of AI context. Git-tracked, blockchain-anchored on Base Mainnet. The atomic unit of the whole platform.</p>
+      </div>
+      <div class="arch-card">
+        <h4>0711-gitchain / Hub</h4>
+        <p>Next.js 16 app serving containers. Exposes <code>/git/*</code> smart-HTTP proxy. Manages visibility, knowledge graph (959 nodes, 154 citations).</p>
+      </div>
+      <div class="arch-card">
+        <h4>gitchain-dl / dl-portal</h4>
+        <p>Download portal for Bosch and other tenants. htpasswd-based auth, nginx bind-mount, per-tenant credential management.</p>
+      </div>
+      <div class="arch-card">
+        <h4>promote-worker</h4>
+        <p>Promotion pipeline: ingests raw product data, creates versioned ctx containers (v5.1 target). 23K+ Bosch ETIM products in pipeline.</p>
+      </div>
+      <div class="arch-card">
+        <h4>0711 Quantum Gateway</h4>
+        <p>Central API broker at gateway.0711.io. LLM key delivery (TTL 900s), fleet events, vault secrets (fingerprint-only), consolidation matrix.</p>
+      </div>
+      <div class="arch-card">
+        <h4>Content Chain</h4>
+        <p>Smart contract on Base Mainnet. Seals container hashes. Provides tamper-proof verification layer for every committed ctx unit.</p>
+      </div>
+      <div class="arch-card">
+        <h4>0711-I (id.0711.io)</h4>
+        <p>SSO/OIDC identity provider. All apps connected. JWT-based session handoff to dl-portal, Hub, Gateway.</p>
+      </div>
+      <div class="arch-card">
+        <h4>0711 Vault</h4>
+        <p>vault-bosch.0711.io — Bosch tenant. 32K files, AI readiness pipeline. Feeds ctx container creation pipeline.</p>
+      </div>
+      <div class="arch-card">
+        <h4>STURM Workflow Engine</h4>
+        <p>GitChain-integrated processing: OCR → seal → commit → promote. Drives automated ctx container creation for enterprise workflows.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ CRITICAL BUGS ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-red">🔥</div>
+      <h2>Critical Blockers — Must Fix Before Launch</h2>
+    </div>
+    <div class="callout callout-red">
+      <div class="callout-icon">🚨</div>
+      <div class="callout-body">
+        <h4>DB Routing Catastrophe — 782/783 Bosch Products Never Promoted</h4>
+        <p>promote-worker is polling <code>ocp-v4-stg-postgres</code> (staging) instead of <code>gitchain-postgres</code> (production). Only 1 of 783 Bosch ETIM products successfully reached v5.1. This is the single most critical issue in the platform.</p>
+      </div>
+    </div>
+    <div class="callout callout-red">
+      <div class="callout-icon">🔒</div>
+      <div class="callout-body">
+        <h4>Container Visibility Default — Private Locks Out Users</h4>
+        <p>Containers default to <code>visibility='private'</code> in the Hub DB. Manual SQL UPDATE required per product. No admin UI. Bosch product <code>CS7800iLW 16 MBF</code> was affected (fixed). Systematic audit needed — unknown how many others are locked.</p>
+      </div>
+    </div>
+    <div class="callout callout-yellow">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body">
+        <h4>4 Unmerged Commits — Pending MR Review</h4>
+        <p>Branch <code>bombas/invoke-session-mismatch-db-lookup</code> has 4 unreviewed commits: invoke session_mismatch fix, OCP registry sealed manifest, drift-kill, master Stage 10. Blocking any clean deploy from main.</p>
+      </div>
+    </div>
+    <div class="callout callout-yellow">
+      <div class="callout-icon">🗄️</div>
+      <div class="callout-body">
+        <h4>Dual DB Split — No Migration Plan</h4>
+        <p><code>gitchain-postgres</code> (port 5440) vs <code>ocp-v4-stg-postgres</code> — two databases, no documented migration path, no schema sync. Risk of permanent data divergence.</p>
+      </div>
+    </div>
+    <div class="callout callout-yellow">
+      <div class="callout-icon">🐛</div>
+      <div class="callout-body">
+        <h4>issue.sh Inode Bug — dl-portal Requires Manual Restart</h4>
+        <p><code>issue.sh</code> uses atomic <code>mv</code> which breaks bind-mount inode. After each credential issuance, <code>docker restart dl-portal</code> is required manually. Must be refactored to in-place write.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PHASE 1 ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-red">🔥</div>
+      <h2>Phase 1 — Data Integrity &amp; Bug Triage</h2>
+      <span class="phase-tag tag-critical">CRITICAL · Week 1</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div>
+        <div>Task</div>
+        <div>Status</div>
+        <div>Owner</div>
+        <div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-01</div>
+        <div class="task-body">
+          <h4>Fix promote-worker DB routing</h4>
+          <p>Point promote-worker at <code>gitchain-postgres:5440</code>. Verify via <code>psql</code> query, not env assumption. Re-run promotion pipeline for all 783 Bosch ETIM products. Validate v5.1 promotion count = 783.</p>
+        </div>
+        <div><span class="status-pill s-bug">BUG · P0</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-02</div>
+        <div class="task-body">
+          <h4>Audit container visibility — full sweep</h4>
+          <p>Run SQL audit: <code>SELECT COUNT(*) FROM containers WHERE visibility = 'private'</code>. Generate report. Change default to <code>'public'</code> for non-sensitive tenants. Add admin toggle to Hub UI.</p>
+        </div>
+        <div><span class="status-pill s-bug">BUG · P0</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-03</div>
+        <div class="task-body">
+          <h4>DB consolidation plan — gitchain-postgres vs ocp-v4-stg</h4>
+          <p>Document schema diff. Decide: merge or keep separate. Write migration SQL. Apply to staging, verify, then production. No more split-brain.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-04</div>
+        <div class="task-body">
+          <h4>Fix issue.sh — in-place write (no atomic mv)</h4>
+          <p>Refactor <code>~/gitchain-dl/issue.sh</code> to write htpasswd and tenant-map in-place (avoid <code>mv</code> across bind-mount inode boundary). Commit to <code>gitchain-dl/main</code>. Verify no manual docker restart needed after credential issuance.</p>
+        </div>
+        <div><span class="status-pill s-bug">BUG · P1</span></div>
+        <div class="owner-tag">Pope</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-05</div>
+        <div class="task-body">
+          <h4>MR review &amp; merge — bombas/invoke-session-mismatch-db-lookup</h4>
+          <p>Review 4 commits: invoke session_mismatch fix, OCP registry sealed manifest, drift-kill, master Stage 10. Merge to <code>0711-gitchain/main</code>. Push to GitHub + GitLab.</p>
+        </div>
+        <div><span class="status-pill s-mr">MR · PENDING</span></div>
+        <div class="owner-tag">Pope + Bombas</div>
+        <div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-06</div>
+        <div class="task-body">
+          <h4>Commit BACKEND-FIXES-2026-05-13.md to repo</h4>
+          <p>Move doc from local MacBook to <code>0711-gitchain/docs/BACKEND-FIXES-2026-05-13.md</code>. Commit, push both remotes. Audit trail must live in-repo.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Minimi → Bombas</div>
+        <div class="effort-tag">30m</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P1-07</div>
+        <div class="task-body">
+          <h4>Bosch Credential expiry pipeline</h4>
+          <p>Bosch users <code>lukas</code> + <code>jens</code> credentials expire 2026-06-12. Build automated renewal job or alert. No silent expiry in production.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope</div>
+        <div class="effort-tag">3h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PHASE 2 ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-purple">🔐</div>
+      <h2>Phase 2 — Security Hardening</h2>
+      <span class="phase-tag tag-high">HIGH · Week 1–2</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div>
+        <div>Task</div>
+        <div>Status</div>
+        <div>Owner</div>
+        <div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-01</div>
+        <div class="task-body">
+          <h4>Auth middleware on all sensitive API routes</h4>
+          <p>Verify Bearer-token middleware is applied to every route that returns secrets, tokens, or user data. Pen-test: attempt unauthenticated <code>GET /api/vault/secrets</code> — must return 401. No exceptions.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Bombas + Pope</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-02</div>
+        <div class="task-body">
+          <h4>Rate limiting — per IP + per device key</h4>
+          <p>LLM key endpoint <code>GET /api/tokens/llm-keys</code> already has TTL 900s. Extend to all public-facing routes. Max 60 req/min per IP. Block and log abusive patterns. Gateway-level enforcement.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-03</div>
+        <div class="task-body">
+          <h4>Vault doctrine enforcement — zero plaintext in API responses</h4>
+          <p>Audit all API routes for accidental secret leakage. <code>/api/vault/secrets</code> must return only names + fingerprints. Automated test: grep API responses for known key prefixes (<code>sk-</code>, <code>Bearer </code>, <code>AKIA</code>).</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Architect doctrine</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-04</div>
+        <div class="task-body">
+          <h4>SSO enforcement — 0711-I as single auth source</h4>
+          <p>All apps (Hub, dl-portal, Vault, Studio) must authenticate exclusively via <code>id.0711.io</code>. Audit for any local-auth bypasses. Document service-to-service token flow.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-05</div>
+        <div class="task-body">
+          <h4>HTTPS enforcement — no plaintext HTTP anywhere</h4>
+          <p>Verify Cloudflare Full Strict SSL on all <code>*.0711.io</code> subdomains. Check nginx configs for HTTP→HTTPS redirects. Reject HTTP on all origin servers.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Engine</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-06</div>
+        <div class="task-body">
+          <h4>Secrets rotation schedule</h4>
+          <p>Document and implement rotation schedule: <code>GATEWAY_BOOTSTRAP_SECRET</code>, <code>STURM_BEARER_TOKEN</code>, htpasswd credentials, LLM API keys. Minimum quarterly rotation. Automate where possible.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P2-07</div>
+        <div class="task-body">
+          <h4>Git proxy route security audit</h4>
+          <p><code>Hub /git/*</code> proxy now fixed with <code>GIT_PROXY_BASE_URL</code>. Verify no unauthenticated write access to any git repo via smart-HTTP. Ensure push is auth-gated.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">2h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PHASE 3 ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-orange">🏗️</div>
+      <h2>Phase 3 — Infrastructure as Code &amp; Drift Elimination</h2>
+      <span class="phase-tag tag-high">HIGH · Week 2</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div>
+        <div>Task</div>
+        <div>Status</div>
+        <div>Owner</div>
+        <div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-01</div>
+        <div class="task-body">
+          <h4>docker-compose.yml — full drift elimination</h4>
+          <p>Repo state must equal running state at all times. Implement <code>make verify</code>: diff running container env vs compose file. Auto-fail CI if drift detected. No more "live config that's not in source".</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-02</div>
+        <div class="task-body">
+          <h4>Clean deploy runbook — git pull → up in one command</h4>
+          <p>Any dev must be able to run <code>git pull && docker compose up -d</code> and get a fully working stack. No hidden manual steps. Document all prerequisites. Test on clean SHIPYARD-2 VM.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope</div>
+        <div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-03</div>
+        <div class="task-body">
+          <h4>Eliminate mock/hardcoded UI at root domain</h4>
+          <p>The public root of gateway.0711.io was previously a never-source-controlled mock UI. Replace with live API-wired dashboard or clean static landing. Nothing that isn't in the repo.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope + Bombas</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-04</div>
+        <div class="task-body">
+          <h4>Untracked files cleanup — 0711-gitchain repo</h4>
+          <p>50+ untracked files in repo: <code>.bak</code> files, <code>.env</code> templates, test dirs. Audit: commit what matters, add remainder to <code>.gitignore</code>, delete dead weight. Clean <code>git status</code> as standard.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-05</div>
+        <div class="task-body">
+          <h4>H200V container inventory — CTAX perimeter</h4>
+          <p>~50 Docker containers on H200V. Document each: name, purpose, owner, dependencies. Enforce CTAX zone isolation — no cross-contamination between tenant containers. Standing order: never touch CTAX containers without explicit authorization.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-06</div>
+        <div class="task-body">
+          <h4>Dockerfile — pin all base image digests</h4>
+          <p>Replace floating tags (<code>node:22</code>) with digest-pinned images (<code>node:22@sha256:...</code>). Ensures reproducible builds. Prevents silent upstream changes from breaking production.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Builds</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P3-07</div>
+        <div class="task-body">
+          <h4>apps/hub/next.config.js — resolve outstanding drift</h4>
+          <p>File flagged as modified (<code>M</code>) but intentionally not touched in last session. Audit the diff. Commit or revert. Nothing should stay in limbo.</p>
+        </div>
+        <div><span class="status-pill s-blocked">BLOCKED · review</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PHASE 4 ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-green">📊</div>
+      <h2>Phase 4 — Observability, Testing &amp; CI/CD</h2>
+      <span class="phase-tag tag-medium">MEDIUM · Week 2–3</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div>
+        <div>Task</div>
+        <div>Status</div>
+        <div>Owner</div>
+        <div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-01</div>
+        <div class="task-body">
+          <h4>Health endpoint on every service</h4>
+          <p>Every container must expose <code>/health</code> or <code>/api/health</code> returning <code>{"ok":true,"version":"x.y.z"}</code>. Quantum Gateway ✓. Hub, dl-portal, promote-worker all need it. Docker healthcheck must reference it.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas + Pope</div>
+        <div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-02</div>
+        <div class="task-body">
+          <h4>Promote-worker audit logging</h4>
+          <p>Every promotion event must be logged: product ID, version, timestamp, DB used, success/fail. Ship logs to centralized <code>audit.jsonl</code> with rotation. Query interface for "when was product X promoted?"</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-03</div>
+        <div class="task-body">
+          <h4>Smart contract verification test suite</h4>
+          <p>Automated tests: create ctx container → seal → verify on-chain hash matches. Must run on every push. No deployment to production without blockchain verification passing.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-04</div>
+        <div class="task-body">
+          <h4>CI/CD pipeline — GitHub Actions</h4>
+          <p>On every push to <code>main</code>: lint → typecheck → test → docker build → push to registry → deploy to staging. Gate: promote-worker regression test must pass. No manual deploys to production.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Engine</div>
+        <div class="effort-tag">2d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-05</div>
+        <div class="task-body">
+          <h4>Uptime monitoring — all public endpoints</h4>
+          <p>Setup monitoring for: <code>gitchain.0711.io</code>, <code>api-gitchain.0711.io</code>, <code>dl.0711.io</code>, <code>gateway.0711.io</code>, <code>vault-bosch.0711.io</code>. Alert on downtime &lt;2min. PagerDuty or equivalent. SLA: 99.5% uptime.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Engine</div>
+        <div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-06</div>
+        <div class="task-body">
+          <h4>E2E test — Bosch login → browse container → download</h4>
+          <p>Full happy-path test: Bosch user login via dl-portal → authenticate → browse ETIM product container → verify knowledge graph renders → download artifact. Must pass before any production release.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-07</div>
+        <div class="task-body">
+          <h4>Gateway token audit — per-device usage tracking</h4>
+          <p>LLM key delivery already has per-device audit logging (v0.5.3). Build dashboard view: requests/day, top consumers, anomaly detection. Expose at <code>gateway.0711.io/api/tokens/audit</code> (admin-only).</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">4h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PHASE 5 ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-yellow">🚀</div>
+      <h2>Phase 5 — Production Launch &amp; Scale</h2>
+      <span class="phase-tag tag-launch">LAUNCH · Week 3–4</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div>
+        <div>Task</div>
+        <div>Status</div>
+        <div>Owner</div>
+        <div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-01</div>
+        <div class="task-body">
+          <h4>Full Bosch ETIM promotion — 23K products to v5.1</h4>
+          <p>After P1-01 (DB fix): re-run promote-worker across full 23K+ product catalog. Verify each: container created, hash sealed, visible in Hub, knowledge graph populated. This is the primary Bosch deliverable.</p>
+        </div>
+        <div><span class="status-pill s-blocked">BLOCKED → P1-01</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">2d (automated)</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-02</div>
+        <div class="task-body">
+          <h4>Multi-tenant isolation — add EATON, Lightnet, Haupa, Buhl</h4>
+          <p>Bosch is the reference tenant. Replicate pattern for EATON, Lightnet, Haupa, Buhl. Tenant-scoped credentials, isolated namespaces, separate visibility controls. No cross-tenant data bleed.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Pope + Bombas</div>
+        <div class="effort-tag">3d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-03</div>
+        <div class="task-body">
+          <h4>GitChain public launch — gitchain.0711.io</h4>
+          <p>Platform marked "COMPLETE". Clear public-facing landing page. API docs. SDK snippet for context injection. Announce to DACH enterprise market. Target: ship after Phases 1–4 complete.</p>
+        </div>
+        <div><span class="status-pill s-blocked">BLOCKED → Ph1–4</span></div>
+        <div class="owner-tag">C + Pope</div>
+        <div class="effort-tag">1 week</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-04</div>
+        <div class="task-body">
+          <h4>Context injection SDK — npm package</h4>
+          <p>Ship <code>@0711/ctx-client</code> npm package. API: <code>ctx.get(id)</code>, <code>ctx.inject(prompt, id)</code>, <code>ctx.verify(hash)</code>. TypeScript-first. Bundled blockchain verification. Publish to npmjs.com.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P3</span></div>
+        <div class="owner-tag">Bombas + Builds</div>
+        <div class="effort-tag">3d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-05</div>
+        <div class="task-body">
+          <h4>Content Chain — Base Mainnet production verification</h4>
+          <p>Verify smart contract is deployed, funded, and operational. Run 10 seal transactions. Confirm on-chain explorer. Document contract address + ABI. Integrate verification into Hub UI.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">C + Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-06</div>
+        <div class="task-body">
+          <h4>Performance baseline — ctx read latency &lt;200ms P95</h4>
+          <p>Benchmark: context container read (cold + warm). Target P95 latency &lt;200ms. Optimize: add read-through cache layer for popular containers. Profile git clone path for large containers.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">2d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-07</div>
+        <div class="task-body">
+          <h4>Disaster recovery — backup + restore runbook</h4>
+          <p>Daily automated backups of: gitchain-postgres, all ctx container git repos, vault data. Offsite storage. Tested restore procedure. RTO &lt;4h, RPO &lt;24h. Document and rehearse quarterly.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Engine</div>
+        <div class="effort-tag">2d</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PRIORITY MATRIX ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-blue">📋</div>
+      <h2>Priority Matrix</h2>
+    </div>
+    <div class="matrix">
+      <div class="matrix-cell">
+        <h4 style="color:var(--red)">🔥 Do Now (P0 — this week)</h4>
+        <ul>
+          <li>Fix promote-worker DB routing (P1-01)</li>
+          <li>Visibility audit — full sweep (P1-02)</li>
+          <li>MR merge: session-mismatch branch (P1-05)</li>
+          <li>Git proxy auth security audit (P2-07)</li>
+          <li>Health endpoints on all services (P4-01)</li>
+          <li>E2E Bosch login test (P4-06)</li>
+          <li>Uptime monitoring live (P4-05)</li>
+        </ul>
+      </div>
+      <div class="matrix-cell">
+        <h4 style="color:var(--orange)">⚡ Do Next (P1 — week 2)</h4>
+        <ul>
+          <li>DB consolidation plan + migration (P1-03)</li>
+          <li>issue.sh in-place write fix (P1-04)</li>
+          <li>Credential renewal pipeline (P1-07)</li>
+          <li>Rate limiting all routes (P2-02)</li>
+          <li>SSO enforcement audit (P2-04)</li>
+          <li>docker-compose drift elimination (P3-01)</li>
+          <li>Clean deploy runbook (P3-02)</li>
+        </ul>
+      </div>
+      <div class="matrix-cell">
+        <h4 style="color:var(--yellow)">📅 Schedule (P2 — week 2–3)</h4>
+        <ul>
+          <li>Secrets rotation schedule (P2-06)</li>
+          <li>HTTPS enforcement audit (P2-05)</li>
+          <li>Untracked files cleanup (P3-04)</li>
+          <li>Container inventory + CTAX perimeter (P3-05)</li>
+          <li>Dockerfile digest pinning (P3-06)</li>
+          <li>Smart contract test suite (P4-03)</li>
+          <li>CI/CD pipeline (P4-04)</li>
+        </ul>
+      </div>
+      <div class="matrix-cell">
+        <h4 style="color:var(--green)">🚀 Launch Gates (P3 — week 3–4)</h4>
+        <ul>
+          <li>Full 23K Bosch ETIM promotion (P5-01)</li>
+          <li>Multi-tenant: EATON, Lightnet, Haupa, Buhl (P5-02)</li>
+          <li>GitChain public launch (P5-03)</li>
+          <li>ctx-client npm SDK (P5-04)</li>
+          <li>Base Mainnet verification (P5-05)</li>
+          <li>Performance baseline &lt;200ms P95 (P5-06)</li>
+          <li>DR backup + restore (P5-07)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ GIT-PER-CONTAINER COMPLIANCE ═══════════ -->
+  <section id="git-compliance">
+    <div class="section-header">
+      <div class="section-icon icon-red">📜</div>
+      <h2>Git-Per-Container Compliance</h2>
+      <span class="phase-tag tag-critical" style="margin-left:auto">MANDATORY · C DECREE 2026-05-24</span>
+    </div>
+    <div class="callout callout-red">
+      <div class="callout-icon">🚨</div>
+      <div class="callout-body">
+        <h4>RULE: Every container gets its own git repo. No exceptions.</h4>
+        <p>Audit result: <strong>108 of 212 containers (51%) are non-compliant.</strong> All <code>0711-master-bosch-*-v5.1</code> containers have no <code>.git</code> — the promote-worker never initialized git on creation.</p>
+      </div>
+    </div>
+    <div class="callout callout-yellow">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body">
+        <h4>GITCHAIN_REPO_ROOT is empty</h4>
+        <p><code>/var/lib/gitchain/repos/</code> — configured as the Hub’s git-proxy root, but completely empty. Hub <code>/git/*</code> proxy has nothing to serve. This is why git smart-HTTP was returning 500s.</p>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">G1</div>
+        <div class="task-body">
+          <h4>Fix promote-worker — <code>git init</code> + initial commit on every container creation</h4>
+          <p>Addressed at service layer by B9 (<code>bcfcc37</code>) — gitchain-service now enforces git on every container creation. Mandate is enforced in code.</p>
+        </div>
+        <div><span class="status-pill s-done">≈ DONE via B9</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">—</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">G2</div>
+        <div class="task-body">
+          <h4>Retroactive git init — 108 Bosch v5.1 containers</h4>
+          <p>Loop all <code>0711-master-bosch-*-v5.1</code> dirs with no <code>.git</code>: <code>git init → git add . → git commit -m "feat: retroactive git init"</code>. Script, log output, verify 108/108. These containers are dead without a git history.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓ 107/107</span></div>
+        <div class="owner-tag">Minimi</div>
+        <div class="effort-tag">scripted</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">G3</div>
+        <div class="task-body">
+          <h4>Fix GITCHAIN_REPO_ROOT — register/symlink repos so Hub proxy can serve them</h4>
+          <p><code>GITCHAIN_REPO_ROOT_HOST</code> in <code>.env</code> was pointing at empty mandanten path. Fixed to <code>/home/christoph.bertsch/0711/containers</code>. Sturm restarted with correct bind-mount.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Minimi</div>
+        <div class="effort-tag">15m
+      </div>
+      <div class="task-row">
+        <div class="task-id">G4</div>
+        <div class="task-body">
+          <h4>Decommission orphaned gitchain service (2026-04-18)</h4>
+          <p><code>/home/christoph.bertsch/0711/_orphaned-gitchain-service-2026-04-18</code> — dead service, not git-per-container compliant. Archive or delete. No live traffic should touch it.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">30m</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">G5</div>
+        <div class="task-body">
+          <h4>CI compliance gate — fail build if container created without .git</h4>
+          <p>Add automated check: any promote-worker run that produces a container directory without <code>.git</code> fails loudly. Never silently create non-compliant containers again.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Engine</div>
+        <div class="effort-tag">2h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ KLAVIO ONBOARDING ═══════════ -->
+  <section id="klavio">
+    <div class="section-header">
+      <div class="section-icon icon-purple">⚡</div>
+      <h2>Klavio Onboarding — Fleet Connectivity Broker</h2>
+      <span class="phase-tag tag-high" style="margin-left:auto">IN PROGRESS · P0 BLOCKER</span>
+    </div>
+    <div class="callout callout-yellow">
+      <div class="callout-icon">🔑</div>
+      <div class="callout-body">
+        <h4>Discord token needed — old token revoked (posted publicly)</h4>
+        <p>App ID: <code>150804814510214767</code> · Reset token at discord.com/developers → send via DM only. Config on REACTOR is wired and ready — just needs the token.</p>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-1</div>
+        <div class="task-body"><h4>Discord bot token — regenerate + wire</h4><p>Reset token in dev portal. Send via DM to Minimi. Already wired into REACTOR config — just swap the token.</p></div>
+        <div><span class="status-pill s-blocked">BLOCKED · token</span></div>
+        <div class="owner-tag">C → Minimi</div>
+        <div class="effort-tag">2m</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-2</div>
+        <div class="task-body"><h4>Invite Klavio bot to Discord server</h4><p>OAuth2 → URL Generator → scopes: bot + applications.commands → add to server.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">C</div>
+        <div class="effort-tag">2m</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-3</div>
+        <div class="task-body"><h4>gateway-api → gitchain-net (3-line compose fix)</h4><p>Add <code>gitchain-net</code> to gateway-api service networks in docker-compose.yml. Unblocks <code>/api/agents/live</code>, fleet-events, all gitchain queries. Currently silently failing with <code>{agents:[], count:0}</code>.</p></div>
+        <div><span class="status-pill s-bug">BLOCKER · Operator</span></div>
+        <div class="owner-tag">Operator</div>
+        <div class="effort-tag">3 lines</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-4</div>
+        <div class="task-body"><h4>Klavis bind loopback → 0.0.0.0 (or gitchain-net join)</h4><p>Container needs to be reachable from gateway-api. Either change <code>--bind loopback</code> to <code>0.0.0.0</code> in compose command, or add it to gitchain-net.</p></div>
+        <div><span class="status-pill s-open">OPEN · Operator</span></div>
+        <div class="owner-tag">Operator</div>
+        <div class="effort-tag">1 line</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-5</div>
+        <div class="task-body"><h4>SSH provisioner API</h4><p>Bombas shipped this commit. API ready for sub-agent SSH provisioning.</p></div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">—</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-6</div>
+        <div class="task-body"><h4>NOPASSWD klavio-authorize wrapper</h4><p><code>/usr/local/bin/klavio-authorize</code> needs NOPASSWD sudo entry for truth=live agent provisioning.</p></div>
+        <div><span class="status-pill s-open">OPEN · Operator</span></div>
+        <div class="owner-tag">Operator</div>
+        <div class="effort-tag">30m</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-7</div>
+        <div class="task-body"><h4>GitLab access tokens for sub-agents</h4><p>Short-lived tokens so Klavio-spawned subagents can push to GitLab repos.</p></div>
+        <div><span class="status-pill s-open">OPEN · Pope</span></div>
+        <div class="owner-tag">Pope</div>
+        <div class="effort-tag">1h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">KL-8</div>
+        <div class="task-body"><h4>Klavio SOUL.md + IDENTITY.md</h4><p>Klavio needs his identity files in <code>/home/christoph.bertsch/0711/0711-quantum-gateway/data/agents/klavis/workspace/</code>.</p></div>
+        <div><span class="status-pill s-open">OPEN · Architect</span></div>
+        <div class="owner-tag">Architect</div>
+        <div class="effort-tag">30m</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ FULL SPRINT TASK LIST (POPE) ═══════════ -->
+  <section id="full-sprint">
+    <div class="section-header">
+      <div class="section-icon icon-blue">📋</div>
+      <h2>Full Sprint Task List</h2>
+      <span class="phase-tag tag-medium" style="margin-left:auto">22 TASKS · Pope’s breakdown 2026-05-24</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+      </div>
+      <!-- P0 -->
+      <div class="task-row"><div class="task-id" style="color:var(--muted);font-size:10px">P0</div><div class="task-body"><h4 style="color:var(--red)">Policy Lock</h4><p></p></div><div></div><div></div><div></div></div>
+      <div class="task-row">
+        <div class="task-id">P0-1</div>
+        <div class="task-body"><h4>Write hard rule into spec: every Knowledge Container MUST have its own Git repo</h4><p>Already decreed by C (2026-05-24). Needs to be committed to spec doc in repo. G2+B9 enforce it in code.</p></div>
+        <div><span class="status-pill s-done">≈ DONE (decree)</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">30m</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P0-2</div>
+        <div class="task-body"><h4>Define required repo layout</h4><p>What files must every container git repo contain at init? Manifest, events.jsonl, signature? Codify the schema.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P0-3</div>
+        <div class="task-body"><h4>Define required commit protocol for all container mutations</h4><p>Every write to a container must produce a commit. Define the commit message schema, who signs, what constitutes a valid mutation.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">2h</div>
+      </div>
+      <!-- P1 -->
+      <div class="task-row"><div class="task-id" style="color:var(--muted);font-size:10px">P1</div><div class="task-body"><h4 style="color:var(--orange)">Auth / Access Control</h4></div><div></div><div></div><div></div></div>
+      <div class="task-row">
+        <div class="task-id">B2</div>
+        <div class="task-body"><h4>STURM middleware verifies B1 tokens</h4><p>All ctx routes in STURM must verify the token issued by B1 (sturm-ctx token broker). Bearer token middleware, 401 on fail.</p></div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">B3</div>
+        <div class="task-body"><h4>Per-container ACL in ctx-publish</h4><p>Each ctx container has an access control list. <code>ctx-publish</code> enforces it before allowing reads/writes. Owner-only write, configurable read.</p></div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">4h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">B8</div>
+        <div class="task-body"><h4><code>PATCH /ctx/:id</code> visibility toggle</h4><p>API endpoint to flip a container between public/private. Used by the admin UI and CLI.</p></div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">2h</div>
+      </div>
+      <!-- P2 -->
+      <div class="task-row"><div class="task-id" style="color:var(--muted);font-size:10px">P2</div><div class="task-body"><h4 style="color:var(--accent)">Provenance / Platform Completion</h4></div><div></div><div></div><div></div></div>
+      <div class="task-row">
+        <div class="task-id">C3</div>
+        <div class="task-body"><h4>Container listing/index</h4><p><code>GET /ctx</code> — paginated list of all containers with ID, name, visibility, git commit count, last updated.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Bombas</div><div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">C4</div>
+        <div class="task-body"><h4>History/provenance inspection surface</h4><p><code>GET /ctx/:id/history</code> — git log of container mutations with author, timestamp, diff summary.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Bombas</div><div class="effort-tag">3h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">C5</div>
+        <div class="task-body"><h4>GitChain on-chain anchor flow</h4><p>Wire container seal → Base mainnet smart contract. Content Chain contract already deployed. Anchor hash per container on publish.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Bombas</div><div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">C6</div>
+        <div class="task-body"><h4>Verification/status dashboard</h4><p><code>GET /ctx/:id/verify</code> — on-chain anchor status, Ed25519 signature validity, git integrity check. One endpoint, three truth signals.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Bombas</div><div class="effort-tag">4h</div>
+      </div>
+      <!-- P3 -->
+      <div class="task-row"><div class="task-id" style="color:var(--muted);font-size:10px">P3</div><div class="task-body"><h4 style="color:var(--yellow)">Design + Docs</h4></div><div></div><div></div><div></div></div>
+      <div class="task-row">
+        <div class="task-id">P3-11</div>
+        <div class="task-body"><h4>Audit alpha.6_2 ZIPs against live Sturm</h4><p>Already done by Minimi (2026-05-24). UI-1–UI-6 tasks created.</p></div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Minimi</div><div class="effort-tag">—</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-3–6</div>
+        <div class="task-body"><h4>Remaining UI page updates (index, designer, ocr-studio, CSS tokens)</h4><p>See UI section above. index.html full replacement, designer +290 lines, ocr-studio +48 lines, oklch token system migration.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Pope / Bombas</div><div class="effort-tag">1d</div>
+      </div>
+      <!-- P4 -->
+      <div class="task-row"><div class="task-id" style="color:var(--muted);font-size:10px">P4</div><div class="task-body"><h4 style="color:var(--red)">Enforcement / Migration</h4></div><div></div><div></div><div></div></div>
+      <div class="task-row">
+        <div class="task-id">G5</div>
+        <div class="task-body"><h4>CI/publish gate — no container publish without valid .git</h4><p>Any container creation that doesn’t produce a <code>.git</code> fails the build loudly. Never silently create non-compliant containers again.</p></div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Engine</div><div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-16</div>
+        <div class="task-body"><h4>Backfill: mark pre-git containers with <code>imported_pre_git</code></h4><p>107 Bosch containers retroactively git-inited (G2). Mark them in their manifest with honest metadata so provenance is clear.</p></div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Bombas</div><div class="effort-tag">1h (scripted)</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-17</div>
+        <div class="task-body"><h4>Migration runbook + rollback plan</h4><p>Written, versioned doc: how to migrate containers to full git compliance. Rollback steps if git init breaks something. Must be in repo before any production launch.</p></div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P4-18</div>
+        <div class="task-body"><h4>Compliance audit across all GitChain projects</h4><p>Sweep: 0711-gitchain, gitchain-dl, 0711-vault, gitchain-desktop, orphaned service. Each project: does it create containers? Are they git-compliant?</p></div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Pope</div><div class="effort-tag">1d</div>
+      </div>
+      <!-- P5 -->
+      <div class="task-row"><div class="task-id" style="color:var(--muted);font-size:10px">P5</div><div class="task-body"><h4 style="color:var(--green)">Fleet Connectivity (Klavio)</h4></div><div></div><div></div><div></div></div>
+      <div class="task-row">
+        <div class="task-id">KL-1–8</div>
+        <div class="task-body"><h4>Klavio onboarding — 8 tasks</h4><p>See Klavio section above. Blocker: Discord token (KL-1) + gitchain-net compose fix (KL-3).</p></div>
+        <div><span class="status-pill s-blocked">BLOCKED</span></div>
+        <div class="owner-tag">Fleet</div><div class="effort-tag">see above</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-20</div>
+        <div class="task-body"><h4>Standardize host alias / SSH bootstrap for all officers + subagents</h4><p>Every officer must have <code>reactor</code> in their SSH config pointing to H200V. Document and automate the bootstrap.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Minimi</div><div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-21</div>
+        <div class="task-body"><h4>Standardize short-lived token path for agents/subagents</h4><p>Agents request tokens via Klavio broker. Token TTL, refresh, revoke flow must be documented and enforced. No hardcoded long-lived tokens.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Bombas + Klavio</div><div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">P5-22</div>
+        <div class="task-body"><h4>Reachability + audit checks for connection/bootstrap events</h4><p>Every agent connection/bootstrap event emitted to the B7 audit log. Klavio monitors for silent failures and alerts.</p></div>
+        <div><span class="status-pill s-open">OPEN</span></div>
+        <div class="owner-tag">Bombas</div><div class="effort-tag">3h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ PHASE D — GATEWAY LIVE WIRING ═══════════ -->
+  <section id="phase-d">
+    <div class="section-header">
+      <div class="section-icon icon-orange">⚡</div>
+      <h2>Phase D — Gateway Live Wiring</h2>
+      <span class="phase-tag tag-high" style="margin-left:auto">IN PROGRESS · Bombas on D9</span>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">D9</div>
+        <div class="task-body">
+          <h4>Truth-state middleware on gateway-api</h4>
+          <p>~150 line middleware that attaches truth-state metadata (<code>live/mixed/seeded/inferred/unavailable</code>) to every gateway-api response. Blocks D2/D3/D4. Bombas actively working now.</p>
+        </div>
+        <div><span class="status-pill s-mr">ACTIVE 💣</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">~150 lines</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">D5</div>
+        <div class="task-body">
+          <h4>Containers view — wire to live Docker data</h4>
+          <p><code>GET /api/containers</code> → live Docker inspect output per container: health, ports, image, uptime. Powers the Containers panel in the gateway dashboard.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">D1–D4</div>
+        <div class="task-body">
+          <h4>Fleet topology, chain status, projects, agents — wire to live data</h4>
+          <p><code>/api/fleet/topology</code> · <code>/api/chain/status</code> (Base mainnet) · <code>/api/projects</code> (gitchain DB) · <code>/api/agents</code>. Currently seeded/mocked in gateway-app. Wire after D9 truth middleware lands.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · blocked on D9</span></div>
+        <div class="owner-tag">Pope / Bombas</div>
+        <div class="effort-tag">2d</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ UI IMPLEMENTATION — alpha.6 DESIGN FILES ═══════════ -->
+  <section id="ui-implementation">
+    <div class="section-header">
+      <div class="section-icon icon-purple">🎨</div>
+      <h2>UI Implementation — alpha.6 Design Files</h2>
+      <span class="phase-tag tag-high" style="margin-left:auto">6 TASKS · FROM DESIGN FILES 2026-05-24</span>
+    </div>
+    <div class="callout callout-blue">
+      <div class="callout-icon">📂</div>
+      <div class="callout-body">
+        <h4>Two design ZIPs uploaded: alpha.6.zip + alpha.6_2.zip</h4>
+        <p>Diffed against live Sturm UI on REACTOR. alpha.6_2 adds a full Quantum Gateway Control Plane dashboard (<code>gateway.html</code> + <code>gateway-app.jsx</code>, 3125 lines combined) that doesn’t exist anywhere yet. 5 existing pages also have design updates waiting to land.</p>
+      </div>
+    </div>
+    <div class="task-list">
+      <div class="task-row task-header">
+        <div>#</div><div>Task</div><div>Status</div><div>Owner</div><div>Effort</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-1</div>
+        <div class="task-body">
+          <h4>Gateway Control Plane — deploy <code>gateway.html</code> + <code>gateway-app.jsx</code></h4>
+          <p>Full React dashboard for the Quantum Gateway. Sidebar nav: Containers · Topology · Chain · Health · Fleet Events · Vault · Projects · Agents. Each panel has a <strong>Truth indicator</strong> (LIVE/MIXED/SEEDED/INFERRED/UNAVAILABLE). 1155 + 1970 lines. Not in Sturm at all — deploy at <code>/gateway</code>.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Minimi</div>
+        <div class="effort-tag">2 min</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-2</div>
+        <div class="task-body">
+          <h4>Backend APIs for gateway dashboard</h4>
+          <p>Gateway-app.jsx needs these endpoints (currently mocked as <code>seeded</code>):<br>
+          <code>/api/containers</code> · <code>/api/fleet/topology</code> · <code>/api/chain/status</code> · <code>/api/projects</code> · <code>/api/agents</code><br>
+          Wire each to real data sources. Container list from Docker API. Chain status from Base mainnet. Projects from gitchain DB.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P1</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">1d</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-3</div>
+        <div class="task-body">
+          <h4><code>index.html</code> redesign — replace with alpha.6_2 version</h4>
+          <p>Design: 852 lines, Geist+Spectral+JetBrains Mono, <code>oklch()</code> color tokens, <code>data-theme</code> dark/light toggle, React-based landing. Live: 465 lines, different CSS stack, German. Full replacement needed.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Pope / Bombas</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-4</div>
+        <div class="task-body">
+          <h4><code>designer.html</code> update</h4>
+          <p>Design file: 1175 lines. Live: 885 lines. +290 new lines of updates. Not a full replacement — diff and merge new sections in.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Pope / Bombas</div>
+        <div class="effort-tag">2h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-5</div>
+        <div class="task-body">
+          <h4><code>ocr-studio.html</code> update</h4>
+          <p>Design: 375 lines vs live <code>studio-ocr.html</code>: 327 lines. +48 lines. Minor update, keep in sync with design file.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P3</span></div>
+        <div class="owner-tag">Pope / Bombas</div>
+        <div class="effort-tag">1h</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">UI-6</div>
+        <div class="task-body">
+          <h4><code>sturm.css</code> — migrate to shared oklch token system</h4>
+          <p>Design files use a shared <code>sturm.css</code> with <code>oklch()</code> color tokens across all pages. Live Sturm uses <code>/design-system/colors_and_type.css</code> + <code>sturm-app.css</code>. Align the systems — either migrate live to new tokens or inject <code>sturm.css</code> alongside the existing system.</p>
+        </div>
+        <div><span class="status-pill s-open">OPEN · P2</span></div>
+        <div class="owner-tag">Pope / Bombas</div>
+        <div class="effort-tag">3h</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ COMPLETED ═══════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-icon icon-green">✅</div>
+      <h2>Completed</h2>
+    </div>
+    <div class="task-list">
+      <div class="task-row">
+        <div class="task-id">✓</div>
+        <div class="task-body">
+          <h4>Quantum Gateway v0.5.3 — 20/20 API routes live</h4>
+          <p>gateway.0711.io fully operational. Auth middleware, LLM key broker, fleet events, consolidation matrix, vault secrets (fingerprint-only). Committed to source.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Bombas + Pope</div>
+        <div class="effort-tag">—</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">✓</div>
+        <div class="task-body">
+          <h4>Bosch dl-portal auth — 4 cascading bugs fixed</h4>
+          <p>openssl added to Docker image, env vars passed, htpasswd permissions fixed, tenant-map in-place. Commits <code>a6e599f</code> (gitchain-dl) + <code>05466a3</code> (0711-gitchain) on main.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Bombas + Pope</div>
+        <div class="effort-tag">—</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">✓</div>
+        <div class="task-body">
+          <h4>Hub /git/* proxy — GIT_PROXY_BASE_URL fix</h4>
+          <p>Commit <code>05466a3</code>. Hub no longer returns 500 on git smart-HTTP. Persisted in docker-compose.yml.</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">—</div>
+      </div>
+      <div class="task-row">
+        <div class="task-id">✓</div>
+        <div class="task-body">
+          <h4>Container visibility — manual fix for Bosch CS7800iLW 16 MBF</h4>
+          <p>SQL UPDATE: visibility → public. 23 commits visible, 959-node knowledge graph accessible. (Systematic fix still needed — see P1-02.)</p>
+        </div>
+        <div><span class="status-pill s-done">DONE ✓</span></div>
+        <div class="owner-tag">Bombas</div>
+        <div class="effort-tag">—</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════ FOOTER ════════════════════════════════ -->
+<footer>
+  <p>0711 Intelligence · GitChain Platform · CTX Production Roadmap · Last updated 2026-05-24 12:26 CEST by Minimi 🤏</p>
+  <p>
+    <a href="https://gitchain.0711.io">gitchain.0711.io</a> ·
+    <a href="https://gateway.0711.io/api/health">gateway health</a> ·
+    <a href="https://vault-bosch.0711.io">vault</a>
+  </p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,18 @@
+name: CTX Git Compliance
+on: [push, pull_request]
+jobs:
+  ctx-git-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ctx containers have git repos
+        run: |
+          echo "Checking CTX git compliance..."
+          FAIL=0
+          for dir in $(find . -maxdepth 3 -name "manifest.json" -not -path "*/node_modules/*" | xargs -I{} dirname {}); do
+            if [ ! -d "$dir/.git" ] && echo "$dir" | grep -q "container\|ctx"; then
+              echo "FAIL: $dir has no .git repo"
+              FAIL=1
+            fi
+          done
+          [ $FAIL -eq 0 ] && echo "All ctx containers are git-compliant ✅" || exit 1

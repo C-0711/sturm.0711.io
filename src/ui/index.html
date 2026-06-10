@@ -1,465 +1,852 @@
-<!DOCTYPE html>
-<html lang="de" class="dark">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>STURM · Workflow-Engine</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="stylesheet" href="/design-system/colors_and_type.css">
-  <link rel="stylesheet" href="/design-system/sturm-app.css">
-  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STURM — Workflow Engine</title>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('sturm-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@300;400;500;600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    /* Tool switcher — drei große Karten als primäre Modus-Wahl */
-    .sturm-tools {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
+    :root, [data-theme="dark"] {
+      --bg: oklch(0.2 0.005 80);
+      --bg-2: oklch(0.235 0.005 80);
+      --bg-3: oklch(0.27 0.005 80);
+      --ink: oklch(0.95 0.005 80);
+      --ink-2: oklch(0.72 0.005 80);
+      --ink-3: oklch(0.52 0.005 80);
+      --line: oklch(0.32 0.005 80);
+      --line-2: oklch(0.28 0.005 80);
+      --accent: oklch(0.82 0.06 85);
+      --accent-deep: oklch(0.72 0.07 85);
+      --on-accent: var(--bg);
+      color-scheme: dark;
+    }
+    [data-theme="light"] {
+      --bg: oklch(0.985 0.004 80);
+      --bg-2: oklch(0.965 0.005 80);
+      --bg-3: oklch(0.93 0.006 80);
+      --ink: oklch(0.18 0.01 80);
+      --ink-2: oklch(0.42 0.01 80);
+      --ink-3: oklch(0.6 0.01 80);
+      --line: oklch(0.84 0.008 80);
+      --line-2: oklch(0.9 0.006 80);
+      --accent: oklch(0.56 0.13 65);
+      --accent-deep: oklch(0.48 0.14 60);
+      --on-accent: oklch(0.99 0.005 80);
+      color-scheme: light;
+    }
+    :root {
+      --radius: 8px;
+      --maxw: 920px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-weight: 400;
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; }
+    .serif { font-family: 'Spectral', ui-serif, Georgia, serif; }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    .container {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    /* NAV */
+    .nav-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: saturate(140%) blur(14px);
+      -webkit-backdrop-filter: saturate(140%) blur(14px);
+      background: color-mix(in oklab, var(--bg) 80%, transparent);
+      border-bottom: 1px solid transparent;
+      transition: border-color 220ms ease;
+    }
+    .nav-wrap.scrolled { border-bottom-color: var(--line); }
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      height: 64px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-tile {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+      color: var(--on-accent);
+      display: grid; place-items: center;
+      font-family: 'Geist', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0 0 1px oklch(0.85 0.05 85 / 0.15) inset;
+    }
+    .brand-name {
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      font-size: 13px;
+    }
+    .brand-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      padding-left: 12px;
+      margin-left: 4px;
+      border-left: 1px solid var(--line);
+      letter-spacing: 0;
+      font-weight: 400;
+    }
+    .nav-spacer { flex: 1; }
+
+    /* burger menu */
+    .burger {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 36px; height: 36px;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink);
+      transition: border-color 150ms ease, background 150ms ease;
+    }
+    .burger:hover { border-color: var(--ink-3); background: var(--bg-2); }
+    .burger .bar {
+      position: absolute;
+      left: 9px; right: 9px;
+      height: 1.5px;
+      background: currentColor;
+      border-radius: 1px;
+      transition: transform 220ms cubic-bezier(.4,1.4,.5,1), top 220ms ease, opacity 160ms ease;
+    }
+    .burger .bar.b1 { top: 12px; }
+    .burger .bar.b2 { top: 17px; }
+    .burger .bar.b3 { top: 22px; }
+    .burger.open .bar.b1 { top: 17px; transform: rotate(45deg); }
+    .burger.open .bar.b2 { opacity: 0; }
+    .burger.open .bar.b3 { top: 17px; transform: rotate(-45deg); }
+
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      background: oklch(0.1 0.005 80 / 0.5);
+      backdrop-filter: blur(4px);
+      z-index: 60;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+    .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .menu-panel {
+      position: fixed;
+      top: 72px;
+      right: 32px;
+      width: min(360px, calc(100vw - 64px));
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 24px 64px oklch(0.05 0 0 / 0.5), 0 0 0 1px oklch(1 0 0 / 0.03);
+      padding: 8px;
+      z-index: 70;
+      transform: translateY(-8px) scale(0.98);
+      transform-origin: top right;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 200ms cubic-bezier(.2,.7,.2,1), opacity 160ms ease;
+    }
+    .menu-panel.open { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+    @media (max-width: 520px) {
+      .menu-panel { right: 20px; top: 64px; width: calc(100vw - 40px); }
+    }
+    .menu-search {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 6px;
+    }
+    .menu-search svg { color: var(--ink-3); flex-shrink: 0; }
+    .menu-search input {
+      flex: 1; background: transparent; border: 0; outline: 0;
+      color: var(--ink); font-size: 14px;
+      font-family: inherit;
+    }
+    .menu-search input::placeholder { color: var(--ink-3); }
+    .menu-search .kbd {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 2px 6px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--ink-3);
+    }
+    .menu-group-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      padding: 10px 12px 4px;
+    }
+    .menu-item {
+      display: flex;
+      align-items: center;
       gap: 12px;
       width: 100%;
-      max-width: 1100px;
-      margin: 4px auto 28px;
-      padding: 0 24px;
-    }
-    @media (max-width: 880px) {
-      .sturm-tools { grid-template-columns: repeat(2, 1fr); }
-    }
-    .sturm-tool {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding: 16px 18px;
-      border: 1px solid var(--color-border);
-      border-radius: 14px;
-      background: var(--color-bg-card, transparent);
+      padding: 10px 12px;
+      background: transparent;
+      border: 0;
+      border-radius: var(--radius-sm);
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+      transition: background 120ms ease;
       text-decoration: none;
-      color: inherit;
-      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+      font-size: 14px;
     }
-    .sturm-tool:hover {
-      border-color: var(--color-accent);
-      background: var(--color-bg-hover);
-      transform: translateY(-1px);
-    }
-    .sturm-tool-head {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .sturm-tool-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px; height: 32px;
-      border-radius: 9px;
-      background: var(--color-bg-hover);
-      color: var(--color-text-primary);
+    .menu-item:hover { background: var(--bg-3); }
+    .menu-item-l { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+    .menu-item-glyph {
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      background: var(--bg-3);
+      border: 1px solid var(--line);
+      display: grid; place-items: center;
+      color: var(--ink-2);
       flex-shrink: 0;
     }
-    .sturm-tool-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--color-text-primary);
-      margin: 0;
+    .menu-item-name { font-size: 14px; color: var(--ink); }
+    .menu-item-sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+    .menu-item .arr { color: var(--ink-3); transition: transform 200ms ease, color 150ms ease; }
+    .menu-item:hover .arr { color: var(--ink); transform: translateX(3px); }
+    .menu-item.primary { background: var(--accent); color: var(--on-accent); margin: 4px; }
+    .menu-item.primary:hover { background: var(--accent-deep); }
+    .menu-item.primary .menu-item-name { color: var(--on-accent); font-weight: 500; }
+    .menu-item.primary .menu-item-sub { color: color-mix(in oklab, var(--on-accent) 70%, var(--accent-deep)); }
+    .menu-item.primary .menu-item-glyph { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--on-accent); }
+    .menu-item.primary .arr { color: var(--on-accent); }
+
+    /* theme toggle */
+    .menu-theme {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px 8px;
+      margin-top: 6px;
+      border-top: 1px solid var(--line-2);
     }
-    .sturm-tool-sub {
-      font-size: 12.5px;
-      color: var(--color-text-secondary);
-      margin: 0;
-      line-height: 1.45;
+    .menu-theme-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+    }
+    .theme-seg {
+      display: inline-flex;
+      background: var(--bg-3);
+      border: 1px solid var(--line-2);
+      border-radius: 999px;
+      padding: 2px;
+    }
+    .theme-seg button {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px;
+      padding: 5px 11px;
+      font-size: 12px;
+      color: var(--ink-3);
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 150ms ease, color 150ms ease;
+    }
+    .theme-seg button.on {
+      background: var(--bg);
+      color: var(--ink);
+      box-shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 0 0 1px var(--line-2);
     }
 
-    /* Category filter chips */
-    .sturm-cats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      width: 100%;
-      max-width: 960px;
-      margin: 0 auto 14px;
-      padding: 0 24px;
-    }
-    .sturm-cat {
+    .nav-cmdk-legacy {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 11px;
-      border: 1px solid var(--color-border);
-      border-radius: 999px;
+      gap: 8px;
+      padding: 6px 8px 6px 12px;
+      font-size: 13px;
+      color: var(--ink-3);
       background: transparent;
-      color: var(--color-text-secondary);
-      font-size: 12.5px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: border-color .12s, background .12s, color .12s;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      transition: border-color 150ms ease, color 150ms ease;
     }
-    .sturm-cat:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
-    .sturm-cat.is-active {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-      color: var(--color-bg-primary, #000);
-    }
-    .sturm-cat-count {
-      font-size: 11px;
-      color: var(--color-text-tertiary);
-      padding: 0 5px;
+    .nav-cmdk-legacy:hover { border-color: var(--ink-3); color: var(--ink-2); }
+    .nav-cmdk-legacy .kbd {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 2px 5px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
       border-radius: 4px;
-      background: var(--color-bg-hover);
-      min-width: 16px;
-      text-align: center;
-    }
-    .sturm-cat.is-active .sturm-cat-count {
-      background: rgba(0,0,0,.18);
-      color: inherit;
+      color: var(--ink-2);
     }
 
-    /* Category section in sidebar — heading + count */
-    .sturm-sb-cat-head {
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      transition: transform 120ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease;
+      white-space: nowrap;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--on-accent);
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+    .btn-ghost { color: var(--ink); border-color: var(--line); }
+    .btn-ghost:hover { border-color: var(--ink-2); background: var(--bg-2); }
+    .btn .arr { transition: transform 200ms ease; }
+    .btn:hover .arr { transform: translateX(3px); }
+
+    /* HERO */
+    .hero {
+      padding: 140px 0 80px;
+      text-align: left;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: var(--ink-3);
+      margin-bottom: 40px;
+    }
+    .eyebrow .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px color-mix(in oklab, var(--accent) 50%, transparent);
+    }
+    h1 {
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-size: clamp(42px, 6.4vw, 72px);
+      line-height: 1.03;
+      letter-spacing: -0.035em;
+      font-weight: 300;
+      margin: 0 0 32px;
+      text-wrap: balance;
+      max-width: 16ch;
+    }
+    h1 .muted { color: var(--ink-3); }
+    .lede {
+      font-size: 18px;
+      line-height: 1.5;
+      color: var(--ink-2);
+      max-width: 50ch;
+      margin: 0 0 48px;
+      text-wrap: pretty;
+    }
+    .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    /* WORKFLOWS */
+    .workflows-sec { padding: 40px 0 120px; }
+    .sec-label {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px 4px;
-      font-size: 10.5px;
-      letter-spacing: 0.08em;
+      gap: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: var(--ink-3);
       text-transform: uppercase;
-      color: var(--color-text-tertiary);
-      cursor: pointer;
+      margin-bottom: 32px;
+    }
+    .sec-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--line-2);
+    }
+    .wf-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .wf-row {
+      display: grid;
+      grid-template-columns: 200px 1fr auto;
+      align-items: center;
+      gap: 32px;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--line-2);
+    }
+    .wf-row:last-child { border-bottom: 0; }
+    .wf-name-wrap {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .wf-name {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+    }
+    .wf-cat {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+    }
+    .wf-pipe {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+    }
+    .wf-stage {
+      color: var(--ink-2);
+      white-space: nowrap;
+    }
+    .wf-arr {
+      color: var(--ink-3);
+      padding: 0 10px;
       user-select: none;
     }
-    .sturm-sb-cat-head:hover { color: var(--color-text-secondary); }
-    .sturm-sb-cat-chev {
-      transition: transform .15s ease;
-      width: 12px; height: 12px;
+    .wf-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      letter-spacing: 0.04em;
     }
-    .sturm-sb-cat.is-collapsed .sturm-sb-cat-chev { transform: rotate(-90deg); }
-    .sturm-sb-cat.is-collapsed .sturm-sb-nav { display: none; }
 
-    /* Empty-state hint when filter shows zero workflows */
-    .sturm-grid-empty {
-      width: 100%;
-      max-width: 960px;
-      margin: 24px auto;
-      padding: 24px;
-      text-align: center;
-      color: var(--color-text-tertiary);
-      font-size: 13px;
-      border: 1px dashed var(--color-border);
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--line-2);
+      padding: 40px 0 56px;
+    }
+    .foot {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .foot-left {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-3);
+      line-height: 1.7;
+      max-width: 48ch;
+    }
+    .foot-left .pill {
+      display: inline-block;
+      padding: 2px 7px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 4px;
+      margin-right: 8px;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .foot-right {
+      display: flex;
+      gap: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .foot-right a {
+      color: var(--ink-2);
+      transition: color 150ms ease;
+    }
+    .foot-right a:hover { color: var(--ink); }
+
+    /* COMMAND PALETTE */
+    .cmdk-overlay {
+      position: fixed;
+      inset: 0;
+      background: oklch(0.1 0.005 80 / 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: grid;
+      place-items: start center;
+      padding-top: 14vh;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .cmdk-overlay.open { opacity: 1; pointer-events: auto; }
+    .cmdk {
+      width: min(540px, calc(100vw - 32px));
+      background: var(--bg-2);
+      border: 1px solid var(--line);
       border-radius: 12px;
+      box-shadow: 0 24px 64px oklch(0.05 0 0 / 0.5), 0 0 0 1px oklch(1 0 0 / 0.04);
+      overflow: hidden;
+      transform: translateY(-8px);
+      transition: transform 200ms cubic-bezier(.2,.7,.2,1);
+    }
+    .cmdk-overlay.open .cmdk { transform: translateY(0); }
+    .cmdk-search {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .cmdk-search svg { color: var(--ink-3); flex-shrink: 0; }
+    .cmdk-search input {
+      flex: 1; border: 0; outline: 0; background: transparent;
+      font-family: inherit; font-size: 15px; color: var(--ink);
+    }
+    .cmdk-search input::placeholder { color: var(--ink-3); }
+    .cmdk-list { padding: 6px; max-height: 50vh; overflow: auto; }
+    .cmdk-group-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; letter-spacing: 0.06em;
+      color: var(--ink-3); text-transform: uppercase;
+      padding: 10px 10px 4px;
+    }
+    .cmdk-item {
+      width: 100%;
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px;
+      background: transparent; border: 0;
+      border-radius: 6px;
+      text-align: left; font-size: 14px;
+      color: var(--ink);
+      transition: background 100ms ease;
+    }
+    .cmdk-item:hover, .cmdk-item.sel { background: var(--bg-3); }
+    .cmdk-item-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      margin-left: auto;
+    }
+    .cmdk-empty {
+      padding: 28px 16px; text-align: center;
+      color: var(--ink-3); font-size: 14px;
+    }
+
+    /* selection */
+    ::selection { background: color-mix(in oklab, var(--accent) 40%, transparent); color: var(--ink); }
+
+    /* RESPONSIVE */
+    @media (max-width: 720px) {
+      .hero { padding: 72px 0 48px; }
+      .workflows-sec { padding: 24px 0 80px; }
+      h1 { font-size: 44px; }
+      .wf-row { grid-template-columns: 1fr; gap: 8px; padding: 20px 0; }
+      .wf-count { justify-self: start; }
+    }
+    @media (max-width: 520px) {
+      .container { padding: 0 20px; }
+      h1 { font-size: 38px; }
+      .foot { flex-direction: column; }
     }
   </style>
 </head>
 <body>
-  <div class="sturm-app">
+  <div id="root"></div>
 
-    <!-- ============ Sidebar (shared via /nav.js) ============ -->
-    <aside id="sturm-nav-host"></aside>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo } = React;
 
-    <!-- ============ Main ============ -->
-    <div class="sturm-main">
-      <header class="sturm-topbar">
-        <div class="sturm-topbar-l">
-          <span class="sturm-topbar-title">Workflow-Engine</span>
-        </div>
-        <div class="sturm-topbar-r">
-          <button class="sturm-icon-btn" id="theme-btn" aria-label="Theme umschalten">
-            <i data-lucide="sun" id="theme-icon"></i>
-          </button>
-        </div>
-      </header>
+const DESIGNER_URL = 'designer.html';
+const APP_URL = 'app.html';
+const DOCS_URL = 'docs/WORKFLOW_TEMPLATE.md';
 
-      <div style="flex:1; overflow-y: auto; display: flex; flex-direction: column; align-items: center;">
-        <div class="sturm-welcome">
-          <div class="sturm-welcome-glyph">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/>
-              <path d="M19 3l.6 1.7L21 5.3l-1.4.6L19 7.5l-.6-1.6L17 5.3l1.4-.6L19 3z"/>
-            </svg>
-          </div>
-          <h1 class="sturm-welcome-title">Workflow-Engine</h1>
-          <p class="sturm-welcome-sub">
-            Jeder Workflow ist ein Graph aus Stages — von OCR bis Bewertung. Dokument rein, Ergebnis raus, jeder Schritt nachvollziehbar.
-          </p>
-        </div>
+const WORKFLOWS = [
+  {
+    name: 'Tax filing',
+    cat: 'ELSTER',
+    stages: ['ocr', 'classify', 'extract', 'verify', 'file'],
+    count: '13 workflows',
+  },
+  {
+    name: 'Receipt',
+    cat: 'Belege',
+    stages: ['ocr', 'split', 'fields', 'audit'],
+    count: '2 workflows',
+  },
+  {
+    name: 'Clinical report',
+    cat: 'Medizin',
+    stages: ['parse', 'normalize', 'range-check', 'flag'],
+    count: '2 workflows',
+  },
+  {
+    name: 'OCR benchmark',
+    cat: 'Labor & Tests',
+    stages: ['ocr-a', 'ocr-b', 'diff', 'score'],
+    count: '2 workflows',
+  },
+];
 
-        <!-- Kategorie-Filter: wirken auf Karten unten -->
-        <div class="sturm-cats" id="cat-chips" role="tablist" aria-label="Workflow-Kategorien">
-          <!-- dynamisch gefüllt -->
-        </div>
+const MENU_GROUPS = [
+  {
+    label: 'Open',
+    items: [
+      { label: 'Open app', sub: 'Workflows & cases', href: APP_URL, primary: true,
+        glyph: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="2" width="4" height="4" rx="0.8" stroke="currentColor" strokeWidth="1.3"/><rect x="8" y="2" width="4" height="4" rx="0.8" stroke="currentColor" strokeWidth="1.3"/><rect x="2" y="8" width="4" height="4" rx="0.8" stroke="currentColor" strokeWidth="1.3"/><rect x="8" y="8" width="4" height="4" rx="0.8" stroke="currentColor" strokeWidth="1.3"/></svg> },
+      { label: 'Designer', sub: 'Build a workflow', href: DESIGNER_URL,
+        glyph: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2.5 2.5-7 7H3v-2.5l7-7z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg> },
+      { label: 'OCR Studio', sub: 'Single-document playground', href: 'ocr-studio.html',
+        glyph: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h2M9 4h2M3 7h4M7 7h4M3 10h6M11 10h0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg> },
+    ],
+  },
+  {
+    label: 'Reference',
+    items: [
+      { label: 'Workflow template', sub: 'WORKFLOW_TEMPLATE.md', href: DOCS_URL,
+        glyph: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 1.5h6l2 2v9H3v-11z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg> },
+      { label: 'Stage reference', sub: 'STAGES.md', href: 'docs/STAGES.md',
+        glyph: <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M8 2L2 4.5l6 3 6-3-6-2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><path d="M2 7l6 3 6-3M2 9.5l6 3 6-3" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg> },
+    ],
+  },
+];
 
-        <div class="sturm-grid" id="workflow-grid">
-          <!-- Workflow-Cards werden dynamisch von /api/workflows geladen -->
+function Arr() {
+  return (
+    <svg className="arr" width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M3 7h7m0 0L7 4m3 3L7 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
 
-          <a class="sturm-card" id="new-workflow-card" href="/designer.html" style="background: transparent; border-style: dashed;" data-category="*">
-            <div class="sturm-card-head">
-              <h3 class="sturm-card-title" style="color: var(--color-text-secondary);">Neuer Workflow</h3>
-              <span class="sturm-card-id">+</span>
-            </div>
-            <p class="sturm-card-sub">
-              Visuell bauen: Stages aus der Palette ziehen, verbinden, testen, speichern.
-              Wer lieber Code schreibt: <a href="/docs/WORKFLOW_TEMPLATE.md">Guide unter <code>docs/WORKFLOW_TEMPLATE.md</code></a>.
-            </p>
-            <div class="sturm-card-meta">
-              <span class="sturm-card-meta-item">
-                <i data-lucide="layout-grid"></i><span>Designer öffnen</span>
-              </span>
-            </div>
-          </a>
-        </div>
+function Nav({ menuOpen, onToggleMenu }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
-        <div class="sturm-grid-empty" id="grid-empty" hidden>
-          Keine Workflows in dieser Kategorie. Filter zurücksetzen oder Suche leeren.
-        </div>
-
-        <p style="font-size: 11.5px; color: var(--color-text-tertiary); margin: 8px 0 24px;">
-          STURM ist experimentell. Antworten können Fehler enthalten — Pflichtfelder immer gegen BMF-Katalog prüfen.
-        </p>
+  return (
+    <div className={`nav-wrap${scrolled ? ' scrolled' : ''}`}>
+      <div className="container nav">
+        <a href="#top" className="brand" aria-label="STURM home">
+          <span className="brand-tile">S</span>
+          <span className="brand-name">STURM</span>
+          <span className="brand-tag">workflow engine</span>
+        </a>
+        <div className="nav-spacer" />
+        <button
+          className={`burger${menuOpen ? ' open' : ''}`}
+          onClick={onToggleMenu}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+        >
+          <span className="bar b1" />
+          <span className="bar b2" />
+          <span className="bar b3" />
+        </button>
       </div>
     </div>
-  </div>
+  );
+}
 
-  <script>
-    // ============ Kategorisierung ============
-    // Reihenfolge bestimmt die Anzeige sowohl in der Sidebar als auch in den Filter-Chips.
-    const CATEGORIES = [
-      { id: 'elster',  label: 'ELSTER & Steuer', icon: 'git-branch', match: id => id.startsWith('elster') },
-      { id: 'belege',  label: 'Belege',          icon: 'receipt',    match: id => id.startsWith('belege') || id.startsWith('steuerbelege') },
-      { id: 'medizin', label: 'Medizin',         icon: 'activity',   match: id => id === 'pentacam-kc-score' || id === 'myopia-progression' },
-      { id: 'ocr',     label: 'OCR & Benchmark', icon: 'scan-text',  match: id => id === 'hello-ocr' || id === 'ocr-shootout' },
-      { id: 'lab',     label: 'Labor & Tests',   icon: 'flask-conical', match: () => true }, // catch-all am Ende
-    ];
-    function categoryFor(id) {
-      return (CATEGORIES.find(c => c.match(id)) || CATEGORIES[CATEGORIES.length - 1]).id;
-    }
-    function categoryMeta(cid) {
-      return CATEGORIES.find(c => c.id === cid) || CATEGORIES[CATEGORIES.length - 1];
-    }
+function Menu({ open, onClose, theme, setTheme }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
-    // ============ UI helpers ============
-    function applyTheme(mode) {
-      const html = document.documentElement;
-      const isDark = mode === 'dark';
-      html.classList.toggle('dark', isDark);
-      const old = document.getElementById('theme-icon');
-      if (old && old.parentNode) {
-        const fresh = document.createElement('i');
-        fresh.id = 'theme-icon';
-        fresh.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
-        old.parentNode.replaceChild(fresh, old);
-        window.lucide && window.lucide.createIcons();
-      }
-      localStorage.setItem('sturm-theme', mode);
-    }
-    function toggleTheme() {
-      const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
-      applyTheme(next);
-    }
-    (function () {
-      const saved = localStorage.getItem('sturm-theme');
-      if (saved === 'light') document.documentElement.classList.remove('dark');
-    })();
-
-    function pickIcon(id) {
-      const cat = categoryFor(id);
-      if (cat === 'elster') return 'git-branch';
-      if (cat === 'belege') return 'receipt';
-      if (cat === 'medizin') return 'activity';
-      if (cat === 'ocr') return 'scan-text';
-      return 'workflow';
-    }
-    function escapeHtml(s) {
-      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    }
-    function shortDesc(d) {
-      if (!d) return '';
-      const s = String(d).trim();
-      return s.length > 220 ? s.slice(0, 217) + '…' : s;
-    }
-    function fileTypesFromAccept(accept) {
-      if (!Array.isArray(accept) || accept.length === 0) return 'Datei';
-      return accept.map(a => String(a).toUpperCase()).join(' · ');
-    }
-
-    // ============ State ============
-    let activeCategory = '*'; // '*' = alle
-    let activeQuery = '';
-
-    // ============ Rendering ============
-    // (Sidebar wird zentral von /nav.js gerendert; hier nur Main-Grid + Chips.)
-
-    function renderCategoryChips(byCat, total) {
-      const host = document.getElementById('cat-chips');
-      if (!host) return;
-      const chips = [
-        { id: '*', label: 'Alle', count: total },
-        ...CATEGORIES.filter(c => (byCat[c.id] || []).length > 0).map(c => ({
-          id: c.id, label: c.label, count: (byCat[c.id] || []).length, icon: c.icon
-        }))
-      ];
-      host.innerHTML = chips.map(ch => `
-        <button class="sturm-cat${ch.id === activeCategory ? ' is-active' : ''}"
-                data-cat="${ch.id}"
-                role="tab"
-                aria-selected="${ch.id === activeCategory}">
-          ${ch.icon ? `<i data-lucide="${ch.icon}" style="width:13px; height:13px;"></i>` : ''}
-          <span>${escapeHtml(ch.label)}</span>
-          <span class="sturm-cat-count">${ch.count}</span>
-        </button>
-      `).join('');
-      host.querySelectorAll('.sturm-cat').forEach(btn => {
-        btn.addEventListener('click', () => {
-          activeCategory = btn.dataset.cat;
-          host.querySelectorAll('.sturm-cat').forEach(b => {
-            b.classList.toggle('is-active', b.dataset.cat === activeCategory);
-            b.setAttribute('aria-selected', b.dataset.cat === activeCategory);
-          });
-          applyFilter();
-        });
-      });
-    }
-
-    function renderGrid(wfs) {
-      const grid = document.getElementById('workflow-grid');
-      const newCard = document.getElementById('new-workflow-card');
-      if (!grid || !newCard) return;
-      const cards = wfs.map(w => {
-        const id = w.id || '';
-        const name = w.name || id;
-        const desc = shortDesc(w.description);
-        const stages = Array.isArray(w.stages) ? w.stages.length : 0;
-        const accept = w.input && w.input.accept;
-        const cat = categoryFor(id);
-        const meta = categoryMeta(cat);
-        const search = (name + ' ' + id + ' ' + desc).toLowerCase();
-        return `<a class="sturm-card"
-                   href="/pipeline.html?workflow=${encodeURIComponent(id)}"
-                   data-search="${escapeHtml(search)}"
-                   data-category="${cat}"
-                   data-workflow-id="${escapeHtml(id)}">
-          <div class="sturm-card-head">
-            <h3 class="sturm-card-title">${escapeHtml(name)}</h3>
-            <span class="sturm-card-id">${escapeHtml(id)}</span>
+  return (
+    <React.Fragment>
+      <div className={`menu-overlay${open ? ' open' : ''}`} onClick={onClose} aria-hidden={!open} />
+      <div className={`menu-panel${open ? ' open' : ''}`} role="dialog" aria-modal="true" aria-label="Menu">
+        <div className="menu-search">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M9 9L12 12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          <input placeholder="Search…" />
+          <span className="kbd">⌘K</span>
+        </div>
+        {MENU_GROUPS.map((g) => (
+          <React.Fragment key={g.label}>
+            <div className="menu-group-label">{g.label}</div>
+            {g.items.map((it) => (
+              <a key={it.label} href={it.href} className={`menu-item${it.primary ? ' primary' : ''}`}>
+                <span className="menu-item-l">
+                  <span className="menu-item-glyph">{it.glyph}</span>
+                  <span>
+                    <span className="menu-item-name">{it.label}</span>
+                    <div className="menu-item-sub">{it.sub}</div>
+                  </span>
+                </span>
+                <Arr />
+              </a>
+            ))}
+          </React.Fragment>
+        ))}
+        <div className="menu-theme">
+          <span className="menu-theme-label">Theme</span>
+          <div className="theme-seg">
+            <button className={theme === 'light' ? 'on' : ''} onClick={() => setTheme('light')} aria-label="Light mode">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.2"/><path d="M6 1v1.5M6 9.5V11M1 6h1.5M9.5 6H11M2.5 2.5l1 1M8.5 8.5l1 1M2.5 9.5l1-1M8.5 3.5l1-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+              Day
+            </button>
+            <button className={theme === 'dark' ? 'on' : ''} onClick={() => setTheme('dark')} aria-label="Dark mode">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9.5 7.5A4 4 0 015.5 2.5 4 4 0 109.5 7.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+              Night
+            </button>
           </div>
-          <p class="sturm-card-sub">${escapeHtml(desc)}</p>
-          <div class="sturm-card-meta">
-            <span class="sturm-card-meta-item">
-              <i data-lucide="${meta.icon}"></i><span>${escapeHtml(meta.label)}</span>
-            </span>
-            <span class="sturm-card-meta-item">
-              <i data-lucide="layers"></i><span>${stages} Stages</span>
-            </span>
-            <span class="sturm-card-meta-item">
-              <i data-lucide="file"></i><span>${escapeHtml(fileTypesFromAccept(accept))}</span>
-            </span>
-            <span class="sturm-card-meta-item" data-role="stats" data-id="${escapeHtml(id)}" style="opacity:0.55">
-              <i data-lucide="activity"></i><span>—</span>
-            </span>
-          </div>
-        </a>`;
-      }).join('');
-      newCard.insertAdjacentHTML('beforebegin', cards);
-      // Stats pro Workflow asynchron nachladen — kein Block beim ersten Render.
-      void hydrateStats(wfs.map(w => w.id).filter(Boolean));
-    }
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
 
-    function formatMs(ms) {
-      if (ms == null || !isFinite(ms)) return '—';
-      if (ms < 1000) return Math.round(ms) + ' ms';
-      if (ms < 60000) return (ms/1000).toFixed(1) + ' s';
-      const m = Math.floor(ms/60000); const s = Math.round((ms%60000)/1000);
-      return `${m}:${s.toString().padStart(2,'0')} min`;
-    }
+function Hero() {
+  return (
+    <section id="top" className="hero">
+      <div className="container">
+        <div className="eyebrow">
+          <span className="dot" />
+          <span>STURM · Workflow Engine</span>
+        </div>
+        <h1>
+          Document in.<br/>
+          Result out.<br/>
+          <span className="muted">Every step traceable.</span>
+        </h1>
+        <p className="lede">
+          Build document workflows as graphs of stages — from OCR to extraction to audit. Drag, connect, test, ship.
+        </p>
+        <div className="hero-cta">
+          <a href={APP_URL} className="btn btn-primary">
+            Open app <Arr />
+          </a>
+          <a href="#workflows" className="btn btn-ghost">
+            See examples
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-    async function hydrateStats(ids) {
-      // Parallel laden, aber Concurrency cap (Card-Liste kann lang werden)
-      const POOL = 4;
-      let i = 0;
-      async function worker() {
-        while (i < ids.length) {
-          const id = ids[i++];
-          try {
-            const r = await fetch(`/api/workflows/${encodeURIComponent(id)}/stats?maxRuns=20`);
-            if (!r.ok) continue;
-            const stats = await r.json();
-            const slot = document.querySelector(`[data-role="stats"][data-id="${CSS.escape(id)}"]`);
-            if (!slot) continue;
-            const span = slot.querySelector('span');
-            if (stats.runs === 0) {
-              span.textContent = 'keine Runs';
-              slot.title = 'noch nicht ausgeführt';
-            } else {
-              const succ = Math.round((stats.successRate || 0) * 100);
-              span.textContent = `${stats.runs} Runs · ⌀ ${formatMs(stats.avgMs)} · ${succ}% ok`;
-              slot.title = `p95 ${formatMs(stats.p95Ms)} — letzte ${stats.runs} Runs`;
-              slot.style.opacity = '0.95';
-            }
-          } catch { /* silent */ }
-        }
-      }
-      await Promise.all(Array.from({length: POOL}, worker));
-      window.lucide && window.lucide.createIcons();
-    }
+function Workflows() {
+  return (
+    <section id="workflows" className="workflows-sec">
+      <div className="container">
+        <div className="sec-label"><span>What people build</span></div>
+        <div className="wf-list">
+          {WORKFLOWS.map((wf) => (
+            <div className="wf-row" key={wf.name}>
+              <div className="wf-name-wrap">
+                <div className="wf-name">{wf.name}</div>
+                <div className="wf-cat">{wf.cat}</div>
+              </div>
+              <div className="wf-pipe">
+                {wf.stages.map((s, i) => (
+                  <React.Fragment key={s}>
+                    {i > 0 && <span className="wf-arr">→</span>}
+                    <span className="wf-stage">{s}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="wf-count">{wf.count}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-    function applyFilter() {
-      const q = activeQuery.trim().toLowerCase();
-      const cat = activeCategory;
-      const grid = document.getElementById('workflow-grid');
-      const empty = document.getElementById('grid-empty');
-      let visibleCards = 0;
-      if (grid) {
-        for (const el of grid.querySelectorAll('[data-search]')) {
-          const matchQuery = !q || el.dataset.search.includes(q);
-          const matchCat = cat === '*' || el.dataset.category === cat;
-          const show = matchQuery && matchCat;
-          el.style.display = show ? '' : 'none';
-          if (show) visibleCards++;
-        }
-        // "Neuer Workflow"-Card: zeige nur, wenn keine Kategorie-Eingrenzung aktiv ist
-        const newCard = document.getElementById('new-workflow-card');
-        if (newCard) newCard.style.display = (cat === '*' && !q) ? '' : 'none';
-      }
-      if (empty) empty.hidden = visibleCards > 0;
-    }
+function Footer() {
+  return (
+    <footer>
+      <div className="container foot">
+        <div className="foot-left">
+          <span className="pill">Experimental</span>
+          Answers may contain errors. Always verify required fields against the BMF catalogue before filing.
+        </div>
+        <div className="foot-right">
+          <a href={APP_URL}>App</a>
+          <a href={DESIGNER_URL}>Designer</a>
+          <a href={DOCS_URL}>Docs</a>
+        </div>
+      </div>
+    </footer>
+  );
+}
 
-    // ============ Boot ============
-    async function loadWorkflows() {
-      try {
-        const resp = await fetch('/api/workflows');
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const list = await resp.json();
-        const wfs = Array.isArray(list) ? list : [];
-
-        // Gruppieren — Reihenfolge gemäß CATEGORIES
-        const byCat = Object.fromEntries(CATEGORIES.map(c => [c.id, []]));
-        for (const w of wfs) {
-          const cat = categoryFor(w.id || '');
-          (byCat[cat] || byCat.lab).push(w);
-        }
-
-        renderCategoryChips(byCat, wfs.length);
-        renderGrid(wfs);
-        window.lucide && window.lucide.createIcons();
-        applyFilter();
-      } catch (err) {
-        console.error('Workflow-Liste konnte nicht geladen werden:', err);
-      }
-    }
-
-    import('/nav.js').then(({ renderSturmNav, contextRendererWorkflows }) => {
-      renderSturmNav({ activeNav: 'workflows', contextHeading: 'Workflow-Kategorien', contextRenderer: contextRendererWorkflows });
-    });
-
-    window.addEventListener('DOMContentLoaded', () => {
-      window.lucide && window.lucide.createIcons();
-      loadWorkflows();
-      document.getElementById('theme-btn')?.addEventListener('click', toggleTheme);
-    });
-
-    // Tastatur-Shortcuts: ⌘N → Pipeline, ⌘K → Suche im Tile-Grid focus
-    window.addEventListener('keydown', (e) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && (e.key === 'n' || e.key === 'N')) {
+function App() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setThemeState] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
+  const setTheme = (t) => {
+    setThemeState(t);
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('sturm-theme', t); } catch (e) {}
+  };
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        location.href = '/pipeline.html';
+        setMenuOpen(v => !v);
       }
-    });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return (
+    <React.Fragment>
+      <Nav menuOpen={menuOpen} onToggleMenu={() => setMenuOpen(v => !v)} />
+      <main>
+        <Hero />
+        <Workflows />
+      </main>
+      <Footer />
+      <Menu open={menuOpen} onClose={() => setMenuOpen(false)} theme={theme} setTheme={setTheme} />
+    </React.Fragment>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
   </script>
 </body>
 </html>
