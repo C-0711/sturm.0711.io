@@ -184,6 +184,23 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     bus.subscribe(e => opts.onEvent!(e.name, e.payload, e.stageId));
   }
 
+  // In-Memory Event-Buffer: spiegelt alle Events während des Runs.
+  // Wird beim finalen runResult-Persist in _result.json mit serialisiert,
+  // sodass Post-Run-Inspection dieselben Events sieht wie der Live-Drawer.
+  // log_*-Events sind chatty (pro Stage hunderte) — die filtern wir raus
+  // damit _result.json klein bleibt. Stage-Lifecycle + custom emit()-Events
+  // (das was im UI-Drawer angezeigt wird) bleiben drin.
+  const persistedEvents: RunResult['events'] = [];
+  bus.subscribe(e => {
+    if (e.name.startsWith('log_')) return;
+    persistedEvents!.push({
+      stageId: e.stageId,
+      name: e.name,
+      payload: e.payload as unknown,
+      timestamp: Date.parse(e.at),
+    });
+  });
+
   // Resolve tool container once per run: bound by appId from runtimeOpts.
   // Standalone runs (no appId) → NullToolContainer; stages that try to
   // .get() will throw a helpful error. Boot-skip mode (appId present but
@@ -317,7 +334,14 @@ export function runWorkflow(def: WorkflowDef, opts: RunOptions): Run {
     }
 
     const totalMs = Date.now() - runStart;
-    const runResult: RunResult = { runId, workflowId: def.id, state: overallState, ms: totalMs, stages: stageResults };
+    const runResult: RunResult = {
+      runId,
+      workflowId: def.id,
+      state: overallState,
+      ms: totalMs,
+      stages: stageResults,
+      events: persistedEvents,
+    };
     await artifacts.write('_result.json', runResult);
 
     if (gitChainStore) {

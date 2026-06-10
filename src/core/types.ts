@@ -235,4 +235,14 @@ export interface RunResult {
   state: 'ok' | 'error' | 'partial';
   ms: number;
   stages: Record<StageId, StageResult>;
+  /** Alle Events die während des Runs emittiert wurden (in Reihenfolge).
+   *  Wird vom Runner aus dem In-Memory-Buffer in _result.json gespiegelt,
+   *  damit der Result-Inspector / Post-Run-Debugging dieselben Events sieht
+   *  wie der Live-Drawer während des Runs. */
+  events?: Array<{
+    stageId?: StageId;
+    name: string;
+    payload?: unknown;
+    timestamp?: number;
+  }>;
 }

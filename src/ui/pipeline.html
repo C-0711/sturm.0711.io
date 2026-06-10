@@ -181,6 +181,10 @@
         const t = u.searchParams.get('token');
         if (t) {
           localStorage.setItem('sturm-token', t);
+          // Token erfolgreich akzeptiert — Reject-Tracking zurücksetzen,
+          // damit der nächste 401 (z.B. nach Token-Rotation) wieder
+          // einen Auto-Retry triggert.
+          sessionStorage.removeItem('sturm-token-attempted');
           u.searchParams.delete('token');
           window.history.replaceState({}, '', u.toString());
         }
@@ -190,6 +194,6 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"></script>
-  <script src="/pipeline.bundle.js?v=20260515a"></script>
+  <script src="/pipeline.bundle.js?v=20260519b"></script>
 </body>
 </html>
