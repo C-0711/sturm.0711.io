@@ -169,11 +169,17 @@ function computeTrust(canonical: Record<string, CanonicalValue>): void {
     } else if (v.origin === 'BMF_RECHNER') {
       trust = 'high';
       reasons.push('BMF Lane-1 deterministisch berechnet');
-    } else if (v.origin === 'REGEX_100%' && v.zeile_anchored === false) {
-      // 4-Faktor-Match aber führende Label-Nummer != vordruckzeile (z.B.
-      // Treffer in Tabellen-Header, der die Zeilennummer woanders enthält).
+    } else if (v.origin === 'REGEX_100%' && v.zeile_anchored === false && !v.evidence_line) {
+      // 4-Faktor-Match ohne Zeilen-Anker UND ohne Belegzeile → unsicher.
+      // Mit Belegzeile fällt der Match in den `medium`-Zweig unten: der
+      // OCR-Text bestätigt den Treffer, auch wenn die führende Label-Nummer
+      // nicht zur Vordruckzeile passt (z.B. ELSTER-Export-Layouts mit
+      // hochgestellten Zeilennummern, die der Anker-Regex nicht erkennt).
       trust = 'suspicious';
-      reasons.push('Regex-Match ohne führenden Zeilen-Anker (vordruckzeile-Mismatch)');
+      reasons.push('Regex-Match ohne Belegzeile und ohne Zeilen-Anker');
+    } else if (v.origin === 'REGEX_100%' && v.zeile_anchored === false && v.evidence_line) {
+      trust = 'medium';
+      reasons.push('Regex-Match mit Belegzeile, aber ohne Zeilen-Anker');
     } else if (v.origin === 'REGEX_100%' && v.evidence_line) {
       trust = 'high';
       reasons.push('Regex-Match mit Belegzeile');

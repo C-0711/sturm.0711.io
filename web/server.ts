@@ -1,0 +1,865 @@
+#!/usr/bin/env -S npx tsx
+/**
+ * web/server — Steuerfall-Web: Datei rein → Extraktion + ELSTER-Mapping +
+ * MCP-autoritative Berechnung. Kein Framework (Node http), keine Multipart-
+ * Parserei: Dateien kommen als rohe Bytes auf /api/upload (Name im Header),
+ * dann /api/steuerfall {paths} → vollständiges Ergebnis-JSON.
+ *
+ *   ELSTER_CATALOG_PG_URL=… TORNADO_ORCHESTRATOR_URL=… npx tsx web/server.ts
+ */
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { join, dirname, extname, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import pg from 'pg';
+import { runLane1 } from '../src/workflows/elster/lib/lane1.ts';
+import { ableiteProfil } from '../src/workflows/elster/lib/steuer/profil.ts';
+import { ocrLighton } from './ocr-lighton.ts';
+import { berechneHaushaltAuthoritativ } from '../src/workflows/elster/lib/steuer/authoritative.ts';
+import { normalisiereSteuerfall } from '../src/workflows/elster/lib/steuer/fallnormalizer.ts';
+import type { SteuerFeld } from '../src/workflows/elster/lib/steuer/adapter.ts';
+import { auditCase } from './audit.ts';
+import { phraseFindings, interpretAnswer } from './auditor.ts';
+import { buildAuditProtocol, sealProtocol } from './protocol.ts';
+import { loadCandidates, buildIndex, type Candidate } from '../src/server/harmonize.ts';
+import { extractBeleg, type ExtractOutput } from './extract-client.ts';
+import { parseVorauszahlungen } from './extract-vorauszahlung.ts';
+import { parseKvPvBasis, parse35aBasis, parseSpenden } from './extract-sonderausgaben.ts';
+import { parseSpendenVision } from './extract-spenden-vision.ts';
+import { parseVersorgungsbeginn } from './extract-versorgungsbeginn.ts';
+import { parseKapital } from './extract-kapital.ts';
+import { extrahiereScanWerte } from './extrahiere-scan-werte.ts';
+import { harmonizeBelege, type BelegLike, type Mastercase, type Household } from './mastercase-harmonize.ts';
+import { envelopeZuV1, type BelegRoh, type Fall as FallV1, type MasterCase as MasterCaseV1, type Uebersprungen as V1Uebersprungen } from '../src/schemas/v1/index.ts';
+import { rename } from 'node:fs/promises';
+
+const { Pool } = pg;
+const HERE = dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT ?? 7190);
+const baseUrl = process.env.TORNADO_ORCHESTRATOR_URL ?? 'http://127.0.0.1:7180';
+const pgUrl = process.env.ELSTER_CATALOG_PG_URL ?? 'postgresql://elster:elster_dev_pw@127.0.0.1:11111/elster_catalog';
+const HEBESATZ = 0.09;
+
+const pool = new Pool({ connectionString: pgUrl, max: 4 });
+
+// Katalog-Meta (Vordruckzeile + kontextPath je eCode): reichert jedes Ingestion-Feld
+// mit seinem deterministischen Struktur-Schlüssel an — einmal lazy aus atoms.json.
+let _catByECode: Map<string, Candidate> | null = null;
+const catByECode = (): Map<string, Candidate> => (_catByECode ??= buildIndex(loadCandidates()).byECode);
+
+// Stammdaten-eCodes, die der Mastercase-Recalc aus dem harmonisierten Mastercase
+// übernehmen DARF (Identität/Adresse — vervollständigen die ELSTER-Form, steuer-
+// neutral). Einkommen (KAP/N/VOR) bleibt BEWUSST Pre-Calc: die rohen /extract-
+// Bank-Werte sind verrauscht (Bruttoarbeitslohn-Mis-Maps), würden die Steuer kippen.
+const MC_STAMMDATEN = new Set([
+  'E0100201', 'E0100301', 'E0100401', 'E0100081',  // Name, Vorname, Geburtsdatum, IdNr (A)
+  'E0100901', 'E0100801', 'E0101001', 'E0100082',  // Name, Vorname, Geburtsdatum, IdNr (B)
+  'E0101104', 'E0101206', 'E0100601', 'E0100602',  // Straße, Hausnr, PLZ, Ort
+  'E0100701', 'E0102102',                           // Verheiratet-seit, IBAN
+]);
+
+// Dropped phone photos (JPG/PNG) are not PDFs → the orchestrator's pdfium
+// rasterizer throws FormatError. Wrap them in a one-page PDF first (Pillow,
+// 200 dpi) so the OCR ensemble sees a page it can raster.
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.webp', '.bmp', '.gif']);
+const PY = process.env.PDL3_PY ?? `${process.env.HOME}/.venvs/pdl3/bin/python`;
+function imageToPdf(img: string): string {
+  const pdf = img.replace(/\.[^.]+$/, '') + '.asimg.pdf';
+  execFileSync(PY, ['-c',
+    "from PIL import Image;import sys;Image.open(sys.argv[1]).convert('RGB').save(sys.argv[2],'PDF',resolution=200.0)",
+    img, pdf], { stdio: 'pipe' });
+  return pdf;
+}
+// ── Content-addressed OCR cache ──────────────────────────────────────────
+// OCR ist GPU-gebunden und serialisiert (~100–145 ms/Seite); der teure Teil
+// jeder Berechnung. OCR/pdftotext sind aber DETERMINISTISCH pro Dokument-
+// Inhalt → wir cachen das Ergebnis unter sha256(Datei-Bytes). Re-Compute
+// eines Falls oder wiederholt gedroppte Belege (gleicher Inhalt, neuer Temp-
+// Pfad) überspringen die OCR komplett. Persistiert auf Platte (überlebt
+// Neustart). `parseDoc` (Cache-Lesen) läuft VOR pdftotext/OCR in runLane1.
+const OCR_CACHE_DIR = process.env.OCR_CACHE_DIR ?? join(tmpdir(), 'sturm-ocr-cache');
+mkdirSync(OCR_CACHE_DIR, { recursive: true });
+const contentHash = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
+const cacheFile = (p: string) => join(OCR_CACHE_DIR, contentHash(p) + '.json');
+const parseDoc = async (p: string): Promise<{ rawText: string; method: 'text' | 'ocr' } | null> => {
+  try { const f = cacheFile(p); if (existsSync(f)) return JSON.parse(readFileSync(f, 'utf8')); } catch { /* miss */ }
+  return null;
+};
+// OCR gescannter Belege über LightOnOCR (vLLM :11437) — PaddleOCR/Orchestrator
+// raus. ocrLighton handhabt PDF (pdftoppm) UND Bilder direkt; kein imageToPdf nötig.
+const parseImage = async (p: string) => {
+  const rawText = await ocrLighton(p);
+  try { writeFileSync(cacheFile(p), JSON.stringify({ rawText, method: 'ocr' })); } catch { /* best-effort */ }
+  return rawText;
+};
+const lightonOcrUrl = process.env.LIGHTON_OCR_URL ?? 'http://127.0.0.1:11437';
+async function pingLighton(): Promise<boolean> {
+  try { const r = await fetch(`${lightonOcrUrl}/v1/models`, { signal: AbortSignal.timeout(3000) }); return r.ok; } catch { return false; }
+}
+
+// ── Provenienz: Feld → Bounding-Box im Dokument ──────────────────────────
+// Für den Viewer: jedes OCR'te Dokument wird (cache-getrieben) zu PNG(s)
+// gerastert UND genau dieses PNG via :11440 ge-OCRt — so liegen die bboxes im
+// selben Pixelraum wie das angezeigte Bild (pixelgenaue gelbe Overlays). Pro
+// Feld wird der Record gesucht, dessen Text dem Feld-Wert entspricht (Beträge:
+// Ziffern-Containment; Text: Substring) → dessen Box ist die Feld-Position.
+const PROV_CACHE_DIR = process.env.PROV_CACHE_DIR ?? join(tmpdir(), 'sturm-prov-cache');
+mkdirSync(PROV_CACHE_DIR, { recursive: true });
+interface ProvPage { w: number; h: number; png: string; records: { text: string; bbox: [number, number, number, number] }[]; }
+const provMem = new Map<string, ProvPage[]>();
+function provenanceFor(path: string): { hash: string; pages: ProvPage[] } {
+  const hash = contentHash(path);
+  let pages = provMem.get(hash);
+  if (!pages) {
+    const outdir = join(PROV_CACHE_DIR, hash);
+    const metaFile = join(outdir, 'meta.json');
+    if (existsSync(metaFile)) { pages = JSON.parse(readFileSync(metaFile, 'utf8')); }
+    else {
+      mkdirSync(outdir, { recursive: true });
+      const out = execFileSync(PY, [join(HERE, 'provenance.py'), path, outdir], { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).toString();
+      pages = (JSON.parse(out).pages as ProvPage[]);
+      writeFileSync(metaFile, JSON.stringify(pages));
+    }
+    provMem.set(hash, pages!);
+  }
+  return { hash, pages: pages! };
+}
+const digitsOf = (s: string) => (s || '').replace(/\D/g, '');
+interface FieldProv { hash: string; page: number; box: [number, number, number, number]; pageW: number; pageH: number; }
+/** Zwei Durchgänge: erst EXAKT (Ziffern-Gleichheit bzw. Text==), dann lockeres
+ *  Containment. Exakt zuerst verhindert, dass „0,24" in einem fremden Dokument
+ *  als Substring vor dem echten Beleg greift. */
+const boxKey = (hash: string, pi: number, box: [number, number, number, number]) => `${hash}:${pi}:${box.join(',')}`;
+function matchProv(value: string, docs: { hash: string; pages: ProvPage[] }[], used?: Set<string>): FieldProv | null {
+  const v = (value || '').trim();
+  if (v.length < 2) return null;
+  const vd = digitsOf(v);
+  const isNum = vd.length >= 2 && /\d/.test(v);
+  const scan = (pred: (rt: string, rd: string) => boolean): FieldProv | null => {
+    for (const doc of docs)
+      for (let pi = 0; pi < doc.pages.length; pi++)
+        for (const rec of doc.pages[pi].records) {
+          if (used && used.has(boxKey(doc.hash, pi, rec.bbox))) continue;  // schon vergebener Record → überspringen
+          if (pred(rec.text || '', digitsOf(rec.text || '')))
+            return { hash: doc.hash, page: pi, box: rec.bbox, pageW: doc.pages[pi].w, pageH: doc.pages[pi].h };
+        }
+    return null;
+  };
+  // Dezimalbetrag ("7.532,00", "0,24"): NUR gegen einen Record matchen, der
+  // selbst eine „…,dd"-Zahl mit identischen Ziffern trägt. Verhindert, dass
+  // „1155" aus „Postfach1155" oder „102" aus „21.02.2025" fälschlich greift.
+  if (isNum && /\d,\d/.test(v)) {
+    return scan((rt, rd) => rd === vd && /\d[.,]\d{2}(?!\d)/.test(rt));
+  }
+  // Distinktive Ganzzahl (IdNr, große Beträge ≥5 Stellen): exakt, sonst
+  // Containment mit enger Längen-Schranke (Währungsformatierung, keine IBAN).
+  if (isNum && vd.length >= 5) {
+    return scan((_rt, rd) => rd === vd)
+        ?? scan((_rt, rd) => rd.length >= 5 && (rd.includes(vd) || vd.includes(rd)) && Math.abs(rd.length - vd.length) <= 3);
+  }
+  // Kurze Ganzzahl (300, 915, 11): zu mehrdeutig → NUR wenn ein Record exakt
+  // diese Zahl ist (kein Teilstring — „11" steckt sonst in „Seite 1 von 1").
+  // Exakt zuerst; erst danach die ausgeschriebene „,00"-Form (Feldwert „36" ↔
+  // Beleg „36,00") — so verliert ein echtes „300" nicht gegen ein fremdes „300,00".
+  if (isNum) {
+    return scan((rt) => rt.trim() === v)
+        ?? scan((rt) => { const t = rt.trim(); return t === `${v},00` || t === `${v}.00`; });
+  }
+  const lv = v.toLowerCase();
+  return scan((rt) => v.length >= 3 && rt.toLowerCase() === lv)      // exakter Text
+      ?? scan((rt) => v.length >= 4 && rt.toLowerCase().includes(lv));
+}
+
+async function body(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  return Buffer.concat(chunks);
+}
+function json(res: ServerResponse, code: number, obj: unknown): void {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(obj));
+}
+
+// ── Mastercase: asynchroner Hintergrund-Harmonizer (read-only ggü. Pre-Calc) ──
+// Die Pre-Calc-Antwort (runSteuerfall) geht SOFORT raus. Danach läuft fire-and-
+// forget ein Job, der JEDEN Beleg neu durch den ECHTEN deterministischen
+// Orchestrator-Extraktor (/api/v1/extract) schickt, die Felder harmonisiert
+// (Person-A/B-Split + Bank-/Gläubiger-Filter + Multi-Quellen-Vote) und das
+// Ergebnis als Sidecar-JSON je caseId persistiert. Der Browser pollt den
+// Mastercase via GET /api/mastercase nach. Kein Einfluss auf die Antwort-Latenz.
+const MASTERCASE_DIR = process.env.MASTERCASE_DIR ?? join(tmpdir(), 'sturm-mastercase');
+mkdirSync(MASTERCASE_DIR, { recursive: true });
+interface MastercaseEnvelope {
+  caseId: string; status: 'pending' | 'ready' | 'error';
+  updatedAt: string; mastercase?: Mastercase; error?: string;
+  // Phase-2-Upgrade (additiv): aus den Gemma-/extract-Daten neu attribuierte
+  // Belege + neu gerechnete Bescheide/Profil. Die synchrone Phase-1-Antwort
+  // bleibt davon unberührt; der Browser spielt dieses Upgrade per Polling ein.
+  belege?: unknown[]; calcs?: unknown[]; profil?: unknown;
+  veranlagungsart?: string; begruendung?: string[];
+  // v1-Vertrags-Sicht (additiv, src/schemas/v1): fall/v1 + mastercase/v1 aus
+  // dem Adapter; uebersprungen = was nicht in den Vertrag passte (kein drop).
+  fallV1?: FallV1; mastercaseV1?: MasterCaseV1; v1Uebersprungen?: V1Uebersprungen[];
+}
+// caseId härten (kein Path-Traversal) — gleiche Härtung wie /api/page + Upload-Name.
+const mcFile = (caseId: string) => join(MASTERCASE_DIR, (caseId.replace(/[^\w.-]/g, '_') || 'case') + '.json');
+// Atomar schreiben: erst .tmp, dann rename — das Polling liest nie eine halbe Datei.
+async function writeEnvelope(env: MastercaseEnvelope): Promise<void> {
+  const f = mcFile(env.caseId); const tmp = f + '.tmp';
+  writeFileSync(tmp, JSON.stringify(env));
+  await rename(tmp, f);
+}
+// Content-addressierter Cache der rohen /extract-Antworten (wie OCR-Cache):
+// Re-Compute eines Falls überspringt den Orchestrator-Roundtrip pro Beleg.
+const extractCacheFile = (p: string) => join(MASTERCASE_DIR, contentHash(p) + '.extract.json');
+async function extractCached(path: string): Promise<ExtractOutput> {
+  const cf = extractCacheFile(path);
+  if (existsSync(cf)) { try { return JSON.parse(readFileSync(cf, 'utf8')) as ExtractOutput; } catch { /* korrupt → neu holen */ } }
+  const out = await extractBeleg(path, { baseUrl });
+  try { writeFileSync(cf, JSON.stringify(out)); } catch { /* best-effort */ }
+  return out;
+}
+
+// Cache-Eviction für die INITIALE Fall-Rechnung: verwirft ALLE datei-bezogenen
+// Caches eines Belegs (OCR-Roh, tornado-/extract, Provenienz-PNG+Boxen +
+// In-Memory). Dadurch wird garantiert frisch ge-OCRt und neu extrahiert (inkl.
+// frischer Flow-Trace-Dumps) — nichts Stale aus früheren Läufen oder anderen
+// Fällen (alle Caches sind content-addressiert per Datei-sha).
+function evictCaches(path: string): void {
+  try {
+    const h = contentHash(path);
+    rmSync(join(OCR_CACHE_DIR, h + '.json'), { force: true });            // OCR-Rohtext
+    rmSync(join(MASTERCASE_DIR, h + '.extract.json'), { force: true });   // tornado /extract
+    rmSync(join(PROV_CACHE_DIR, h), { recursive: true, force: true });    // Provenienz-PNG + Boxen
+    provMem.delete(h);                                                    // In-Memory-Provenienz
+  } catch (e) { console.error('EVICT', basename(path), (e as Error).message); }
+}
+
+/** Hintergrund-Job: Master Case aus den runLane1-FAKTEN (diagramm-konform) →
+ *  verbindlich neu rechnen → Sidecar persistieren. KEIN erneuter Orchestrator-
+ *  /extract-Durchlauf: digitale PDFs hat Lane 1, Scans hat Lane 2 (in runLane1)
+ *  bereits sauber extrahiert; hier wird nur konsolidiert + gerechnet. `paths`
+ *  bleibt für Signatur-Kompatibilität, wird nicht mehr genutzt. */
+async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: string; vorjahr?: boolean; felder?: number; status?: string; belegTyp?: string; felderListe?: unknown[]; method?: string }>; household?: Household; felder?: SteuerFeld[]; vz?: number }, paths: string[]): Promise<void> {
+  await writeEnvelope({ caseId, status: 'pending', updatedAt: new Date().toISOString() });
+  void paths;
+  try {
+    // Master Case = Konsolidierung der runLane1-Fakten (belege[].felderListe):
+    // dedupliziert inhaltsgleiche Belege + votet pro (Person,eCode). Diagramm-
+    // konform — der Orchestrator läuft nur in Lane 2 (Scans) INNERHALB runLane1,
+    // nicht hier nochmal über die (digitalen) Belege.
+    const mastercase = harmonizeBelege((out.belege ?? []) as BelegLike[], out.household ?? {});
+    // BERECHNUNG aus den konsolidierten (deduplizierten) Mastercase-Fakten als
+    // PRIMÄRquelle; out.felder ergänzt nur, was der Mastercase nicht hat — das
+    // sind die synthetischen Parser-Felder (Vorauszahlung/§35a/Spenden/KV-PV/
+    // Versorgungsbeginn), die runLane1 NACHträglich erzeugt. Dedup fixt Doppel-
+    // Uploads (Bruttoarbeitslohn 2×); ohne Duplikate ist das Ergebnis = Phase 1.
+    const mcFelder: SteuerFeld[] = mastercase.fakten.map((f) => {
+      const cat = catByECode().get(f.e_code);
+      return { eCode: f.e_code, wert: String(f.value), person: f.person, anlage: cat?.anlage || '', pdfLabel: cat?.drucktext || f.belegfeld_id };
+    });
+    const have = new Set(mcFelder.map((f) => `${f.person}|${f.eCode}`));
+    const extra = (out.felder ?? []).filter((f) => !have.has(`${f.person}|${f.eCode}`));
+    const augmented = [...mcFelder, ...extra];
+    const vz = Number(out.vz) || 2023;
+    const profil = ableiteProfil(augmented, { vz, hebesatzProzent: Math.round(HEBESATZ * 100) });
+    const fall = normalisiereSteuerfall(augmented, (out.household ?? {}) as Parameters<typeof normalisiereSteuerfall>[1]);
+    const haushalt = await berechneHaushaltAuthoritativ(fall, { vz, kirchensteuerHebesatz: HEBESATZ });
+    const calcs = haushalt.bescheide.map((bx) => ({
+      person: bx.einheit, einheit: bx.einheit, felder: bx.felder,
+      quelle: bx.res.quelle, bindend: bx.res.bindend,
+      angerechnet: bx.res.angerechnet, erstattung: bx.res.erstattung,
+      abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
+      aufstellung: { einkommen: bx.res.vorschau.einkommen, steuer: bx.res.vorschau.steuer, anrechnung: bx.res.vorschau.anrechnung },
+    }));
+    // v1-Vertrags-Sicht (fall/v1 + mastercase/v1, src/schemas/v1) — additiv;
+    // ein Adapter-Fehler darf den klassischen Envelope nie kippen.
+    // calcs[0] = Haushalts-/erster Bescheid (rechen_ergebnis ist pro Jahr, nicht
+    // pro Person — bei Einzelbescheiden je Person trägt v1 nur den ersten).
+    let v1: { fall: FallV1; mastercase: MasterCaseV1; uebersprungen: V1Uebersprungen[] } | null = null;
+    try {
+      v1 = envelopeZuV1({
+        fallId: caseId, vz, mastercase,
+        household: out.household,
+        veranlagungsart: haushalt.veranlagungsart,
+        belege: (out.belege ?? []) as BelegRoh[],
+        calc: (calcs[0] ?? null) as { erstattung?: number; bindend?: { zve?: number; gesamtsteuer?: number } } | null,
+      });
+    } catch (e) { console.error('MASTERCASE/v1', (e as Error).message); }
+    await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase, calcs, profil, veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
+      ...(v1 ? { fallV1: v1.fall, mastercaseV1: v1.mastercase, v1Uebersprungen: v1.uebersprungen } : {}) });
+  } catch (e) {
+    console.error('MASTERCASE/build', (e as Error).message);
+    await writeEnvelope({ caseId, status: 'error', updatedAt: new Date().toISOString(), error: (e as Error).message });
+  }
+}
+
+// Text eines Belegs für die Zusatz-Parser: Text-PDF → pdftotext, Bild → OCR-Cache.
+function docText(p: string): string {
+  // OCR-Cache ZUERST: gescannte Belege (.pdf-Scans wie die §35a-Bescheinigung)
+  // haben oft nur einen dünnen, unbrauchbaren Text-Layer, aber den VOLLEN Inhalt
+  // im OCR-Cache. Text-PDFs (z.B. PKV-eDaten) sind nicht ge-OCRt → Cache leer →
+  // Fallback auf pdftotext.
+  try {
+    const f = cacheFile(p);
+    if (existsSync(f)) {
+      const rt = String((JSON.parse(readFileSync(f, 'utf8')) as { rawText?: string }).rawText ?? '');
+      if (rt.trim().length > 20) return rt;
+    }
+  } catch { /* miss */ }
+  try { return execFileSync('pdftotext', ['-layout', p, '-'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }); }
+  catch { return ''; }
+}
+
+async function runSteuerfall(paths: string[], vz: number) {
+  const t0 = process.hrtime.bigint();
+  const ocrUp = await pingLighton();
+  const r = await runLane1(paths, { vz, pool, parseDoc, parseImage: ocrUp ? parseImage : undefined });
+  const lane1Ms = Number(process.hrtime.bigint() - t0) / 1e6;
+
+  const ocrSet = new Set(r.ocrFields);
+  let fields: Array<Record<string, unknown>> = r.aggregated.map((f) => {
+    const cat = catByECode().get(f.eCode);
+    return {
+      eCode: f.eCode, label: f.pdfLabel, wert: f.wert, person: String(f.person),
+      anlage: f.anlage, method: ocrSet.has(`${f.eCode}|${f.person}`) ? 'ocr' : 'text',
+      zeile: cat?.zeile || null, kontextPath: cat?.kontextPath || null,
+      // Feld-Datentyp aus dem ELSTER-Katalog ('currency' | 'date' | 'string') →
+      // typgerechte Anzeige im Frontend (nur 'currency' bekommt €). Kein Hardcode.
+      format: cat?.datentyp || null,
+    };
+  });
+  const felder: SteuerFeld[] = r.aggregated.map((f) => ({ eCode: f.eCode, wert: f.wert, person: f.person, anlage: f.anlage, pdfLabel: f.pdfLabel }));
+  // A1+B2 — Vorauszahlungen aus einer Steuerkontoabfrage (falls vorhanden) als
+  // interne Anrechnungs-Felder injizieren → der Adapter rechnet sie auf die
+  // Festsetzung an. Rein strukturell geparst, kein Case-Hardcode; nur die
+  // Quartals-VZ des VZ (Vorjahres-Reste ausgeschlossen). Eine Abfrage je Fall.
+  // Belege, deren Daten erst über die dedizierten Parser (VZ/§35a/Spenden/Kapital)
+  // erfasst werden, dem QUELL-Beleg zuordnen → die Beleg-Karte zeigt Typ + Felder
+  // statt „Unbekannt · 0 Felder".
+  const attributionen: Array<{ src: string; typ: string; eCode: string; wert: string; label: string }> = [];
+  for (const p of paths) {
+    let vzp: ReturnType<typeof parseVorauszahlungen> = null;
+    try { vzp = parseVorauszahlungen(p, vz); } catch (e) { console.error('VZ-PARSE', basename(p), (e as Error).message); }
+    if (vzp) {
+      const de = (n: number) => n.toFixed(2).replace('.', ',');
+      felder.push(
+        { eCode: 'VZ_EST', wert: de(vzp.est), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Einkommensteuer' },
+        { eCode: 'VZ_SOLZ', wert: de(vzp.solz), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Solidaritätszuschlag' },
+        { eCode: 'VZ_KIST', wert: de(vzp.kist), person: 'A', anlage: 'AB', pdfLabel: 'Vorauszahlung Kirchensteuer' },
+      );
+      attributionen.push({ src: p, typ: 'Steuerkontoabfrage', eCode: 'VZ_EST', wert: de(vzp.est), label: `Vorauszahlung ESt ${de(vzp.est)} € (+ SolZ/KiSt)` });
+      break;
+    }
+  }
+  // A2/A3/A4 — KV/PV-Basis, §35a-Arbeitslohnanteil, Spenden aus Belegen, die der
+  // Haupt-Extraktor offen lässt → kanonische E-Codes (BMF-MCP-Module vorsorge/
+  // haushaltsnahe_35a/spenden_10b). Erster Treffer je Typ (kein Doppel über mehrere
+  // Belege), rein strukturell geparst — kein Case-Hardcode.
+  let saKvPv: ReturnType<typeof parseKvPvBasis> = null;
+  let sa35a: ReturnType<typeof parse35aBasis> = null;
+  let saSpenden: ReturnType<typeof parseSpenden> = null;
+  let versBeginn: number | null = null; // §19 Abs.2 — frühester Versorgungsbeginn (Nr. 30 LStB)
+  let darlehenZinsen = 0, darlehenSrc: string | null = null; // §20 Wohnstift-Darlehnszinsen
+  let sa35aSrc: string | null = null, spendenSrc: string | null = null;
+  let spendenVisionCand: string | null = null, spendenCandPerDatei = false; // Spenden-Vision-Fallback
+  for (const p of paths) {
+    let txt = ''; try { txt = docText(p); } catch { /* best-effort */ }
+    // Dünner/kein Text-Layer (gescannter Beleg) → OCR erzwingen (cached), damit
+    // §35a-/Spenden-Bescheinigungen ihren vollen Inhalt liefern.
+    // wasOcr: kam der Text aus dem OCR-Cache (lighton-Markdown)? Dann sind die
+    // positions-/regex-Parser ungültig → Gemma. docText liefert für Scans den
+    // GECACHTEN OCR-Text (>200 Z.), daher reicht die Längen-Schwelle allein nicht.
+    let wasOcr = false;
+    try { const cf = cacheFile(p); if (existsSync(cf)) wasOcr = (JSON.parse(readFileSync(cf, 'utf8')) as { method?: string }).method === 'ocr'; } catch { /* */ }
+    if (txt.trim().length < 200) { try { txt = await parseImage(p); wasOcr = true; } catch { /* OCR-Fehler → skip */ } }
+    if (!txt) continue;
+    // Gescannte Belege liefern lighton-MARKDOWN — die regex-/positions-Parser
+    // (parseSpenden über-summiert "Betrag"-Zeilen, parse35aBasis findet die
+    // "Summe"-Zeilen nicht) versagen darauf. Für Scans deshalb Gemma-Extraktion
+    // (domänen-bewusst: §35a = nur Dienstleistungs-/Pflegeanteil); digitale PDFs
+    // bleiben bei den deterministischen Parsern.
+    const scanW = wasOcr ? await extrahiereScanWerte(txt).catch(() => null) : null;
+    if (!saKvPv) saKvPv = parseKvPvBasis(txt);
+    if (!sa35a) {
+      if (scanW?.haushaltsnahe_dienstleistung) { sa35a = { haushaltsnah: scanW.haushaltsnahe_dienstleistung }; sa35aSrc = p; }
+      else if (!wasOcr) { sa35a = parse35aBasis(txt); if (sa35a) sa35aSrc = p; }
+    }
+    // §19 Abs.2: maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB) —
+    // über ALLE LStB das FRÜHESTE Jahr (höchster Freibetrag). Bestimmt die Kohorte.
+    const vb = parseVersorgungsbeginn(txt);
+    if (vb && (versBeginn === null || vb < versBeginn)) versBeginn = vb;
+    if (!saSpenden) {
+      if (scanW?.spende) { saSpenden = { betrag: scanW.spende }; spendenSrc = p; }
+      else if (!wasOcr) { saSpenden = parseSpenden(txt); if (saSpenden) spendenSrc = p; }
+    }
+    // Spenden-Beleg für den Vision-Fallback wählen. Dateiname = stärkstes Signal
+    // (handschriftliche Zahlscheine OCR'en zu Müll, ihr Text enthält oft kein
+    // „Spende"). Fallback für anders benannte Belege: ein lane1-UNBEKANNTER Beleg
+    // mit STARKEN Zuwendungs-Markern — bewusst NICHT die großen Bescheide/
+    // Erklärungen, die „Spende" nur erwähnen (die sind lane1-mapped).
+    if (/spend|zuwendung/i.test(basename(p))) {
+      if (!spendenCandPerDatei) { spendenVisionCand = p; spendenCandPerDatei = true; }
+    } else if (!spendenVisionCand
+      && ((r.belege ?? []).find((b) => String(b.source).split('#')[0] === p)?.status ?? '') !== 'mapped'
+      && /zuwendungsbest|gemeinn[üu]tzig|f[öo]rderverein|hospiz|zuwendung im sinne/i.test(txt)) {
+      spendenVisionCand = p;
+    }
+    // §20 Kapitalerträge — Wohnstift-/Privatdarlehnszinsen (ohne Steuerabzug) +
+    // Bank-Steuerbescheinigungen. Bank-Beträge sind meist schon über den
+    // Freistellungsauftrag erfasst → nur Darlehnszinsen injizieren; beide Belege
+    // werden aber attribuiert (Karte zeigt „Kapitalerträge").
+    if (scanW?.darlehenszinsen && darlehenZinsen === 0) {
+      darlehenZinsen = scanW.darlehenszinsen; darlehenSrc = p;
+      attributionen.push({ src: p, typ: 'Kapitalerträge', eCode: 'E1900701', wert: scanW.darlehenszinsen.toFixed(2).replace('.', ','), label: `Kapitalerträge ${scanW.darlehenszinsen.toFixed(2).replace('.', ',')} € (Darlehnszinsen)` });
+    }
+    const kap = wasOcr ? null : parseKapital(txt);
+    if (kap && kap.betrag > 0) {
+      if (kap.art === 'darlehenszinsen' && darlehenZinsen === 0) { darlehenZinsen = kap.betrag; darlehenSrc = p; }
+      attributionen.push({ src: p, typ: 'Kapitalerträge', eCode: 'E1900701', wert: kap.betrag.toFixed(2).replace('.', ','), label: `Kapitalerträge ${kap.betrag.toFixed(2).replace('.', ',')} €${kap.art === 'darlehenszinsen' ? ' (Darlehnszinsen)' : ''}` });
+    }
+  }
+  // Spenden-Vision GENAU EINMAL, gezielt auf den Spenden-Beleg (on-prem gemma4-mm),
+  // wenn der Text-Parser nichts fand (verstümmelter/handschriftlicher Scan).
+  if (!saSpenden && spendenVisionCand) {
+    try { const v = await parseSpendenVision(spendenVisionCand); if (v?.betrag) { saSpenden = { betrag: v.betrag }; spendenSrc = spendenVisionCand; } }
+    catch (e) { console.error('SPENDEN-VISION', basename(spendenVisionCand), (e as Error).message); }
+  }
+  const deSA = (n: number) => n.toFixed(2).replace('.', ',');
+  if (saKvPv?.kv) felder.push({ eCode: 'E0202504', wert: deSA(saKvPv.kv), person: 'A', anlage: 'VOR', pdfLabel: 'KV-Basisbeitrag' });
+  if (saKvPv?.pv) felder.push({ eCode: 'E0202604', wert: deSA(saKvPv.pv), person: 'A', anlage: 'VOR', pdfLabel: 'Pflege-Pflichtbeitrag' });
+  if (sa35a?.haushaltsnah) {
+    felder.push({ eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), person: 'A', anlage: 'HA', pdfLabel: 'haushaltsnahe Dienstleistungen §35a' });
+    if (sa35aSrc) attributionen.push({ src: sa35aSrc, typ: 'Haushaltsnahe Dienstleistungen', eCode: 'E0107301', wert: deSA(sa35a.haushaltsnah), label: `§35a-Basis ${deSA(sa35a.haushaltsnah)} €` });
+  }
+  if (saSpenden?.betrag) {
+    felder.push({ eCode: 'E0108701', wert: deSA(saSpenden.betrag), person: 'A', anlage: 'SA', pdfLabel: 'Spenden §10b' });
+    if (spendenSrc) attributionen.push({ src: spendenSrc, typ: 'Spenden / Zuwendungen', eCode: 'E0108701', wert: deSA(saSpenden.betrag), label: `Spenden §10b ${deSA(saSpenden.betrag)} €` });
+  }
+  // §19 Abs.2: Versorgungsbeginn (Nr. 30 LStB) → E0201307. Der BMF-MCP mappt
+  // versorgungsbezuege_1_beginn ← E0201307 und wählt damit die richtige
+  // Versorgungsfreibetrags-Kohorte (statt auf 2005 zu defaulten).
+  if (versBeginn) felder.push({ eCode: 'E0201307', wert: String(versBeginn), person: 'A', anlage: 'N', pdfLabel: 'Maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB)' });
+  // §20: Wohnstift-/Privatdarlehnszinsen (ohne inländischen Steuerabzug). I.d.R.
+  // unter dem Sparer-Pauschbetrag → 0 € Steuer, wird aber erfasst + ausgewiesen.
+  if (darlehenZinsen > 0) felder.push({ eCode: 'E1900701', wert: deSA(darlehenZinsen), person: 'A', anlage: 'KAP', pdfLabel: 'Kapitalerträge — Wohnstift-Darlehnszinsen (§20)' });
+  void darlehenSrc;
+
+  // KV-Quellen-Priorität (schemas.ts branchHint): die private KV-Basis (E2003104)
+  // steht sowohl auf der dedizierten Beitragsbescheinigung (VaSt_KRV) als auch auf
+  // der Beamten-LStB (Z.28) — sie überlappen. Authoritative ist die VaSt_KRV;
+  // sonst summiert der Aggregat-Schritt LStB-Z.28 + Bescheinigung doppelt.
+  const krvBeleg = (r.belege ?? []).find((b) => (b as { belegTyp?: string }).belegTyp === 'VaSt_KRV') as { felderListe?: Array<{ eCode?: string; wert?: string }> } | undefined;
+  const krvKvWert = krvBeleg?.felderListe?.find((f) => f.eCode === 'E2003104')?.wert;
+  if (krvKvWert != null) {
+    for (const f of felder) if (f.eCode === 'E2003104') f.wert = String(krvKvWert);
+  }
+
+  // Attribution: Treffer der dedizierten Parser dem QUELL-Beleg zuordnen → die
+  // Beleg-Karte zeigt Typ + Felder statt „Unbekannt · 0 Felder". Echte Lane-1-
+  // Treffer (status=mapped mit Feldern) werden NICHT überschrieben.
+  for (const a of attributionen) {
+    const b = (r.belege ?? []).find((x) => String(x.source).split('#')[0] === a.src);
+    if (!b || (b.status === 'mapped' && (b.felder ?? 0) > 0)) continue;
+    const bb = b as unknown as { belegTyp: string; status: string; felder: number; felderListe: Array<Record<string, string>> };
+    bb.belegTyp = a.typ;
+    bb.status = 'mapped';
+    bb.felder = (bb.felder ?? 0) + 1;
+    bb.felderListe = [...(bb.felderListe ?? []), { eCode: a.eCode, label: a.label, wert: a.wert, person: 'A', anlage: '' }];
+  }
+
+  // Steuerzahler-Profil — DETERMINISTISCH aus den vollständigen Feldern (kein
+  // LLM, kein Hardcode). Beschreibt den Fall (Versorgungsbezüge? Rente? aktiver
+  // Lohn? privat/gesetzl. versichert? Alter? Konfession?) und macht im Fall-Tab
+  // sichtbar, WELCHE Regeln greifen. Wird VOR der Berechnung ermittelt.
+  const profil = ableiteProfil(felder, { vz, hebesatzProzent: Math.round(HEBESATZ * 100) });
+
+  // Provenienz-Pass: pro OCR'tem Dokument PNG+bboxes (cache), dann je Feld den
+  // Record mit passendem Wert finden → prov (Box im Bild). Best-effort: ein
+  // Fehler hier darf den Bescheid nie kippen.
+  let docs: Array<{ hash: string; name: string; pages: Array<{ w: number; h: number }> }> = [];
+  try {
+    // OCR-Belege (Bild/Scan) UND Text-PDFs: provenance.py liefert für PDFs mit
+    // Textebene die Wort-Boxen direkt (OCR-frei), sonst OCR — gleiche Records.
+    const provSources = new Set<string>();
+    for (const b of r.belege) {
+      const src = String(b.source).split('#')[0];
+      if (b.method === 'ocr') provSources.add(src);
+      else if (b.method === 'text' && src.toLowerCase().endsWith('.pdf')) provSources.add(src);
+    }
+    // Pro Dokument isoliert: ein korruptes PDF/Bild (provenance.py-Fehler) darf
+    // nicht die Boxen ALLER Belege kippen → per-Doc try/catch, dann ausfiltern.
+    const provDocs = [...provSources].filter((p) => existsSync(p)).map((p) => {
+      try { const { hash, pages } = provenanceFor(p); return { path: p, hash, pages }; }
+      catch (e) { console.error('PROV-DOC', basename(p), (e as Error).message); return null; }
+    }).filter((d): d is { path: string; hash: string; pages: ProvPage[] } => d !== null);
+    const byHash = new Map<string, { hash: string; name: string; pages: Array<{ w: number; h: number }> }>();
+    for (const d of provDocs) byHash.set(d.hash, { hash: d.hash, name: basename(d.path), pages: d.pages.map((pg) => ({ w: pg.w, h: pg.h })) });
+    docs = [...byHash.values()];
+    // Per-Beleg-Provenienz ZUERST: jedes Feld gegen die Records SEINES EIGENEN
+    // Belegs matchen (eindeutig, kein Greedy-Cross-Doc). Treibt die Beleg-Detail-
+    // ansicht UND — via provByField — die Provenienz der aggregierten Felder.
+    const provBySource = new Map(provDocs.map((d) => [d.path, d]));
+    const provByField = new Map<string, FieldProv>();
+    for (const b of r.belege) {
+      if (!Array.isArray(b.felderListe)) continue;
+      const pd = provBySource.get(String(b.source).split('#')[0]);
+      if (!pd) continue;  // kein Prov-Dokument (z.B. image-only ohne Treffer) → keine Box
+      // Records pro Beleg verbrauchen: zwei Felder mit gleichem Wert (z.B. zwei
+      // „0,00") bekommen je einen EIGENEN Record-Treffer; nur wenn keiner mehr
+      // frei ist, teilen sie sich (Fallback) — statt beide auf denselben zu legen.
+      const used = new Set<string>();
+      for (const f of b.felderListe) {
+        const m = matchProv(String(f.wert ?? ''), [pd], used) ?? matchProv(String(f.wert ?? ''), [pd]);
+        if (m) { f.prov = { hash: m.hash, page: m.page, box: m.box };
+                 used.add(boxKey(m.hash, m.page, m.box));
+                 provByField.set(`${f.eCode}|${f.person}|${f.wert}`, m); }
+      }
+    }
+    // Aggregierte Felder (Dashboard-Viewer „im Beleg zeigen"): Box aus der
+    // eindeutigen Per-Beleg-Zuordnung übernehmen — kein Cross-Doc-Greifen. Nur
+    // wenn kein Beleg-Treffer (z.B. aggregiert abweichender Wert) global matchen.
+    fields = fields.map((f) => {
+      const byBeleg = provByField.get(`${f.eCode}|${f.person}|${String(f.wert)}`);
+      if (byBeleg) return { ...f, prov: byBeleg };
+      const m = matchProv(String(f.wert ?? ''), provDocs);
+      return m ? { ...f, prov: m } : f;
+    });
+  } catch (e) {
+    console.error('PROV', (e as Error).message);
+  }
+
+  // Fallnormalizer: Veranlagungsart erkennen + Felder reattribuieren, DANN
+  // verbindlich rechnen (Zusammenveranlagung = ein Splitting-Bescheid).
+  const fall = normalisiereSteuerfall(felder, r.household);
+  const haushalt = await berechneHaushaltAuthoritativ(fall, { vz, kirchensteuerHebesatz: HEBESATZ });
+  const calcs = haushalt.bescheide.map((bx) => ({
+    person: bx.einheit, einheit: bx.einheit, felder: bx.felder,
+    quelle: bx.res.quelle, bindend: bx.res.bindend,
+    angerechnet: bx.res.angerechnet, erstattung: bx.res.erstattung,
+    abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
+    // Zeilengenaue, profil-adaptive Aufstellung (In-Process): jede Position der
+    // Einkommensermittlung mit Rechtsgrundlage + die Steuerfestsetzung inkl.
+    // §35a — treibt die vollständige Bescheid-Ansicht im Fall-Tab.
+    aufstellung: {
+      einkommen: bx.res.vorschau.einkommen,
+      steuer: bx.res.vorschau.steuer,
+      anrechnung: bx.res.vorschau.anrechnung,
+    },
+  }));
+  // A0 — Coverage-Lücken sichtbar machen: jeder Beleg, der eingelesen, aber mit
+  // 0 Feldern gemappt wurde, wird als Warnung geführt (kein stiller Verlust).
+  // Rein strukturell über die Felderzahl — kein Belegtyp/keine Case-Daten hartcodiert.
+  const coverageGaps = (r.belege ?? [])
+    .filter((b) => Number(b.felder ?? 0) === 0)
+    .map((b) => `Coverage-Lücke: „${basename(String(b.source).split('#')[0])}" (Typ ${b.belegTyp ?? 'Unbekannt'}, ${b.method ?? '?'}) → 0 Felder extrahiert; Werte fehlen in der Berechnung.`);
+  return {
+    ok: true, vz, lane1Ms: Math.round(lane1Ms),
+    belege: r.belege, fields, felder, ocrCount: r.belege.filter((b) => b.method === 'ocr').length,
+    household: r.household, docs,
+    // Deterministisches Steuerzahler-Profil (beschreibt den Fall + steuert die Regeln).
+    profil,
+    veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
+    warnings: [...(r.warnings ?? []), ...haushalt.warnungen, ...coverageGaps], calcs,
+    // Fremdjährige Belege (≠ VZ): NICHT in der Berechnung — Quelle für Prefill +
+    // gezielte Rückfragen (vom Auditor zu Findings verarbeitet). null wenn keine.
+    vorjahr: r.vorjahr ?? null,
+  };
+}
+
+// ── Kurator-Chat: LLM über den GANZEN Fall (Optimierung + Jahresvergleich) ──
+// Provider-agnostisch. Default: vLLM gemma4-mm (OpenAI-kompatibel, on-prem,
+// 65K Kontext) — läuft sofort, kein Mock. Sobald ein gültiger Opus-Key
+// vorliegt: KURATOR_MODEL=claude-… + KURATOR_API_KEY setzen → Anthropic-Pfad.
+// Der zugrundeliegende Modellname erscheint NIE im UI ("der Kurator").
+// Gemma-Pfad (on-prem, Default): OpenAI-kompatibel via vLLM.
+const KURATOR_URL = process.env.KURATOR_URL ?? 'http://127.0.0.1:11435/v1/chat/completions';
+const KURATOR_MODEL = process.env.KURATOR_MODEL ?? 'gemma4-mm';
+// Opus-Pfad (Anthropic): nur aktiv, wenn der Client „opus" wählt UND ein
+// gültiger Key vorliegt. Modell-ID env-überschreibbar (kein Modellname im UI).
+const KURATOR_OPUS_MODEL = process.env.KURATOR_OPUS_MODEL ?? 'claude-opus-4-8';
+const KURATOR_KEY = process.env.KURATOR_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? '';
+const KURATOR_ANTHROPIC_URL = process.env.KURATOR_ANTHROPIC_URL ?? 'https://api.anthropic.com/v1/messages';
+const KURATOR_MAX_TOKENS = Number(process.env.KURATOR_MAX_TOKENS ?? 1500);
+
+const KURATOR_SYSTEM = [
+  'Du bist „der Kurator" — ein erfahrener deutscher Steuerberater, der einen',
+  'konkreten, bereits berechneten Steuerfall ganzheitlich prüft. Du bekommst',
+  'den vollständigen Fall als JSON (Felder mit E-Codes/Werten, Bescheide/',
+  'Erstattung, Haushalt, Veranlagungsart, Warnungen) und — falls vorhanden —',
+  'die Belege des VORJAHRES als Vergleichsbasis.',
+  '',
+  'Deine Aufgaben:',
+  '• Beantworte Fragen zum Fall präzise und in klarem Deutsch, mit Bezug auf',
+  '  die konkreten Werte/Felder (nenne E-Codes/Beträge, wenn es hilft).',
+  '• Schlage konkrete steuerliche OPTIMIERUNGEN vor (nicht ausgeschöpfte',
+  '  Pauschalen, Werbungskosten, Sonderausgaben, …) — immer begründet.',
+  '• Vergleiche VORJAHR ↔ Fall-Jahr: benenne auffällige Abweichungen und',
+  '  Posten, die letztes Jahr da waren und diesmal fehlen; leite daraus',
+  '  gezielte Rückfragen ab.',
+  '• Fehlen Daten, fordere genau die fehlende Information an.',
+  '',
+  'Wichtig: Du gibst Hinweise, keine verbindliche Rechtsberatung — sag das bei',
+  'Grenzfällen. Erfinde keine Werte; was nicht im Fall steht, benennst du als',
+  'unbekannt. Antworte kompakt und strukturiert (kurze Absätze/Listen).',
+].join('\n');
+
+// Kompakter Fall-Kontext fürs Modell: nur entscheidungsrelevante Felder,
+// keine schweren Blobs (PNG-Seiten, Box-Listen). Vorjahr separat ausgewiesen.
+function kuratorContext(data: Record<string, unknown> | null | undefined): string {
+  if (!data || typeof data !== 'object') return '{}';
+  const d = data as Record<string, any>;
+  const slim = {
+    veranlagungsjahr: d.vz ?? null,
+    veranlagungsart: d.veranlagungsart ?? null,
+    begruendung: d.begruendung ?? null,
+    haushalt: d.household ?? null,
+    bescheide: Array.isArray(d.calcs) ? d.calcs.map((c: any) => ({
+      einheit: c.einheit, erstattung: c.erstattung, angerechnet: c.angerechnet,
+      bindend: c.bindend, abgleich: c.abgleich ?? null,
+    })) : [],
+    felder: Array.isArray(d.fields) ? d.fields.map((f: any) => ({
+      eCode: f.eCode, label: f.label, wert: f.wert, person: f.person, anlage: f.anlage,
+    })) : [],
+    warnungen: d.warnings ?? [],
+    vorjahr: d.vorjahr ?? null,
+  };
+  try { return JSON.stringify(slim); } catch { return '{}'; }
+}
+
+// SSE-Streaming des Kurators an den Browser. Normalisiert beide Provider auf
+// EIN Wire-Format: `data: {"delta":"…"}` je Token, Abschluss `data: {"done":true}`,
+// Fehler `data: {"error":"…"}`. Der Client bleibt dadurch provider-agnostisch.
+async function streamKurator(
+  res: ServerResponse,
+  messages: Array<{ role: string; content: string }>,
+  caseData: Record<string, unknown> | null,
+  choice: string,
+): Promise<void> {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  let closed = false;
+  res.on('close', () => { closed = true; });
+  const ctx = kuratorContext(caseData);
+  const useOpus = choice === 'opus';                       // Modellwahl des Clients
+  const model = useOpus ? KURATOR_OPUS_MODEL : KURATOR_MODEL;
+  const turns = messages
+    .filter((m) => m && typeof m.content === 'string' && m.content.trim())
+    .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+  try {
+    let r: Response;
+    if (useOpus) {
+      if (!KURATOR_KEY) { send({ error: 'Opus 4.8: kein gültiger API-Key gesetzt (KURATOR_API_KEY/ANTHROPIC_API_KEY). Auf „Gemma" umschalten.' }); send({ done: true }); return void res.end(); }
+      r = await fetch(KURATOR_ANTHROPIC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': KURATOR_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: KURATOR_MAX_TOKENS, stream: true,
+          system: `${KURATOR_SYSTEM}\n\nFALL (JSON):\n${ctx}`, messages: turns }),
+      });
+    } else {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (KURATOR_KEY) headers.Authorization = `Bearer ${KURATOR_KEY}`;
+      r = await fetch(KURATOR_URL, {
+        method: 'POST', headers,
+        body: JSON.stringify({ model, max_tokens: KURATOR_MAX_TOKENS, temperature: 0.3, stream: true,
+          messages: [{ role: 'system', content: `${KURATOR_SYSTEM}\n\nFALL (JSON):\n${ctx}` }, ...turns] }),
+      });
+    }
+    if (!r.ok || !r.body) {
+      const detail = r.ok ? 'kein Stream' : `HTTP ${r.status}`;
+      send({ error: `Kurator-LLM nicht verfügbar (${detail}).` }); send({ done: true }); return void res.end();
+    }
+    // Web-Stream-Reader (versions-robust, kein for-await auf res.body nötig).
+    const reader = (r.body as ReadableStream<Uint8Array>).getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      if (closed) { try { await reader.cancel(); } catch { /* socket weg */ } break; }
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith('data:')) continue;            // SSE: nur data-Zeilen
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]' || !payload) continue;     // OpenAI-Sentinel
+        try {
+          const ev = JSON.parse(payload);
+          const delta = useOpus
+            ? (ev.type === 'content_block_delta' ? ev.delta?.text : '')   // Anthropic
+            : ev.choices?.[0]?.delta?.content;                            // OpenAI/vLLM
+          if (delta) send({ delta });
+        } catch { /* Ping/Keep-alive-Zeile → ignorieren */ }
+      }
+    }
+    send({ done: true });
+  } catch (e) {
+    send({ error: 'Kurator nicht erreichbar: ' + (e as Error).message }); send({ done: true });
+  }
+  res.end();
+}
+
+createServer(async (req, res) => {
+  try {
+    const url = (req.url ?? '/').split('?')[0];
+    if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
+      // no-cache: Browser muss die HTML-Shell revalidieren → Deploys schlagen
+      // sofort durch (sonst hält der Browser eine alte index.html und neue
+      // Features wie der Mastercase-Poller laden nie).
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache, must-revalidate' });
+      res.end(readFileSync(join(HERE, 'index.html'), 'utf8'));
+      return;
+    }
+    if (req.method === 'POST' && url === '/api/upload') {
+      const buf = await body(req);
+      if (buf.length === 0 || buf.length > 40 * 1024 * 1024) return json(res, 413, { error: 'leer oder zu groß' });
+      const hdr = String(req.headers['x-filename'] ?? 'upload.pdf');
+      let raw = hdr;
+      try { raw = decodeURIComponent(hdr); } catch { /* header not percent-encoded → use as-is */ }
+      const safe = raw.replace(/[^\w.\-]+/g, '_').slice(-80) || 'upload.pdf';
+      const dir = mkdtempSync(join(tmpdir(), 'steuerweb-'));
+      const path = join(dir, safe);
+      writeFileSync(path, buf);
+      return json(res, 200, { path, name: raw, bytes: buf.length });
+    }
+    if (req.method === 'GET' && url === '/api/page') {
+      // Rasterisierte Dokumentseite für den Viewer (gelbe Overlay-Boxen liegen
+      // im selben Pixelraum). Nur hex-Hash + int-Seite → kein Path-Traversal.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const h = (q.get('h') ?? '').replace(/[^a-f0-9]/g, '');
+      const p = String(parseInt(q.get('p') ?? '0', 10) || 0);
+      const png = join(PROV_CACHE_DIR, h, `p${p}.png`);
+      if (!h || !existsSync(png)) { res.writeHead(404); res.end('no page'); return; }
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600' });
+      res.end(readFileSync(png));
+      return;
+    }
+    if (req.method === 'GET' && url === '/api/trace') {
+      // Prozess-Trace eines Runs für den Flow-Tab: reicht tornados
+      // GET /api/v1/trace/:dochash durch (Phasen 0–4 + Lane-2 vLLM-
+      // Prompts/Antworten + Timing). ?h=<dochash> (hex). Token-frei,
+      // gleicher Scope wie /api/page.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const h = (q.get('h') ?? '').replace(/[^a-f0-9]/g, '').slice(0, 64);
+      if (!h) return json(res, 400, { error: 'trace: ?h=<dochash> fehlt' });
+      // Bild-Belege (JPG/PNG/…) werden vor /extract zu einem asimg.pdf gerastert;
+      // tornado schlüsselt den Trace nach document_sha256 = sha DIESER Bytes, NICHT
+      // nach der Original-Datei-sha, die das Frontend als docs[].hash führt. Über den
+      // Extract-Cache (derselbe Aufruf, der auch den Trace erzeugt) Original-Hash →
+      // document_sha256 auflösen. PDFs: sha identisch → no-op; kein Cache → Original.
+      let traceHash = h;
+      try {
+        const ecf = join(MASTERCASE_DIR, h + '.extract.json');
+        if (existsSync(ecf)) {
+          const eo = JSON.parse(readFileSync(ecf, 'utf8')) as { document_sha256?: string };
+          const ds = (eo.document_sha256 ?? '').replace(/[^a-f0-9]/gi, '').toLowerCase();
+          if (ds.length === 64) traceHash = ds;
+        }
+      } catch { /* Cache fehlt/korrupt → Original-Hash versuchen */ }
+      try {
+        const r = await fetch(`${baseUrl}/api/v1/trace/${traceHash}`);
+        const text = await r.text();
+        res.writeHead(r.status, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-cache',
+        });
+        res.end(text);
+      } catch (e) {
+        return json(res, 502, { error: 'tornado trace unreachable: ' + (e as Error).message });
+      }
+      return;
+    }
+    if (req.method === 'POST' && url === '/api/steuerfall') {
+      const { paths, vz, caseId, fresh } = JSON.parse((await body(req)).toString('utf8'));
+      if (!Array.isArray(paths) || paths.length === 0) return json(res, 400, { error: 'keine Dateien' });
+      // Initiale Rechnung (fresh=true vom Client beim Fall-Anlegen): JEDEN Beleg-
+      // Cache verwerfen, BEVOR gerechnet wird → garantiert frische OCR + tornado-
+      // Extraktion (+ frische Flow-Dumps). „Neu berechnen"/Belege-Hinzufügen lassen
+      // fresh weg und nutzen den dann frisch befüllten Cache (schnell, konsistent).
+      if (fresh) { let n = 0; for (const p of paths) { if (typeof p === 'string' && existsSync(p)) { evictCaches(p); n++; } } console.log(`[fresh] ${n} Beleg-Caches verworfen für Fall ${caseId ?? '(neu)'}`); }
+      const cid = String(caseId ?? ('c' + Date.now()));
+      const out = await runSteuerfall(paths, Number(vz) || 2023);
+      // Hintergrund-Harmonizer fire-and-forget: KEIN await → die Pre-Calc-Antwort
+      // geht sofort raus. Promise selbst mit .catch absichern, weil ein unhandled
+      // rejection nach gesendeter Antwort den Prozess kippen könnte (der Handler-
+      // try/catch greift dann nicht mehr).
+      void kickMastercase(cid, out, paths).catch((e) => console.error('MASTERCASE', (e as Error).message));
+      return json(res, 200, { ...out, caseId: cid, mastercaseStatus: 'pending' });
+    }
+    if (req.method === 'GET' && url === '/api/mastercase') {
+      // Polling-Endpoint (read-only): harmonisierter Mastercase je caseId.
+      // caseId härten wie /api/page → kein Path-Traversal.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const id = (q.get('id') ?? '').replace(/[^\w.-]/g, '_');
+      const f = id ? mcFile(id) : '';
+      if (!id || !existsSync(f)) return json(res, 200, { status: 'pending' });
+      try { return json(res, 200, JSON.parse(readFileSync(f, 'utf8'))); }
+      catch { return json(res, 200, { status: 'pending' }); }
+    }
+    if (req.method === 'GET' && url === '/api/v1/fall') {
+      // v1-Vertrags-Sicht (fall/v1 + mastercase/v1) desselben Envelopes —
+      // Polling wie /api/mastercase, gleiche caseId-Härtung.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const id = (q.get('id') ?? '').replace(/[^\w.-]/g, '_');
+      const f = id ? mcFile(id) : '';
+      if (!id || !existsSync(f)) return json(res, 200, { status: 'pending' });
+      try {
+        const env = JSON.parse(readFileSync(f, 'utf8')) as MastercaseEnvelope;
+        if (env.status !== 'ready' || !env.fallV1) return json(res, 200, { status: env.status || 'pending' });
+        return json(res, 200, { status: 'ready', fall: env.fallV1, mastercase: env.mastercaseV1, uebersprungen: env.v1Uebersprungen ?? [] });
+      } catch { return json(res, 200, { status: 'pending' }); }
+    }
+    // Auditor: gerechneter Fall → verifizierte Befunde (deterministisch) +
+    // user-gerichtete Fragen (lokales Gemma, on-prem). „der Auditor" — das
+    // zugrundeliegende Modell wird nie nach außen genannt.
+    if (req.method === 'POST' && url === '/api/audit') {
+      const { data } = JSON.parse((await body(req)).toString('utf8'));
+      if (!data || typeof data !== 'object') return json(res, 400, { error: 'kein Fall' });
+      const rep = auditCase(data);
+      const findings = await phraseFindings(rep.findings);
+      return json(res, 200, { ok: true, findings, score: rep.score });
+    }
+    if (req.method === 'POST' && url === '/api/audit/answer') {
+      const { finding, antwort } = JSON.parse((await body(req)).toString('utf8'));
+      if (!finding || typeof antwort !== 'string') return json(res, 400, { error: 'unvollständig' });
+      const verdict = await interpretAnswer(finding, antwort);
+      return json(res, 200, { ok: true, verdict });
+    }
+    // Gemeinsamer Abschluss: Audit-Protokoll bauen + blake2b-256 versiegeln.
+    if (req.method === 'POST' && url === '/api/audit/seal') {
+      const { caseId, label, vz, data, audit } = JSON.parse((await body(req)).toString('utf8'));
+      if (!data || !audit) return json(res, 400, { error: 'unvollständig' });
+      const protocol = buildAuditProtocol({ caseId: String(caseId ?? ''), label: String(label ?? ''), vz: Number(vz) || 0, data, audit });
+      const seal = sealProtocol(protocol, new Date().toISOString());
+      return json(res, 200, { ok: true, protocol, seal });
+    }
+    // Kurator-Chat (SSE): ganzer Fall + Verlauf → gestreamte Antwort. Modell
+    // on-prem (vLLM), per Env auf Opus umstellbar. Siehe streamKurator.
+    if (req.method === 'POST' && url === '/api/chat') {
+      let payload: { messages?: Array<{ role: string; content: string }>; case?: Record<string, unknown>; model?: string };
+      try { payload = JSON.parse((await body(req)).toString('utf8')); }
+      catch { return json(res, 400, { error: 'kein JSON' }); }
+      const messages = Array.isArray(payload?.messages)
+        ? payload.messages.filter((m) => m && typeof m.content === 'string').slice(-20)
+        : [];
+      if (!messages.length) return json(res, 400, { error: 'keine Nachricht' });
+      const choice = payload?.model === 'opus' ? 'opus' : 'gemma';
+      await streamKurator(res, messages, payload?.case ?? null, choice);
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found');
+  } catch (e) {
+    console.error('ERR', (e as Error).stack);
+    json(res, 500, { ok: false, error: (e as Error).message });
+  }
+}).listen(PORT, '0.0.0.0', () => console.log(`Steuerfall-Web on http://0.0.0.0:${PORT} (orchestrator ${baseUrl})`));

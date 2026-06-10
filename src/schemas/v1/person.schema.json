@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/person.schema.json",
+  "title": "Person",
+  "version": "1.0.0",
+  "description": "Eine steuerpflichtige Person (Steuerpflichtiger oder Ehepartner). Stammdaten zeitlich konstant.",
+  "type": "object",
+  "required": ["rolle", "person_key"],
+  "additionalProperties": false,
+  "properties": {
+    "rolle": {
+      "type": "string",
+      "enum": ["A", "B"],
+      "description": "A = Steuerpflichtiger (Hauptperson), B = Ehepartner. eCodes mit __B-Suffix beziehen sich auf Person B."
+    },
+    "person_key": {
+      "type": "string",
+      "description": "Stabile Personen-Referenz innerhalb des Falls. Konvention: \"p_a\", \"p_b\". Wird als Foreign-Key in Belegen/Positionen genutzt."
+    },
+    "idnr": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{11}$",
+      "description": "Steuerliche Identifikationsnummer (11 Ziffern)."
+    },
+    "name": {
+      "type": ["string", "null"],
+      "description": "Vollständiger Name (Anzeige). Strukturierte Felder optional via vorname/nachname."
+    },
+    "vorname": { "type": ["string", "null"] },
+    "nachname": { "type": ["string", "null"] },
+    "geburtsdatum": { "type": ["string", "null"], "format": "date" },
+    "beruf": { "type": ["string", "null"] },
+    "anschrift_abweichend": {
+      "type": ["object", "null"],
+      "description": "Nur wenn die Person eine andere Adresse als der Haushalt hat. Sonst null = Haushalts-Adresse gilt."
+    }
+  }
+}

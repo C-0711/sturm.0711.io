@@ -143,33 +143,51 @@ export const gemmaVisionOcrStage = defineStage<
         dpi,
       });
 
-      const pageOutputs: Array<{ index: number; markdown: string; chars: number }> = [];
+      const pageOutputs: Array<{ index: number; markdown: string; chars: number; emptyReason?: string }> = [];
+      const emptyPages: Array<{ index: number; reason: string }> = [];
       for (let i = 0; i < paths.length; i++) {
-        const { parsed } = await callVllmVision<{ markdown: string }>({
-          vllmUrl,
-          model,
-          imagePaths: [paths[i]],
-          textInstructions: PROMPT,
-          jsonSchema: SCHEMA,
-          maxTokens,
-          temperature: 0,
-          timeoutMs,
-          signal: ctx.signal,
-        });
-        const md = parsed?.markdown ?? '';
-        pageOutputs.push({ index: i, markdown: md, chars: md.length });
-        ctx.emit('gemma_vision_ocr_page', { index: i, chars: md.length });
+        try {
+          const { parsed } = await callVllmVision<{ markdown: string }>({
+            vllmUrl,
+            model,
+            imagePaths: [paths[i]],
+            textInstructions: PROMPT,
+            jsonSchema: SCHEMA,
+            maxTokens,
+            temperature: 0,
+            timeoutMs,
+            signal: ctx.signal,
+          });
+          const md = parsed?.markdown ?? '';
+          pageOutputs.push({ index: i, markdown: md, chars: md.length });
+          ctx.emit('gemma_vision_ocr_page', { index: i, chars: md.length });
+        } catch (err) {
+          if (err instanceof VllmVisionError && err.stage === 'parse') {
+            const reason = `vllm-empty: ${err.message}`;
+            pageOutputs.push({ index: i, markdown: '', chars: 0, emptyReason: reason });
+            emptyPages.push({ index: i, reason });
+            ctx.emit('gemma_vision_ocr_page_empty', { index: i, reason });
+            continue;
+          }
+          throw err;
+        }
       }
 
       const text = pageOutputs.map((p) => p.markdown).join('\n\n');
       const ms = Date.now() - t0;
-      ctx.emit('gemma_vision_ocr_done', { pages: pageOutputs.length, chars: text.length, ms });
+      ctx.emit('gemma_vision_ocr_done', {
+        pages: pageOutputs.length,
+        chars: text.length,
+        ms,
+        emptyPages: emptyPages.length,
+      });
       return {
         model,
         pages: pageOutputs,
         text,
         chars: text.length,
         ms,
+        emptyPages,
       };
     } finally {
       await cleanup();

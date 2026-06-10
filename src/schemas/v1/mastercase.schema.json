@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/mastercase.schema.json",
+  "title": "MasterCase",
+  "version": "1.0.0",
+  "description": "Output-Snapshot eines Daten-Producers (z.B. beleg-api). Schlanker als der full Fall — fokussiert auf die für die Engine notwendigen Felder + Vergleich + fehlende Belege. Kann jederzeit aus einem Fall abgeleitet werden.",
+  "type": "object",
+  "required": ["schema", "fall", "jahre"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "mastercase/v1"
+    },
+    "fall": {
+      "type": "string",
+      "description": "Fall-ID (Foreign Key auf Fall.fall_id)."
+    },
+    "erzeugt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "jahre": {
+      "type": "object",
+      "patternProperties": {
+        "^(19|20|21)\\d{2}$": { "$ref": "jahresblock.schema.json" }
+      },
+      "additionalProperties": false
+    },
+    "vergleich": {
+      "type": "array",
+      "items": { "$ref": "vergleichzeile.schema.json" }
+    },
+    "fehlende_belege": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["beleg", "fehlt_in"],
+        "properties": {
+          "beleg": { "type": "string" },
+          "fehlt_in": { "type": "string" },
+          "vorhanden_in": { "type": "string" }
+        }
+      }
+    },
+    "_datei": {
+      "type": "string",
+      "description": "Pfad zur persistierten Datei (falls auf Disk geschrieben)."
+    },
+    "_quelle": {
+      "type": "string",
+      "description": "Welcher Producer hat den MasterCase erzeugt? z.B. \"beleg-api@0.1.0\"."
+    }
+  }
+}

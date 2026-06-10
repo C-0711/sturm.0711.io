@@ -97,16 +97,160 @@ function resolveInputRef(ref, stageOutputs) {
 function valuePreview(value) {
   if (value == null) return '—';
   if (typeof value === 'string') {
-    const trimmed = value.length > 240 ? value.slice(0, 240) + '…' : value;
-    return trimmed;
+    const len = value.length;
+    const sample = value.replace(/\s+/g, ' ').trim();
+    const head = sample.length > 80 ? sample.slice(0, 80) + '…' : sample;
+    return len > 80 ? `${head}  ·  ${len.toLocaleString('de-DE')} chars` : head;
   }
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return `[${value.length} Elemente]`;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[ ]';
+    const first = value[0];
+    const tag = typeof first === 'string'
+      ? `"${(first.length > 24 ? first.slice(0, 24) + '…' : first)}"`
+      : typeof first === 'object' && first != null
+        ? `{${Object.keys(first).slice(0, 3).join(', ')}…}`
+        : String(first);
+    return `[${value.length}] ${tag}`;
+  }
   if (typeof value === 'object') {
     const keys = Object.keys(value).filter(k => !k.startsWith('_'));
-    return `{${keys.length} Felder}`;
+    const head = keys.slice(0, 4).join(', ');
+    return keys.length > 4 ? `{${keys.length}: ${head}…}` : `{${head}}`;
   }
   return String(value);
+}
+
+/* Detailed Volltext für die <details>-Disclosure unter dem Preview. */
+function valueFull(value) {
+  if (value == null) return '—';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/* Shape-Erkennung für Tag-Rendering im Output-Panel. */
+const ECODE_RE = /^E\d{6,7}(__[AB])?$/;
+function looksLikeECodeMap(v) {
+  if (v == null || typeof v !== 'object' || Array.isArray(v)) return false;
+  const keys = Object.keys(v);
+  if (keys.length === 0) return false;
+  return keys.every(k => ECODE_RE.test(k));
+}
+function looksLikeStringArray(v) {
+  return Array.isArray(v) && v.length > 0 && v.every(x => typeof x === 'string');
+}
+function looksLikeBlockArray(v) {
+  return Array.isArray(v) && v.length > 0 && v.every(x =>
+    x && typeof x === 'object' && typeof x.dokumenten_typ === 'string',
+  );
+}
+function looksLikeAcceptedArray(v) {
+  return Array.isArray(v) && v.length > 0 && v.every(x =>
+    x && typeof x === 'object' && typeof x.ecode === 'string',
+  );
+}
+
+/* Tag-Renderer: jeden Eintrag als compact chip. Klick auf chip togglet
+ * eine optional ausführliche Sicht (z.B. provenance/details des eCodes). */
+function ECodeTags({ map, source }) {
+  const entries = Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    <div className="sturm-tag-grid" data-source={source ?? ''}>
+      {entries.map(([ecode, val]) => (
+        <span
+          key={ecode}
+          className="sturm-tag sturm-tag-ecode"
+          title={`${ecode} = ${typeof val === 'string' ? val : JSON.stringify(val)}`}
+        >
+          <span className="sturm-tag-key">{ecode}</span>
+          <span className="sturm-tag-sep">=</span>
+          <span className="sturm-tag-val">{typeof val === 'object' ? JSON.stringify(val) : String(val)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function StringTags({ items, kind }) {
+  return (
+    <div className="sturm-tag-grid">
+      {items.map((s, i) => (
+        <span key={`${s}-${i}`} className={`sturm-tag sturm-tag-${kind ?? 'plain'}`}>{s}</span>
+      ))}
+    </div>
+  );
+}
+
+function BlockTags({ blocks }) {
+  return (
+    <div className="sturm-tag-grid">
+      {blocks.map((b, i) => {
+        const lines = Array.isArray(b.ocr_zeilen) ? b.ocr_zeilen.length : 0;
+        const person = b.gehoert_zu_person || '?';
+        return (
+          <span key={i} className="sturm-tag sturm-tag-block" title={`Block ${i + 1}: ${b.dokumenten_typ} (Person ${person}, ${lines} Zeilen)`}>
+            <span className="sturm-tag-key">{b.dokumenten_typ}</span>
+            <span className="sturm-tag-sep">·</span>
+            <span className="sturm-tag-val">P{person}</span>
+            <span className="sturm-tag-sep">·</span>
+            <span className="sturm-tag-val">{lines}z</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function AcceptedTags({ accepted }) {
+  return (
+    <div className="sturm-tag-grid">
+      {accepted.map((a, i) => (
+        <span
+          key={i}
+          className="sturm-tag sturm-tag-ecode"
+          data-conf={a.confidence != null ? (a.confidence >= 1 ? 'high' : a.confidence >= 0.5 ? 'mid' : 'low') : ''}
+          title={`${a.ecode} = ${a.normalizedValue ?? a.rawValue ?? '?'} · ${a.sourceLabel ?? a.method ?? ''} · conf ${a.confidence ?? '?'}`}
+        >
+          <span className="sturm-tag-key">{a.ecode}</span>
+          <span className="sturm-tag-sep">=</span>
+          <span className="sturm-tag-val">{String(a.normalizedValue ?? a.rawValue ?? '—')}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/* Schaut top-down durch output und extrahiert "tag-würdige" Felder.
+ * Liefert Array von { label, node } die ÜBER dem JSON-Viewer gerendert
+ * werden. Wenn nichts erkennbar → leer → JSON-Viewer bleibt einzige Sicht. */
+function tagViewsFromOutput(output) {
+  if (!output || typeof output !== 'object') return [];
+  const views = [];
+  for (const [k, v] of Object.entries(output)) {
+    if (looksLikeECodeMap(v)) {
+      views.push({ key: k, label: `${k} · ${Object.keys(v).length} eCodes`, node: <ECodeTags map={v} source={k} /> });
+    } else if (looksLikeAcceptedArray(v)) {
+      views.push({ key: k, label: `${k} · ${v.length} accepted`, node: <AcceptedTags accepted={v} /> });
+    } else if (looksLikeBlockArray(v)) {
+      views.push({ key: k, label: `${k} · ${v.length} Blöcke`, node: <BlockTags blocks={v} /> });
+    } else if (looksLikeStringArray(v) && v.length <= 20) {
+      views.push({ key: k, label: `${k} · ${v.length}`, node: <StringTags items={v} kind={k.includes('anlage') ? 'anlage' : 'plain'} /> });
+    } else if (v && typeof v === 'object' && !Array.isArray(v)) {
+      // 1 Level nested (z.B. canonical_layer.codes)
+      for (const [nk, nv] of Object.entries(v)) {
+        if (looksLikeECodeMap(nv)) {
+          views.push({ key: `${k}.${nk}`, label: `${k}.${nk} · ${Object.keys(nv).length} eCodes`, node: <ECodeTags map={nv} source={`${k}.${nk}`} /> });
+        } else if (looksLikeAcceptedArray(nv)) {
+          views.push({ key: `${k}.${nk}`, label: `${k}.${nk} · ${nv.length} provenance`, node: <AcceptedTags accepted={nv} /> });
+        }
+      }
+    }
+  }
+  return views;
 }
 
 /* ------------------------------------------------------------
@@ -2337,6 +2481,12 @@ function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, sta
                 <tbody>
                   {Object.entries(inputs).map(([k, ref]) => {
                     const r = resolveInputRef(ref, stageOutputs);
+                    const hasValue = r.kind === 'literal' || r.kind === 'resolved';
+                    const valueIsLarge = hasValue && (
+                      (typeof r.value === 'string' && r.value.length > 80) ||
+                      (Array.isArray(r.value) && r.value.length > 0) ||
+                      (typeof r.value === 'object' && r.value !== null)
+                    );
                     return (
                       <tr key={k}>
                         <td className="sturm-inspector-key">{k}</td>
@@ -2347,10 +2497,16 @@ function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, sta
                         <td className="sturm-inspector-val">
                           {r.kind === 'pending'  && <span className="sturm-inspector-val-pending">noch nicht verfügbar</span>}
                           {r.kind === 'missing'  && <span className="sturm-inspector-val-missing">nicht gefunden</span>}
-                          {(r.kind === 'literal' || r.kind === 'resolved') && (
-                            <span className="sturm-inspector-val-preview" title={typeof r.value === 'string' ? r.value : ''}>
-                              {valuePreview(r.value)}
-                            </span>
+                          {hasValue && !valueIsLarge && (
+                            <span className="sturm-inspector-val-preview">{valuePreview(r.value)}</span>
+                          )}
+                          {hasValue && valueIsLarge && (
+                            <details className="sturm-inspector-val-details">
+                              <summary className="sturm-inspector-val-preview">{valuePreview(r.value)}</summary>
+                              <pre className="sturm-json-viewer" style={{ marginTop: 6, maxHeight: 240 }}>
+                                {valueFull(r.value)}
+                              </pre>
+                            </details>
                           )}
                         </td>
                       </tr>
@@ -2381,11 +2537,24 @@ function StageInspectorPanel({ stageId, workflow, stageStates, stageOutputs, sta
               <div className="sturm-inspector-error">{String(state.error)}</div>
             )}
             {output ? (
-              <pre
-                className="sturm-json-viewer"
-                style={{ marginLeft: 0, marginRight: 0, maxHeight: 280 }}
-                dangerouslySetInnerHTML={{ __html: jsonToHtml(output) }}
-              />
+              <>
+                {tagViewsFromOutput(output).map(v => (
+                  <div key={v.key} className="sturm-tag-section">
+                    <div className="sturm-tag-section-label">{v.label}</div>
+                    {v.node}
+                  </div>
+                ))}
+                <details className="sturm-inspector-val-details">
+                  <summary className="sturm-inspector-val-preview" style={{ marginTop: 8 }}>
+                    Full JSON output
+                  </summary>
+                  <pre
+                    className="sturm-json-viewer"
+                    style={{ marginLeft: 0, marginRight: 0, marginTop: 6, maxHeight: 280 }}
+                    dangerouslySetInnerHTML={{ __html: jsonToHtml(output) }}
+                  />
+                </details>
+              </>
             ) : state.state === 'running' ? (
               <div className="sturm-inspector-empty">Läuft gerade …</div>
             ) : state.state === 'ok' ? (
@@ -3170,9 +3339,56 @@ function App() {
     fetchArtifact(spanLinkerStage, 'spanLinker');
     fetchArtifact(crossValidatorStage, 'crossValidator');
     fetchArtifact(criticStage, 'critic');
-    // v5/v5.1: phase5-merge produces the canonical_layer for citation-verify
+    // v5/v5.1: phase5-merge produces the canonical_layer for citation-verify.
+    // v5_4: finalize-extraction (elster-v3/finalize-extraction) hat eine
+    // verschachtelte Output-Shape ({canonical_layer: {codes, nested, provenance}}),
+    // während phase5-merge canonical_layer flach pro-eCode liefert. Damit
+    // buildResultModelFromCanonical für BEIDE funktioniert, normalisieren
+    // wir finalize-extraction-Output auf phase5-merge-Shape (flach: eCode →
+    // {value, drucktext, anlage, ...}). Reihenfolge: erst v5_4-Finalize.
+    const finalizeV3Stage = workflow.stages.find(s => s.uses === 'elster-v3/finalize-extraction');
     const phase5Stage = workflow.stages.find(s => s.uses === 'elster-v5/phase5-merge');
-    fetchArtifact(phase5Stage, 'phase5Merge');
+    if (finalizeV3Stage) {
+      // Custom fetch + flatten, statt fetchArtifact() (das den raw output cached).
+      if (!qualityArtifacts.phase5Merge) {
+        fetch(`/api/runs/${encodeURIComponent(workflow.id)}/${encodeURIComponent(runId)}/stages/${encodeURIComponent(finalizeV3Stage.id)}/output`, { headers })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => {
+            if (!j) return;
+            // finalize-extraction shape:
+            //   canonical_layer.codes      = {eCode: rawValue}  (flach)
+            //   canonical_layer.provenance = [{ecode, drucktext, anlage, method,
+            //                                  rawValue, normalizedValue, confidence, ...}]
+            //   canonical_layer.nested     = nested per-Anlage (für anderen Tab)
+            // Re-shape zu phase5-merge: canonical_layer = {eCode: {value, drucktext, anlage, evidence_line, origin, ...}}
+            const cl = j.canonical_layer ?? {};
+            const codes = cl.codes ?? {};
+            const provList = Array.isArray(cl.provenance) ? cl.provenance : [];
+            const provByEcode = new Map(provList.map(p => [p.ecode, p]));
+            const flat = {};
+            for (const [ecode, rawVal] of Object.entries(codes)) {
+              const p = provByEcode.get(ecode) ?? {};
+              flat[ecode] = {
+                value: p.rawValue ?? rawVal,
+                normalized: p.normalizedValue ?? rawVal,
+                drucktext: p.drucktext || ecode,
+                anlage: p.anlage || 'X',
+                vordruckzeile: p.vordruckzeile ?? null,
+                datentyp: p.datentyp ?? null,
+                evidence_line: p.evidence_line ?? null,
+                origin: (p.method || p.sourceLabel || 'ESE_MAPPER').toString().toUpperCase(),
+              };
+            }
+            setQualityArtifacts(prev => ({
+              ...prev,
+              phase5Merge: { canonical_layer: flat, stats: { eCodeCount: Object.keys(flat).length } },
+            }));
+          })
+          .catch(() => {});
+      }
+    } else {
+      fetchArtifact(phase5Stage, 'phase5Merge');
+    }
     // v5.2: BMF-Rechner-Output (canonical_layer mit computed eCodes) + Validator
     const bmfStage = workflow.stages.find(s => s.uses === 'elster-v5_2/bmf-rechner-compute');
     fetchArtifact(bmfStage, 'bmfRechner');

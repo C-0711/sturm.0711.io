@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="de"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tornado-Orchestrator · Pipeline · Stricker VaSt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.3.5/dist/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react-dom": "https://esm.sh/react-dom@18.3.1?deps=react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
+    "@xyflow/react": "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1&bundle-deps"
+  }
+}
+</script>
+<style>
+  :root{
+    --ink:#1a1815; --paper:#fbf8f2; --line:rgba(26,24,21,.14); --line2:rgba(26,24,21,.22);
+    --muted:#8a8378; --dim:#a39b8f; --gold:#c48a00; --green:#2f7d4f; --blue:#2666a0; --red:#c0333a;
+    --mono:'IBM Plex Mono',ui-monospace,monospace; --serif:'Fraunces',Georgia,serif;
+  }
+  html,body,#root{height:100%;margin:0;font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--paper)}
+  .topbar{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:baseline;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);background:rgba(251,248,242,.92);backdrop-filter:blur(10px)}
+  .logo{font-family:var(--serif);font-weight:800;font-size:18px;letter-spacing:-.02em}
+  .logo b{color:var(--gold)}
+  .subtitle{font-family:var(--serif);font-style:italic;color:var(--muted);font-size:14px}
+  .meta{margin-left:auto;display:flex;gap:14px;font-size:10px;color:var(--dim);letter-spacing:.04em}
+  .meta b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+  /* Custom node */
+  .pn{background:#fff;border:1.5px solid var(--line);border-radius:11px;min-width:240px;max-width:300px;font-family:var(--mono);font-size:11px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .pn.start{border-color:var(--blue)}
+  .pn.lane1{border-color:var(--gold)}
+  .pn.lane2{border-color:var(--red)}
+  .pn .ph{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:linear-gradient(to bottom,#fafaf6,#f4f1ea)}
+  .pn.start .ph{background:linear-gradient(to bottom,#eaf2f9,#dde7f2)}
+  .pn.lane1 .ph{background:linear-gradient(to bottom,#fbf3df,#f5e8c6)}
+  .pn.lane2 .ph{background:linear-gradient(to bottom,#f9e6e6,#f0cccd)}
+  .pn .num{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--gold);line-height:1}
+  .pn.start .num{color:var(--blue)} .pn.lane2 .num{color:var(--red)}
+  .pn .nm{font-weight:600;font-size:12px;letter-spacing:.02em}
+  .pn .sub{font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:.06em;text-transform:uppercase}
+  .pn .body{padding:9px 12px}
+  .pn .row{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:10.5px;color:var(--muted)}
+  .pn .row .v{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:500}
+  .pn .row .v.big{font-family:var(--serif);font-size:14px;font-weight:600;color:var(--gold)}
+  .pn .row .v.big.b{color:var(--blue)} .pn .row .v.big.r{color:var(--red)} .pn .row .v.big.g{color:var(--green)}
+  .pn .bytes{font-size:9px;color:var(--dim);margin-top:5px;border-top:1px dashed var(--line);padding-top:6px;letter-spacing:.04em}
+  .pn .sample{font-size:9.5px;color:var(--muted);padding:5px 8px;background:rgba(196,138,0,.05);border-radius:5px;margin-top:6px;font-style:italic;line-height:1.4;word-break:break-word}
+  .pn .sample b{color:var(--ink);font-style:normal;font-weight:500}
+  .pn .badge{display:inline-block;font-size:8px;letter-spacing:.14em;text-transform:uppercase;padding:1.5px 5px;border-radius:3px;background:rgba(196,138,0,.12);color:var(--gold);margin-left:auto}
+  .pn.lane2 .badge{background:rgba(192,51,58,.12);color:var(--red)}
+  .pn.start .badge{background:rgba(38,102,160,.12);color:var(--blue)}
+  /* Detail panel */
+  .panel{position:absolute;right:14px;top:62px;bottom:14px;width:380px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;z-index:9;box-shadow:0 6px 24px rgba(0,0,0,.08);display:none}
+  .panel.open{display:block}
+  .panel h3{font-family:var(--serif);font-weight:600;font-size:17px;margin:0 0 4px}
+  .panel .ptag{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
+  .panel pre{background:#faf7f1;padding:11px;border-radius:6px;font-size:10.5px;overflow:auto;border:1px solid var(--line);line-height:1.45;color:var(--ink);max-height:65vh}
+  .panel .close{position:absolute;top:11px;right:12px;background:none;border:1px solid var(--line2);border-radius:4px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;color:var(--muted)}
+  .panel .close:hover{border-color:var(--red);color:var(--red)}
+  .panel .legend{font-size:10px;color:var(--dim);margin:8px 0 12px}
+  /* React Flow tweaks */
+  .react-flow__edge-path{stroke:var(--gold);stroke-width:1.6}
+  .react-flow__edge-text{font-family:var(--mono);font-size:10px;fill:var(--ink)}
+  .react-flow__edge-textbg{fill:#fff}
+  .react-flow__controls{box-shadow:0 1px 4px rgba(0,0,0,.08);border-radius:6px}
+  .react-flow__minimap{background:#fff;border:1px solid var(--line);border-radius:6px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">ST<b>U</b>RM</div>
+  <div class="subtitle">Tornado-Orchestrator · Pipeline</div>
+  <div class="meta">
+    <span>Case: <b>Stricker VaSt</b></span>
+    <span>Run: <b>7b38557c</b></span>
+    <span>PDF: <b>34.536 B</b></span>
+    <span>Pages: <b>5</b></span>
+    <span>OCR: <b>paddleocr-classical</b></span>
+  </div>
+</div>
+<div id="root"></div>
+<div class="panel" id="panel">
+  <button class="close" id="close-panel">×</button>
+  <div class="ptag" id="panel-tag">Phase</div>
+  <h3 id="panel-title">—</h3>
+  <div class="legend" id="panel-legend"></div>
+  <pre id="panel-pre">—</pre>
+</div>
+
+<script type="module">
+window.addEventListener('error', e => {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<pre style="position:fixed;top:60px;left:14px;right:14px;background:#fff3f3;border:1px solid #c0333a;color:#c0333a;padding:12px;font:11px/1.4 monospace;z-index:99;white-space:pre-wrap;max-height:40vh;overflow:auto">JS-Fehler: ${e.message}\n${e.filename}:${e.lineno}</pre>`);
+});
+window.addEventListener('unhandledrejection', e => {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<pre style="position:fixed;top:60px;left:14px;right:14px;background:#fff3f3;border:1px solid #c0333a;color:#c0333a;padding:12px;font:11px/1.4 monospace;z-index:99;white-space:pre-wrap;max-height:40vh;overflow:auto">Promise rejected: ${e.reason?.stack || e.reason}</pre>`);
+});
+import React, {useCallback, useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {ReactFlow, Background, Controls, MiniMap, Handle, Position} from '@xyflow/react';
+
+const phases = {
+  "phase0-ingest":           { bytes:121,    out:{document_sha256_hex:"7b38557c…628b56", pdf_bytes_len:34536} },
+  "phase1-raster":           { bytes:700,    out:{pages:5, dpi:150, page_px:"1240×1754", channels:3, byte_size_per_page:6524880} },
+  "phase2a-ocr-raw":         { bytes:34617,  out:{pages:5, engines:["paddleocr-classical"], total_records:165, sample_texts:["Transferticket:","Steuer-Abruf","Zuletzt abgerufen am:","05.05.2025 11:25 Uhr","Seite 1"]} },
+  "phase2b-consensus":       { bytes:42177,  out:{pages:5, total_records:165, sample_texts:["Transferticket:","Steuer-Abruf","Zuletzt abgerufen am:","05.05.2025 11:25 Uhr","Seite 1","Diese Bescheinigung wurde nicht übernommen."]} },
+  "phase2c-tagged":          { bytes:80560,  out:{pages:5, total_tagged_records:165, samples:[
+                                {text:"Transferticket:", top_candidate:["E0100602", 0.5567932], num_candidates:3},
+                                {text:"Steuer-Abruf", top_candidate:["E0200301", 0.7370645], num_candidates:3},
+                                {text:"Zuletzt abgerufen am:", top_candidate:["E0100601", 0.5817089], num_candidates:3},
+                                {text:"05.05.2025 11:25 Uhr", top_candidate:["E0100401", 0.431706], num_candidates:3}
+                              ]} },
+  "phase3a-field-specs":     { bytes:9804,   out:{specs:21, unique_ecodes:16, by_strategy:{BoxAnchor:20, LabelRight:1}, samples:[
+                                {e_code:"E0100081", label:"Identifikationsnummer", strategy:"BoxAnchor"},
+                                {e_code:"E0100201", label:"Name", strategy:"BoxAnchor"},
+                                {e_code:"E0100301", label:"Vorname", strategy:"BoxAnchor"},
+                                {e_code:"E0100401", label:"Geburtsdatum", strategy:"BoxAnchor"}
+                              ]} },
+  "phase3b-windowed":        { bytes:34077,  out:{windowed:74, failures:0, samples:[
+                                {e_code:"E0100081", belegfeld_id:"identifikationsnummer", page:1, has_anchor:false},
+                                {e_code:"E0100201", belegfeld_id:"name_steuerpflichtiger", page:1, has_anchor:false},
+                                {e_code:"E0100301", belegfeld_id:"vorname_steuerpflichtiger", page:1, has_anchor:false},
+                                {e_code:"E0100401", belegfeld_id:"geburtsdatum_steuerpflichtiger", page:1, has_anchor:false}
+                              ]} },
+  "phase4a-extracted":       { bytes:2,      out:{count:0, note:"Lane-1 fast-path: 0 — alle Felder zu Lane-2"} },
+  "phase4b-lane1-pending":   { bytes:671651, out:{pending:74, all_reason_type:"kind"} },
+  "phase4c-extracted-merged":{ bytes:5466,   out:{fields_count:0, note:"Merge Lane-1+Lane-2 (Lane-2 nicht aktiv)"} },
+  "phase4d-lane2-pending":   { bytes:543352, out:{pending_lane2:60, all_reason_type:"kind", note:"60 Felder warten auf vLLM Gemma-Resolution"} },
+};
+
+const nodes = [
+  // Eingabe
+  { id:'input', type:'phase', position:{x:30, y:80}, data:{ kind:'start', num:'IN', title:'PDF Bytes', sub:'POST /api/v1/extract', summary:[['Bytes','34.536','b']], sample:'Stricker VaSt-PDF · application/pdf · 5 Seiten' }},
+
+  // Phase 0
+  { id:'p0', type:'phase', position:{x:320, y:80}, data:{ kind:'mid', num:'0', title:'Ingest', sub:'ingest.rs · sha256', summary:[['Bytes','34.536'],['SHA256','7b38557c…']], sample:'IngestedDoc { sha256, raw: Bytes }', dump:'phase0-ingest' }},
+
+  // Phase 1
+  { id:'p1', type:'phase', position:{x:610, y:80}, data:{ kind:'mid', num:'1', title:'Rasterize', sub:'raster.rs · pdfium @ 150 dpi', summary:[['Pages','5','b'],['Resolution','1240×1754'],['/page','6,5 MB']], sample:'Vec<RasterPage{ width_px, height_px, channels:3, bytes }>', dump:'phase1-raster' }},
+
+  // Phase 2a
+  { id:'p2a', type:'phase', position:{x:900, y:80}, data:{ kind:'mid', num:'2a', title:'OCR Fan-out', sub:'ocr_ensemble.rs · :11440', summary:[['Engines','1'],['Records','165','b']], sample:'paddleocr-classical → "Transferticket:" "Steuer-Abruf" "05.05.2025 11:25 Uhr"', dump:'phase2a-ocr-raw' }},
+
+  // Phase 2b
+  { id:'p2b', type:'phase', position:{x:900, y:280}, data:{ kind:'mid', num:'2b', title:'Consensus', sub:'consensus.rs · vote', summary:[['Records','165'],['Engines voted','1']], sample:'ConsensusPage{ records[ { text, bbox, voters[], confidence_min:0.9985 } ] }', dump:'phase2b-consensus' }},
+
+  // Phase 2c
+  { id:'p2c', type:'phase', position:{x:610, y:280}, data:{ kind:'mid', num:'2c', title:'Semantic Overlay', sub:'semantic_overlay.rs · :11436', summary:[['Tagged','165','b'],['Cand/record','3']], sample:'"Steuer-Abruf" → [E0200301 @0.74, E…, E…] (EmbeddingGemma + PolarQuant)', dump:'phase2c-tagged' }},
+
+  // Phase 3a
+  { id:'p3a', type:'phase', position:{x:320, y:280}, data:{ kind:'mid', num:'3a', title:'Field Specs', sub:'catalog_runtime.rs', summary:[['Specs','21'],['E-Codes','16'],['BoxAnchor','20 / LabelRight 1']], sample:'FieldSpec{ e_code, label, strategy:{BoxAnchor{rect, tol_mm:2.5}} }', dump:'phase3a-field-specs' }},
+
+  // Phase 3b
+  { id:'p3b', type:'phase', position:{x:30, y:280}, data:{ kind:'mid', num:'3b', title:'Spatial Window', sub:'spatial_window.rs', summary:[['Windowed','74','b'],['Failures','0','g']], sample:'WindowedField{ e_code:E0100081, page, value_window_px, has_anchor:false }', dump:'phase3b-windowed' }},
+
+  // Phase 4a
+  { id:'p4a', type:'phase', position:{x:30, y:480}, data:{ kind:'lane1', num:'4a', title:'Extract Fast-Path', sub:'extraction.rs · Lane-1', summary:[['Extracted','0','r'],['→ Pending','74','r']], sample:'ExtractedField (none — kein Window enthielt Wert-Token)', dump:'phase4a-extracted' }},
+
+  // Phase 4b
+  { id:'p4b', type:'phase', position:{x:320, y:480}, data:{ kind:'lane2', num:'4b', title:'Lane-1 Pending', sub:'lane2 candidate queue', summary:[['Pending','74','r'],['Reason','kind']], sample:'LaneTwoCandidate{ e_code, value_window_px, reason: { kind: NoRecordsInWindow } }', dump:'phase4b-lane1-pending' }},
+
+  // Phase 4c
+  { id:'p4c', type:'phase', position:{x:610, y:480}, data:{ kind:'mid', num:'4c', title:'Merge Extracted', sub:'extraction.rs · merge', summary:[['Total','0','r']], sample:'extracted_fields: []  (Lane-2 vLLM noch nicht aktiv)', dump:'phase4c-extracted-merged' }},
+
+  // Phase 4d
+  { id:'p4d', type:'phase', position:{x:900, y:480}, data:{ kind:'lane2', num:'4d', title:'Lane-2 Pending', sub:'lane_two.rs · → HiTL', summary:[['Open','60','r']], sample:'60 Felder → HiTL / Gemma-4 fallback (oder verworfen)', dump:'phase4d-lane2-pending' }},
+
+  // Ausgabe
+  { id:'out', type:'phase', position:{x:1190, y:480}, data:{ kind:'start', num:'OUT', title:'PipelineOutput JSON', sub:'/api/v1/extract response', summary:[['Bytes','298.985'],['Status','200']], sample:'{ document_sha256_hex, consensus_pages, tagged_pages, windowed_fields, extracted_fields[], lane_two_pending[] }' }},
+];
+
+const edges = [
+  { id:'e-in-p0',  source:'input', target:'p0',  label:'PDF · 34.5 KB',        animated:true },
+  { id:'e-p0-p1',  source:'p0',    target:'p1',  label:'IngestedDoc',          animated:true },
+  { id:'e-p1-p2a', source:'p1',    target:'p2a', label:'5 RasterPages · 32 MB' },
+  { id:'e-p2a-p2b',source:'p2a',   target:'p2b', label:'5 engine_pages · 165 records' },
+  { id:'e-p2b-p2c',source:'p2b',   target:'p2c', label:'ConsensusPage[5]' },
+  { id:'e-p2c-p3a',source:'p2c',   target:'p3a', label:'TaggedPage[5] (165 × Cand)' },
+  { id:'e-p3a-p3b',source:'p3a',   target:'p3b', label:'FieldSpec[21]' },
+  { id:'e-p3b-p4a',source:'p3b',   target:'p4a', label:'WindowedField[74]' },
+  { id:'e-p4a-p4b',source:'p4a',   target:'p4b', label:'74 pending' },
+  { id:'e-p4b-p4c',source:'p4b',   target:'p4c', label:'lane-1 pending' },
+  { id:'e-p4c-p4d',source:'p4c',   target:'p4d', label:'merge' },
+  { id:'e-p4d-out',source:'p4d',   target:'out', label:'PipelineOutput' },
+];
+
+function PhaseNode({data}){
+  const kind = data.kind || 'mid';
+  return React.createElement('div',{className:`pn ${kind}`},
+    React.createElement(Handle,{type:'target', position:Position.Left}),
+    React.createElement('div',{className:'ph'},
+      React.createElement('div',{className:'num'}, data.num),
+      React.createElement('div',null,
+        React.createElement('div',{className:'nm'}, data.title),
+        React.createElement('div',{className:'sub'}, data.sub),
+      ),
+      data.dump ? React.createElement('span',{className:'badge'}, 'dump') : null
+    ),
+    React.createElement('div',{className:'body'},
+      ...data.summary.map(([k,v,cls],i)=>React.createElement('div',{className:'row',key:i},
+        React.createElement('span',null, k),
+        React.createElement('span',{className:'v '+(cls==='b'?'big b':cls==='r'?'big r':cls==='g'?'big g':cls==='big'?'big':'')}, v)
+      )),
+      React.createElement('div',{className:'sample'}, data.sample),
+      React.createElement('div',{className:'bytes'}, 'dump: ', data.dump || '—', ' · ', data.dump ? (phases[data.dump]?.bytes.toLocaleString('de-DE')+' B') : '')
+    ),
+    React.createElement(Handle,{type:'source', position:Position.Right}),
+  );
+}
+
+const nodeTypes = { phase: PhaseNode };
+
+function App(){
+  const onNodeClick = useCallback((_, n)=>{
+    const dump = n.data.dump;
+    const p = document.getElementById('panel');
+    document.getElementById('panel-title').textContent = n.data.title;
+    document.getElementById('panel-tag').textContent = 'Phase ' + n.data.num + (dump ? ' · ' + dump : '');
+    document.getElementById('panel-legend').textContent = n.data.sub;
+    document.getElementById('panel-pre').textContent = dump ? JSON.stringify(phases[dump], null, 2) : JSON.stringify({title:n.data.title, summary:n.data.summary, sample:n.data.sample}, null, 2);
+    p.classList.add('open');
+  },[]);
+  return React.createElement(ReactFlow, {
+    nodes, edges, nodeTypes, onNodeClick,
+    fitView:true, fitViewOptions:{padding:0.15},
+    minZoom:0.4, maxZoom:1.8,
+    proOptions:{hideAttribution:true}
+  },
+    React.createElement(Background, {gap:18, size:1.2, color:'rgba(26,24,21,.08)'}),
+    React.createElement(Controls, {showInteractive:false}),
+    React.createElement(MiniMap, {nodeColor:(n)=>{const k=n.data?.kind;return k==='start'?'#2666a0':k==='lane2'?'#c0333a':k==='lane1'?'#c48a00':'#8a8378'}, pannable:true, zoomable:true, maskColor:'rgba(251,248,242,.6)'}),
+  );
+}
+
+createRoot(document.getElementById('root')).render(React.createElement(App));
+document.getElementById('close-panel').onclick = ()=> document.getElementById('panel').classList.remove('open');
+</script>
+</body></html>

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/jahresblock.schema.json",
+  "title": "Jahresblock",
+  "version": "1.0.0",
+  "description": "Pro Veranlagungsjahr: Personen-spezifische ELSTER-Werte + abgeleiteter engineInput für bmf-api. Eine Person kann pro Jahr unterschiedliche elsterWerte haben (Job-Wechsel, Krankenversicherung etc.).",
+  "type": "object",
+  "required": ["personen", "engineInput"],
+  "additionalProperties": false,
+  "properties": {
+    "veranlagung": {
+      "type": "string",
+      "enum": ["einzel", "zusammen", "getrennt", "unbekannt"],
+      "description": "Override gegenüber profil.haushalt.veranlagung — falls dieses Jahr abweicht."
+    },
+    "personen": {
+      "type": "array",
+      "items": { "$ref": "jahresperson.schema.json" }
+    },
+    "engineInput": {
+      "type": "object",
+      "required": ["steuerjahr", "elsterWerte"],
+      "additionalProperties": false,
+      "properties": {
+        "steuerjahr": {
+          "type": "integer",
+          "minimum": 1900,
+          "maximum": 2100
+        },
+        "elsterWerte": {
+          "type": "object",
+          "patternProperties": {
+            "^E[0-9]{7}(__B)?$": {
+              "type": ["number", "string", "boolean", "null"]
+            },
+            "^bundesland$": { "type": "string" }
+          },
+          "additionalProperties": true,
+          "description": "ELSTER-Codes → Werte. Persönliche Codes können mit __B-Suffix versehen sein für Person B. Nicht-eCode Schlüssel (z.B. \"bundesland\") sind erlaubt für Engine-Parameter."
+        }
+      },
+      "description": "Direkt verwendbar mit POST :12015/api/rechnen (bmf-api)."
+    }
+  }
+}

@@ -20,6 +20,19 @@ export interface KlassifizierungInput {
    * dass anlagen_hint gegeben ist; sonst Fallback auf normale Klassifizierung.
    */
   skip?: boolean;
+  /**
+   * v5_4 Hybrid-Routing: strukturierte Block-Liste von gemma-vision-ocr-zoning.
+   * Wenn vorhanden: doc_type wird direkt aus den Block-Typen abgeleitet
+   * (Hauptvordruck_ESt1A → 'einkommensteuererklaerung'; nur VAST-typen →
+   * 'vast_bundle'; sonst 'einzelbeleg'). Regex-Heuristik wird nur als
+   * Fallback bei leerem/fehlendem Input verwendet. erkannte_anlagen wird
+   * zusätzlich aus den Block-Typen abgeleitet (Anlage_N → 'N' etc.).
+   */
+  erkannte_dokumente?: Array<{
+    dokumenten_typ: string;
+    gehoert_zu_person?: string;
+    ocr_zeilen?: Array<{ zeilen_nr: number; text: string }>;
+  }>;
 }
 
 export interface KlassifizierungOutput {
@@ -30,7 +43,167 @@ export interface KlassifizierungOutput {
   /** Wenn gesetzt: Meta-Dokument (Transferticket etc.) wurde erkannt,
    *  Downstream-Stages sollten zu No-ops werden. */
   kpi_warning?: 'meta-doc';
+  /** v5_4 Hybrid-Routing: grobe Dokumentklasse (immer gesetzt). */
+  doc_type: 'vast_bundle' | 'einkommensteuererklaerung' | 'einzelbeleg';
+  /** v5_4 Hybrid-Routing: Veranlagungszeitraum aus OCR (optional). */
+  steuerjahr?: number;
   ms: number;
+}
+
+/**
+ * v5_4 Hybrid-Routing: bestimmt doc_type rein heuristisch aus OCR-Text.
+ * Keine LLM-Calls, keine zusätzlichen Allokationen.
+ */
+function detectDocType(text: string): KlassifizierungOutput['doc_type'] {
+  const hasTransferticket = /Transferticket:\s*Steuer-Abruf/i.test(text);
+  const hasHauptvordruck = /Hauptvordruck\s+ESt\s*1\s*A|Einkommensteuererklärung\s+\d{4}/i.test(text);
+  return hasTransferticket
+    ? 'vast_bundle'
+    : hasHauptvordruck
+      ? 'einkommensteuererklaerung'
+      : 'einzelbeleg';
+}
+
+/**
+ * v5_4 Hybrid-Routing: leitet doc_type DETERMINISTISCH aus den von
+ * gemma-vision-ocr-zoning gelieferten Block-Typen ab. Bevorzugt vor der
+ * Regex-Heuristik, weil das Vision-Modell Person + Layout-Zonen bereits
+ * unverrückbar bestimmt hat.
+ *
+ * Regeln (in dieser Reihenfolge):
+ *   - irgendein Block 'Hauptvordruck_ESt1A' → 'einkommensteuererklaerung'
+ *   - alle Blocks sind VAST-Typen (volle 11-Datenarten-Liste, siehe
+ *     VAST_BLOCK_TYPES) → 'vast_bundle'
+ *   - sonst → 'einzelbeleg'
+ */
+const VAST_BLOCK_TYPES = new Set<string>([
+  'Lohnsteuerbescheinigung',
+  'Religionszugehoerigkeit',
+  'Mitteilung_Kapitalertraege',
+  'Steuerbescheinigung_Bank',
+  'VAST_Bescheinigung',
+  // Vollständige VaSt-Abdeckung (ERiC §9.9):
+  'Beitragsmitteilung_KV',
+  'Riester_Bescheinigung',
+  'Basisrenten_Bescheinigung',
+  'Lohnersatzleistungen_Mitteilung',
+  'VWL_Bescheinigung',
+  'Behindertenmerkmale_Mitteilung',
+  'Spendenquittung',
+  'Rentenbezugsmitteilung',
+]);
+function detectDocTypeFromBlocks(
+  blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
+): KlassifizierungOutput['doc_type'] | null {
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const types = blocks.map((b) => b?.dokumenten_typ).filter(Boolean);
+  if (types.length === 0) return null;
+  if (types.includes('Hauptvordruck_ESt1A')) return 'einkommensteuererklaerung';
+  if (types.every((t) => VAST_BLOCK_TYPES.has(t))) return 'vast_bundle';
+  return 'einzelbeleg';
+}
+
+/**
+ * v5_4: leitet Anlagen-Liste aus Block-Typen ab. Direktes Mapping
+ * Anlage_N → 'N', Anlage_KAP → 'KAP', Anlage_Vorsorgeaufwand → 'VOR' etc.
+ * Lohnsteuerbescheinigung impliziert 'N' + 'VOR' (Sozialvers-Beiträge sind
+ * dort enthalten). Religionszugehoerigkeit impliziert 'ESt1A'.
+ */
+const BLOCK_TYPE_TO_ANLAGEN: Record<string, string[]> = {
+  Hauptvordruck_ESt1A: ['ESt1A'],
+  Anlage_N: ['N'],
+  Anlage_KAP: ['KAP'],
+  Anlage_Vorsorgeaufwand: ['VOR'],
+  Anlage_Sonderausgaben: ['SA'],
+  Lohnsteuerbescheinigung: ['N', 'VOR'],
+  Steuerbescheinigung_Bank: ['KAP'],
+  Mitteilung_Kapitalertraege: ['KAP'],
+  Religionszugehoerigkeit: ['ESt1A'],
+  // Catch-all für VaSt-Belege ohne spezifischere Klassifikation:
+  // Stammdaten sind der sicherste kleinste-gemeinsame-Nenner. Vorher leer →
+  // dann routete die Pipeline ins Nichts.
+  VAST_Bescheinigung: ['ESt1A'],
+  Spendenquittung: ['SA'],
+  Rentenbezugsmitteilung: ['R'],
+
+  // Vollständige VaSt-Abdeckung (ERiC §9.9):
+  Beitragsmitteilung_KV:          ['VOR'],                  // VaSt_KRV
+  Riester_Bescheinigung:          ['AV', 'RAV_bAV'],        // VaSt_RIE
+  Basisrenten_Bescheinigung:      ['VOR'],                  // VaSt_RUE
+  Lohnersatzleistungen_Mitteilung:['N'],                    // VaSt_LErsL
+  VWL_Bescheinigung:              ['AV'],                   // VaSt_VWL
+  Behindertenmerkmale_Mitteilung: ['ESt1A', 'AgB'],         // VaSt_GDB
+};
+function detectAnlagenFromBlocks(
+  blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
+): string[] {
+  const set = new Set<string>();
+  for (const b of blocks) {
+    const mapped = BLOCK_TYPE_TO_ANLAGEN[b?.dokumenten_typ ?? ''] ?? [];
+    for (const a of mapped) set.add(a);
+  }
+  return Array.from(set).sort();
+}
+
+/**
+ * v5_4 Hybrid-Routing: extrahiert Veranlagungszeitraum (Jahr) aus OCR.
+ *
+ * Strategie (in dieser Priorität):
+ *   1. Explizite VZ-Marker: "Veranlagungszeitraum 2024", "Steuerjahr 2023"
+ *   2. Vordruck-Header-Patterns: "ESt 1 A 2023", "Hauptvordruck … 2023",
+ *      "Anlage N 2023" — die maßgebliche Jahresangabe steht IMMER im
+ *      Vordruck-Titel, NICHT im "Datum der Ausfertigung"-Stempel.
+ *   3. Mehrheits-Voting: alle 20XX-Zahlen im Text sammeln, aber Zahlen
+ *      die in einem Datumskontext stehen (DD.MM.YYYY oder "Ausfertigung",
+ *      "Stand", "Druck", "gedruckt") ausschließen. Häufigstes Jahr gewinnt.
+ *
+ * Range-Check 2010–2099.
+ */
+function detectSteuerjahr(text: string): number | undefined {
+  const inRange = (y: number) => y >= 2010 && y <= 2099;
+
+  // Priorität 1: explizite Marker
+  const explicit = text.match(/(?:Veranlagungszeitraum|Steuerjahr|VZ)\s*[:.\-\s]{0,3}(20\d{2})/i);
+  if (explicit) {
+    const y = Number(explicit[1]);
+    if (inRange(y)) return y;
+  }
+
+  // Priorität 2: Vordruck-Header — "ESt 1 A 2023", "Anlage N 2023" usw.
+  // Pattern: Vordruck-Keyword, dann bis zu 30 Zeichen (Zahlen/Buchstaben/Spaces)
+  // bevor die Jahreszahl kommt. Schlägt nur an, wenn das Jahr noch im
+  // Header-Block steht (am Anfang einer Zeile), nicht irgendwo im Fließtext.
+  const vordruck = text.match(
+    /^[^\n]{0,40}\b(?:Hauptvordruck|ESt|Anlage(?:nverzeichnis)?)\b[^\n]{0,30}\b(20\d{2})\b/m,
+  );
+  if (vordruck) {
+    const y = Number(vordruck[1]);
+    if (inRange(y)) return y;
+  }
+
+  // Priorität 3: Mehrheits-Voting über alle 20XX-Vorkommen, aber filtere
+  // Datums-Kontexte raus (DD.MM.YYYY oder Ausfertigungs-/Druck-/Stand-Stempel).
+  const counts = new Map<number, number>();
+  const yearRe = /\b(20\d{2})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = yearRe.exec(text)) !== null) {
+    const y = Number(m[1]);
+    if (!inRange(y)) continue;
+    const ctxBefore = text.slice(Math.max(0, m.index - 30), m.index);
+    const ctxAfter = text.slice(m.index + 4, m.index + 4 + 20);
+    // Datums-Kontext erkennen
+    const isInDate =
+      /\b\d{1,2}\.\d{1,2}\.$/.test(ctxBefore) ||
+      /(Ausfertigung|gedruckt|Druckdatum|Stand|Stand vom|am)\s*[:.\s]{0,3}\d*\.?\d*\.?$/i.test(ctxBefore) ||
+      /^\.\d{1,2}\.\d{1,2}\b/.test(ctxAfter);
+    if (isInDate) continue;
+    counts.set(y, (counts.get(y) ?? 0) + 1);
+  }
+  if (counts.size > 0) {
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    return best[0];
+  }
+  return undefined;
 }
 
 export interface KlassifizierungConfig {
@@ -242,6 +415,23 @@ export const klassifizierungStage = defineStage<
     const anlagenNames = katalog.anlagen.map((a) => a.name);
     const allowed = new Set(anlagenNames);
 
+    // v5_4 Hybrid-Routing: bevorzugt strukturierte Block-Liste von
+    // gemma-vision-ocr-zoning (Vision-Modell hat Layout-Zonen bereits
+    // unverrückbar bestimmt). Fallback: Regex-Heuristik auf input.text.
+    const blocksDocType = detectDocTypeFromBlocks(input.erkannte_dokumente ?? []);
+    const doc_type = blocksDocType ?? detectDocType(input.text);
+    const blocksAnlagen = (input.erkannte_dokumente?.length ?? 0) > 0
+      ? detectAnlagenFromBlocks(input.erkannte_dokumente!)
+      : null;
+    const steuerjahr = detectSteuerjahr(input.text);
+    if (blocksDocType) {
+      ctx.emit('klassifizierung_block_routing', {
+        doc_type: blocksDocType,
+        anlagen_from_blocks: blocksAnlagen,
+        block_count: input.erkannte_dokumente?.length ?? 0,
+      });
+    }
+
     // ─── I1.4 Meta-Dokument-Heuristik ──────────────────────────────────────
     // ELSTER produziert eine Reihe von Meta-Dokumenten (Transferticket,
     // Steuer-Abruf-Quittung, Empfangsbestätigung), die für die Extraktion
@@ -283,6 +473,8 @@ export const klassifizierungStage = defineStage<
         llm_hits: [],
         used_llm: false,
         kpi_warning: 'meta-doc',
+        doc_type,
+        steuerjahr,
         ms: Date.now() - t0,
       };
     }
@@ -307,6 +499,8 @@ export const klassifizierungStage = defineStage<
         regex_hits: {},
         llm_hits: [],
         used_llm: false,
+        doc_type,
+        steuerjahr,
         ms: Date.now() - t0,
       };
     }
@@ -358,12 +552,20 @@ export const klassifizierungStage = defineStage<
       }
     }
 
-    const union = Array.from(new Set([...regexNames, ...llmNames])).sort();
+    // v5_4: wenn erkannte_dokumente (von gemma-vision-ocr-zoning) Blocks
+    // geliefert hat, deren abgeleitete Anlagen mit der Regex/LLM-Union
+    // vereinigen — Vision-Modell ist deterministisch besser als Drucktext-
+    // Regex bei Multi-Doc-Bundles (z.B. VAST mit 5 Sub-Belegen).
+    const baseUnion = Array.from(new Set([...regexNames, ...llmNames])).sort();
+    const union = blocksAnlagen
+      ? Array.from(new Set([...baseUnion, ...blocksAnlagen])).sort()
+      : baseUnion;
     await ctx.artifacts.write('erkannte_anlagen.json', {
       erkannte_anlagen: union,
       regex_hits: regexHits,
       llm_hits: llmNames,
       llm_rejected: llmRejected,
+      anlagen_from_blocks: blocksAnlagen,
     });
 
     return {
@@ -371,6 +573,8 @@ export const klassifizierungStage = defineStage<
       regex_hits: regexHits,
       llm_hits: llmNames,
       used_llm: usedLlm,
+      doc_type,
+      steuerjahr,
       ms: Date.now() - t0,
     };
   },

@@ -37,6 +37,24 @@ export interface CaseDocument {
    */
   trustBreakdown?: { high: number; medium: number; suspicious: number; low: number };
   mimeType?: string;
+  /**
+   * Round-1 Vorschau (beleg-indikation Stage). Wird ~1-3s nach Upload
+   * geschrieben, parallel zur OCR. Enthält erkannte Anlagen, Belegtyp
+   * und die wichtigsten direkt aus dem Bild gelesenen Werte. Bleibt im
+   * Manifest erhalten, damit die Belege-Tabelle sie auch nach Reload
+   * zeigt.
+   */
+  indikation?: {
+    anlagen: string[];
+    belegtyp: string | null;
+    wichtige_werte: Array<{ label: string; value: string }>;
+    /** Steuerjahr des Belegs (z.B. 2024). null für Stammdaten / Belege
+     *  ohne klares Jahr. Vom UI für Mismatch-Warnung gegen case.veranlagungsjahr
+     *  genutzt; vom geplanten cross-doc-reasoner für die finale Zuordnung. */
+    steuerjahr?: number | null;
+    ms: number;
+    at: string;
+  };
 }
 
 export interface ApplicationInstance {
@@ -50,6 +68,13 @@ export interface ApplicationInstance {
   updatedAt: string;
   /** Run-IDs des extraction-Workflows, jüngste zuletzt. */
   runs: string[];
+  /** Per-Case Override des Extraction-Workflows (z.B. 'elster-v6-vision').
+   *  Wird beim ersten Upload persistiert (siehe upload-bulk Handler) damit
+   *  spätere master-Refreshes denselben Workflow-runs/-Pfad aggregieren.
+   *  Ohne diesen Wert würde der refresh-Handler auf den App-Default
+   *  zurückfallen (typisch elster-v5_2-rag) und Artefakte aus dem v6-
+   *  Verzeichnis nicht finden → 0 Felder aggregiert. */
+  extractionWorkflow?: string;
   /** Per-Dokument-Metadaten — befüllt von /upload + /upload-bulk. */
   documents?: CaseDocument[];
   /** Pfad zum Workspace-Verzeichnis (uploads, artifacts). Relativ zum Server-Cwd. */
@@ -58,6 +83,63 @@ export interface ApplicationInstance {
   sealCommitSha?: string;
   exportedAt?: string;
   einreichungsId?: string;
+  /** Vorjahres- oder Onboarding-Kontext für engführende Extraktion. */
+  context?: CaseContext;
+}
+
+/**
+ * Per-Case Kontext aus Vorjahres-Erklärung ODER 5-Fragen-Onboarding-Wizard.
+ * Engführt die Pipeline:
+ *   • felderNarrow + phase3LlmFill: nur expected_ecodes_by_anlage
+ *   • phase6BmfRechner: nutzt veranlagungsart für Splittingtarif
+ *   • UI: schlägt daueranschnitte zur Übernahme vor
+ *
+ * Quelle ist entweder ein dediziertes Vorjahres-Upload (source='vorjahr',
+ * Output von vorjahres-kontext-extract-Workflow) oder das Onboarding-Wizard-
+ * Formular (source='onboarding'). Beide Pfade liefern dieselbe Shape, damit
+ * downstream-Code identisch funktioniert.
+ */
+export interface CaseContext {
+  source: 'vorjahr' | 'onboarding' | 'progressive';
+  /** ISO-Timestamp wann gesetzt. */
+  setAt: string;
+  /** Jahr aus dem die Vorjahres-Erkl stammt (nur source='vorjahr'). */
+  vorjahr?: number;
+  /** Anlagen die in 2024 erwartet werden. felderNarrow + Klassifizierung
+   *  begrenzen sich darauf. */
+  expected_anlagen: string[];
+  /** Pro Anlage die eCodes die im Vorjahr belegt waren bzw. via Onboarding
+   *  abgeleitet sind. phase3LlmFill engführt sein Schema darauf. */
+  expected_ecodes_by_anlage?: Record<string, string[]>;
+  /** Veranlagungsart — direkt an BMF-Rechner für Tarif-Wahl. */
+  veranlagungsart?: 'zusammenveranlagung' | 'einzelveranlagung' | 'ledig';
+  /** Anzahl Kinder (für Kinderfreibetrag-Aktivierung). */
+  anzahl_kinder?: number;
+  /** Vorschlagswerte aus Vorjahr/Onboarding die der User in 2024 bestätigen
+   *  kann (Pendlerpauschale, Werbungskosten, etc.). Werden im UI als
+   *  „Übernahme?"-Karten gerendert. */
+  daueranschnitte?: Array<{
+    eCode: string;
+    label: string;
+    wert: number | string;
+    einheit?: string;
+    quelle: string;
+    /** Status — vom User in der UI gesetzt. */
+    status?: 'vorgeschlagen' | 'uebernommen' | 'geaendert' | 'verworfen';
+  }>;
+  /** Belege die für 2024 erwartet werden aber noch nicht da sind. */
+  missing_belege_erwartet?: string[];
+  /** Falls source='vorjahr': Pfad zur extrahierten Vorjahres-JSON im Case-Workspace. */
+  vorjahresKontextPfad?: string;
+  /** Person-A (Hauptperson / Ehemann). Wird von v5_4-Mappern als hartes Seed
+   *  für Person-A/B-Disambig genutzt (statt fragiler first-seen-IdNr-Heuristik). */
+  person_a?: { idnr?: string; familienname?: string; vorname?: string };
+  /** Person-B (nur bei Zusammenveranlagung gesetzt). */
+  person_b?: { idnr?: string; familienname?: string; vorname?: string };
+  /** Flache eCode-Map aus dem ESE-Mapper (Python-Solver Welle 0-5) auf der
+   *  Vorjahres-Erklärung. 31 Locks @ conf 1.0 für Stricker 2023. Wird von
+   *  v5_4-Mappern als Δ-Check-Basis genutzt (z.B. "Brutto 2024 > 2023"). */
+  vorjahr_ecodes?: Record<string, string | number>;
 }
 
 export interface CreateInstanceBody {

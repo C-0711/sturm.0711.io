@@ -1,0 +1,229 @@
+{
+  "_kommentar": [
+    "GROUND TRUTH — Hildburg Haubrich-Koch, Veranlagungszeitraum 2024.",
+    "Soll-Werte leben AUSSCHLIESSLICH hier (Epic E2). Niemals im Produktivcode,",
+    "in Prompts oder Katalogen. Dieses Fixture ist die einzige Stelle, an der",
+    "fall-spezifische Betraege und Bescheid-Kennzahlen stehen duerfen.",
+    "",
+    "Quellen: die Original-Belege im Mandanten-Ordner sowie der Cent-Audit",
+    "'Hildburg / VZ 2024' (siehe docs/CENT-PERFECT-TASKLIST.md). Pro Position",
+    "steht der cent-genaue EINGANGSBETRAG laut Beleg. Die E-Codes sind gegen die",
+    "Einzel-Fixtures unter tests/groundtruth/*.json und gegen die Live-Engine",
+    "verifiziert.",
+    "",
+    "Genutzt von scripts/case_assert.py: jede 'position' wird cent-genau gegen",
+    "den E2E-Report (scripts/case_e2e.py) geprueft; 'bescheid' liefert die",
+    "Soll-Endkennzahlen; 'coverage' steuert die Beleg-Abdeckungs-Assertion."
+  ],
+
+  "case": "hildburg-2024",
+  "vz": 2024,
+  "veranlagungsart_soll": "einzel",
+
+  "_eingangsbetraege_kommentar": [
+    "Eingangsbetraege je E-Code, wie sie aus den Belegen extrahiert werden",
+    "MUESSEN. 'toleranzCent' = 0 bedeutet cent-genau. 'required' = true heisst:",
+    "fehlt die Position im E2E-Report (oder weicht ab), ist der Test ROT.",
+    "Bei 'required' = false ist die Position optional (Plausibilitaet/Kontext)."
+  ],
+  "positionen": {
+
+    "E0200201": {
+      "label": "Bruttoarbeitslohn (Anlage N, LBV NRW Versorgung)",
+      "value": 30707.00, "toleranzCent": 0, "required": true,
+      "quelle": "Lohnsteuerbescheinigung LBV NRW",
+      "hinweis": "Witwen-Beamtenpension; zugleich Versorgungsbezug."
+    },
+    "E0200301": {
+      "label": "einbehaltene Lohnsteuer (Anlage N)",
+      "value": 2960.00, "toleranzCent": 0, "required": true,
+      "quelle": "Lohnsteuerbescheinigung LBV NRW",
+      "hinweis": "Teil der Anrechnung. Audit-Pruefwert Anrechnung-LSt gesamt ~3.290 inkl. weiterer LStB."
+    },
+    "E0200501": {
+      "label": "einbehaltene Kirchensteuer (Anlage N)",
+      "value": 266.35, "toleranzCent": 0, "required": false,
+      "quelle": "Lohnsteuerbescheinigung LBV NRW",
+      "hinweis": "Einbehaltene KiSt; Audit nennt KiSt einbehalten gesamt ~295,99."
+    },
+    "E0200801": {
+      "label": "steuerbeguenstigte Versorgungsbezuege (Anlage N)",
+      "value": 34726.16, "toleranzCent": 0, "required": true,
+      "quelle": "Versorgungsbezuege gesamt (LBV NRW + Philips Pensionskasse)",
+      "hinweis": [
+        "Audit-Kernwert Versorgungsbezuege = 34.726,16.",
+        "Achtung Quellenlage: Einzel-Fixture lohnsteuerbescheinigung.json fuehrt",
+        "E0200801 = 30.707,00 NUR fuer den LBV-Beleg. Der case-weite Soll-Wert",
+        "34.726,16 ist die Summe ueber beide Versorgungsbezuege; je nachdem, ob",
+        "die Engine pro Beleg oder aggregiert ausgibt, matcht case_assert.py den",
+        "Wert gegen jede beobachtete E0200801-Position (siehe matchModus)."
+      ]
+    },
+
+    "E1800301": {
+      "label": "Renten-/Leistungsbetrag DRV (Anlage R)",
+      "value": 24807.78, "toleranzCent": 0, "required": true,
+      "quelle": "Rentenbezugsmitteilung Deutsche Rentenversicherung Bund",
+      "hinweis": "Gesetzliche Rente, Rentenbeginn 12/1995 -> Besteuerungsanteil 50% (§22 Nr.1 EStG)."
+    },
+    "E1800606": {
+      "label": "Rentenanpassungsbetrag DRV (in Zeile 4 enthalten)",
+      "value": 7953.18, "toleranzCent": 0, "required": true,
+      "quelle": "Rentenbezugsmitteilung DRV Bund",
+      "hinweis": "Anpassungsbetrag fliesst in die Berechnung des steuerfreien Teils."
+    },
+    "E1800501": {
+      "label": "Beginn der Rente/Leistung DRV",
+      "value": "1995-12-01", "toleranzCent": 0, "required": false,
+      "matchModus": "datum",
+      "quelle": "Rentenbezugsmitteilung DRV Bund",
+      "hinweis": "Datum; matchModus=datum. Bestimmt den Besteuerungsanteil."
+    },
+    "E1803102": {
+      "label": "Renten-/Leistungsbetrag betriebliche Rente (Philips Pensionskasse)",
+      "value": 704.00, "toleranzCent": 0, "required": false,
+      "quelle": "Rentenbezugsmitteilung Philips Pensionskasse",
+      "hinweis": [
+        "Betriebliche Rente ~704 EUR. Genauer Cent-Wert haengt vom Beleg ab;",
+        "deshalb required=false und groessere toleranzCent unten ueber matchModus.",
+        "Wird hier vor allem als Coverage-Anker gefuehrt (Beleg darf nicht leer sein)."
+      ]
+    },
+
+    "E2003104": {
+      "label": "Beitraege zur privaten Krankenversicherung — nur Basisabsicherung (Anlage VOR)",
+      "value": 1781.98, "toleranzCent": 0, "required": true,
+      "quelle": "Beitragsbescheinigung Debeka (private KV/PV)",
+      "hinweis": "KV-Basis. Fliesst als Sonderausgabe in die zvE (Epic A3/B6)."
+    },
+    "E2003202": {
+      "label": "Beitraege zur Pflege-Pflichtversicherung (Anlage VOR)",
+      "value": 772.68, "toleranzCent": 0, "required": true,
+      "quelle": "Beitragsbescheinigung Debeka",
+      "hinweis": "PV-Pflicht, voll abzugsfaehig."
+    },
+    "E2003502": {
+      "label": "ueber Basisabsicherung hinausgehende KV-Beitraege (Wahlleistungen)",
+      "value": 456.62, "toleranzCent": 0, "required": false,
+      "quelle": "Beitragsbescheinigung Debeka",
+      "hinweis": "KV gesamt 2.238,60 - Basis 1.781,98 = 456,62 Wahlleistungen (i.d.R. nicht abzugsfaehig)."
+    },
+
+    "E0107208": {
+      "label": "§35a — abzugsfaehiger haushaltsnaher Dienstleistungsanteil (Augustinum)",
+      "value": 11946.79, "toleranzCent": 0, "required": true,
+      "quelle": "Bescheinigung Augustinum Seniorenresidenz (DL-/Pflegeanteil)",
+      "hinweis": [
+        "§35a-BASIS laut Audit = 11.946,79 (der nach §35a beguenstigte",
+        "Dienstleistungs-/Pflegeanteil im Wohnentgelt).",
+        "NICHT zu verwechseln mit dem Wohn-Gesamtentgelt 19.529,70 (Jahressumme)",
+        "oder dem Verpflegungsanteil 6.192,00 (nicht haushaltsnah).",
+        "Steuerermaessigung = 20% der Basis, gedeckelt (§35a Abs.2 EStG)."
+      ]
+    },
+
+    "E1900701": {
+      "label": "Kapitalertraege, vom Steuerabzug freigestellt (Anlage KAP)",
+      "value": 15.00, "toleranzCent": 0, "required": false,
+      "quelle": "Kapitalertragsbescheinigung KSK Ahrweiler",
+      "hinweis": "Kleinbetraege mehrerer Banken; unter Sparer-Pauschbetrag, keine Steuerlast."
+    },
+
+    "E0108405": {
+      "label": "geleistete Spenden an inlaendische gemeinnuetzige Empfaenger (Anlage SA)",
+      "value": 60.00, "toleranzCent": 0, "required": true,
+      "quelle": "Zuwendungsbestaetigungen / Kontobelege",
+      "hinweis": [
+        "BELEGTE Spenden 2024 = 60,00 (Audit).",
+        "Abgrenzung: behauptete 85,00 sind NICHT vollstaendig belegt — Engine",
+        "soll belegt (60) von behauptet (85) unterscheiden und die Differenz als",
+        "Hinweis fuehren (Epic A4/B5). Das Einzel-Fixture spendenquittung.json",
+        "nennt 40,00 fuer eine Teilmenge; case-weit ist 60,00 der Soll-Wert."
+      ]
+    },
+
+    "E0100402": {
+      "label": "Kirchensteuermerkmal / Konfession (Person A)",
+      "value": "02", "toleranzCent": 0, "required": false,
+      "matchModus": "text",
+      "quelle": "ELSTER-Stammdaten / Religionsmerkmal",
+      "hinweis": "Evangelisch (Code '02'/'ev'); KiSt-Satz RLP 9% (Wohnsitz Bad Neuenahr-Ahrweiler)."
+    }
+  },
+
+  "_vorauszahlungen_kommentar": [
+    "Vorauszahlungen / Anrechnung — die groesste Cent-Fehlerquelle (Epic A1/B2).",
+    "ESt-VZ 2024 = Summe der vier Quartalsbuchungen = 3.161; KiSt-VZ = 284.",
+    "Diese Werte stammen aus der Steuerkontoabfrage und gehen in die Anrechnung."
+  ],
+  "vorauszahlungen": {
+    "est_vz": { "value": 3161.00, "toleranzCent": 0, "required": true,
+      "hinweis": "Summe vier Quartale ESt-Vorauszahlung 2024." },
+    "kist_vz": { "value": 284.00, "toleranzCent": 0, "required": true,
+      "hinweis": "Kirchensteuer-Vorauszahlung 2024." },
+    "lohnsteuer_einbehalten": { "value": 3290.00, "toleranzCent": 0, "required": false,
+      "hinweis": "Einbehaltene LSt gesamt (Anrechnung); Audit-Pruefwert." },
+    "kist_einbehalten": { "value": 295.99, "toleranzCent": 0, "required": false,
+      "hinweis": "Einbehaltene KiSt gesamt; Audit-Pruefwert." }
+  },
+
+  "_abgeleitet_kommentar": [
+    "Abgeleitete Groessen — Ergebnis der korrekten Berechnung, nicht direkt aus",
+    "einem einzelnen Beleg. Als Plausibilitaetsanker. Hoehere Toleranz erlaubt,",
+    "da Rundung/Freibetragslogik je nach Implementierung leicht streut."
+  ],
+  "abgeleitet": {
+    "drv_rente_steuerpflichtig": {
+      "value": 16380.00, "toleranzCent": 200, "required": false,
+      "hinweis": [
+        "Steuerpflichtiger Teil der DRV-Rente ~ Rentenbetrag - 50%*(Rentenbetrag - Anpassung)",
+        "= 24.807,78 - 0,5*(24.807,78 - 7.953,18) ~= 16.380.",
+        "toleranzCent gross (2 EUR), da Rundung des Besteuerungsanteils variiert."
+      ]
+    }
+  },
+
+  "_bescheid_kommentar": [
+    "Soll-Endkennzahlen des Bescheids nach korrekter Berechnung. Das Audit-Ziel",
+    "ist eine KLEINE ERSTATTUNG (nahe Null), nicht die fehlerhafte Nachzahlung",
+    "von 3.643,39 EUR aus dem Ist-Stand. Da die exakten Cent-Endwerte erst nach",
+    "Abschluss von Epic A-D feststehen, ist hier primaer das VORZEICHEN/Korridor",
+    "der Erstattung bindend (matchModus=korridor). Sobald die Pipeline 'fertig'",
+    "ist, koennen die zve/est/gesamt-Sollwerte cent-genau nachgetragen werden."
+  ],
+  "bescheid": {
+    "erstattung": {
+      "matchModus": "korridor",
+      "min": -50.00, "max": 600.00, "required": true,
+      "hinweis": [
+        "Erstattung positiv (= Geld zurueck) und betragsmaessig klein -> Nullnummer.",
+        "Konvention im E2E-Report: 'erstattung' negativ = Nachzahlung. Daher pruefen",
+        "wir, dass der Wert NICHT stark negativ ist. Der fehlerhafte Ist-Wert",
+        "-3.643,39 (grosse Nachzahlung) faellt damit durch.",
+        "Korridor bewusst weit, bis die Endwerte nach Epic A-D feststehen."
+      ]
+    },
+    "zve_anker": {
+      "matchModus": "korridor",
+      "min": 43000.00, "max": 44500.00, "required": false,
+      "hinweis": [
+        "zvE soll nach Rentenfreibetrag/Versorgungsfreibetrag von 37.325 auf ~43.900",
+        "ruecken (Audit-Anker am 2023-Bescheid 43.765). Ist-Wert 37.325,06 ist zu",
+        "niedrig (Renten-/Versorgungsfreibetrag noch nicht korrekt)."
+      ]
+    }
+  },
+
+  "_coverage_kommentar": [
+    "Coverage-Assertion (Epic A0/E3c): JEDER Beleg muss entweder Felder liefern",
+    "ODER eine begruendete Warnung erzeugen. 'minBelege' ist die erwartete",
+    "Mindestanzahl Belege im Lauf; 'belegeMitNullFeldernErlaubtMitWarnung' = true",
+    "heisst: 0-Felder-Belege sind nur dann ok, wenn dazu eine Warnung existiert.",
+    "'erwarteteBelegnamen' ist optional und dient nur der Vollstaendigkeitspruefung."
+  ],
+  "coverage": {
+    "minBelege": 18,
+    "belegeMitNullFeldernErlaubtMitWarnung": true,
+    "erwarteteBelegnamen": []
+  }
+}

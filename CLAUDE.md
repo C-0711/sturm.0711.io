@@ -99,6 +99,7 @@ runs/                Artefakte pro Run (gitignored — enthält echte Case-Daten
 - `src/core/workflow.ts` — Workflow-Definition-Shape
 - `src/core/stage.ts` — Stage-Interface, Context
 - `docs/WORKFLOW_TEMPLATE.md` — wenn es um das Bauen neuer Workflows geht
+- `docs/V1-VERTRAG.md` + `src/schemas/v1/SCHEMAS-README.md` — wenn Fall-/MasterCase-Daten erzeugt oder konsumiert werden (kanonischer v1-Vertrag, `__B`-/bundesland-Regeln)
 
 ## Legacy verweis
 

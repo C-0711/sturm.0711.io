@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/position.schema.json",
+  "title": "Position",
+  "version": "1.0.0",
+  "description": "Eine einzelne extrahierte Wertzeile aus einem Beleg. Die atomare Datenpartikel der gesamten Pipeline.",
+  "type": "object",
+  "required": ["bezeichnung", "wert", "datentyp"],
+  "additionalProperties": false,
+  "properties": {
+    "bezeichnung": {
+      "type": "string",
+      "description": "Wie im Beleg gelesen (z.B. \"Bruttoarbeitslohn\")."
+    },
+    "anlage": {
+      "type": ["string", "null"],
+      "description": "Aufgelöste ELSTER-Anlage, z.B. \"Anlage N\"."
+    },
+    "zeile": {
+      "type": ["string", "null"],
+      "description": "Zeile in der Anlage, z.B. \"Zeile 6\"."
+    },
+    "wert": {
+      "type": ["number", "string", "boolean", "null"],
+      "description": "Typgerechter Wert (nach datentyp-coercion)."
+    },
+    "e_code": {
+      "type": ["string", "null"],
+      "pattern": "^E[0-9]{7}$",
+      "description": "ELSTER-Code (Single Source of Truth)."
+    },
+    "elster_kennziffer": {
+      "type": ["string", "null"],
+      "description": "Menschenlesbare Anzeige, z.B. \"Anlage KAP Zeile 7 · Kz 210/410\"."
+    },
+    "kennzahl": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "datentyp": {
+      "type": "string",
+      "enum": ["number", "integer", "string", "boolean", "date", "iban", "enum"]
+    },
+    "aufgeloest": {
+      "type": "string",
+      "enum": ["zeile", "label"],
+      "description": "Wie wurde der e_code gefunden? \"zeile\" = direkter Match aus Anlage+Zeile, \"label\" = via resolver-api."
+    },
+    "resolver_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Nur bei aufgeloest=label."
+    },
+    "unsicher": { "type": "boolean", "default": false },
+    "wert_code": {
+      "type": "string",
+      "description": "Enum-Code falls datentyp=enum (z.B. \"rk\" für römisch-katholisch)."
+    },
+    "person_key": { "type": ["string", "null"] },
+    "quelle_beleg_id": { "type": ["string", "null"] }
+  }
+}

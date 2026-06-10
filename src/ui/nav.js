@@ -177,24 +177,42 @@ export async function contextRendererWorkflows(host) {
       const cat = CATEGORIES.find(c => c.match(w.id || ''));
       groups.get(cat.id).push(w);
     }
+    // Aktiv-Workflow aus URL ermitteln (für Highlight + ggf. vorne anpinnen).
+    const activeId = (() => {
+      try {
+        const u = new URL(window.location.href);
+        return u.searchParams.get('workflow') || '';
+      } catch { return ''; }
+    })();
     const blocks = CATEGORIES.filter(c => groups.get(c.id).length > 0).map(cat => {
-      const items = groups.get(cat.id).slice(0, 6); // Top 6 pro Kategorie sichtbar
-      const moreCount = groups.get(cat.id).length - items.length;
+      // Alle Workflows zeigen — keine künstliche Truncation mehr.
+      // Aktiv-Workflow nach oben ziehen wenn er in dieser Kategorie ist.
+      const all = groups.get(cat.id).slice();
+      if (activeId) {
+        const idx = all.findIndex(w => w.id === activeId);
+        if (idx > 0) {
+          const [a] = all.splice(idx, 1);
+          all.unshift(a);
+        }
+      }
       return `
         <div style="padding: 6px 0;">
           <div style="padding: 4px 12px; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-tertiary);">
-            ${escapeHtml(cat.label)} <span style="float: right;">${groups.get(cat.id).length}</span>
+            ${escapeHtml(cat.label)} <span style="float: right;">${all.length}</span>
           </div>
-          ${items.map(w => {
+          ${all.map(w => {
             const short = (w.name || w.id).split('—')[0].trim();
+            const isActive = w.id === activeId;
+            const activeStyle = isActive
+              ? 'background: var(--color-surface-hover, rgba(255,255,255,.05)); border-left: 2px solid var(--color-accent, #d4a373);'
+              : '';
             return `
-              <a class="sturm-sb-item" href="/pipeline.html?workflow=${encodeURIComponent(w.id)}" style="text-decoration:none;">
+              <a class="sturm-sb-item${isActive ? ' sturm-sb-item--active' : ''}" href="/pipeline.html?workflow=${encodeURIComponent(w.id)}" style="text-decoration:none;${activeStyle}">
                 <i data-lucide="workflow"></i>
                 <span class="sturm-sb-item-main"><span class="sturm-sb-item-label">${escapeHtml(short)}</span></span>
               </a>
             `;
           }).join('')}
-          ${moreCount > 0 ? `<a href="/" style="display:block; padding: 4px 12px; font-size: 11px; color: var(--color-text-tertiary); text-decoration:none;">+${moreCount} weitere</a>` : ''}
         </div>
       `;
     });

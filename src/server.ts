@@ -56,6 +56,7 @@ import {
   writeStageOverride,
 } from './core/config-overrides.ts';
 import { startUploadSweep } from './server/upload-sweep.ts';
+import { deriveSteuerjahrFromRuns } from './server/derive-steuerjahr.ts';
 import { requireBearerToken, warnIfDisabled } from './server/auth.ts';
 import {
   getSchemaIndex,
@@ -1003,8 +1004,12 @@ app.get(
           }])),
         );
         const client = new BmfMcpClient({ timeoutMs: 15_000 });
+        const erklaerungsjahr =
+          inst.veranlagungsjahr ??
+          (await deriveSteuerjahrFromRuns(RUNS_DIR, extractionId, inst.runs)) ??
+          new Date().getFullYear() - 1;
         const bmfResult = await client.berechneVollstaendigeSteuerV2({
-          erklaerungsjahr: inst.veranlagungsjahr ?? 2024,
+          erklaerungsjahr,
           elster_felder: felder,
         });
         (agg as { bmf?: unknown }).bmf = bmfResult;

@@ -8,6 +8,11 @@ logs/
 # Run-Artefakte (sensible Case-Daten)
 runs/
 uploads/
+var/
+# Generierte E10-XMLs sind IMMER ausgefüllte Steuererklärungen = Case-Daten
+*.e10.xml
+# Lokale Session-Zusammenfassungen (wie qc_*)
+SESSION-SUMMARY.html
 
 # User-defined workflows (designer-authored) — kept local
 workflows-user/

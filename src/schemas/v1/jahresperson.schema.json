@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/jahresperson.schema.json",
+  "title": "JahresPerson",
+  "version": "1.0.0",
+  "description": "Person-Jahres-Schnitt: Welche ELSTER-Werte, Anlagen und Belege sind für diese Person in diesem Jahr relevant.",
+  "type": "object",
+  "required": ["person_key", "elsterWerte"],
+  "additionalProperties": false,
+  "properties": {
+    "person_key": {
+      "type": "string",
+      "description": "Foreign-Key auf profil.personen[].person_key."
+    },
+    "rolle": {
+      "type": "string",
+      "enum": ["A", "B"]
+    },
+    "idnr": { "type": ["string", "null"] },
+    "name": { "type": ["string", "null"] },
+    "anlagen": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Welche ELSTER-Anlagen für diese Person in diesem Jahr ausgefüllt werden müssen, z.B. [\"Anlage N\", \"Anlage R\", \"Anlage Kind\"]."
+    },
+    "belege": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Beleg-IDs (oder Dateinamen) die zu dieser Person gehören."
+    },
+    "elsterWerte": {
+      "type": "object",
+      "patternProperties": {
+        "^E[0-9]{7}$": {
+          "type": ["number", "string", "boolean", "null"]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Personen-eigene ELSTER-Werte OHNE __B-Suffix. Der Suffix wird beim Bauen des Jahres-engineInput von der Pipeline angewendet (für Person B)."
+    }
+  }
+}

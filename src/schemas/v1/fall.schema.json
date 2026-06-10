@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/fall.schema.json",
+  "title": "Fall",
+  "version": "1.0.0",
+  "description": "Kanonisches Fall-Schema für alle 0711-Steuer-Apps. Ein Fall ist die fachliche Klammer um einen Steuerpflichtigen (oder Ehegatten-Paar) über ein oder mehrere Veranlagungsjahre. Beinhaltet Stammdaten (Profil), zugeordnete Belege/Dokumente und pro Jahr die berechneten ELSTER-Werte sowie einen verteilbaren engineInput für bmf-api.",
+  "type": "object",
+  "required": ["schema", "fall_id", "profil", "jahre"],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "fall/v1",
+      "description": "Schema-Identifier inkl. Version."
+    },
+    "fall_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Eindeutige Fall-ID. Konvention: kebab-case oder UUID. Bsp: \"stricker\", \"19ba32f7-...\""
+    },
+    "erzeugt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601-Zeitstempel der Fall-Erzeugung."
+    },
+    "aktualisiert": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 letzter Update."
+    },
+    "tenant": {
+      "type": "string",
+      "enum": ["b2c", "pro", "system", "demo"],
+      "description": "Mandant. b2c = Endkunde, pro = Steuerberater, system = intern, demo = Test."
+    },
+    "profil": {
+      "$ref": "profil.schema.json",
+      "description": "Stammdaten des Falls (Personen, Haushalt, Bankverbindung)."
+    },
+    "jahre": {
+      "type": "object",
+      "patternProperties": {
+        "^(19|20|21)\\d{2}$": {
+          "$ref": "jahresblock.schema.json"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Pro Veranlagungsjahr (z.B. \"2024\") ein Jahresblock mit Personen, ELSTER-Werten und engineInput."
+    },
+    "belege": {
+      "type": "array",
+      "items": { "$ref": "beleg.schema.json" },
+      "description": "Optional. Liste aller Belege/Dokumente die zu diesem Fall gehören. In manchen Pipelines wird diese Liste pro Jahr in jahre[].personen[].belege geführt — beide Stellen sind erlaubt, Apps müssen mit beidem umgehen."
+    },
+    "vergleich": {
+      "type": "array",
+      "items": { "$ref": "vergleichzeile.schema.json" },
+      "description": "Optional. Multi-Jahr-Vergleichsbasis (z.B. 2023 vs 2024)."
+    },
+    "fehlende_belege": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "beleg": { "type": "string" },
+          "fehlt_in": { "type": "string" },
+          "vorhanden_in": { "type": "string" }
+        }
+      },
+      "description": "Belege die in einem Jahr da sind, im anderen aber fehlen."
+    },
+    "rechen_ergebnis": {
+      "type": "object",
+      "description": "Optional. Zwischenspeicher des letzten bmf-api Compute-Outputs pro Jahr. Wird vom Workflow-Orchestrator gepflegt, nicht vom Daten-Producer.",
+      "patternProperties": {
+        "^(19|20|21)\\d{2}$": { "$ref": "rechenergebnis.schema.json" }
+      }
+    }
+  }
+}

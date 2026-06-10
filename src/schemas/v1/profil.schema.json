@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/profil.schema.json",
+  "title": "Profil",
+  "version": "1.0.0",
+  "description": "Stammdaten eines Falls: Personen, Haushalt, Bankverbindung, Religionszugehörigkeit. Zeitlich konstant über alle Veranlagungsjahre des Falls — Jahresvariable Werte gehören NICHT hierher (siehe Jahresblock).",
+  "type": "object",
+  "required": ["haushalt", "personen"],
+  "additionalProperties": false,
+  "properties": {
+    "haushalt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "veranlagung": {
+          "type": "string",
+          "enum": ["einzel", "zusammen", "getrennt", "unbekannt"],
+          "description": "Veranlagungsart. \"zusammen\" = Splittingtarif, \"einzel\" = Grundtarif. Pro Jahr kann sich das ändern → dann separater Eintrag in jahre[].veranlagung (Override)."
+        },
+        "verheiratet": { "type": ["boolean", "null"] },
+        "verheiratet_seit": { "type": ["string", "null"], "format": "date" },
+        "verwitwet_seit": { "type": ["string", "null"], "format": "date" },
+        "finanzamt": { "type": ["string", "null"] },
+        "steuernummer": { "type": ["string", "null"] },
+        "bundesland": {
+          "type": ["string", "null"],
+          "description": "Slug, z.B. \"rheinland-pfalz\", \"bayern\". Engine-relevant für Kirchensteuer."
+        },
+        "adresse": {
+          "type": ["object", "null"],
+          "properties": {
+            "strasse": { "type": ["string", "null"] },
+            "hausnummer": { "type": ["string", "null"] },
+            "plz": { "type": ["string", "null"] },
+            "ort": { "type": ["string", "null"] },
+            "land": { "type": ["string", "null"] }
+          }
+        },
+        "iban": { "type": ["string", "null"] },
+        "bic": { "type": ["string", "null"] }
+      }
+    },
+    "personen": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": { "$ref": "person.schema.json" },
+      "description": "Steuerpflichtige Personen. [0] = Person A (Steuerpflichtiger), [1] = Person B (Ehepartner bei Zusammenveranlagung). Kinder werden separat als belege/anhaenge geführt, NICHT als personen."
+    },
+    "religion": {
+      "type": "object",
+      "properties": {
+        "person_a": { "type": ["string", "null"], "description": "Religionsschlüssel, z.B. \"rk\", \"ev\", \"vd\" oder null = keine KiSt-Pflicht." },
+        "person_b": { "type": ["string", "null"] }
+      }
+    },
+    "metadaten": {
+      "type": "object",
+      "description": "Frei nutzbar für app-spezifische Profil-Erweiterungen (z.B. Pope-Branch-Tags). Engine ignoriert das.",
+      "additionalProperties": true
+    }
+  }
+}
