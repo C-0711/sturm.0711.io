@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/vergleichzeile.schema.json",
+  "title": "VergleichZeile",
+  "version": "1.0.0",
+  "description": "Eine Zeile im Multi-Jahr-Vergleich (z.B. 2023 vs 2024).",
+  "type": "object",
+  "required": ["e_code", "label", "delta", "status"],
+  "additionalProperties": true,
+  "properties": {
+    "e_code": { "type": "string", "pattern": "^E[0-9]{7}(__B)?$" },
+    "label": { "type": "string" },
+    "anlage": { "type": ["string", "null"] },
+    "zeile": { "type": ["string", "null"] },
+    "delta": { "type": "number", "description": "Absolute Differenz aktuelles Jahr − Vorjahr (positiv = mehr im aktuellen Jahr)." },
+    "status": {
+      "type": "string",
+      "enum": ["geändert", "neu", "entfallen", "gleich"]
+    }
+  },
+  "patternProperties": {
+    "^(19|20|21)\\d{2}$": {
+      "type": ["number", "string", "null"],
+      "description": "Jahr-Spalte mit dem Wert für dieses Jahr, z.B. \"2024\": 50000."
+    }
+  }
+}

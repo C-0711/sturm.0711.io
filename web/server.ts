@@ -33,6 +33,7 @@ import { parseVersorgungsbeginn } from './extract-versorgungsbeginn.ts';
 import { parseKapital } from './extract-kapital.ts';
 import { extrahiereScanWerte } from './extrahiere-scan-werte.ts';
 import { harmonizeBelege, type BelegLike, type Mastercase, type Household } from './mastercase-harmonize.ts';
+import { envelopeZuV1, type BelegRoh, type Fall as FallV1, type MasterCase as MasterCaseV1, type Uebersprungen as V1Uebersprungen } from '../src/schemas/v1/index.ts';
 import { rename } from 'node:fs/promises';
 
 const { Pool } = pg;
@@ -199,6 +200,9 @@ interface MastercaseEnvelope {
   // bleibt davon unberührt; der Browser spielt dieses Upgrade per Polling ein.
   belege?: unknown[]; calcs?: unknown[]; profil?: unknown;
   veranlagungsart?: string; begruendung?: string[];
+  // v1-Vertrags-Sicht (additiv, src/schemas/v1): fall/v1 + mastercase/v1 aus
+  // dem Adapter; uebersprungen = was nicht in den Vertrag passte (kein drop).
+  fallV1?: FallV1; mastercaseV1?: MasterCaseV1; v1Uebersprungen?: V1Uebersprungen[];
 }
 // caseId härten (kein Path-Traversal) — gleiche Härtung wie /api/page + Upload-Name.
 const mcFile = (caseId: string) => join(MASTERCASE_DIR, (caseId.replace(/[^\w.-]/g, '_') || 'case') + '.json');
@@ -271,7 +275,22 @@ async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: s
       abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
       aufstellung: { einkommen: bx.res.vorschau.einkommen, steuer: bx.res.vorschau.steuer, anrechnung: bx.res.vorschau.anrechnung },
     }));
-    await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase, calcs, profil, veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung });
+    // v1-Vertrags-Sicht (fall/v1 + mastercase/v1, src/schemas/v1) — additiv;
+    // ein Adapter-Fehler darf den klassischen Envelope nie kippen.
+    // calcs[0] = Haushalts-/erster Bescheid (rechen_ergebnis ist pro Jahr, nicht
+    // pro Person — bei Einzelbescheiden je Person trägt v1 nur den ersten).
+    let v1: { fall: FallV1; mastercase: MasterCaseV1; uebersprungen: V1Uebersprungen[] } | null = null;
+    try {
+      v1 = envelopeZuV1({
+        fallId: caseId, vz, mastercase,
+        household: out.household,
+        veranlagungsart: haushalt.veranlagungsart,
+        belege: (out.belege ?? []) as BelegRoh[],
+        calc: (calcs[0] ?? null) as { erstattung?: number; bindend?: { zve?: number; gesamtsteuer?: number } } | null,
+      });
+    } catch (e) { console.error('MASTERCASE/v1', (e as Error).message); }
+    await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase, calcs, profil, veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung,
+      ...(v1 ? { fallV1: v1.fall, mastercaseV1: v1.mastercase, v1Uebersprungen: v1.uebersprungen } : {}) });
   } catch (e) {
     console.error('MASTERCASE/build', (e as Error).message);
     await writeEnvelope({ caseId, status: 'error', updatedAt: new Date().toISOString(), error: (e as Error).message });
@@ -786,6 +805,19 @@ createServer(async (req, res) => {
       if (!id || !existsSync(f)) return json(res, 200, { status: 'pending' });
       try { return json(res, 200, JSON.parse(readFileSync(f, 'utf8'))); }
       catch { return json(res, 200, { status: 'pending' }); }
+    }
+    if (req.method === 'GET' && url === '/api/v1/fall') {
+      // v1-Vertrags-Sicht (fall/v1 + mastercase/v1) desselben Envelopes —
+      // Polling wie /api/mastercase, gleiche caseId-Härtung.
+      const q = new URLSearchParams((req.url ?? '').split('?')[1] ?? '');
+      const id = (q.get('id') ?? '').replace(/[^\w.-]/g, '_');
+      const f = id ? mcFile(id) : '';
+      if (!id || !existsSync(f)) return json(res, 200, { status: 'pending' });
+      try {
+        const env = JSON.parse(readFileSync(f, 'utf8')) as MastercaseEnvelope;
+        if (env.status !== 'ready' || !env.fallV1) return json(res, 200, { status: env.status || 'pending' });
+        return json(res, 200, { status: 'ready', fall: env.fallV1, mastercase: env.mastercaseV1, uebersprungen: env.v1Uebersprungen ?? [] });
+      } catch { return json(res, 200, { status: 'pending' }); }
     }
     // Auditor: gerechneter Fall → verifizierte Befunde (deterministisch) +
     // user-gerichtete Fragen (lokales Gemma, on-prem). „der Auditor" — das

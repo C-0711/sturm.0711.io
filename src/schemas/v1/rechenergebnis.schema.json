@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/rechenergebnis.schema.json",
+  "title": "RechenErgebnis",
+  "version": "1.0.0",
+  "description": "Output von bmf-api POST /api/rechnen für ein Jahr. Mirror der bmf-api Response. Wird im Fall pro Jahr persistiert.",
+  "type": "object",
+  "required": ["steuerjahr", "endwerte"],
+  "additionalProperties": true,
+  "properties": {
+    "steuerjahr": { "type": "integer" },
+    "engine": {
+      "type": "string",
+      "description": "Welche Engine hat gerechnet? Konvention: \"bmf-api:12015\" oder Legacy \"lane1-mcp:12010\"."
+    },
+    "berechnet_am": { "type": "string", "format": "date-time" },
+    "endwerte": {
+      "type": "object",
+      "required": ["zve", "einkommensteuer"],
+      "properties": {
+        "zve": { "type": "number" },
+        "einkommensteuer": { "type": "number" },
+        "solidaritaetszuschlag": { "type": "number" },
+        "kirchensteuer": { "type": "number" },
+        "erstattung": { "type": "number", "minimum": 0 },
+        "nachzahlung": { "type": "number", "minimum": 0 }
+      }
+    },
+    "module_count": { "type": "integer" },
+    "formeln_gesamt": { "type": "integer" },
+    "fehler_gesamt": { "type": "integer" },
+    "module": {
+      "type": "array",
+      "description": "Spur pro Modul. Detailbeschreibung siehe bmf-api Doku.",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  }
+}

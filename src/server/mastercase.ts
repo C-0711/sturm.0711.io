@@ -13,10 +13,12 @@
  * ELSTER-agnostische Sicht; das Mapping verifiziert/konsolidiert die E-Codes.
  *
  * Lauf:  npx tsx src/server/mastercase.ts [pfad/zu/ctax-case-data.json]
+ *        npx tsx src/server/mastercase.ts --v1 [pfad]   → fall/v1 + mastercase/v1 als JSON
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadCandidates, buildIndex, type Candidate, type MapperIndex } from './harmonize.ts';
+import { jahresFormZuV1 } from '../schemas/v1/adapter.ts';
 
 const DEFAULT_INPUT = '/tmp/stricker-mastercase-input.json';
 
@@ -140,10 +142,21 @@ export function buildMastercase(c: CtaxCase, idx: MapperIndex, cands: Candidate[
 
 // ── Lauf ──────────────────────────────────────────────────────────────
 function main() {
-  const inputPath = process.argv[2] ? resolve(process.argv[2]) : DEFAULT_INPUT;
+  const argv = process.argv.slice(2);
+  const v1Mode = argv.includes('--v1');
+  const rest = argv.filter((a) => a !== '--v1');
+  const inputPath = rest[0] ? resolve(rest[0]) : DEFAULT_INPUT;
   const c = JSON.parse(readFileSync(inputPath, 'utf8')) as CtaxCase;
   const cands = loadCandidates(); const idx = buildIndex(cands);
   const mc = buildMastercase(c, idx, cands);
+
+  if (v1Mode) {
+    // v1-Vertrags-Ausgabe (fall/v1 + mastercase/v1) statt Pretty-Print —
+    // maschinenlesbar für Downstream (Engine-Gateway, Validierung).
+    const v1 = jahresFormZuV1(mc, { quelle: inputPath });
+    console.log(JSON.stringify(v1, null, 2));
+    return;
+  }
 
   console.log(`\n╔══ MASTERCASE (vor Mapping) · ${mc.label} · VZ ${mc.vz} ══`);
   console.log(`veranlagung : ${mc.veranlagungsart}`);

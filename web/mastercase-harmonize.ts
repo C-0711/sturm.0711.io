@@ -489,12 +489,12 @@ export function harmonizeBelege(belege: BelegLike[], household: Household): Mast
 }
 
 // ── optionales main(): Real-Samples laden + drucken ─────────────────────
-const SAMPLE_DIR = process.env.MC_SAMPLES ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'var', 'extract-samples');
+export const SAMPLE_DIR = process.env.MC_SAMPLES ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'var', 'extract-samples');
 // Bank-Belege + VaSt (eDaten). ex_est lassen wir bewusst weg, weil es die
 // reinen Stammdaten enthält; der Harmonizer soll am verrauschten Bank-/VaSt-Set
 // zeigen, dass er Bank-Namen/-Adressen filtert. (ex_0..ex_5 sind stale.)
-const SAMPLE_FILES = ['ex_b4', 'ex_b5', 'ex_b6', 'ex_b7', 'ex_b8', 'ex_vast'];
-const STRICKER: Household = {
+export const SAMPLE_FILES = ['ex_b4', 'ex_b5', 'ex_b6', 'ex_b7', 'ex_b8', 'ex_vast'];
+export const STRICKER: Household = {
   personA: { idnr: '85236749007', vorname: 'Rainer', nachname: 'Stricker' },
   personB: { idnr: '54129386608', vorname: 'Maria Ute', nachname: 'Stricker' },
 };

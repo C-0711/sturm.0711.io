@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://0711-services/schemas/v1/beleg.schema.json",
+  "title": "Beleg",
+  "version": "1.0.0",
+  "description": "Ein Beleg/Dokument im Fall (Lohnsteuerbescheinigung, Rentenbescheid, Spendenquittung etc.). Trägt die OCR-Roh-Ausgabe, klassifizierten Dokumenttyp und extrahierte Positionen.",
+  "type": "object",
+  "required": ["beleg_id", "dokument_typ", "person_key"],
+  "additionalProperties": false,
+  "properties": {
+    "beleg_id": {
+      "type": "string",
+      "description": "Eindeutige ID innerhalb des Falls. Konvention: sha256-Prefix oder Dateiname."
+    },
+    "dateiname": { "type": ["string", "null"] },
+    "sha256": { "type": ["string", "null"] },
+    "dokument_typ": {
+      "type": "string",
+      "description": "Klassifiziertes Dokument. z.B. \"Lohnsteuerbescheinigung\", \"Rentenbescheid\", \"Spendenquittung\", \"Vorsorgeaufwand-Bescheinigung\"."
+    },
+    "aussteller": { "type": ["string", "null"] },
+    "person_key": {
+      "type": "string",
+      "description": "FK auf Person."
+    },
+    "kalenderjahr": { "type": ["integer", "null"], "minimum": 1900, "maximum": 2100 },
+    "status": {
+      "type": "string",
+      "enum": ["hochgeladen", "ocr_laeuft", "extraktion_laeuft", "extrahiert", "kuratiert", "freigegeben", "fehlgeschlagen", "ignoriert"]
+    },
+    "positionen": {
+      "type": "array",
+      "items": { "$ref": "position.schema.json" }
+    },
+    "verarbeitung": {
+      "type": "object",
+      "properties": {
+        "engine": { "type": "string", "description": "OCR-Engine, z.B. \"q0711-beleg-pipeline\", \"Kurator\", \"Pixtral\"" },
+        "ms": { "type": "number" },
+        "erstellt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
