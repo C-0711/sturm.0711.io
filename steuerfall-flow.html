@@ -96,6 +96,7 @@
   .node.source .accent{background:linear-gradient(90deg,#cdd6e6,#6c7791)}
   .node.prep .accent{background:linear-gradient(90deg,#9fb4d6,#42506e)}
   .node.merge{border-color:#3a3a44}.node.merge .accent{background:linear-gradient(90deg,var(--parch),#9a927e)}
+  .node.master{border-color:#3a4a44}.node.master .accent{background:linear-gradient(90deg,var(--teal),var(--amber))}
   .node.check .accent{background:linear-gradient(90deg,var(--ok),#2f7a44)}
   .node.build .accent{background:linear-gradient(90deg,var(--gold),#9a7a2a)}
   .node.output{border-color:#5a4d22}.node.output .accent{background:linear-gradient(90deg,var(--gold),var(--amber))}
@@ -140,6 +141,24 @@
   .foot{max-width:300px}
   .foot p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.5}
   .foot code{font-family:"IBM Plex Mono",monospace;color:var(--teal);font-size:11px}
+
+  /* inspector — click a node to see IN / does / OUT */
+  .inspector{width:344px;max-height:calc(100vh - 150px);overflow:auto;background:#0d1019f5;border:1px solid var(--line);border-radius:12px;padding:14px 16px;backdrop-filter:blur(6px);box-shadow:var(--shadow)}
+  .ins-empty{font-size:12px;color:var(--muted);line-height:1.65}
+  .ins-empty b{display:block;margin-bottom:6px;color:var(--txt);font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.2em;text-transform:uppercase}
+  .ins-empty em{color:var(--teal);font-style:normal}
+  .ins-kicker{font:600 10px/1 "IBM Plex Mono",monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  .ins-title{font-family:"Fraunces",serif;font-weight:600;font-size:21px;letter-spacing:-.01em;margin:0 0 14px;color:var(--txt)}
+  .ins-sec{margin:0 0 13px}
+  .ins-sec h5{margin:0 0 6px;font:600 9px/1 "IBM Plex Mono",monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--slate)}
+  .ins-chip{font:500 11px/1.4 "IBM Plex Mono",monospace;color:var(--txt);padding:3px 9px;border-radius:6px;background:#141a26;border:1px solid #20283a;margin:3px 0;word-break:break-word}
+  .ins-chip.out{color:#0b0d12;background:var(--parch);border-color:transparent}
+  .ins-chip.dim{color:var(--muted);background:transparent;border-color:transparent;padding:1px 9px}
+  .ins-chip.hd{color:var(--teal);background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;padding:8px 0 2px;font-weight:600;letter-spacing:.08em}
+  .ins-chip b{color:var(--gold)}
+  .ins-fn{font:500 11px/1.5 "IBM Plex Mono",monospace;color:var(--slate);word-break:break-word;margin:3px 0}
+  .ins-badge{display:inline-block;font:600 9px/1.4 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--ok);background:#16241a;border:1px solid #2f7a44;border-radius:5px;padding:3px 8px;margin:0 0 13px}
+  .ins-find{font:500 10.5px/1.5 "IBM Plex Mono",monospace;color:var(--muted);border-left:2px solid #3a3a44;padding:2px 0 2px 9px;margin:5px 0}
   .react-flow__handle{width:7px;height:7px;background:#39455a;border:1px solid #5b6478}
 
   /* dossier — complete extracted field table */
@@ -168,7 +187,7 @@
     <div>
       <div class="mark">sturm.0711.io · field-mapper</div>
       <h1>ELSTER Steuerfall — <em>Lane 1 + Lane 2</em> Datenfluss</h1>
-      <div class="sub">Ein Steuerfall (Stricker), 6 Dokumente → submittable E10-XML. Jeder Knoten zeigt, was hineingeht (IN) und was herauskommt (OUT). Live-Lauf auf H200V, co-located.</div>
+      <div class="sub">Ein Steuerfall (Stricker), 6 Dokumente → submittable E10-XML. <b>Inversion:</b> alle Belege werden zuerst zu EINEM Fall konsolidiert (Master Case), dann EINMAL gegen den Katalog gemappt (<b>map-once</b>) — nicht pro Dokument.</div>
     </div>
     <div class="stats">
       <div class="stat"><b>6</b><span>Dokumente</span></div>
@@ -294,20 +313,20 @@ const nodes = [
         " (Name → in Lane 2 gelernt)",
         "Sections: Religion·A · LStB·A",
         " FSA·A · FSA·A · Religion·B" ] }},
-  { id:"l1m", type:"stage", position:{x:60,y:470}, data:{ kind:"lane1", delay:D(), kicker:"Lane 1", title:"mapBeleg × 5",
-      fn:"3-Stufen-Kaskade: Label-exakt → Alias → Nummern-Anker (LStB-Nr · Anlage-Zeile)", in:["5 Sections — LStB · FSA · Religion"],
-      out:["20 E-Codes (Person A/B)"], produced:[
-        "▸ Anlage ESt1A",
-        ["E0100081","85236749007"],["E0100201","Stricker"],["E0100301","Rainer"],["E0100402","02"],
-        ["E0100082","54129386608"],["E0101002","03"],
-        "▸ Anlage N",
-        ["E0200002","3"],["E0200201","69292"],["E0200301","7532,00"],["E0200401","0,00"],
-        ["E0200501","338,94"],["E0200601","338,94"],["E0201806","300"],
-        "▸ Anlage VOR",
-        ["E2000501","0"],["E2000601","6544"],["E2000801","6544"],["E2001203","4902"],
-        ["E2001505","1427"],["E2004403","915"],
-        "▸ Anlage KAP",
-        ["E1901402","324"] ] }},
+  { id:"l1m", type:"stage", position:{x:60,y:470}, data:{ kind:"lane1", delay:D(), kicker:"Lane 1 · Ingestion", title:"Ingestion → Fakten",
+      fn:"extractor() — Label · Wert · Anlage · Zeile · Person (ELSTER-frei, noch keine E-Codes)", in:["5 Sections — LStB · FSA · Religion"],
+      out:["20 Fakten · Person A/B"], produced:[
+        "▸ Anlage N · A",
+        "Bruttoarbeitslohn → 69292",
+        "Lohnsteuer → 7532,00 · KiSt → 338,94",
+        "▸ Anlage VOR · A",
+        "Rentenvers. AN → 6544 · KV → 4902",
+        "▸ Anlage KAP · A",
+        "Sparer-Pauschbetrag → 324",
+        "▸ Stammdaten",
+        "IdNr A → 85 236 749 007",
+        "IdNr B → 54 129 386 608",
+        "↳ Schlüssel Anlage·Zeile·kontextPath — E-Code erst in map-once" ] }},
 
   { id:"i2p", type:"stage", position:{x:770,y:215}, data:{ kind:"prep", delay:D(), kicker:"Phase 0", title:"Bild → PDF",
       fn:"imageToPdf() · sips (Mac) ↦ PIL (H200V)", in:["5 JPG-Scans"], out:["5 image-only PDF","· kein Text-Layer → Lane 2"] }},
@@ -328,25 +347,45 @@ const nodes = [
         "11,25",
         "(ohne Kapitalerträge …)",
         "Zeile 7 Anlage KAP" ] }},
-  { id:"l2m", type:"stage", position:{x:770,y:910}, data:{ kind:"lane2", delay:D(), kicker:"Lane 2", title:"Klassifik. · Person · mapBeleg",
-      fn:"detectBelegTyp · resolvePersonByName · Anlage-Zeile-Anker (+Look-Back +Boundary-Guard) · Erträgnis-Summe",
-      in:["rawText × 5"], out:["17 roh → 8 KAP (A/B)"], produced:[
+  { id:"l2m", type:"stage", position:{x:770,y:910}, data:{ kind:"lane2", delay:D(), kicker:"Lane 2 · Ingestion", title:"Klassifik. · Person → Fakten",
+      fn:"detectBelegTyp · resolvePersonByName · Anlage-Zeile-Anker · Erträgnis-Summe (ELSTER-frei)",
+      in:["rawText × 5"], out:["17 Fakten → 8 (KAP · A/B)"], produced:[
         "▸ Person A (Σ 3 Banken)",
-        ["E1900701","52"],["E1904701","11,55"],["E1904901","0,63"],["E1904801","1,02"],
+        "Kapitalerträge Z.7 → 52",
+        "KapErtSt Z.37 → 11,55",
         "▸ Person B (Σ 2 Banken)",
-        ["E1900701","330"],["E1904701","2,75"],["E1904901","0,15"],["E1904801","0,24"],
+        "Kapitalerträge Z.7 → 330",
+        "KapErtSt Z.37 → 2,75",
         "↳ Volksbank-Summe 319,35 (Erträgnisaufstellung)" ] }},
 
-  { id:"mrg", type:"stage", position:{x:430,y:1170}, data:{ kind:"merge", delay:D(), kicker:"Merge", title:"aggregate()",
-      fn:"Dedup / Summe je (Anlage · Kontext · E-Code · Person)", in:["20 (Lane 1)  +  17 (Lane 2)"],
-      out:["28 E-Codes"], produced:[
-        "20 Lane 1 + 8 Lane 2 (KAP)",
-        "= 28 E-Codes",
-        "KAP/Person summiert (A · B getrennt)",
-        "↳ Detail siehe Dossiers unten" ] }},
-  { id:"val", type:"stage", position:{x:430,y:1410}, data:{ kind:"check", delay:D(), kicker:"Gate", title:"Pre-Validate",
+  { id:"mc", type:"stage", position:{x:430,y:1170}, data:{ kind:"master", delay:D(), kicker:"Inversion · erst mergen", title:"Master Case",
+      fn:"buildMastercase() — alle Dokumente → EIN ELSTER-agnostischer Fall (Entitäten · Profil · Fakten · Meta)", in:["Lane-1-Fakten  +  Lane-2-Fakten"],
+      out:["1 Fall · 2 Entitäten · 37 Fakten + Meta"], produced:[
+        "▸ Entitäten",
+        "A · Rainer — Arbeitnehmer · Kapitalanleger · Vorsorge",
+        "B · Maria — Kapitalanleger",
+        "▸ Fakten konsolidiert",
+        "20 (Lane 1) + 17 (Lane 2) = 37 roh",
+        "household-Stammdaten als Fakten ergänzt",
+        "▸ + Meta (jahresübergreifend) →" ] }},
+  { id:"meta", type:"stage", position:{x:800,y:1300}, data:{ kind:"master", delay:D(), kicker:"Master Case · Meta", title:"Meta-Gedächtnis",
+      fn:"jahresübergreifende Stammdaten + Daueranschnitte → prefill / frage — KEIN ELSTER-Feld im aktuellen Fall", in:["Vorjahr-Fakten (≠ aktueller VZ)"],
+      out:["Vorschläge / Rückfragen an User"], produced:[
+        "▸ stabil → prefill (Auto-Angebot)",
+        "Arbeitgeber-Adresse · IBAN · Konfession",
+        "▸ Betrag → frage (Rückfrage)",
+        "Pendlerpauschale (km × Tage) · Werbungskosten · KV/RV",
+        "↳ 'Arbeitsplatz unverändert + letztes Jahr Pendlerpauschale — im aktuellen Fall übernehmen?'" ] }},
+  { id:"m1", type:"stage", position:{x:430,y:1410}, data:{ kind:"build", delay:D(), kicker:"dann mappen · 1×", title:"map-once",
+      fn:"(Anlage · Vordruckzeile · kontextPath) → Katalog-Bucket → drucktext-Pick · Quantum-Reranker optional (≤24)", in:["37 Fakten · 1 Fall"],
+      out:["28 E-Codes (verifiziert)"], produced:[
+        "Anlage·Zeile·kontextPath → E-Code",
+        "37 Fakten → 28 eindeutige E-Codes",
+        "kein Embedding-NN über 2287 Atome (nur 3% Recall)",
+        "↳ löst die 19 Split-Artefakte des Pro-Dokument-Mappings" ] }},
+  { id:"val", type:"stage", position:{x:430,y:1650}, data:{ kind:"check", delay:D(), kicker:"Gate", title:"Pre-Validate",
       fn:"preValidate() — Catalog regex / Länge / enum", in:["28 E-Codes"], out:["0 errors · 0 warnings → ready ✓"] }},
-  { id:"xml", type:"stage", position:{x:150,y:1640}, data:{ kind:"build", delay:D(), kicker:"Build", title:"E10-XML",
+  { id:"xml", type:"stage", position:{x:150,y:1890}, data:{ kind:"build", delay:D(), kicker:"Build", title:"E10-XML",
       fn:"buildE10XML() — per-Person <KAP>-Blöcke", in:["28 E-Codes"],
       out:["stricker.e10.xml · 2069 bytes"], produced:[
         "<KAP><Person>PersonA</Person>",
@@ -354,21 +393,21 @@ const nodes = [
         "<KAP><Person>PersonB</Person>",
         " E1900701=330 · E1904701=2,75",
         "2 KAP-Blöcke · 28 E-Codes" ] }},
-  { id:"kz", type:"stage", position:{x:660,y:1640}, data:{ kind:"build", delay:D(), kicker:"ERiC-Prep", title:"Kennzahl-Bridge",
+  { id:"kz", type:"stage", position:{x:660,y:1890}, data:{ kind:"build", delay:D(), kicker:"ERiC-Prep", title:"Kennzahl-Bridge",
       fn:"annotateWithKennzahl() — Sachbereich.Kennzahl", in:["28 E-Codes"],
       out:["22/28 → SB.Kz"], produced:[
         "N → 47.110 47.140 47.142 47.144",
         "VOR → 52.301 … 52.370",
         "KAP → 54.210 (A) · 54.410 (B)",
         "22/28 aufgelöst · Rest = 6 ESt1A-ID" ] }},
-  { id:"out", type:"stage", position:{x:430,y:1880}, data:{ kind:"output", delay:D(), kicker:"Ausgang", title:"Submittable E10-XML",
+  { id:"out", type:"stage", position:{x:430,y:2130}, data:{ kind:"output", delay:D(), kicker:"Ausgang", title:"Submittable E10-XML",
       in:["XML + Kennzahl-Adressierung"], out:["ELSTER E10-2024 · schema-ready"] }},
 
   // services (right rail)
   { id:"svc-orch", type:"svc", position:{x:1170,y:380}, data:{ delay:D(), title:"tornado-orchestrator", addr:"H200V :7180", role:"Phasen 0–2b · Rust" }},
   { id:"svc-pad",  type:"svc", position:{x:1170,y:560}, data:{ delay:D(), title:"PaddleOCR-classical", addr:":11440", role:"OCR + per-Record BBox" }},
   { id:"svc-emb",  type:"svc", position:{x:1170,y:690}, data:{ delay:D(), title:"EmbeddingGemma", addr:":11436", role:"semantic overlay · vLLM" }},
-  { id:"svc-pg",   type:"svc", position:{x:1170,y:1430}, data:{ delay:D(), title:"Postgres elster_catalog", addr:":11111", role:"Felder · MatViews · Validierung" }},
+  { id:"svc-pg",   type:"svc", position:{x:1170,y:1520}, data:{ delay:D(), title:"Postgres elster_catalog", addr:":11111", role:"Felder · MatViews · map-once-Bucket" }},
 
   // ledger
   { id:"led", type:"ledger", position:{x:1150,y:870}, data:{ delay:D(), rows:[
@@ -380,7 +419,7 @@ const nodes = [
     ]}},
 
   // complete extracted field dossiers (alle 28 E-Codes, Live-Lauf)
-  { id:"dosA", type:"fields", position:{x:60,y:2110}, data:{ delay:D(), person:"A", title:"Person A · Rainer Stricker", total:22, groups:[
+  { id:"dosA", type:"fields", position:{x:60,y:2370}, data:{ delay:D(), person:"A", title:"Person A · Rainer Stricker", total:22, groups:[
     { anlage:"ESt1A", rows:[
       ["E0100081","85236749007","—","Identifikationsnummer"],
       ["E0100201","Stricker","—","Nachname"],
@@ -408,7 +447,7 @@ const nodes = [
       ["E1904801","1,02","54.282","Kirchensteuer z. KapErtSt (Z.39)"],
       ["E1901402","324","54.218","Sparer-Pauschbetrag"] ]},
   ]}},
-  { id:"dosB", type:"fields", position:{x:560,y:2110}, data:{ delay:D(), person:"B", title:"Person B · Maria Ute Stricker", total:6, groups:[
+  { id:"dosB", type:"fields", position:{x:560,y:2370}, data:{ delay:D(), person:"B", title:"Person B · Maria Ute Stricker", total:6, groups:[
     { anlage:"ESt1A", rows:[
       ["E0100082","54129386608","—","Identifikationsnummer"],
       ["E0101002","03","—","Religion (röm.-katholisch)"] ]},
@@ -438,9 +477,11 @@ const edges = [
   { id:"e4", source:"i2p", target:"l2o", sourceHandle:"b", targetHandle:"t", ...flow(C.amber,"5 image-PDF") },
   { id:"e5", source:"l2o", target:"l2r", sourceHandle:"b", targetHandle:"t", ...flow(C.amber,"consensus + BBox") },
   { id:"e6", source:"l2r", target:"l2m", sourceHandle:"b", targetHandle:"t", ...flow(C.amber,"rawText") },
-  { id:"e7", source:"l1m", target:"mrg", sourceHandle:"b", targetHandle:"t", ...flow(C.teal,"20 Felder") },
-  { id:"e8", source:"l2m", target:"mrg", sourceHandle:"b", targetHandle:"t", ...flow(C.amber,"17 roh → A/B") },
-  { id:"e9", source:"mrg", target:"val", sourceHandle:"b", targetHandle:"t", ...flow(C.parch,"28 Felder") },
+  { id:"e7", source:"l1m", target:"mc", sourceHandle:"b", targetHandle:"t", ...flow(C.teal,"20 Fakten") },
+  { id:"e8", source:"l2m", target:"mc", sourceHandle:"b", targetHandle:"t", ...flow(C.amber,"17 Fakten · A/B") },
+  { id:"emc", source:"mc", target:"m1", sourceHandle:"b", targetHandle:"t", ...flow(C.parch,"konsolidierte Fakten · 1 Fall") },
+  { id:"emeta", source:"mc", target:"meta", sourceHandle:"r", targetHandle:"t", ...dep("Meta · prefill / frage") },
+  { id:"e9", source:"m1", target:"val", sourceHandle:"b", targetHandle:"t", ...flow(C.gold,"28 E-Codes") },
   { id:"e10", source:"val", target:"xml", sourceHandle:"b", targetHandle:"t", ...flow(C.ok,"ready ✓") },
   { id:"e11", source:"val", target:"kz", sourceHandle:"b", targetHandle:"t", ...flow(C.ok,"28 E-Codes") },
   { id:"e12", source:"xml", target:"out", sourceHandle:"b", targetHandle:"t", ...flow(C.gold,"E10-XML") },
@@ -452,32 +493,125 @@ const edges = [
   { id:"d4", source:"l2m", target:"led", sourceHandle:"r", targetHandle:"lt", ...dep("5 Belege A/B") },
   { id:"d5", source:"svc-pg", target:"val", sourceHandle:"slo", targetHandle:"l", ...dep("regex/len/enum") },
   { id:"d6", source:"svc-pg", target:"kz", sourceHandle:"slo", targetHandle:"l", ...dep("vw_sb_kz_to_code") },
-  { id:"d7", source:"svc-pg", target:"l1m", sourceHandle:"slo", targetHandle:"l", ...dep("Schema-Lookup") },
+  { id:"d7", source:"svc-pg", target:"m1", sourceHandle:"slo", targetHandle:"l", ...dep("Bucket · Anlage·Zeile·kontextPath") },
   // output → vollständige Feld-Dossiers
   { id:"r1", source:"out", target:"dosA", sourceHandle:"b", targetHandle:"dt", ...flow(C.teal,"22 Felder · Person A",false) },
   { id:"r2", source:"out", target:"dosB", sourceHandle:"b", targetHandle:"dt", ...flow(C.amber,"6 Felder · Person B",false) },
 ];
 
 const legendRows = [
-  ["Lane 1 — deterministisch (Digital-Text)", C.teal],
-  ["Lane 2 — OCR (gescannte Belege)", C.amber],
-  ["Merge / Validate / Build", C.parch],
+  ["Lane 1 — Ingestion (Digital-Text → Fakten)", C.teal],
+  ["Lane 2 — OCR-Ingestion (Scans → Fakten)", C.amber],
+  ["Master Case — erst mergen (1 Fall)", "linear-gradient(90deg,#48d6c2,#eab24c)"],
+  ["map-once · Validate · Build — dann mappen", C.gold],
   ["Service / Catalog (Abhängigkeit)", "#42506e"],
 ];
 
+/* ---------- per-node VERIFIED detail (echter Lauf, gegen Code + Dateien grounded) ---------- */
+const DETAILS = {
+  in: {
+    real_in: ["7 Dateien · ~/Desktop/Belege/Upload/"],
+    does: ["Bulk-Upload → pro Datei triage.ts (front-door):", "pdftotext -layout → Text-Layer-Schwelle (200 Zeichen)", "detectBelegTyp aus Titel · IdNr-Regex → Person A/B"],
+    real_out: ["VaSt.pdf · 34 KB · Digital-Text 7051 Z. · 5 Sektionen → Lane 1", "5× WhatsApp .jpg · kein Text → Lane 2 (OCR)", "ESt-Erklärung.pdf · 6-Seiten-SCAN (6 Z.) · 105 Felder → Vision"],
+    findings: ["Diagramm zeigt 6 Belege — real liegen 7 Dateien", "Die gescannte ESt-Erklärung (reichste Quelle: 105 Felder / 7 Anlagen) fehlt im Diagramm", "Mandanten: Rainer (A) · Maria (B) · VZ 2023"],
+  },
+  l1p: {
+    real_in: ["VAST Belege Stricker.pdf · 7051 Zeichen Digital-Text"],
+    does: ["splitVastText() — Schnitt an 5× 'Transferticket:' (vast-splitter.ts:59)", "inferHousehold() — Person A/B aus IdNr-Häufigkeit (vast-splitter.ts:132)"],
+    real_out: ["5 Sektionen: 1× LStB·A · 2× FSA · 2× Religion (A/B)", "Person A IdNr · Person B IdNr (Name erst aus Lane 2)"],
+    findings: ["Im echten PDF bestätigt: 1 Lohnsteuerbescheinigung · 2 freigestellte Kapitalerträge · 2 Religionszugehörigkeit = 5 Sektionen"],
+  },
+  l1m: {
+    real_in: ["5 Sektionen (LStB · FSA · Religion)"],
+    does: ["mapBeleg() — 7 Schemas, Label→eCode + Normalisierung (mapper.ts:269)", "4 Post-Prozessoren: StKl-6 · ESt1A-Person-B · KRV · RBM-bAV", "In der Inversion: Fakten + provisorischer eCodeParse"],
+    real_out: ["20 Fakten · Person A/B (ESt1A · N · VOR · KAP)"],
+    findings: ["Nur 7 Beleg-Schemas — KEIN Schema für die volle Erklärung", "zeile/kontextPath first-class (Commit ff33248) → map-once-Schlüssel"],
+  },
+  i2p: {
+    real_in: ["5× WhatsApp .jpg (76–246 KB)"],
+    does: ["JPG → image-only PDF (sips/PIL) — erzeugt KEINEN Text-Layer"],
+    real_out: ["5 image-PDF → OCR-Pflicht (Lane 2)"],
+    findings: ["Lane-Routing fällt real in triage (Text < 200 Z.), nicht per Dateiendung"],
+  },
+  l2o: {
+    real_in: ["5 image-only PDF"],
+    does: ["POST /api/v1/ocr-ensemble → tornado-orchestrator (Rust :7180)", "Phase 2a PaddleOCR :11440 · Phase 2b EmbeddingGemma :11436", "consensus_pages + tagged_pages mit BBox"],
+    real_out: ["consensus records + BBox je Bank-Beleg (Westerwald · LBS · Sparkasse · Volksbank)"],
+    findings: ["Echte Felder/Scan im App-Lauf: 6–15 KAP-Felder (inst.json)", "tornado co-located auf H200V — kein SSH-Tunnel"],
+  },
+  l2r: {
+    real_in: ["consensus records + BBox"],
+    does: ["ocrEnsembleToRawText — BBox (y,x) → Zeilen clustern → Spalten-Layout"],
+    real_out: ["rawText je Beleg (z.B. 'Zeile 7 Anlage KAP' neben '11,25')"],
+    findings: ["Rekonstruiert die Tabellen-Spalten der Bank-Steuerbescheinigung"],
+  },
+  l2m: {
+    real_in: ["rawText × 5"],
+    does: ["mapBelegFromTagged — detectBelegTyp · resolvePersonByName · Anlage-Zeile-Anker (mapper-from-tagged.ts:199)", "Erträgnis-Summe je Person"],
+    real_out: ["17 Fakten → 8 KAP (A · B)"],
+    findings: ["Volksbank-Erträgnisaufstellung-Summe 319,35 (B) korrekt gefangen", "Person per Name — JPGs liefern keine IdNr-Häufigkeit"],
+  },
+  mc: {
+    real_in: ["Lane-1-Fakten + Lane-2-Fakten (+ optional Vision-Fakten der Erklärung)"],
+    does: ["buildMastercase() — alle Dokumente → 1 ELSTER-agnostischer Fall (mastercase.ts:92)", "Entitäten + Profil + Fakten[] + Meta; household-Stammdaten als Fakten"],
+    real_out: ["1 Fall · 2 Entitäten · ~37 Fakten + Meta-Sektion"],
+    findings: ["A/B-Split aus person-Attribut statt pro Dokument → löst 19 Split-Artefakte", "Heute CLI-PoC — noch NICHT in lane1.ts verdrahtet (Inversionsplan)", "NEU: Meta-Sektion (jahresübergreifend, prefill/frage) — siehe Meta-Gedächtnis-Knoten"],
+  },
+  meta: {
+    real_in: ["Vorjahr-Fakten (fremdjährig, ≠ aktueller VZ) — laut Code NIE Teil der Berechnung (lane1.ts:208)"],
+    does: ["buildVorjahr() klassifiziert je Feld (lane1.ts:151):", "stabiles Stammdatum → 'prefill' (zum Übernehmen anbieten)", "Betrag (€) → 'frage' (rückfragen, NIE auto-übernehmen)", "vorjahres-kontext-mapper.ts → daueranschnitte[]: Pendlerpauschale · Werbungskosten · KV/RV"],
+    real_out: ["prefill-Liste (Stammdaten) + frage-Liste (Beträge) + gebündelte Rückfrage an User"],
+    findings: ["~80% existiert schon: buildVorjahr (prefill/frage) + vorjahres-kontext-mapper (daueranschnitte) + audit.ts (Rückfragen)", "NEU: als persistente Meta-Sektion im Master Case (master.json) konsolidieren + EINE begründete Rückfrage statt pro Feld", "Heimat für E-Code-lose Fakten: Arbeitgeber-Adresse (ERiC zieht sie aus dem Übermittler — kein eigenes Feld)", "Beispielwerte illustrativ — keine echten Stricker-Daten"],
+  },
+  m1: {
+    real_in: ["~37 Fakten · 1 Fall"],
+    does: ["mapInContext() — (Anlage·Zeile·kontextPath) → Katalog-Bucket → drucktext-Pick (harmonize.ts:71)", "Quantum-Container nur optionaler Reranker (≤24 Kandidaten)"],
+    real_out: ["28 eindeutige E-Codes (verifiziert)"],
+    findings: ["Voll-NN über 2287 Atome reproduziert nur 3% — daher Bucket-First", "Katalog: atoms.json (Option A) oder Postgres :11111 (Option B)"],
+  },
+  val: {
+    real_in: ["28 E-Codes"],
+    does: ["preValidate() — Katalog regex / Länge / enum (pre-validate.ts:346)"],
+    real_out: ["0 errors · 0 warnings → ready ✓"],
+    findings: ["Gegen Postgres elster_catalog :11111 (2569 Felder · 2196 Regeln)", "null-eCode → unknown-ecode → ready=false → stiller XML-Verlust"],
+  },
+  xml: {
+    real_in: ["28 validierte E-Codes"],
+    does: ["buildE10XML() — xs:sequence · Person-Index · IBAN-Strip · NichtNull-Omit (e10-xml.ts:616)"],
+    real_out: ["VAST Belege Stricker.e10.xml · 2069 bytes", "<E10> root · <A>/<B> · 2× <KAP>"],
+    findings: ["Echte Ausgabe bestätigt: 28 <E…> über ESt1A · N · VOR · 2× KAP", "anlage case-sensitive ('ESt1A') — e10-xml.ts:425 droppt Mismatches"],
+  },
+  kz: {
+    real_in: ["28 E-Codes"],
+    does: ["annotateWithKennzahl() — eCode → Sachbereich.Kennzahl via vw_sb_kz_to_code (kennzahl-bridge.ts:119)"],
+    real_out: ["22/28 aufgelöst · Rest = 6 ESt1A-Identitätsfelder (kein Kennzahl)"],
+    findings: ["Matview vw_sb_kz_to_code im Postgres-Katalog (load_04_views.py)"],
+  },
+  out: {
+    real_in: ["XML + Kennzahl-Adressierung"],
+    does: ["schema-valid gegen E10-2024.xsd (xmllint)"],
+    real_out: ["ELSTER E10-2024 · einreichbar"],
+    findings: ["Lane-5 ELSTER-Einreichung-MCP (:12014) deklariert aber Stub — lokal gespeichert", "Daten VZ 2023 · Schema E10-2024"],
+  },
+};
+
 function App(){
+  const [sel,setSel]=React.useState(null);
+  const d=sel&&sel.data;
+  const det=sel&&DETAILS[sel.id];
   return html`
   <${ReactFlow} nodes=${nodes} edges=${edges} nodeTypes=${nodeTypes}
+      onNodeClick=${(_,n)=>setSel(n)} onPaneClick=${()=>setSel(null)}
       fitView fitViewOptions=${{padding:0.08}} minZoom=${0.04} maxZoom=${1.8}
       onInit=${(inst)=>{ setTimeout(()=>inst.fitView({padding:0.08}),120); setTimeout(()=>inst.fitView({padding:0.08}),450); }}
       proOptions=${{hideAttribution:true}} nodesDraggable=${true} defaultEdgeOptions=${{}}>
     <${Background} variant="lines" gap=${28} size=${1} color="#161c28" />
     <${Background} variant="dots" gap=${28} size=${1.4} color="#202a3c" />
     <${Controls} showInteractive=${false} />
-    <${MiniMap} position="top-right" pannable zoomable maskColor="#0b0d12cc" nodeColor=${n=>{
+    <${MiniMap} position="bottom-right" pannable zoomable maskColor="#0b0d12cc" nodeColor=${n=>{
         if(n.type==="fields") return n.data.person==="A"?C.teal:C.amber;
         const k=(n.data&&n.data.kind)||(n.type==="svc"?"svc":(n.type==="ledger"?"led":"merge"));
-        return ({lane1:C.teal,lane2:C.amber,merge:C.parch,check:C.ok,build:C.gold,output:C.gold,source:"#cdd6e6",prep:C.slate,svc:"#42506e",led:C.amber}[k])||"#444";
+        return ({lane1:C.teal,lane2:C.amber,merge:C.parch,master:C.parch,check:C.ok,build:C.gold,output:C.gold,source:"#cdd6e6",prep:C.slate,svc:"#42506e",led:C.amber}[k])||"#444";
       }} style=${{background:"#0d1019",border:"1px solid #222a3a",borderRadius:10}} />
     <${Panel} position="top-left">
       <div class="legend">
@@ -485,10 +619,33 @@ function App(){
         ${legendRows.map((r,i)=>html`<div class="lg-row" key=${i}><span class="swatch" style=${{background:r[1]}}></span>${r[0]}</div>`)}
       </div>
     <//>
-    <${Panel} position="bottom-right">
+    <${Panel} position="top-right">
+      <div class="inspector">
+        ${d ? html`
+          <div class="ins-kicker">${d.kicker||sel.type}</div>
+          <div class="ins-title">${d.title||sel.id||"Knoten"}</div>
+          ${det ? html`
+            <div class="ins-badge">✓ echter Lauf · verifiziert</div>
+            ${det.real_in && html`<div class="ins-sec"><h5>↘ was wirklich reingeht</h5>${det.real_in.map((c,i)=>html`<div class="ins-chip" key=${"ri"+i}>${c}</div>`)}</div>`}
+            ${det.does && html`<div class="ins-sec"><h5>⚙ was es wirklich tut</h5>${det.does.map((c,i)=>html`<div class="ins-fn" key=${"dd"+i}>${c}</div>`)}</div>`}
+            ${det.real_out && html`<div class="ins-sec"><h5>↗ was wirklich rauskommt</h5>${det.real_out.map((c,i)=>html`<div class="ins-chip out" key=${"ro"+i}>${c}</div>`)}</div>`}
+            ${det.findings && html`<div class="ins-sec"><h5>⚠ Befunde</h5>${det.findings.map((c,i)=>html`<div class="ins-find" key=${"fi"+i}>${c}</div>`)}</div>`}
+          ` : html`
+            ${d.in && html`<div class="ins-sec"><h5>↘ was reingeht</h5>${d.in.map((c,i)=>html`<div class="ins-chip" key=${"i"+i}>${c}</div>`)}</div>`}
+            ${d.fn && html`<div class="ins-sec"><h5>⚙ was es tut</h5><div class="ins-fn">${d.fn}</div></div>`}
+            ${d.out && html`<div class="ins-sec"><h5>↗ was rauskommt</h5>${d.out.map((c,i)=>html`<div class="ins-chip out" key=${"o"+i}>${c}</div>`)}</div>`}
+            ${d.addr && html`<div class="ins-sec"><h5>⛁ service</h5><div class="ins-fn">${d.addr} · ${d.role}</div></div>`}
+            ${d.produced && html`<div class="ins-sec"><h5>▣ daten</h5>${d.produced.map((p,i)=> Array.isArray(p)
+              ? html`<div class="ins-chip" key=${"p"+i}><b>${p[0]}</b> ${p[1]}</div>`
+              : html`<div class=${"ins-chip"+(p[0]==="▸"?" hd":((p[0]==="·"||p[0]==="↳"||p[0]===" ")?" dim":""))} key=${"p"+i}>${p[0]==="▸"?p.slice(1):p}</div>`)}</div>`}
+          `}
+        ` : html`<div class="ins-empty"><b>Inspector</b>Klicke einen Knoten — hier erscheint, <em>was reingeht</em>, <em>was er tut</em> und <em>was rauskommt</em>. Knoten mit ✓ zeigen den echten Lauf.</div>`}
+      </div>
+    <//>
+    <${Panel} position="bottom-left">
       <div class="foot">
-        <h4>Co-located Lauf · H200V</h4>
-        <p>Orchestrator <code>:7180</code>, Postgres <code>:11111</code>, OCR <code>:11440</code> — alle lokal, kein SSH-Tunnel. Ganzer Fall in <code>10,1 s</code>: 20→28 Felder, getrennte KAP-Blöcke (A · B), Volksbank-Summe 319,35 gefangen, <code>ready=✓</code>.</p>
+        <h4>Inversion · erst mergen, dann mappen</h4>
+        <p>Alle 6 Belege werden zuerst zu <b>einem</b> Fall konsolidiert (<code>buildMastercase()</code>), dann <b>einmal</b> gegen den Katalog gemappt (<code>map-once</code>) — statt pro Dokument zu mappen und danach zu aggregieren. Löst die 19 A/B-Split-Artefakte. Co-located auf H200V <code>:7180 · :11111</code>, <code>ready=✓</code>.</p>
       </div>
     <//>
   <//>`;

@@ -411,7 +411,21 @@ function pollMastercase(caseId){
       const m=await r.json();
       if(m.status==='ready'||m.status==='error'){
         clearInterval(mastercasePoll);mastercasePoll=null;
-        if(active&&active.id===caseId){active.mastercase=m.mastercase||null;active.mastercaseError=m.error||null;persistActive();render();}
+        if(active&&active.id===caseId){
+          active.mastercase=m.mastercase||null;active.mastercaseError=m.error||null;
+          // Phase-2-Upgrade: aus den Gemma-/extract-Daten neu attribuierte Belege +
+          // neu gerechneter Bescheid ersetzen die deterministische Erstanzeige
+          // (nur wenn vorhanden — sonst bleibt die Phase-1-Anzeige stehen).
+          if(active.data&&m.status==='ready'){
+            if(Array.isArray(m.belege)&&m.belege.length)active.data.belege=m.belege;
+            if(Array.isArray(m.calcs)&&m.calcs.length)active.data.calcs=m.calcs;
+            if(m.profil)active.data.profil=m.profil;
+            if(m.veranlagungsart)active.data.veranlagungsart=m.veranlagungsart;
+            if(m.begruendung)active.data.begruendung=m.begruendung;
+            active.mastercaseUpgraded=true;
+          }
+          persistActive();render();
+        }
       }
     }catch(e){/* transient → weiter pollen */}
   },1500);
