@@ -6,7 +6,7 @@ they are the actual gesetzliche Werte that drive arithmetic constraints in
 tax-form validation. Updating them requires an act of parliament (or
 Bundessozialversicherungs-Rechengrößenverordnung for SV-BBG/Rates).
 
-Scope: VZ 2023 (Stricker-Test). For other Veranlagungszeiträume, add a
+Scope: VZ 2023. For other Veranlagungszeiträume, add a
 year-keyed lookup — same statute, different parameter values per year.
 """
 

@@ -3,13 +3,16 @@
 Welle 4 — Constrained-LLM-Fallback via Gemma-4 (Ollama JSON-Schema mode).
 
 Input:
-  - Welle 1-3 Output (55 locked eCodes als VORANALYSIERTE HINTS)
-  - OCR-Volltext der Stricker.pdf
+  - Welle 1-3 Output (eCode-Locks als VORANALYSIERTE HINTS)
+  - OCR-Volltext einer Einkommensteuererklärung
   - ELSTER-Container atoms.json (alle 2287 eCodes mit Metadaten als Lookup)
 
 Output: JSON-Schema-constrained Liste zusätzlicher {ecode, value, drucktext,
 source_line, anlage}-Tripel die der LLM aus dem OCR-Volltext mit eCode-Lookup
 aus dem Container ableiten kann. Werden in locks.dict gemerged.
+
+KEINE hardcoded Case-Daten — der LLM bekommt nur das Container-Schema +
+die bisher gelockten eCodes als Context. Keine Soll-Werte im Prompt.
 """
 import json
 import urllib.request
@@ -20,7 +23,7 @@ from typing import Optional
 ROOT = Path(__file__).parent
 ATOMS_JSON = ROOT.parent / "Upload" / "data" / "atoms.json"
 SOLVER_JSON = ROOT / "out" / "solver_result.json"
-OCR_FILE = ROOT / "out" / "ocr" / "Elster 2023 Stricker - Einkommensteuererklärung.ocr.txt"
+OCR_FILE = None  # via CLI --ocr argument set
 OUT_JSON = ROOT / "out" / "welle4_result.json"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "gemma4:e4b"
@@ -143,25 +146,19 @@ Drucktexten. Du DARFST NUR eCodes aus dieser Liste verwenden:
 
 {json.dumps(catalog_active, ensure_ascii=False)[:50000]}
 
---- OCR-VOLLTEXT (Einkommensteuererklärung 2023 Stricker) ---
+--- OCR-VOLLTEXT (Einkommensteuererklärung) ---
 {ocr_text}
 
 --- AUFGABE ---
 Finde im OCR-Volltext WEITERE Werte die noch NICHT in den HINTS gelockt sind, \
 und ordne sie ihren ELSTER-eCodes aus dem Container zu.
 
-Konkrete Lücken im aktuellen Lockset (DU SOLLST diese auffüllen, nicht erfinden):
-1. KAP-Antrag Überprüfung des Steuereinbehalts (Person A + Person B) — Wert "1" für Ja
-2. Sonderausgaben Kirchensteuer gezahlt 2023 = 924 EUR
-3. Sonderausgaben Kirchensteuer erstattet 2023 = 356 EUR
-4. Anlage N Werbungskosten — Arbeitsmittel-Betrag 103, Kontoführungsgebühren 16, \
-   Berufl. Anteil Rechtsschutzversicherung 88
-5. Anlage AV — Bezeichnung "Arbeitgeberanteil zur Zukunftssicherung" + Betrag 456
-
 REGELN:
 - NUR eCodes aus dem ELSTER-Container verwenden. KEINE erfundenen eCodes.
+- KEINE Werte erfinden — wenn der Wert nicht im OCR steht, NICHT emittieren.
 - source_line muss die OCR-Zeile sein in der der Wert steht.
-- person="A" für Rainer Stricker, "B" für Ute Stricker, "none" für Felder ohne Personentrennung.
+- person="A" für Steuerpflichtige Person (erste IdNr), "B" für Ehegatte/Partner
+  (zweite distinct IdNr), "none" für Felder ohne Personentrennung.
 - value als String wie er im OCR steht.
 - confidence 0.0-1.0 — wie sicher die Zuordnung ist.
 

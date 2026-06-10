@@ -129,7 +129,7 @@ FINANCIAL_KEYWORDS = {
 # Noise references to numbers that AREN'T amounts
 NUMBER_REFERENCE_PATTERNS = [
     # LStB-Zeilennummern sind 1-99. Beschränken auf \d{1,2} damit ALV-Wert
-    # 841 nicht durch "Nr. 841" eaten wird.
+    # ALV-Werte (3-stellig) nicht durch "Nr. 27"-Mask eaten werden.
     re.compile(r"Nr\.\s*\d{1,2}(?:\s*[a-z](?:\s*/\s*[a-z])?)?", re.I),
     re.compile(r"Zeilen?\s*\d+(?:\s+bis\s+\d+)?", re.I),
     re.compile(r"Seite\s*\d+\s*von\s*\d+", re.I),
@@ -219,8 +219,57 @@ def parse_ocr(ocr_text: str) -> tuple[list[NumValue], list[DateValue], list[tupl
     in_summe_section = False  # under "Summe Lohnsteuerbescheinigung(en) ..." header
     stkl_range = None         # current Steuerklassen-Range section: "1_5" or "6"
 
-    for line_no, line in enumerate(lines, start=1):
-        # Anlage detection
+    # Vision-Pipeline-Format Recognition:
+    #   === ANLAGE_N (Person A) ===
+    #   [058] Bruttoarbeitslohn 63.559,90 €
+    # Block-Header sets current_anlage + current_person.
+    # [NNN] prefix overrides the file-line-no with the semantic zeilen_nr
+    # so zoning.json zeilen_nr matches NumValue.line_no downstream.
+    VISION_BLOCK_HEADER_RE = re.compile(
+        r"^\s*=+\s*([A-Z][A-Z0-9_]+)(?:\s*\(Person\s+([AB])\))?\s*=+\s*$"
+    )
+    VISION_LINE_PREFIX_RE = re.compile(r"^\s*\[(\d{1,4})\]\s*(.*)$")
+
+    def _vision_doc_typ_to_anlage(dt: str) -> Optional[str]:
+        dt_up = dt.upper().replace("HAUPTVORDRUCK_", "").replace("ANLAGE_", "")
+        if dt_up.startswith("EST1A"):
+            return "ESt1A"
+        if dt_up in ("ESTA1", "ESTA1A"):
+            return "ESt1A"
+        if len(dt_up) <= 4:
+            return dt_up
+        # Common multi-char anlagen
+        if dt_up.startswith("VORSORGE"):
+            return "Vorsorgeaufwand"
+        if dt_up.startswith("SONDERAUSGABEN") or dt_up == "SA":
+            return "SA"
+        return dt_up.title()
+
+    for file_line_no, raw_line in enumerate(lines, start=1):
+        line = raw_line
+        # Vision-block-header detection (NEW): "=== ANLAGE_N (Person A) ==="
+        vbh = VISION_BLOCK_HEADER_RE.match(line)
+        if vbh:
+            anlage_from_vision = _vision_doc_typ_to_anlage(vbh.group(1))
+            if anlage_from_vision:
+                current_anlage = anlage_from_vision
+            if vbh.group(2):
+                current_person = vbh.group(2)
+            # Header-Zeile selbst trägt keine Tokens — line_ctx setzen, weiter
+            line_ctx.append((current_anlage, current_person))
+            continue
+
+        # Vision-line-prefix detection (NEW): "[058] Bruttoarbeitslohn ..."
+        # Wenn vorhanden: line_no wird auf die semantische Zeile (058) gesetzt,
+        # damit zoning.json-Mapping über zeilen_nr direkt greift.
+        vlp = VISION_LINE_PREFIX_RE.match(line)
+        if vlp:
+            line_no = int(vlp.group(1))
+            line = vlp.group(2)
+        else:
+            line_no = file_line_no
+
+        # Legacy: Anlage detection via Hauptvordruck X / Anlage X
         m = ANLAGE_RE.search(line)
         if m:
             current_anlage = (m.group(2) or m.group(4) or "").strip()
@@ -731,7 +780,7 @@ def write_markdown_report(locks: dict, ratio_findings: dict,
                             unlocked_currencies: list,
                             unlocked_integers: list,
                             unlocked_dates: list):
-    md = ["# ELSTER Inverse Solver — Stricker 2023", ""]
+    md = ["# ELSTER Inverse Solver Report", ""]
     md.append(f"**Locks total:** {len(locks)}")
     md.append("")
 
@@ -800,19 +849,128 @@ def write_markdown_report(locks: dict, ratio_findings: dict,
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# CLI ARGS
+# ─────────────────────────────────────────────────────────────────────────
+def _parse_args():
+    import argparse
+    p = argparse.ArgumentParser(
+        description="ELSTER Inverse Solver — Ratio-Math + Spatial-Zoning + "
+                    "Label-Adjacency + (optional) embeddinggemma-Cascade + Lane 1 Verifier.",
+    )
+    p.add_argument("--ocr",         help="OCR-Volltext (.txt) Pfad (Pflicht).")
+    p.add_argument("--output",      help="Output solver_result.json Pfad. Default: out/solver_result.json")
+    p.add_argument("--atoms",       help="atoms.json Container-Snapshot Pfad. Default: ../Upload/data/atoms.json")
+    p.add_argument("--paragraphs",  help="paragraph_estg.json Pfad (optional).")
+    p.add_argument("--zoning",      help="Vision-OCR-Zoning JSON (gemma-vision-ocr-zoning Output). "
+                                          "Wenn gegeben: explizite (Anlage,Person)-Zonen statt OCR-Header-Regex.")
+    p.add_argument("--steuerjahr",  type=int, default=2023,
+                                          help="Veranlagungszeitraum (für statutory constants + Lane 1).")
+    p.add_argument("--lane1-verify", action="store_true",
+                                          help="Welle 5: Lane 1 BMF §32a-Verifier aufrufen (braucht localhost:12010).")
+    p.add_argument("--cascade-fallback", action="store_true",
+                                          help="Welle 4: embeddinggemma Cascade-Search aufrufen (braucht Ollama).")
+    return p.parse_args()
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────
 def main():
+    global OCR_DIR, ATOMS_JSON, OUT_JSON, OUT_MD
+    # CLI ist Pflicht. Ohne --ocr → Fehler. Der Solver kennt keine hardcoded
+    # Case-Daten als Default — er ist vollständig generisch und kennt weder
+    # konkrete Mandanten noch Veranlagungszeiträume von selber.
+    args = _parse_args()
+    if not args.ocr:
+        raise SystemExit(
+            "ERROR: --ocr <path> ist Pflicht. Der Solver kennt keine hardcoded "
+            "Test-Fixture. Übergib einen OCR-Text-Pfad einer Einkommensteuererklärung."
+        )
+    if args.atoms:
+        ATOMS_JSON = Path(args.atoms)
+    if args.output:
+        OUT_JSON = Path(args.output)
+        OUT_MD = OUT_JSON.with_name(
+            OUT_JSON.stem.replace("solver_result", "SOLVER_REPORT") + ".md"
+        )
+
     print("=== ELSTER Inverse Solver ===")
-    print(f"OCR: {OCR_DIR}")
+    print(f"OCR: {args.ocr}")
     print(f"Atoms: {ATOMS_JSON}")
+    if args.zoning:
+        print(f"Zoning: {args.zoning}")
     print()
 
-    # Welle 0
-    ocr_file = OCR_DIR / "Elster 2023 Stricker - Einkommensteuererklärung.ocr.txt"
+    ocr_file = Path(args.ocr)
     ocr_text = ocr_file.read_text()
     ocr_lines = ocr_text.split("\n")
+
+    # Zoning-Override: wenn --zoning gegeben, die strukturierten Block-Marker
+    # NACH parse_ocr in line_ctx einspielen, sodass Welle 2 (Spatial Zoning)
+    # explizite (anlage, person)-Zonen pro Block-Bereich bekommt.
+    zoning_blocks = None
+    if args and args.zoning and Path(args.zoning).exists():
+        zoning_blocks = json.loads(Path(args.zoning).read_text())
+        print(f"W0: zoning loaded — {len(zoning_blocks)} blocks "
+              f"({sum(len(b.get('ocr_zeilen', [])) for b in zoning_blocks)} OCR-rows)")
     nums, dates, line_ctx = parse_ocr(ocr_text)
+
+    # Zoning-Override: wenn explizite Block-Liste (gemma-vision-ocr-zoning),
+    # überschreibe (anlage, person) für die NumValue+DateValue Tokens nach dem
+    # Vision-Block-Mapping. Das verhindert dass die OCR-Header-Regex
+    # ("Hauptvordruck ESt1A") fehlschlägt wenn der Vision-Pfad strukturierten
+    # Text mit "=== ANLAGE_N (Person A) ===" Markern liefert.
+    if zoning_blocks:
+        # Zoning-Format: [{dokumenten_typ, gehoert_zu_person, ocr_zeilen[{zeilen_nr,text}]}]
+        # Map dokumenten_typ → Container-Anlage (z.B. "ANLAGE_N" → "N", "ANLAGE_KAP" → "KAP")
+        def _doc_typ_to_anlage(dt: str) -> Optional[str]:
+            dt_up = dt.upper().replace("HAUPTVORDRUCK_", "").replace("ANLAGE_", "")
+            if dt_up.startswith("EST1A"):
+                return "ESt1A"
+            if len(dt_up) <= 4:
+                return dt_up
+            return dt_up.title()
+
+        line_to_block: dict[int, tuple[Optional[str], Optional[str]]] = {}
+        cumulative = 0
+        for b in zoning_blocks:
+            anlage = _doc_typ_to_anlage(b.get("dokumenten_typ") or "")
+            person = b.get("gehoert_zu_person")
+            cumulative += 1  # Header-Zeile selber
+            for z in b.get("ocr_zeilen") or []:
+                # zeilen_nr ist Block-relativ; cumulative deckt globalen Index ab
+                # Im strukturierten Text werden tatsächlich [NNN] Präfixe gesetzt
+                # — wir matchen direkt auf zeilen_nr aus dem Vision-Output.
+                ln = z.get("zeilen_nr")
+                if ln is not None:
+                    line_to_block[int(ln)] = (anlage, person)
+            cumulative += 1  # Leerzeile
+
+        # Override anlage/person für jeden Token dessen line_no in einem Block ist
+        for n in nums:
+            ap = line_to_block.get(n.line_no)
+            if ap:
+                if ap[0]:
+                    n.anlage = ap[0]
+                if ap[1]:
+                    n.person = ap[1]
+        for d in dates:
+            ap = line_to_block.get(d.line_no)
+            if ap:
+                if ap[0]:
+                    d.anlage = ap[0]
+                if ap[1]:
+                    d.person = ap[1]
+        # line_ctx neu aufbauen aus den überschriebenen Tokens
+        line_ctx_dict: dict[int, tuple[Optional[str], Optional[str]]] = {}
+        for n in nums:
+            line_ctx_dict[n.line_no] = (n.anlage, n.person)
+        for d in dates:
+            line_ctx_dict.setdefault(d.line_no, (d.anlage, d.person))
+        line_ctx = [(None, None)] + [
+            line_ctx_dict.get(i, (None, None)) for i in range(1, len(ocr_lines) + 1)
+        ]
+        print(f"W0: zoning override applied — {len(line_to_block)} OCR-rows pinned to (anlage, person)")
     currs = [n for n in nums if n.is_currency]
     ints = [n for n in nums if not n.is_currency]
     print(f"W0: parsed {len(currs)} currencies, {len(ints)} integers, {len(dates)} dates")
@@ -832,19 +990,34 @@ def main():
         "kist_halb_8": find_ratio_locks(all_amounts, 0.04, RATIO_TOL, max_line_dist=15),
         "kist_halb_9": find_ratio_locks(all_amounts, 0.045, RATIO_TOL, max_line_dist=15),
     }
-    # SV ratios: base = Bruttoarbeitslohn (Anlage N), derived = SV-Beitrag
-    # (Anlage Vorsorgeaufwand / AV). Brutto + Vorsorge können weit auseinander
-    # liegen in der Erklärung (Anlage N → Anlage Vorsorgeaufwand sind ~100+
-    # OCR-Zeilen entfernt). Anlage-Constraint verhindert Kreuz-Match mit
-    # zufälligen Beträgen anderer Anlagen.
+    # SV ratios — Math-First, kein anlage-Constraint mehr.
+    # Math-Anchor-Validation: wenn 3+ verschiedene SV-Sätze aus DERSELBEN Brutto-
+    # Base feuern → das IST der Vorsorge-Block, egal wo im Dokument. False-
+    # Positives (z.B. ein KiSt-Wert der zufällig 1.5%×Brutto ≈ PV-Rate matched)
+    # werden ausgefiltert weil sie SOLO
+    # matchen, nicht als Cluster.
     for rate, label, paragraph in SV_RATES:
         key = f"sv_{label.replace(' ','_').replace('-','_')}"
         ratio_findings[key] = find_ratio_locks(
-            all_amounts, rate, RATIO_TOL_SV, max_line_dist=200,
+            all_amounts, rate, RATIO_TOL_SV, max_line_dist=400,
             min_base=10000.0, min_derived=50.0,
-            base_anlage_allowed={"N"},
-            derived_anlage_allowed={"Vorsorgeaufwand", "AV"},
+            # KEIN anlage-Constraint mehr — Math validiert sich selbst durch
+            # gleichzeitige Mehrfach-Treffer aus derselben Base
         )
+    # Multi-Anchor-Cluster-Filter: nur Findings behalten deren BASE auch
+    # mindestens N andere SV-Findings hat (= konsistenter Vorsorge-Block).
+    sv_keys = [f"sv_{l.replace(' ','_').replace('-','_')}" for _, l, _ in SV_RATES]
+    base_to_hits: dict[int, list[tuple[str, dict]]] = {}
+    for k in sv_keys:
+        for f in ratio_findings[k]:
+            base_id = id(f["base"])
+            base_to_hits.setdefault(base_id, []).append((k, f))
+    MIN_SV_CLUSTER = 3  # >=3 SV-Sätze aus derselben Brutto-Base = echter Block
+    confident_bases = {b for b, hits in base_to_hits.items() if len(hits) >= MIN_SV_CLUSTER}
+    for k in sv_keys:
+        ratio_findings[k] = [f for f in ratio_findings[k] if id(f["base"]) in confident_bases]
+    print(f"  SV-Cluster: {len(confident_bases)} base(s) with ≥{MIN_SV_CLUSTER} SV-Ratio-Hits "
+          f"(false-positives gefiltert)")
     print(f"  Soli (5.5%): {len(ratio_findings['soli'])}")
     print(f"  KiSt 8%: {len(ratio_findings['kist_8'])}, KiSt 9%: {len(ratio_findings['kist_9'])}")
     print(f"  KiSt halb 4%: {len(ratio_findings['kist_halb_8'])}, halb 4.5%: {len(ratio_findings['kist_halb_9'])}")
@@ -1053,7 +1226,7 @@ def main():
         atoms = json.load(f)
 
     # Pre-index math-locks by (line_no, value-rounded) for fast convergence-check.
-    # Also store integer-truncated form so currency-int atoms (Brutto 63559.90→63559)
+    # Also store integer-truncated form so currency-int atoms (e.g. Brutto-Wert mit Cents → ohne Cents)
     # converge with their math-lock counterpart.
     math_by_line_val = defaultdict(list)
     for lock in locks.values():
@@ -1234,7 +1407,7 @@ def main():
         max_laenge = meta.get("maxLaenge")
 
         # Person-aware lock key: same eCode can be locked twice (Person A AND B)
-        # E.g. E1904701 KESt locked at L132 for Rainer AND L159 for Ute
+        # E.g. KESt-eCode can be locked twice (Person A line + Person B line)
         lock_key = f"{ecode}__{zone_person}" if zone_person else ecode
 
         # Convergence: math-lock at same (line, value) exists?
@@ -1281,6 +1454,58 @@ def main():
     print(f"  Unlocked currencies: {len(unlocked_currs)}")
     print(f"  Unlocked integers:   {len(unlocked_ints)}")
     print(f"  Unlocked dates:      {len(unlocked_dates)}")
+
+    # ═════════════════════════════════════════════════════════════
+    # Welle 4 — embeddinggemma Cascade-Search-Fallback
+    # ═════════════════════════════════════════════════════════════
+    # Für OCR-Lines die weder Math-Lock noch Label-Adjacency-Lock haben:
+    # query embeddinggemma → cosine top-K gegen FP32-Atom-Embeddings →
+    # filter by aktive Anlagen-Set + threshold 0.55. Produces low-confidence
+    # locks (0.7) für sonst un-anchorbare Felder (KAP-Anträge, Sonderausgaben
+    # KiSt, AV-Zukunftssicherung).
+    cascade_locks_added = 0
+    if args.cascade_fallback:
+        print(f"\nW4: Cascade-Search-Fallback (embeddinggemma)")
+        try:
+            from welle4_cascade import load_fp32_embeddings, run_cascade
+            emb_n, _meta, NN, DD = load_fp32_embeddings()
+            atoms_list = json.loads(ATOMS_JSON.read_text())
+            locked_ecodes = {l.ecode for l in locks.values()
+                              if not str(l.ecode).startswith("PSEUDO")}
+            locked_lines_w4 = {l.line_no for l in locks.values()
+                                if not str(l.ecode).startswith("PSEUDO")}
+            active_anlagen_w4 = {(l.anlage or "").lower() for l in locks.values()
+                                  if not str(l.ecode).startswith("PSEUDO") and l.anlage}
+            active_anlagen_w4.update({"sa", "av"})
+            cascade_new = run_cascade(
+                ocr_lines=ocr_lines,
+                locked_ecodes=locked_ecodes,
+                locked_lines=locked_lines_w4,
+                atoms=atoms_list,
+                emb_n=emb_n, N=NN, D=DD,
+                active_anlagen=active_anlagen_w4,
+            )
+            for cl in cascade_new:
+                ecode = cl["ecode"]
+                if ecode in locks:
+                    continue
+                locks[ecode] = Lock(
+                    ecode=ecode,
+                    drucktext=cl["drucktext"],
+                    value=cl["value"],
+                    line_no=cl["line_no"],
+                    locked_by=[f"cascade cos={cl['cosine']}"],
+                    paragraph=None,
+                    anlage=cl.get("anlage"),
+                    confidence=0.7,
+                    wave=4,
+                )
+                cascade_locks_added += 1
+            print(f"  Cascade locks: +{cascade_locks_added} new eCodes (confidence 0.7)")
+        except FileNotFoundError as e:
+            print(f"  Cascade skipped — {e}")
+        except Exception as e:
+            print(f"  Cascade failed: {type(e).__name__}: {e}")
 
     # Welle 5 — Lane 1 verify with all math-locked amounts
     print(f"\nW5: Lane 1 verifier")

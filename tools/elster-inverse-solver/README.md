@@ -1,71 +1,97 @@
-# ELSTER Inverse Solver — Deterministic eCode Extraction
+# Elster-Quantum Extraktions-Workflow
 
-Pipeline that derives ELSTER eCodes from a German Einkommensteuererklärung PDF
-through constraint propagation. No hardcoded ground-truth values — eCodes
-emerge from Ratio Math + Spatial Zoning + statutory §§-EStG-Constraints +
-Lane 1 BMF calculation verification.
+Generischer Workflow, der **beliebige Steuer-Belege/Rechnungen** gegen den
+ELSTER-Quantum-Container matcht und für jedes Feld liefert:
 
-## Architecture — 5 Waves
+- **Elster eCode** (`E0200201`, …)
+- **Drucktext** (kanonische Bezeichnung)
+- **Bezeichnung** (BMF-XML-Wert)
+- **Anlage** (N, KAP, SA, …)
+- **Wert vom Beleg** (rohe OCR-Form)
+- **Normalisierter Wert** (cents / int / `TT.MM.JJJJ` / string)
+- **Vordruckzeile**
+- **Range / Regex** (`minLaenge`, `maxLaenge`, `formatRegex`)
+- **§EStG-Paragraph** (über `paragraph_estg.json`-Mapping)
+- **Quelle** (Datei + Zeilennummer im OCR-Text)
+- **Alternativen** (gleichwertige eCodes mit identischem Drucktext im selben
+  Anlagen-Kontext werden als `alternatives[]` aufgelistet, statt sie als
+  separate Treffer zu emittieren)
+
+## Wichtig
+
+Nichts ist hardcoded: keine Werte, keine Belegtypen, keine Steuerzahler-Daten.
+Das Skript kennt nur das, was im Container steht (atoms.json, paragraph_estg.json,
+disambiguation_hints.json). Belege werden ausschließlich über OCR + Container-Index
+extrahiert.
+
+## Aufruf
+
+```bash
+python3 elster_extract.py \
+  --container <pfad/zum/container_ordner> \
+  --input     <pfad/zum/belege_ordner> \
+  --out       <pfad/zum/ausgabe_ordner>
+```
+
+- `--container` muss `atoms.json` enthalten (optional `paragraph_estg.json`,
+  `disambiguation_hints.json`, `container.json`).
+- `--input` darf beliebig viele `.pdf`, `.jpg`, `.jpeg`, `.png`, `.tif`,
+  `.tiff`, `.bmp` enthalten. Der Container-Ordner wird automatisch
+  ausgeschlossen, falls er innerhalb von `--input` liegt.
+- `--out` wird angelegt; enthält danach:
+  - `ocr/` — Roh-OCR-Output pro Datei
+  - `hits/<beleg>.hits.json` — Treffer pro Beleg
+  - `REPORT.md` — aggregierter Markdown-Report pro Anlage
+  - `REPORT.json` — maschinenlesbar (alle Treffer + Container-Meta)
+
+## Abhängigkeiten
 
 ```
-Welle 0   parse_ocr               — token extraction, date preservation,
-                                    reference-mask, line-context tracking
-Welle 1   Ratio Math              — Soli 5.5%, KiSt 8/9%, KiSt-halb (Konfess.-versch.),
-                                    SV-Sätze (RV 9.3%, KV 7.3%, PV 1.5%, ALV 1.3%),
-                                    Sum-Triplets, Diff-Triplets, Statutory-Exact
-Welle 1.5 Math→Real-eCode-Transfer — PSEUDO_<role> → official ELSTER eCode via
-                                    MATH_ROLE_TO_ECODE + atoms-lookup
-Welle 2   Spatial Zoning          — per (Anlage, Person)-key zone from math-anchors,
-                                    +OCR-fallback zones, case-insensitive
-Welle 3   Label-Adjacency Cascade — zone-filtered, word-boundary, multi-line
-                                    drucktext-prefix, drucktext-clean string,
-                                    kontextPath /A vs /B Person-disambig,
-                                    formatRegex with \Q..\E normalization
-Welle 4   embeddinggemma Cascade  — FP32 cosine search (cascade tier 4),
-                                    threshold 0.55 + anlage-allowlist filter,
-                                    candidate disambig
-Welle 5   Lane 1 BMF Verifier     — §32a Tarif via PostgreSQL Lane 1 stored
-                                    procedures → Erstattung als Coherence-Proof
+brew install poppler tesseract tesseract-lang
 ```
 
-## Result on Stricker 2023
+(stellt `pdftotext`, `pdftoppm`, `tesseract` mit `deu+eng` zur Verfügung)
 
-- **56 of 63 fields locked (89% coverage)**
-- 17 Convergence-Locks (math + label, confidence 1.0)
-- Lane 1 verification: **Erstattung 308,98 €** (BMF-konform=true)
+## Pipeline-Stufen (alle aus dem Container gespeist)
 
-## Files
+1. **Container laden** — atoms, §EStG-Mapping, Klassifikations-Hinweise.
+2. **Index bauen** — pro Atom Such-Tokens aus `metadata.drucktext` + `value`
+   (normalisiert: lowercased, Diakritika entfernt, Whitespace kollabiert).
+3. **OCR** — PDF: `pdftotext -layout`, Fallback `pdftoppm` + `tesseract`.
+   Bilder: `tesseract -l deu+eng`.
+4. **Anlagen-Kontext-Tracking** — `Anlage X` in Headings setzt sticky
+   `current_anlage`. Treffer werden bevorzugt aus dieser Anlage gezogen.
+5. **Label-Matching** — pro OCR-Zeile alle Atom-Labels als Teilstring suchen,
+   längster Label-Treffer gewinnt. Generische Labels (`Summe`, `Betrag`, …)
+   nur mit Anlagen-Kontext akzeptieren.
+6. **Wert-Extraktion** — datentyp-abhängig:
+   - `currency` mit Komma-Regex → Cents
+   - `currency` ohne Komma im formatRegex → Ganzzahl
+   - `date` → `TT.MM.JJJJ` normalisiert
+   - `string` → roh + getrimmt
+7. **Regex-Validierung** — Wert muss `metadata.formatRegex` matchen,
+   sonst Treffer verworfen (Halluzinations-Stop).
+8. **Deduplizierung + Alternatives-Gruppierung** —
+   gleiche (drucktext, anlage, wert, zeile) → erstem Treffer als
+   `alternatives[]` angehängt.
+9. **Report** — Markdown nach Anlagen gruppiert + JSON für nachgelagerte
+   Pipelines (retrieval-verify, Rules-Engine).
 
-| File | Purpose |
-|---|---|
-| `inverse_solver.py` | Main solver (Welle 0-3 + 1.5 + 5) |
-| `welle4_cascade.py` | Cascade-search fallback via embeddinggemma-300m |
-| `welle4_llm.py` | Alternative: constrained-LLM via Gemma-4 (Ollama JSON schema) |
-| `tax_law_constants.py` | Statutory parameters 2023 (§32a Tarif, SV-Sätze, Pauschbeträge) |
-| `quality_check.py` | Quality-metrics validator (L0-L6 layers) |
-| `elster_extract.py` | Original V1 token-substring-match extractor |
+## Beispiel-Ausgabe (Auszug)
 
-## Dependencies
+```
+| eCode (Alt.)                      | Drucktext                      | Wert (Beleg) | Normalisiert | Range/Regex                        | §EStG                  |
+| `E0200501` · alt: `E0200502`, …   | Kirchensteuer des Arbeitnehmers| 302,37       | 30237 (cents)| len 4–15 `…\d{1,12}(,\d{2,2})$`    | §19 Abs.1 Nr.1 EStG    |
+| `E0203503`                        | aufgesucht an Tagen            | 220          | 220 (int)    | len 1–3 `\d{1,3}$`                 | §9 EStG (Werbungskosten)|
+| `E0500701`                        | Geburtsdatum                   | 27.05.1963   | 27.05.1963   | `\d\d\.\d\d\.\d\d\d\d`             | §32 EStG (Kind-Angaben) |
+```
 
-- Python 3.10+ (stdlib only for solver; numpy optional for quality_check)
-- Ollama with `embeddinggemma:latest` model (for Welle 4 cascade)
-- Lane 1 BMF Calculator running on port 12010 (PostgreSQL `lane1_bmf_calculator` schema)
-- ELSTER atoms.json container (`../Upload/data/atoms.json`)
+## Erweiterungspunkte (nicht implementiert)
 
-## Key Constraints — what makes this deterministic
-
-| Constraint | Source | Effect |
-|---|---|---|
-| Soli/ESt = 5.5% | § 4 SolzG | Locks ESt + Soli pair simultaneously |
-| KiSt/ESt = 8/9% | LKiStG | Locks KiSt + ESt, infers Bundesland |
-| RV-AN/Brutto = 9.3% | § 158 SGB VI | Locks Brutto + Vorsorge-Anteil |
-| Sum(Komp) = Summe-Feld | atoms.json drucktext "Summe..." | Locks Komponenten + Summe |
-| Sparer-PB ∈ {1000, 2000} | § 20(9) EStG | Identifies Veranlagungsart |
-| IdNr §139b AO mod-11 | gesetzliche Prüfziffer | Validates IdNr |
-| IBAN ISO 13616 mod-97 | international | Validates IBAN |
-| §32a Tarif 2023 | piecewise polynomial | Lane 1 verifier closes loop |
-
-## Generic — works on any Einkommensteuererklärung 2023+
-
-Stricker.pdf was the test case. The pipeline reads the atoms.json container
-+ OCR + statutory constants. No PII or year-specific values are hardcoded.
+- Cascade-Lookup über `embeddings.gemma4.*` für unscharfe OCR-Phrasen
+  (für seltene Drucktexte, die per Substring nicht treffen).
+- Layer-1-Output gegen `nested_schemas/*.json` per strict json_schema
+  (z.B. `lohnsteuerbescheinigung_extraction`) — der Markdown-Report ersetzt
+  das nicht, sondern liefert die rohen eCode-Treffer als Ground Truth.
+- Disambiguierung mehrerer Atome mit identischem Drucktext+Anlage über
+  `vordruckzeile`-Heuristik (Zeilenzahl im OCR-Output abgleichen).
