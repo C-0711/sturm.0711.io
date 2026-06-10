@@ -5,6 +5,13 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA_ROOT = join(HERE, '..', 'data');
 
+/**
+ * Wenn ELSTER_CATALOG_PG_URL gesetzt ist, wird der Postgres-Adapter
+ * (anlagen-katalog-pg.ts) als Quelle benutzt — sonst die JSON-Dateien in data/.
+ * Schema-DDL + Loader: scripts/elster-catalog-db/
+ */
+const USE_PG = Boolean(process.env.ELSTER_CATALOG_PG_URL);
+
 export interface AnlagenKatalog {
   vz: number;
   datenart: string;
@@ -43,8 +50,12 @@ const katalogCache = new Map<number, AnlagenKatalog>();
 const felderCache = new Map<string, FelderSchema>(); // key: `${vz}:${anlage}`
 let currentVzCache: number | null = null;
 
-/** Liefert die im `data/`-Ordner vorhandenen VZ, sortiert absteigend (neueste zuerst). */
+/** Liefert die verfügbaren VZ, sortiert absteigend (neueste zuerst). */
 export async function listVZ(): Promise<number[]> {
+  if (USE_PG) {
+    const { listVZ_PG } = await import('./anlagen-katalog-pg.ts');
+    return listVZ_PG();
+  }
   const entries = await readdir(DATA_ROOT, { withFileTypes: true });
   return entries
     .filter((e) => e.isDirectory() && /^\d{4}$/.test(e.name))
@@ -100,8 +111,14 @@ export async function loadKatalog(vz?: number | string): Promise<AnlagenKatalog>
   const v = await resolveVZ(vz);
   const cached = katalogCache.get(v);
   if (cached) return cached;
-  const raw = await readFile(join(DATA_ROOT, String(v), 'anlagen.json'), 'utf-8');
-  const parsed = JSON.parse(raw) as AnlagenKatalog;
+  let parsed: AnlagenKatalog;
+  if (USE_PG) {
+    const { loadKatalog_PG } = await import('./anlagen-katalog-pg.ts');
+    parsed = await loadKatalog_PG(v);
+  } else {
+    const raw = await readFile(join(DATA_ROOT, String(v), 'anlagen.json'), 'utf-8');
+    parsed = JSON.parse(raw) as AnlagenKatalog;
+  }
   katalogCache.set(v, parsed);
   return parsed;
 }
@@ -114,11 +131,17 @@ export async function loadFelder(
   const key = `${v}:${anlage}`;
   const cached = felderCache.get(key);
   if (cached) return cached;
-  const raw = await readFile(
-    join(DATA_ROOT, String(v), 'felder', `${anlage}.json`),
-    'utf-8',
-  );
-  const parsed = JSON.parse(raw) as FelderSchema;
+  let parsed: FelderSchema;
+  if (USE_PG) {
+    const { loadFelder_PG } = await import('./anlagen-katalog-pg.ts');
+    parsed = await loadFelder_PG(anlage, v);
+  } else {
+    const raw = await readFile(
+      join(DATA_ROOT, String(v), 'felder', `${anlage}.json`),
+      'utf-8',
+    );
+    parsed = JSON.parse(raw) as FelderSchema;
+  }
   felderCache.set(key, parsed);
   return parsed;
 }

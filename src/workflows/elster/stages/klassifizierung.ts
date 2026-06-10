@@ -72,9 +72,8 @@ function detectDocType(text: string): KlassifizierungOutput['doc_type'] {
  *
  * Regeln (in dieser Reihenfolge):
  *   - irgendein Block 'Hauptvordruck_ESt1A' → 'einkommensteuererklaerung'
- *   - alle Blocks sind VAST-Typen (Bescheinigung, Lohnsteuerbescheinigung,
- *     Religionszugehoerigkeit, Mitteilung_Kapitalertraege, Steuerbescheinigung_Bank,
- *     VAST_Bescheinigung) → 'vast_bundle'
+ *   - alle Blocks sind VAST-Typen (volle 11-Datenarten-Liste, siehe
+ *     VAST_BLOCK_TYPES) → 'vast_bundle'
  *   - sonst → 'einzelbeleg'
  */
 const VAST_BLOCK_TYPES = new Set<string>([
@@ -83,6 +82,15 @@ const VAST_BLOCK_TYPES = new Set<string>([
   'Mitteilung_Kapitalertraege',
   'Steuerbescheinigung_Bank',
   'VAST_Bescheinigung',
+  // Vollständige VaSt-Abdeckung (ERiC §9.9):
+  'Beitragsmitteilung_KV',
+  'Riester_Bescheinigung',
+  'Basisrenten_Bescheinigung',
+  'Lohnersatzleistungen_Mitteilung',
+  'VWL_Bescheinigung',
+  'Behindertenmerkmale_Mitteilung',
+  'Spendenquittung',
+  'Rentenbezugsmitteilung',
 ]);
 function detectDocTypeFromBlocks(
   blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
@@ -111,9 +119,20 @@ const BLOCK_TYPE_TO_ANLAGEN: Record<string, string[]> = {
   Steuerbescheinigung_Bank: ['KAP'],
   Mitteilung_Kapitalertraege: ['KAP'],
   Religionszugehoerigkeit: ['ESt1A'],
-  VAST_Bescheinigung: [],
+  // Catch-all für VaSt-Belege ohne spezifischere Klassifikation:
+  // Stammdaten sind der sicherste kleinste-gemeinsame-Nenner. Vorher leer →
+  // dann routete die Pipeline ins Nichts.
+  VAST_Bescheinigung: ['ESt1A'],
   Spendenquittung: ['SA'],
   Rentenbezugsmitteilung: ['R'],
+
+  // Vollständige VaSt-Abdeckung (ERiC §9.9):
+  Beitragsmitteilung_KV:          ['VOR'],                  // VaSt_KRV
+  Riester_Bescheinigung:          ['AV', 'RAV_bAV'],        // VaSt_RIE
+  Basisrenten_Bescheinigung:      ['VOR'],                  // VaSt_RUE
+  Lohnersatzleistungen_Mitteilung:['N'],                    // VaSt_LErsL
+  VWL_Bescheinigung:              ['AV'],                   // VaSt_VWL
+  Behindertenmerkmale_Mitteilung: ['ESt1A', 'AgB'],         // VaSt_GDB
 };
 function detectAnlagenFromBlocks(
   blocks: NonNullable<KlassifizierungInput['erkannte_dokumente']>,
@@ -128,16 +147,62 @@ function detectAnlagenFromBlocks(
 
 /**
  * v5_4 Hybrid-Routing: extrahiert Veranlagungszeitraum (Jahr) aus OCR.
- * Bevorzugt explizite Marker ("Veranlagungszeitraum 2024"), fällt sonst
- * auf die erste 20XX-Zahl im Text zurück. Range-Check 2010–2099.
+ *
+ * Strategie (in dieser Priorität):
+ *   1. Explizite VZ-Marker: "Veranlagungszeitraum 2024", "Steuerjahr 2023"
+ *   2. Vordruck-Header-Patterns: "ESt 1 A 2023", "Hauptvordruck … 2023",
+ *      "Anlage N 2023" — die maßgebliche Jahresangabe steht IMMER im
+ *      Vordruck-Titel, NICHT im "Datum der Ausfertigung"-Stempel.
+ *   3. Mehrheits-Voting: alle 20XX-Zahlen im Text sammeln, aber Zahlen
+ *      die in einem Datumskontext stehen (DD.MM.YYYY oder "Ausfertigung",
+ *      "Stand", "Druck", "gedruckt") ausschließen. Häufigstes Jahr gewinnt.
+ *
+ * Range-Check 2010–2099.
  */
 function detectSteuerjahr(text: string): number | undefined {
-  const yrMatch =
-    text.match(/(?:Veranlagungszeitraum|Steuerjahr|VZ|Erklärung|ESt)\s*[:.\s]*(\d{4})/i) ||
-    text.match(/\b(20[0-9]{2})\b/);
-  if (!yrMatch) return undefined;
-  const y = Number(yrMatch[1]);
-  if (y >= 2010 && y <= 2099) return y;
+  const inRange = (y: number) => y >= 2010 && y <= 2099;
+
+  // Priorität 1: explizite Marker
+  const explicit = text.match(/(?:Veranlagungszeitraum|Steuerjahr|VZ)\s*[:.\-\s]{0,3}(20\d{2})/i);
+  if (explicit) {
+    const y = Number(explicit[1]);
+    if (inRange(y)) return y;
+  }
+
+  // Priorität 2: Vordruck-Header — "ESt 1 A 2023", "Anlage N 2023" usw.
+  // Pattern: Vordruck-Keyword, dann bis zu 30 Zeichen (Zahlen/Buchstaben/Spaces)
+  // bevor die Jahreszahl kommt. Schlägt nur an, wenn das Jahr noch im
+  // Header-Block steht (am Anfang einer Zeile), nicht irgendwo im Fließtext.
+  const vordruck = text.match(
+    /^[^\n]{0,40}\b(?:Hauptvordruck|ESt|Anlage(?:nverzeichnis)?)\b[^\n]{0,30}\b(20\d{2})\b/m,
+  );
+  if (vordruck) {
+    const y = Number(vordruck[1]);
+    if (inRange(y)) return y;
+  }
+
+  // Priorität 3: Mehrheits-Voting über alle 20XX-Vorkommen, aber filtere
+  // Datums-Kontexte raus (DD.MM.YYYY oder Ausfertigungs-/Druck-/Stand-Stempel).
+  const counts = new Map<number, number>();
+  const yearRe = /\b(20\d{2})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = yearRe.exec(text)) !== null) {
+    const y = Number(m[1]);
+    if (!inRange(y)) continue;
+    const ctxBefore = text.slice(Math.max(0, m.index - 30), m.index);
+    const ctxAfter = text.slice(m.index + 4, m.index + 4 + 20);
+    // Datums-Kontext erkennen
+    const isInDate =
+      /\b\d{1,2}\.\d{1,2}\.$/.test(ctxBefore) ||
+      /(Ausfertigung|gedruckt|Druckdatum|Stand|Stand vom|am)\s*[:.\s]{0,3}\d*\.?\d*\.?$/i.test(ctxBefore) ||
+      /^\.\d{1,2}\.\d{1,2}\b/.test(ctxAfter);
+    if (isInDate) continue;
+    counts.set(y, (counts.get(y) ?? 0) + 1);
+  }
+  if (counts.size > 0) {
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    return best[0];
+  }
   return undefined;
 }
 
