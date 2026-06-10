@@ -17,8 +17,7 @@ import { tmpdir } from 'node:os';
 import pg from 'pg';
 import { runLane1 } from '../src/workflows/elster/lib/lane1.ts';
 import { ableiteProfil } from '../src/workflows/elster/lib/steuer/profil.ts';
-import { ocrEnsembleFromPath, pingOrchestrator } from '../src/workflows/elster/lib/field-mapper/ocr-ensemble-client.ts';
-import { ocrEnsembleToRawText } from '../src/workflows/elster/lib/field-mapper/lane2-adapter.ts';
+import { ocrLighton } from './ocr-lighton.ts';
 import { berechneHaushaltAuthoritativ } from '../src/workflows/elster/lib/steuer/authoritative.ts';
 import { normalisiereSteuerfall } from '../src/workflows/elster/lib/steuer/fallnormalizer.ts';
 import type { SteuerFeld } from '../src/workflows/elster/lib/steuer/adapter.ts';
@@ -32,7 +31,8 @@ import { parseKvPvBasis, parse35aBasis, parseSpenden } from './extract-sonderaus
 import { parseSpendenVision } from './extract-spenden-vision.ts';
 import { parseVersorgungsbeginn } from './extract-versorgungsbeginn.ts';
 import { parseKapital } from './extract-kapital.ts';
-import { harmonize, type Mastercase, type Household } from './mastercase-harmonize.ts';
+import { extrahiereScanWerte } from './extrahiere-scan-werte.ts';
+import { harmonizeBelege, type BelegLike, type Mastercase, type Household } from './mastercase-harmonize.ts';
 import { rename } from 'node:fs/promises';
 
 const { Pool } = pg;
@@ -87,12 +87,17 @@ const parseDoc = async (p: string): Promise<{ rawText: string; method: 'text' | 
   try { const f = cacheFile(p); if (existsSync(f)) return JSON.parse(readFileSync(f, 'utf8')); } catch { /* miss */ }
   return null;
 };
+// OCR gescannter Belege über LightOnOCR (vLLM :11437) — PaddleOCR/Orchestrator
+// raus. ocrLighton handhabt PDF (pdftoppm) UND Bilder direkt; kein imageToPdf nötig.
 const parseImage = async (p: string) => {
-  const src = IMAGE_EXT.has(extname(p).toLowerCase()) ? imageToPdf(p) : p;
-  const rawText = ocrEnsembleToRawText(await ocrEnsembleFromPath(src, { baseUrl }));
+  const rawText = await ocrLighton(p);
   try { writeFileSync(cacheFile(p), JSON.stringify({ rawText, method: 'ocr' })); } catch { /* best-effort */ }
   return rawText;
 };
+const lightonOcrUrl = process.env.LIGHTON_OCR_URL ?? 'http://127.0.0.1:11437';
+async function pingLighton(): Promise<boolean> {
+  try { const r = await fetch(`${lightonOcrUrl}/v1/models`, { signal: AbortSignal.timeout(3000) }); return r.ok; } catch { return false; }
+}
 
 // ── Provenienz: Feld → Bounding-Box im Dokument ──────────────────────────
 // Für den Viewer: jedes OCR'te Dokument wird (cache-getrieben) zu PNG(s)
@@ -189,6 +194,11 @@ mkdirSync(MASTERCASE_DIR, { recursive: true });
 interface MastercaseEnvelope {
   caseId: string; status: 'pending' | 'ready' | 'error';
   updatedAt: string; mastercase?: Mastercase; error?: string;
+  // Phase-2-Upgrade (additiv): aus den Gemma-/extract-Daten neu attribuierte
+  // Belege + neu gerechnete Bescheide/Profil. Die synchrone Phase-1-Antwort
+  // bleibt davon unberührt; der Browser spielt dieses Upgrade per Polling ein.
+  belege?: unknown[]; calcs?: unknown[]; profil?: unknown;
+  veranlagungsart?: string; begruendung?: string[];
 }
 // caseId härten (kein Path-Traversal) — gleiche Härtung wie /api/page + Upload-Name.
 const mcFile = (caseId: string) => join(MASTERCASE_DIR, (caseId.replace(/[^\w.-]/g, '_') || 'case') + '.json');
@@ -224,31 +234,48 @@ function evictCaches(path: string): void {
   } catch (e) { console.error('EVICT', basename(path), (e as Error).message); }
 }
 
-/** Hintergrund-Job: Belege → /extract → harmonize → Sidecar persistieren.
- *  out = Pre-Calc-Ergebnis (liefert belege[].source + household); paths = roher
- *  Handler-Input (Fallback). Jeder Beleg isoliert: ein /extract-Fehler kippt den
- *  Job nicht, der Mastercase entsteht aus den erfolgreichen Belegen. */
-async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: string; vorjahr?: boolean }>; household?: Household }, paths: string[]): Promise<void> {
+/** Hintergrund-Job: Master Case aus den runLane1-FAKTEN (diagramm-konform) →
+ *  verbindlich neu rechnen → Sidecar persistieren. KEIN erneuter Orchestrator-
+ *  /extract-Durchlauf: digitale PDFs hat Lane 1, Scans hat Lane 2 (in runLane1)
+ *  bereits sauber extrahiert; hier wird nur konsolidiert + gerechnet. `paths`
+ *  bleibt für Signatur-Kompatibilität, wird nicht mehr genutzt. */
+async function kickMastercase(caseId: string, out: { belege?: Array<{ source?: string; vorjahr?: boolean; felder?: number; status?: string; belegTyp?: string; felderListe?: unknown[]; method?: string }>; household?: Household; felder?: SteuerFeld[]; vz?: number }, paths: string[]): Promise<void> {
   await writeEnvelope({ caseId, status: 'pending', updatedAt: new Date().toISOString() });
-  // Fremdjährige (Vorjahres-)Belege gehören NICHT in den harmonisierten Mastercase
-  // — konsistent zur Berechnung, die sie ebenfalls ausschließt. Ihre Pfade werden
-  // sowohl aus den Beleg-Quellen als auch aus dem rohen paths-Fallback gefiltert.
-  const vorjahrPfade = new Set((out.belege ?? []).filter((b) => b.vorjahr).map((b) => String(b.source).split('#')[0]));
-  // Beleg-Pfade: aus belege[].source (VaSt-Section-Suffix '#…' abschneiden),
-  // Fallback auf den rohen Handler-Input; uniq + existsSync; ohne Vorjahr.
-  const fromBelege = (out.belege ?? []).filter((b) => !b.vorjahr).map((b) => String(b.source).split('#')[0]);
-  const candidates = [...new Set([...fromBelege, ...paths])].filter((p) => p && existsSync(p) && !vorjahrPfade.has(p));
-  const outputs: ExtractOutput[] = [];
-  for (const p of candidates) {
-    try { outputs.push(await extractCached(p)); }
-    catch (e) { console.error('MASTERCASE/extract', basename(p), (e as Error).message); }
+  void paths;
+  try {
+    // Master Case = Konsolidierung der runLane1-Fakten (belege[].felderListe):
+    // dedupliziert inhaltsgleiche Belege + votet pro (Person,eCode). Diagramm-
+    // konform — der Orchestrator läuft nur in Lane 2 (Scans) INNERHALB runLane1,
+    // nicht hier nochmal über die (digitalen) Belege.
+    const mastercase = harmonizeBelege((out.belege ?? []) as BelegLike[], out.household ?? {});
+    // BERECHNUNG aus den konsolidierten (deduplizierten) Mastercase-Fakten als
+    // PRIMÄRquelle; out.felder ergänzt nur, was der Mastercase nicht hat — das
+    // sind die synthetischen Parser-Felder (Vorauszahlung/§35a/Spenden/KV-PV/
+    // Versorgungsbeginn), die runLane1 NACHträglich erzeugt. Dedup fixt Doppel-
+    // Uploads (Bruttoarbeitslohn 2×); ohne Duplikate ist das Ergebnis = Phase 1.
+    const mcFelder: SteuerFeld[] = mastercase.fakten.map((f) => {
+      const cat = catByECode().get(f.e_code);
+      return { eCode: f.e_code, wert: String(f.value), person: f.person, anlage: cat?.anlage || '', pdfLabel: cat?.drucktext || f.belegfeld_id };
+    });
+    const have = new Set(mcFelder.map((f) => `${f.person}|${f.eCode}`));
+    const extra = (out.felder ?? []).filter((f) => !have.has(`${f.person}|${f.eCode}`));
+    const augmented = [...mcFelder, ...extra];
+    const vz = Number(out.vz) || 2023;
+    const profil = ableiteProfil(augmented, { vz, hebesatzProzent: Math.round(HEBESATZ * 100) });
+    const fall = normalisiereSteuerfall(augmented, (out.household ?? {}) as Parameters<typeof normalisiereSteuerfall>[1]);
+    const haushalt = await berechneHaushaltAuthoritativ(fall, { vz, kirchensteuerHebesatz: HEBESATZ });
+    const calcs = haushalt.bescheide.map((bx) => ({
+      person: bx.einheit, einheit: bx.einheit, felder: bx.felder,
+      quelle: bx.res.quelle, bindend: bx.res.bindend,
+      angerechnet: bx.res.angerechnet, erstattung: bx.res.erstattung,
+      abgleich: bx.res.abgleich ?? null, latenzMs: bx.res.latenzMs, konflikte: bx.res.konflikte.length,
+      aufstellung: { einkommen: bx.res.vorschau.einkommen, steuer: bx.res.vorschau.steuer, anrechnung: bx.res.vorschau.anrechnung },
+    }));
+    await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase, calcs, profil, veranlagungsart: haushalt.veranlagungsart, begruendung: haushalt.begruendung });
+  } catch (e) {
+    console.error('MASTERCASE/build', (e as Error).message);
+    await writeEnvelope({ caseId, status: 'error', updatedAt: new Date().toISOString(), error: (e as Error).message });
   }
-  if (!outputs.length) {
-    await writeEnvelope({ caseId, status: 'error', updatedAt: new Date().toISOString(), error: 'kein Beleg extrahierbar' });
-    return;
-  }
-  const mastercase = harmonize(outputs, out.household ?? {});
-  await writeEnvelope({ caseId, status: 'ready', updatedAt: new Date().toISOString(), mastercase });
 }
 
 // Text eines Belegs für die Zusatz-Parser: Text-PDF → pdftotext, Bild → OCR-Cache.
@@ -270,8 +297,8 @@ function docText(p: string): string {
 
 async function runSteuerfall(paths: string[], vz: number) {
   const t0 = process.hrtime.bigint();
-  const orchUp = await pingOrchestrator(baseUrl);
-  const r = await runLane1(paths, { vz, pool, parseDoc, parseImage: orchUp ? parseImage : undefined });
+  const ocrUp = await pingLighton();
+  const r = await runLane1(paths, { vz, pool, parseDoc, parseImage: ocrUp ? parseImage : undefined });
   const lane1Ms = Number(process.hrtime.bigint() - t0) / 1e6;
 
   const ocrSet = new Set(r.ocrFields);
@@ -324,15 +351,32 @@ async function runSteuerfall(paths: string[], vz: number) {
     let txt = ''; try { txt = docText(p); } catch { /* best-effort */ }
     // Dünner/kein Text-Layer (gescannter Beleg) → OCR erzwingen (cached), damit
     // §35a-/Spenden-Bescheinigungen ihren vollen Inhalt liefern.
-    if (txt.trim().length < 200) { try { txt = await parseImage(p); } catch { /* OCR-Fehler → skip */ } }
+    // wasOcr: kam der Text aus dem OCR-Cache (lighton-Markdown)? Dann sind die
+    // positions-/regex-Parser ungültig → Gemma. docText liefert für Scans den
+    // GECACHTEN OCR-Text (>200 Z.), daher reicht die Längen-Schwelle allein nicht.
+    let wasOcr = false;
+    try { const cf = cacheFile(p); if (existsSync(cf)) wasOcr = (JSON.parse(readFileSync(cf, 'utf8')) as { method?: string }).method === 'ocr'; } catch { /* */ }
+    if (txt.trim().length < 200) { try { txt = await parseImage(p); wasOcr = true; } catch { /* OCR-Fehler → skip */ } }
     if (!txt) continue;
+    // Gescannte Belege liefern lighton-MARKDOWN — die regex-/positions-Parser
+    // (parseSpenden über-summiert "Betrag"-Zeilen, parse35aBasis findet die
+    // "Summe"-Zeilen nicht) versagen darauf. Für Scans deshalb Gemma-Extraktion
+    // (domänen-bewusst: §35a = nur Dienstleistungs-/Pflegeanteil); digitale PDFs
+    // bleiben bei den deterministischen Parsern.
+    const scanW = wasOcr ? await extrahiereScanWerte(txt).catch(() => null) : null;
     if (!saKvPv) saKvPv = parseKvPvBasis(txt);
-    if (!sa35a) { sa35a = parse35aBasis(txt); if (sa35a) sa35aSrc = p; }
+    if (!sa35a) {
+      if (scanW?.haushaltsnahe_dienstleistung) { sa35a = { haushaltsnah: scanW.haushaltsnahe_dienstleistung }; sa35aSrc = p; }
+      else if (!wasOcr) { sa35a = parse35aBasis(txt); if (sa35a) sa35aSrc = p; }
+    }
     // §19 Abs.2: maßgebendes Kalenderjahr des Versorgungsbeginns (Nr. 30 LStB) —
     // über ALLE LStB das FRÜHESTE Jahr (höchster Freibetrag). Bestimmt die Kohorte.
     const vb = parseVersorgungsbeginn(txt);
     if (vb && (versBeginn === null || vb < versBeginn)) versBeginn = vb;
-    if (!saSpenden) { saSpenden = parseSpenden(txt); if (saSpenden) spendenSrc = p; }
+    if (!saSpenden) {
+      if (scanW?.spende) { saSpenden = { betrag: scanW.spende }; spendenSrc = p; }
+      else if (!wasOcr) { saSpenden = parseSpenden(txt); if (saSpenden) spendenSrc = p; }
+    }
     // Spenden-Beleg für den Vision-Fallback wählen. Dateiname = stärkstes Signal
     // (handschriftliche Zahlscheine OCR'en zu Müll, ihr Text enthält oft kein
     // „Spende"). Fallback für anders benannte Belege: ein lane1-UNBEKANNTER Beleg
@@ -349,7 +393,11 @@ async function runSteuerfall(paths: string[], vz: number) {
     // Bank-Steuerbescheinigungen. Bank-Beträge sind meist schon über den
     // Freistellungsauftrag erfasst → nur Darlehnszinsen injizieren; beide Belege
     // werden aber attribuiert (Karte zeigt „Kapitalerträge").
-    const kap = parseKapital(txt);
+    if (scanW?.darlehenszinsen && darlehenZinsen === 0) {
+      darlehenZinsen = scanW.darlehenszinsen; darlehenSrc = p;
+      attributionen.push({ src: p, typ: 'Kapitalerträge', eCode: 'E1900701', wert: scanW.darlehenszinsen.toFixed(2).replace('.', ','), label: `Kapitalerträge ${scanW.darlehenszinsen.toFixed(2).replace('.', ',')} € (Darlehnszinsen)` });
+    }
+    const kap = wasOcr ? null : parseKapital(txt);
     if (kap && kap.betrag > 0) {
       if (kap.art === 'darlehenszinsen' && darlehenZinsen === 0) { darlehenZinsen = kap.betrag; darlehenSrc = p; }
       attributionen.push({ src: p, typ: 'Kapitalerträge', eCode: 'E1900701', wert: kap.betrag.toFixed(2).replace('.', ','), label: `Kapitalerträge ${kap.betrag.toFixed(2).replace('.', ',')} €${kap.art === 'darlehenszinsen' ? ' (Darlehnszinsen)' : ''}` });
@@ -380,6 +428,16 @@ async function runSteuerfall(paths: string[], vz: number) {
   // unter dem Sparer-Pauschbetrag → 0 € Steuer, wird aber erfasst + ausgewiesen.
   if (darlehenZinsen > 0) felder.push({ eCode: 'E1900701', wert: deSA(darlehenZinsen), person: 'A', anlage: 'KAP', pdfLabel: 'Kapitalerträge — Wohnstift-Darlehnszinsen (§20)' });
   void darlehenSrc;
+
+  // KV-Quellen-Priorität (schemas.ts branchHint): die private KV-Basis (E2003104)
+  // steht sowohl auf der dedizierten Beitragsbescheinigung (VaSt_KRV) als auch auf
+  // der Beamten-LStB (Z.28) — sie überlappen. Authoritative ist die VaSt_KRV;
+  // sonst summiert der Aggregat-Schritt LStB-Z.28 + Bescheinigung doppelt.
+  const krvBeleg = (r.belege ?? []).find((b) => (b as { belegTyp?: string }).belegTyp === 'VaSt_KRV') as { felderListe?: Array<{ eCode?: string; wert?: string }> } | undefined;
+  const krvKvWert = krvBeleg?.felderListe?.find((f) => f.eCode === 'E2003104')?.wert;
+  if (krvKvWert != null) {
+    for (const f of felder) if (f.eCode === 'E2003104') f.wert = String(krvKvWert);
+  }
 
   // Attribution: Treffer der dedizierten Parser dem QUELL-Beleg zuordnen → die
   // Beleg-Karte zeigt Typ + Felder statt „Unbekannt · 0 Felder". Echte Lane-1-
@@ -481,7 +539,7 @@ async function runSteuerfall(paths: string[], vz: number) {
     .map((b) => `Coverage-Lücke: „${basename(String(b.source).split('#')[0])}" (Typ ${b.belegTyp ?? 'Unbekannt'}, ${b.method ?? '?'}) → 0 Felder extrahiert; Werte fehlen in der Berechnung.`);
   return {
     ok: true, vz, lane1Ms: Math.round(lane1Ms),
-    belege: r.belege, fields, ocrCount: r.belege.filter((b) => b.method === 'ocr').length,
+    belege: r.belege, fields, felder, ocrCount: r.belege.filter((b) => b.method === 'ocr').length,
     household: r.household, docs,
     // Deterministisches Steuerzahler-Profil (beschreibt den Fall + steuert die Regeln).
     profil,

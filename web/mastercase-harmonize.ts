@@ -425,6 +425,69 @@ export function harmonize(outputs: ExtractOutput[], household: Household): Maste
   return { entitaeten, fakten, verworfen: [...dropped, ...incomeDup] };
 }
 
+// ── Master Case aus den runLane1-FAKTEN (diagramm-konform) ──────────────
+// Der Orchestrator (/api/v1/extract) ist die Lane-2-OCR-Engine für SCANS;
+// digitale PDFs liest Lane 1 (pdftotext) bereits sauber. Statt jeden Beleg
+// erneut (und verlustbehaftet) durch den Orchestrator zu jagen, konsolidiert
+// der Master Case die Fakten, die runLane1 PRO BELEG schon erzeugt hat:
+//   belege[].felderListe (eCode·Wert·Person; fremdjährige Belege ausgenommen)
+//     → inhaltsgleiche Belege deduplizieren → pro (Person,eCode) über DISTINCT
+//       Belege voten. Kein page_records/Geometrie nötig — runLane1 hat bereits
+//       gemappt + Person zugeordnet.
+export interface BelegFakt { eCode: string; label?: string; wert?: string; person?: string; anlage?: string }
+export interface BelegLike { source?: string; vorjahr?: boolean; belegTyp?: string; felderListe?: BelegFakt[] }
+
+export function harmonizeBelege(belege: BelegLike[], household: Household): Mastercase {
+  const roster = buildRoster(household);
+  interface RF { e_code: string; belegfeld_id: string; value: string; person: 'A' | 'B'; document: string }
+  // FLATTEN — nur aktueller VZ (vorjahr-Belege gehören nicht in den Fall).
+  const raw: RF[] = [];
+  for (const b of belege ?? []) {
+    if (b.vorjahr) continue;
+    const document = String(b.source ?? '').split('#')[0];
+    for (const f of b.felderListe ?? []) {
+      const value = String(f.wert ?? '').trim();
+      if (!value) continue;
+      raw.push({ e_code: f.eCode, belegfeld_id: f.label ?? f.eCode, value, person: f.person === 'B' ? 'B' : 'A', document });
+    }
+  }
+  // DEDUP — inhaltsgleiche Belege (z.B. derselbe Beleg doppelt hochgeladen) als
+  // EINE Quelle behandeln, sonst verdoppeln sich Beträge (Bruttoarbeitslohn 2×).
+  const order: string[] = [];
+  const byDoc = new Map<string, RF[]>();
+  for (const f of raw) { if (!byDoc.has(f.document)) { byDoc.set(f.document, []); order.push(f.document); } byDoc.get(f.document)!.push(f); }
+  const fp = (fs: RF[]): Map<string, string> => { const m = new Map<string, string>(); for (const f of fs) m.set(`${f.person}|${f.e_code}`, f.value); return m; };
+  const fps = new Map(order.map((d) => [d, fp(byDoc.get(d)!)] as const));
+  const isDup = (a: Map<string, string>, b: Map<string, string>): boolean => {
+    if (!a.size || !b.size) return false;
+    let matched = 0; for (const [k, v] of a) if (b.get(k) === v) matched++;
+    return matched >= 3 || (matched >= 2 && matched / Math.min(a.size, b.size) >= 0.8);
+  };
+  const canon: string[] = [];
+  const keep = new Set<string>();
+  for (const d of order) { if (canon.some((c) => isDup(fps.get(d)!, fps.get(c)!))) continue; canon.push(d); keep.add(d); }
+  const kept = raw.filter((f) => keep.has(f.document));
+  // VOTE — pro (Person,eCode): Gewinner = von den meisten DISTINCT Belegen bestätigt.
+  const groups = new Map<string, RF[]>();
+  for (const f of kept) { const k = `${f.person}|${f.e_code}`; (groups.get(k) ?? groups.set(k, []).get(k)!).push(f); }
+  const fakten: MasterFact[] = [];
+  for (const [key, fs] of groups) {
+    const [person, e_code] = key.split('|') as ['A' | 'B', string];
+    const cand = new Map<string, { docs: Set<string>; rep: string }>();
+    for (const f of fs) { const vk = voteKey(e_code, f.value); const c = cand.get(vk) ?? { docs: new Set<string>(), rep: f.value }; c.docs.add(f.document); cand.set(vk, c); }
+    const ranked = [...cand.entries()].sort((a, b) => b[1].docs.size - a[1].docs.size);
+    const [winVk, win] = ranked[0];
+    const sources: FactSource[] = fs.filter((f) => voteKey(e_code, f.value) === winVk).map((f) => ({ document: f.document, page: 0, lane: 'lane1', value: f.value, bbox: null }));
+    const fact: MasterFact = { person, e_code, belegfeld_id: fs[0].belegfeld_id, value: win.rep, confidence: win.docs.size, sources };
+    const conflict = ranked.slice(1).map(([, c]) => ({ value: c.rep, documents: [...c.docs] }));
+    if (conflict.length) fact.conflict = conflict;
+    fakten.push(fact);
+  }
+  fakten.sort((a, b) => (a.person < b.person ? -1 : a.person > b.person ? 1 : a.e_code < b.e_code ? -1 : 1));
+  const seen = new Set<'A' | 'B'>(fakten.map((f) => f.person));
+  return { entitaeten: buildEntities(roster, seen, household), fakten, verworfen: [] };
+}
+
 // ── optionales main(): Real-Samples laden + drucken ─────────────────────
 const SAMPLE_DIR = process.env.MC_SAMPLES ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'var', 'extract-samples');
 // Bank-Belege + VaSt (eDaten). ex_est lassen wir bewusst weg, weil es die
