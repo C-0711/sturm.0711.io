@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>0711 · CTX Production Roadmap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/design-system/colors_and_type.css">
+  <link rel="icon" type="image/svg+xml" href="/design-system/assets/logo-mark.svg">
+  <style>
+    body {
+      margin: 0;
+      font-family: var(--font-inter, -apple-system, sans-serif);
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      line-height: 1.6;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 36px 24px 96px; }
+
+    /* Header band */
+    header.hero {
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    header.hero .eyebrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--color-text-tertiary);
+      margin: 0 0 8px;
+    }
+    header.hero h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    header.hero .sub {
+      color: var(--color-text-secondary);
+      font-size: 16px;
+      margin: 0 0 12px;
+      max-width: 720px;
+    }
+    header.hero .meta {
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      margin-top: 8px;
+    }
+    header.hero .meta code {
+      background: var(--color-bg-tertiary);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    /* Status badges */
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+    .badge {
+      font-size: 11px;
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      padding: 4px 10px;
+      border-radius: 11px;
+      border: 1px solid var(--color-border);
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+    }
+    .badge.done { background: rgba(34, 197, 94, 0.12); color: rgb(74, 222, 128); border-color: rgba(34, 197, 94, 0.3); }
+    .badge.active { background: rgba(245, 158, 11, 0.12); color: rgb(251, 191, 36); border-color: rgba(245, 158, 11, 0.3); }
+    .badge.queued { background: rgba(59, 130, 246, 0.12); color: rgb(96, 165, 250); border-color: rgba(59, 130, 246, 0.3); }
+    .badge.future { background: rgba(148, 163, 184, 0.10); color: var(--color-text-secondary); }
+
+    /* Section */
+    section { margin: 36px 0; }
+    section.phase {
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      background: var(--color-bg-secondary, var(--color-bg));
+      margin-bottom: 28px;
+    }
+    section.phase header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed var(--color-border);
+    }
+    section.phase header h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    section.phase header h2 .phase-id {
+      display: inline-block;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      background: var(--color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 8px;
+      vertical-align: middle;
+      color: var(--color-text-secondary);
+    }
+    .phase-meta {
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      color: var(--color-text-tertiary);
+    }
+    .phase-meta .owner { color: var(--color-text-primary); font-weight: 600; }
+    .phase-meta .eta { color: var(--color-accent, rgb(96, 165, 250)); }
+
+    /* Task lists */
+    ol.tasks { padding-left: 0; list-style: none; counter-reset: t; }
+    ol.tasks > li {
+      counter-increment: t;
+      padding: 14px 16px 14px 56px;
+      position: relative;
+      border-radius: 8px;
+      background: var(--color-bg-tertiary, transparent);
+      margin: 8px 0;
+      border: 1px solid transparent;
+    }
+    ol.tasks > li:hover { border-color: var(--color-border); }
+    ol.tasks > li::before {
+      content: counter(t, decimal);
+      position: absolute;
+      left: 18px;
+      top: 14px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      color: var(--color-text-secondary);
+    }
+    ol.tasks > li.done::before { background: rgb(74, 222, 128); color: var(--color-bg); border-color: rgb(74, 222, 128); content: "✓"; }
+    ol.tasks > li.active::before { background: rgb(251, 191, 36); color: var(--color-bg); border-color: rgb(251, 191, 36); }
+    ol.tasks > li > .task-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    ol.tasks > li > .task-title .id {
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      background: var(--color-bg);
+      padding: 1px 7px;
+      border-radius: 3px;
+      color: var(--color-text-secondary);
+      border: 1px solid var(--color-border);
+    }
+    ol.tasks > li > .task-body {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      line-height: 1.55;
+    }
+    ol.tasks > li > .task-body code {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      background: var(--color-bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+    }
+    ol.tasks > li .files {
+      margin-top: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+    }
+    ol.tasks > li .done-when {
+      display: block;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      font-style: italic;
+    }
+    ol.tasks > li .done-when::before {
+      content: "✓ Done-when: ";
+      color: rgb(74, 222, 128);
+      font-style: normal;
+      font-weight: 600;
+    }
+
+    /* Top nav (anchor links) */
+    nav.toc {
+      position: sticky;
+      top: 0;
+      background: var(--color-bg);
+      border-bottom: 1px solid var(--color-border);
+      padding: 12px 24px;
+      display: flex;
+      gap: 18px;
+      font-size: 13px;
+      z-index: 20;
+      backdrop-filter: blur(6px);
+    }
+    nav.toc a {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    nav.toc a:hover { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+    nav.toc a.active { background: var(--color-bg-tertiary); color: var(--color-accent, rgb(96, 165, 250)); }
+
+    /* Architecture diagram (ASCII inline) */
+    pre.diagram {
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      overflow-x: auto;
+      color: var(--color-text-primary);
+    }
+
+    /* Tables */
+    table.summary {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    table.summary th, table.summary td {
+      border-bottom: 1px solid var(--color-border);
+      padding: 10px 12px;
+      text-align: left;
+    }
+    table.summary th {
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    table.summary td code {
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      background: var(--color-bg-tertiary);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* Officer chips */
+    .officer {
+      display: inline-block;
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+    }
+    .officer.bombas { color: rgb(251, 113, 133); border-color: rgba(251, 113, 133, 0.4); }
+    .officer.pope { color: rgb(192, 132, 252); border-color: rgba(192, 132, 252, 0.4); }
+    .officer.operator { color: rgb(56, 189, 248); border-color: rgba(56, 189, 248, 0.4); }
+    .officer.architect { color: rgb(74, 222, 128); border-color: rgba(74, 222, 128, 0.4); }
+
+    /* Code block */
+    pre.code {
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: ui-monospace, "JetBrains Mono", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+
+    /* Risk callout */
+    .callout {
+      border-left: 3px solid var(--color-accent, rgb(96, 165, 250));
+      padding: 10px 14px;
+      margin: 12px 0;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-tertiary);
+      border-radius: 0 6px 6px 0;
+    }
+    .callout.risk { border-color: rgb(251, 191, 36); }
+    .callout.note { border-color: rgb(96, 165, 250); }
+    .callout.danger { border-color: rgb(248, 113, 113); }
+
+    /* Phase D table grid */
+    .integrations { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+    .integration {
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: var(--color-bg-tertiary);
+    }
+    .integration h4 { margin: 0 0 4px; font-size: 13px; }
+    .integration p { margin: 0; font-size: 12px; color: var(--color-text-secondary); }
+
+    footer {
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid var(--color-border);
+      font-size: 12px;
+      color: var(--color-text-tertiary);
+      font-family: ui-monospace, monospace;
+    }
+    footer .signoff { color: rgb(251, 113, 133); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<nav class="toc">
+  <a href="#overview">Overview</a>
+  <a href="#phase-a">Phase A · Wiring</a>
+  <a href="#phase-b">Phase B · Hardening</a>
+  <a href="#phase-c">Phase C · Sealing</a>
+  <a href="#phase-d">Phase D · Integration</a>
+  <a href="#phase-e">Phase E · Operations</a>
+  <a href="#milestones">Milestones</a>
+</nav>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">OPERATION CTX-PROD · 2026-05-24</p>
+  <h1>CTX-Bootstrap Production Roadmap</h1>
+  <p class="sub">
+    Detaillierte Task-Liste für die Überführung des STURM <code>ctx-bootstrap</code> Workflows
+    in production mode. Vier Phasen, vier Owner, jede Aufgabe atomar und mit klarem
+    Done-Criteria. Ergänzt um Phase E (Operations) für post-launch hygiene.
+  </p>
+  <p class="meta">
+    Repo <code>~/0711-STURM-polar/</code> · Live <code>sturm.0711.io</code> · Owner: Fleet Admiral Bombas 💣 · Mastermind C order 2026-05-24 08:34 CEST
+  </p>
+  <div class="badges">
+    <span class="badge done">Phase A · 5 / 5</span>
+    <span class="badge active">Phase B · 0 / 8</span>
+    <span class="badge queued">Phase C · 0 / 6</span>
+    <span class="badge queued">Phase D · 0 / 7</span>
+    <span class="badge future">Phase E · 0 / 5</span>
+  </div>
+</header>
+
+<section id="overview">
+  <h2 style="font-size: 18px; margin-bottom: 12px;">Was wird gebaut</h2>
+  <p>
+    <strong>CTX-Bootstrap</strong> macht aus dem ersten Context-Window einer beliebigen LLM-Session
+    (ChatGPT, Claude, Gemini, Cursor, …) einen <em>quantum-indexed retrieval container</em>, der
+    von anderen LLMs/Agenten per plain HTTP angesprochen werden kann. Same wire format, no SDK.
+  </p>
+  <pre class="diagram">
+┌──────────────────────────────────────────────────────────────────────────────┐
+│   INPUT                                                                       │
+│   • paste/upload (ctx-demo.html)                                              │
+│   • CLI stdin (scripts/ctx.ts)                                                │
+│   • POST /api/workflows/ctx-bootstrap/run                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│   5-STAGE PIPELINE                                                            │
+│   ingest → parse → atomize → index → publish                                  │
+│   • allocate id     • transcript→atoms  • Ollama embeddinggemma 768d         │
+│   • write source    • split code blocks • MRL×TurboQuant cascade             │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│   HTTP SURFACE — sturm.0711.io/ctx/*                                          │
+│   GET    /ctx                       list containers                           │
+│   GET    /ctx/:id                   container metadata                        │
+│   POST   /ctx/:id/retrieve          {query,k} → {hits}                        │
+│   GET    /ctx/:id/atom/:slug        raw atom markdown                         │
+│   POST   /ctx/:id/events            agent event append                        │
+│   GET    /ctx/:id/events            ndjson event stream                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│   CROSS-LLM CONSUMPTION                                                       │
+│   ChatGPT Custom GPT · Claude MCP · Cursor · Gemini CLI · OpenAI Assistants  │
+│   Single retrieval primitive, served as plain HTTP + system-prompt preamble.  │
+└──────────────────────────────────────────────────────────────────────────────┘
+  </pre>
+  <table class="summary">
+    <thead><tr><th>Phase</th><th>Owner</th><th>ETA</th><th>Done-Criteria</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A · Wiring</strong></td><td><span class="officer bombas">@Bombas</span></td><td>2026-05-24 (heute) ✅</td><td>ctx-bootstrap in <code>/api/workflows</code>, smoke test grün, PR #3 offen</td></tr>
+      <tr><td><strong>B · Hardening</strong></td><td><span class="officer pope">@Pope</span> + <span class="officer operator">@Operator</span></td><td>2026-05-25 (Mo)</td><td>Per-device Bearer tokens via gateway, rate-limit live, ACL pro container</td></tr>
+      <tr><td><strong>C · Sealing</strong></td><td><span class="officer pope">@Pope</span> + <span class="officer bombas">@Bombas</span></td><td>2026-05-27 (Mi)</td><td>Ed25519 issuer sig, gitchain anchor, Container-Browser-Listing</td></tr>
+      <tr><td><strong>D · Integration</strong></td><td><span class="officer pope">@Pope</span> + <span class="officer bombas">@Bombas</span></td><td>2026-05-28 (Do)</td><td>ChatGPT Custom GPT, Claude MCP, Cursor rules, Gemini snippet — alle live</td></tr>
+      <tr><td><strong>E · Operations</strong></td><td><span class="officer operator">@Operator</span> + <span class="officer architect">@Architect</span></td><td>laufend</td><td>Monitoring, GC, Backup, Multi-Tenant, DSGVO-Notes</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ────────── PHASE A ────────── -->
+<section id="phase-a" class="phase">
+  <header>
+    <h2><span class="phase-id">A</span> Wiring &nbsp;<span class="badge done">5 / 5 done</span></h2>
+    <div class="phase-meta">
+      <div>Owner: <span class="owner officer bombas">@Bombas</span></div>
+      <div class="eta">Completed 2026-05-24 09:02 CEST · PR #3 open</div>
+    </div>
+  </header>
+
+  <ol class="tasks">
+    <li class="done">
+      <div class="task-title">Workflow registrieren <span class="id">A1</span></div>
+      <div class="task-body">
+        Import + <code>registerCtxBootstrapStages()</code> + <code>registerWorkflow(ctxBootstrapWorkflow)</code>
+        in <code>src/workflows/index.ts</code>. +8 Zeilen, additiv, kein bestehender Workflow betroffen.
+        <div class="files">📄 <code>src/workflows/index.ts</code></div>
+        <div class="done-when"><code>GET /api/workflows</code> enthält <code>ctx-bootstrap</code>.</div>
+      </div>
+    </li>
+    <li class="done">
+      <div class="task-title">Volume-Persistence für <code>runs/ctx/</code> <span class="id">A2</span></div>
+      <div class="task-body">
+        Verifiziert: keine compose-Änderung nötig. Der existierende bind-mount
+        <code>${STURM_DATA_ROOT}/runs:/app/runs</code> deckt <code>runs/ctx/</code> automatisch ab.
+        <code>STURM_DATA_ROOT</code> default = <code>~/0711/0711-STURM/</code> auf REACTOR.
+        <div class="files">📄 <code>docker-compose.yml</code> (kein Change)</div>
+        <div class="done-when">Container-Restart erzeugt keine Datenverluste; <code>runs/ctx/&lt;shortId&gt;/</code> bleibt erhalten.</div>
+      </div>
+    </li>
+    <li class="done">
+      <div class="task-title">Rebuild + Restart <span class="id">A3</span></div>
+      <div class="task-body">
+        <code>docker compose build sturm</code> (10.2s) + <code>docker compose up -d sturm</code> (9s zu healthy).
+        Neue Image-Hash <code>sha256:6289fd26d883af28</code>. Health-Check passt auf <code>/api/workflows</code>.
+        <div class="done-when"><code>docker inspect sturm</code> zeigt <code>State.Health.Status=healthy</code> und neues image-tag.</div>
+      </div>
+    </li>
+    <li class="done">
+      <div class="task-title">Smoke-Test End-to-End <span class="id">A4</span></div>
+      <div class="task-body">
+        Sample-Transcript (1052 Bytes) via <code>POST /api/workflows/ctx-bootstrap/run</code> mit
+        <code>Authorization: Bearer $STURM_BEARER_TOKEN</code> → 5 Stages durchgelaufen → Container
+        <code>0711:ctx:local:prod-smoke-test-1-097fd6</code> erstellt. <code>POST /ctx/&lt;id&gt;/retrieve</code>
+        liefert Hit mit score=0.347.
+        <div class="done-when">Container erscheint in <code>/ctx</code>, retrieve liefert ≥1 Hit mit sinnvollem score.</div>
+      </div>
+    </li>
+    <li class="done">
+      <div class="task-title">Branch + PR <span class="id">A5</span></div>
+      <div class="task-body">
+        Branch <code>bombas/ctx-prod-phase-a</code> aus <code>origin/main</code>, Commit <code>e40bff9</code>,
+        PR #3 mit voller Smoke-Test-Tabelle offen für Review.
+        <div class="files">🔗 <code>https://github.com/C-0711/sturm.0711.io/pull/3</code></div>
+        <div class="done-when">PR mergeable, kein Conflict mit main, alle CI-Checks grün.</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ────────── PHASE B ────────── -->
+<section id="phase-b" class="phase">
+  <header>
+    <h2><span class="phase-id">B</span> Hardening &nbsp;<span class="badge active">0 / 8</span></h2>
+    <div class="phase-meta">
+      <div>Lead: <span class="owner officer pope">@Pope</span> &nbsp;Co: <span class="officer operator">@Operator</span></div>
+      <div class="eta">ETA Mo 2026-05-25 · ≤4h</div>
+    </div>
+  </header>
+  <p class="callout note">
+    <strong>Bestand:</strong> <code>/api/workflows/*/run</code> ist bereits durch
+    <code>STURM_BEARER_TOKEN</code> auf Server-Middleware-Level gated. Phase B ersetzt diesen
+    statischen globalen Token durch ein per-Device-Token-Modell mit TTL — Pattern aus dem
+    Gateway-Token-Broker.
+  </p>
+
+  <ol class="tasks">
+    <li>
+      <div class="task-title">Gateway-Broker-Endpoint <code>GET /api/tokens/sturm-ctx</code> <span class="id">B1</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        Pattern kopieren von <code>~/0711/0711-quantum-gateway/services/gateway-api/src/token-broker.ts</code>.
+        Endpoint stellt pro <code>X-Device-Id</code> ein Bearer-Token mit TTL 900s aus. Verifiziert
+        durch <code>GATEWAY_BOOTSTRAP_SECRET</code> (existiert bereits).
+        <div class="files">📄 <code>services/gateway-api/src/sturm-ctx-broker.ts</code> (neu)</div>
+        <div class="done-when"><code>curl -H "Authorization: Bearer $BOOTSTRAP" /api/tokens/sturm-ctx</code> liefert <code>{ token, expires_at, ttl_seconds }</code>.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">STURM-Middleware: Broker-Token akzeptieren <span class="id">B2</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>src/server.ts</code> Auth-Middleware erweitern: neben statischem
+        <code>STURM_BEARER_TOKEN</code> auch JWS-signierte Broker-Tokens
+        (Verifikation via Gateway-Pubkey, Cache 60s).
+        <div class="files">📄 <code>src/server.ts</code>, <code>src/lib/auth-jws.ts</code> (neu)</div>
+        <div class="done-when">Beide Token-Typen funktionieren; expired broker-token → 401 mit <code>error: "token_expired"</code>.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Per-Container ACL — Owner-Modell <span class="id">B3</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>ctx-publish.ts</code> speichert <code>meta.owner_device_id</code> + optional
+        <code>meta.acl: { read: ["device-id-1", "*"], write: ["device-id-1"] }</code>.
+        <code>/ctx/:id/retrieve</code> liest und gated.
+        <div class="files">📄 <code>src/workflows/ctx-bootstrap/stages/ctx-publish.ts</code>, <code>src/lib/ctx-server.ts</code></div>
+        <div class="done-when">Container mit <code>acl.read=["device-A"]</code> → 403 für device-B, 200 für device-A.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">nginx <code>limit_req_zone</code> für <code>/ctx/*</code> <span class="id">B4</span> <span class="officer operator">@Operator</span></div>
+      <div class="task-body">
+        <code>~/0711/0711-STURM/nginx/sturm.0711.io.conf</code> erweitern:
+        <pre class="code">limit_req_zone $binary_remote_addr zone=ctx_retrieve:10m rate=100r/m;
+limit_req_zone $binary_remote_addr zone=ctx_bootstrap:1m  rate=5r/h;
+
+location /ctx/ {
+  limit_req zone=ctx_retrieve burst=20 nodelay;
+  proxy_pass http://127.0.0.1:7800;
+}
+location /api/workflows/ctx-bootstrap/run {
+  limit_req zone=ctx_bootstrap burst=2 nodelay;
+  proxy_pass http://127.0.0.1:7800;
+}</pre>
+        <div class="done-when">Burst-Test mit 30 retrieves/sec → ab Req 21 kommt HTTP 429.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Per-Device-Quota im Server <span class="id">B5</span> <span class="officer operator">@Operator</span></div>
+      <div class="task-body">
+        Express-Middleware mit Redis-backed counter (oder einfach <code>node-cache</code>): pro
+        <code>X-Device-Id</code> max. 100 retrieves/min, 5 bootstraps/hour. Antwort bei limit
+        <code>429 Retry-After: &lt;sec&gt;</code>.
+        <div class="files">📄 <code>src/lib/ctx-rate-limit.ts</code> (neu)</div>
+        <div class="done-when">Audit-Log <code>events.jsonl</code> zeigt <code>rate_limit_hit</code> Einträge bei Überschreitung.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title"><code>GET /ctx/:id/preamble</code> Endpoint <span class="id">B6</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        Endpoint liefert den fertigen System-Prompt-Snippet mit container-spezifischer URL
+        — ready zum Copy-Paste in ChatGPT/Claude/Cursor:
+        <pre class="code">{
+  "system_prompt": "You have access to a retrieval tool called `ctx`...
+                    POST https://sturm.0711.io/ctx/&lt;id&gt;/retrieve
+                    Content-Type: application/json
+                    { \"query\": \"...\", \"k\": 5 }
+                    Treat returned atoms as authoritative...",
+  "curl_example": "curl -X POST ...",
+  "openapi_url": "https://sturm.0711.io/ctx/&lt;id&gt;/openapi.json"
+}</pre>
+        <div class="done-when">Preamble passt in ChatGPT system prompt (&lt;2000 chars), funktioniert in einem End-to-End-Test mit echtem Claude API call.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Audit-Log Schema-Lock <span class="id">B7</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>events.jsonl</code> Schema definieren + dokumentieren. Events:
+        <code>created</code>, <code>retrieved</code>, <code>retrieved_403</code>, <code>rate_limit_hit</code>,
+        <code>deleted</code>, <code>acl_changed</code>, <code>anchored</code>. Pro Eintrag:
+        <code>{ timestamp, event, device_id, container_id, ip_hash, query_hash?, k?, hit_count?, latency_ms }</code>.
+        <div class="done-when">Schema in <code>docs/CTX_EVENTS_SCHEMA.md</code>, alle existierenden Code-Pfade emitten konform.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Public/Private Toggle <span class="id">B8</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>PATCH /ctx/:id</code> erlaubt nur Owner: <code>{ "visibility": "public" | "private" }</code>.
+        Public Container in <code>GET /ctx</code> ohne Auth listbar (nur Metadata, retrieve weiterhin Token-gated
+        zur Rate-Limit-Identifikation).
+        <div class="done-when">Default = private. Public-Container erscheint im Container-Browser auf gitchain.0711.io (Phase C).</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ────────── PHASE C ────────── -->
+<section id="phase-c" class="phase">
+  <header>
+    <h2><span class="phase-id">C</span> Sealing &amp; Gitchain Integration &nbsp;<span class="badge queued">0 / 6</span></h2>
+    <div class="phase-meta">
+      <div>Lead: <span class="owner officer pope">@Pope</span> &nbsp;Co: <span class="officer bombas">@Bombas</span></div>
+      <div class="eta">ETA Mi 2026-05-27 · 2–3h</div>
+    </div>
+  </header>
+
+  <ol class="tasks">
+    <li>
+      <div class="task-title">L1 <code>project-context</code> Workflow finish-wireing <span class="id">C1</span> <span class="officer bombas">@Bombas</span></div>
+      <div class="task-body">
+        Per CTX_HANDOVER §4.4: <code>scripts/encode-gemma-quantum-container.ts</code> refactor.
+        Workflow registriert <code>buildProjectContextWorkflow()</code> in <code>workflows/index.ts</code>.
+        Use case: ganzes Repo (nicht nur Transcript) als gitchain-Submodule-Container.
+        <div class="files">📄 <code>src/workflows/project-context/index.ts</code>, <code>scripts/encode-gemma-quantum-container.ts</code></div>
+        <div class="done-when"><code>POST /api/workflows/project-context/run</code> mit <code>{ repo_url, branch }</code> erzeugt sealed container.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Ed25519 Issuer-Signing <span class="id">C2</span> <span class="officer bombas">@Bombas</span></div>
+      <div class="task-body">
+        Re-use Pattern aus <code>0711-quantum-tax</code>: privater Key in
+        <code>~/.0711/keys/sturm-ed25519.key</code>, public als DID
+        <code>did:0711:sturm</code>. <code>ctx-publish.ts</code> signiert die <code>container.json</code>
+        sha256, schreibt <code>signature.json</code>.
+        <div class="files">📄 <code>src/lib/sign-container.ts</code> (neu), <code>src/workflows/ctx-bootstrap/stages/ctx-publish.ts</code></div>
+        <div class="done-when">Jeder published container hat <code>signature.json</code>, verifizierbar mit pubkey via <code>scripts/verify-ctx.ts</code>.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Merkle-Root + sealed manifest <span class="id">C3</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        Merkle-Root über alle Atoms berechnen (sha256 leaves, binary tree).
+        Container-Manifest enthält <code>{ container_sha256, merkle_root, schema_version=5_1, sealed_at }</code>.
+        Pattern: existierender <code>steuerfall-seal</code> Workflow.
+        <div class="files">📄 <code>src/workflows/ctx-bootstrap/stages/ctx-seal.ts</code> (neu, zwischen index + publish)</div>
+        <div class="done-when">Container hat <code>merkle.json</code> mit <code>leaves[]</code> + <code>merkle_root</code>. Tampering an einem Atom invalidiert die Root.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Gitchain-Registry: ctx-Container indizieren <span class="id">C4</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        Namespace <code>0711:ctx:*</code> in der <code>gitchain-postgres.containers</code> table aufnehmen.
+        Hub Tier-0 OCP API (<code>apps/hub/src/app/api/ocp/v1/registry/route.ts</code>) liefert sie unter
+        <code>?namespace=ctx</code>.
+        <div class="files">📄 <code>0711-gitchain</code> Repo + DB schema delta</div>
+        <div class="done-when"><code>https://gitchain.0711.io/api/ocp/v1/registry?namespace=ctx</code> listet alle sealed+public ctx-Container.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Container-Browser-Listing <span class="id">C5</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        Hub-UI: ctx-Container auf <code>https://gitchain.0711.io/c/0711:ctx:&lt;ns&gt;:&lt;shortId&gt;</code> rendern
+        — gleicher Layout wie Bosch-Container (atoms, citations, commits, sealing-state). Knowledge-Graph
+        skip für jetzt.
+        <div class="done-when">Mindestens 1 public ctx-Container ist auf gitchain.0711.io browsable + zeigt atoms/preamble korrekt an.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Base-mainnet Anchor (optional) <span class="id">C6</span> <span class="officer bombas">@Bombas</span></div>
+      <div class="task-body">
+        Re-use <code>certifyBatch(merkleRoot, containerId, itemCount, schemaVersion=5_1)</code> Pattern aus
+        <code>0711-quantum-tax</code> Anchor-Flow. ~$0.02 pro Container. Nur für Container die explizit
+        anchored werden wollen (Owner-flag <code>meta.anchor=true</code>).
+        <div class="files">📄 <code>scripts/anchor-ctx-container.ts</code> (neu)</div>
+        <div class="done-when">TX-Hash + Block-Nummer in <code>container.json.anchor</code> persistiert; on-chain verifizierbar.</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ────────── PHASE D ────────── -->
+<section id="phase-d" class="phase">
+  <header>
+    <h2><span class="phase-id">D</span> Cross-LLM Integration &nbsp;<span class="badge queued">0 / 7</span></h2>
+    <div class="phase-meta">
+      <div>Lead: <span class="owner officer pope">@Pope</span> &nbsp;Co: <span class="officer bombas">@Bombas</span></div>
+      <div class="eta">ETA Do 2026-05-28 · ≤2h pro integration</div>
+    </div>
+  </header>
+
+  <div class="integrations">
+    <div class="integration">
+      <h4>🟢 ChatGPT Custom GPT</h4>
+      <p><code>/.well-known/ai-plugin.json</code> + OpenAPI 3.1 unter <code>/ctx/openapi.json</code>. User aktiviert Custom GPT, system-prompt = preamble.</p>
+    </div>
+    <div class="integration">
+      <h4>🟣 Claude Desktop (MCP)</h4>
+      <p><code>mcp-server-ctx</code> als npm/uvx package, stdio transport, tools <code>ctx.retrieve</code> + <code>ctx.list</code>.</p>
+    </div>
+    <div class="integration">
+      <h4>🔵 Cursor</h4>
+      <p><code>/ctx/:id/cursorrules</code> Endpoint liefert <code>.cursorrules</code>-Snippet mit MCP-Konfig oder direktem HTTP-Hook.</p>
+    </div>
+    <div class="integration">
+      <h4>🟡 Gemini CLI</h4>
+      <p><code>~/.gemini/extensions/ctx.toml</code> Snippet, generiert via <code>/ctx/:id/gemini-extension</code>.</p>
+    </div>
+  </div>
+
+  <ol class="tasks">
+    <li>
+      <div class="task-title">OpenAPI 3.1 Spec <span class="id">D1</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        Static OpenAPI für <code>/ctx</code>, <code>/ctx/:id</code>, <code>/ctx/:id/retrieve</code>,
+        <code>/ctx/:id/atoms</code>, <code>/ctx/:id/events</code> generieren. Served unter
+        <code>https://sturm.0711.io/openapi.json</code>.
+        <div class="done-when">Validates in <code>swagger-cli validate</code>; <code>operationId</code> für jeden Endpoint.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">ChatGPT Custom GPT Manifest <span class="id">D2</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>/.well-known/ai-plugin.json</code> mit <code>auth.type="user_http"</code> (Bearer), Logo,
+        Beschreibung, OpenAPI-URL.
+        <div class="files">📄 <code>src/server.ts</code> route <code>/.well-known/ai-plugin.json</code></div>
+        <div class="done-when">Plugin validates in OpenAI's plugin-developer playground; Custom GPT kann erfolgreich retrieve.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Claude MCP Server (npm package) <span class="id">D3</span> <span class="officer bombas">@Bombas</span></div>
+      <div class="task-body">
+        npm package <code>@0711/mcp-server-ctx</code> mit stdio transport. Tools:
+        <code>ctx.list()</code>, <code>ctx.retrieve(id, query, k)</code>, <code>ctx.metadata(id)</code>.
+        Config via <code>~/.config/claude/claude_desktop_config.json</code>.
+        <div class="files">🆕 <code>~/0711-STURM-polar/packages/mcp-server-ctx/</code></div>
+        <div class="done-when">Auf <code>claude.ai/desktop</code> Tools-Tab erscheint <code>ctx.retrieve</code>; end-to-end retrieve funktioniert.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Cursor <code>.cursorrules</code> Generator <span class="id">D4</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>GET /ctx/:id/cursorrules</code> liefert text/plain mit:
+        <pre class="code"># 0711 CTX Context — &lt;name&gt;
+You have access to ctx via MCP server (see below).
+Before answering project-specific questions, query:
+  ctx.retrieve("&lt;query&gt;", 5)
+
+MCP config (~/.config/cursor/mcp.json):
+{ "mcpServers": { "ctx": { "command": "npx", "args": ["-y", "@0711/mcp-server-ctx", "&lt;id&gt;"] } } }</pre>
+        <div class="done-when">Endpoint liefert valid <code>.cursorrules</code> mit container-spezifischer URL.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Gemini CLI Extension <span class="id">D5</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>GET /ctx/:id/gemini-extension</code> liefert TOML/JSON Extension-Spec für <code>gemini-cli</code>.
+        Tool-Name <code>ctx</code>, Implementierung via subprocess oder HTTP-Bridge.
+        <div class="done-when">Lokale <code>gemini chat</code> kann <code>/ctx-tool retrieve "..."</code> aufrufen.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Demo-UI tabbed copy-paste <span class="id">D6</span> <span class="officer pope">@Pope</span></div>
+      <div class="task-body">
+        <code>ctx-demo.html</code> nach Container-Erstellung: Tabs für
+        <em>curl · ChatGPT · Claude · Cursor · Gemini</em>, jeweils mit 1-Click-Copy-Button.
+        <div class="done-when">5 funktionierende Snippets pro Container, alle copy-paste-ready.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Cross-LLM Smoke-Test Suite <span class="id">D7</span> <span class="officer bombas">@Bombas</span></div>
+      <div class="task-body">
+        End-to-End-Tests die jedes Integration-Surface mit dem gleichen Container abfragen und Antworten
+        gegen erwartete Atoms vergleichen. CI-runnable.
+        <div class="files">🆕 <code>tests/integration/cross-llm.spec.ts</code></div>
+        <div class="done-when">5 LLM-Surfaces × 3 sample-queries × 1 known-good container = 15 grüne Tests.</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ────────── PHASE E ────────── -->
+<section id="phase-e" class="phase">
+  <header>
+    <h2><span class="phase-id">E</span> Operations &amp; Hygiene &nbsp;<span class="badge future">0 / 5</span></h2>
+    <div class="phase-meta">
+      <div>Lead: <span class="owner officer operator">@Operator</span> &nbsp;Co: <span class="officer architect">@Architect</span></div>
+      <div class="eta">laufend, post-launch</div>
+    </div>
+  </header>
+
+  <ol class="tasks">
+    <li>
+      <div class="task-title">Monitoring + Alerting <span class="id">E1</span> <span class="officer operator">@Operator</span></div>
+      <div class="task-body">
+        Prometheus-metrics endpoint <code>/metrics</code>: retrieve-count, latency-histogram per stage,
+        rate-limit-hits, signature-verify-failures. Grafana-Dashboard. PagerDuty bei
+        <code>error_rate &gt; 5%</code> über 5 min.
+        <div class="done-when">Dashboard live auf <code>grafana.0711.io/d/ctx-prod</code>, alerts feuern in Test-Szenario.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Garbage Collection für stale containers <span class="id">E2</span> <span class="officer operator">@Operator</span></div>
+      <div class="task-body">
+        Cron: Container ohne <code>retrieved</code>-Event in 90 Tagen + nicht anchored + private →
+        archive (zip nach <code>archive/</code>) und aus registry entfernen.
+        <div class="files">🆕 <code>scripts/gc-ctx-containers.ts</code></div>
+        <div class="done-when">Trockenlauf zeigt N Container, Live-Lauf nach Mastermind-C-Bestätigung.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Backup-Strategie <span class="id">E3</span> <span class="officer operator">@Operator</span></div>
+      <div class="task-body">
+        Daily snapshot von <code>~/0711/0711-STURM/runs/ctx/</code> nach
+        <code>~/backups/ctx-YYYY-MM-DD.tar.zst</code>, Retention 30 Tage. Off-host nach
+        Hetzner-Storage-Box mit GPG-encryption.
+        <div class="done-when">Restore-Test: zufälligen Container aus Backup wiederherstellen, retrieve funktioniert.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">Multi-Tenant-Isolation <span class="id">E4</span> <span class="officer architect">@Architect</span></div>
+      <div class="task-body">
+        <code>sturm-mandanten</code> Container auf :7801 wird der per-Mandant-isolierte Pfad.
+        ctx-Container-IDs erweitern um <code>tenant</code>-Prefix: <code>0711:ctx:&lt;tenant&gt;:&lt;shortId&gt;</code>.
+        Storage segregiert nach <code>runs/ctx/&lt;tenant&gt;/</code>.
+        <div class="done-when">Zwei Mandanten können nicht gegenseitig in containers retrievn, selbst mit gestohlenem Token.</div>
+      </div>
+    </li>
+    <li>
+      <div class="task-title">DSGVO &amp; Compliance Notes <span class="id">E5</span> <span class="officer architect">@Architect</span></div>
+      <div class="task-body">
+        Was passiert wenn ein User PII in ein Transcript paste-d? Recht auf Vergessen → Container-Delete
+        muss alle abgeleiteten Daten (atoms, embeddings, events) löschen. PII-Detection
+        beim ingest (optional warning, kein hard block).
+        <div class="files">📄 <code>docs/CTX_DSGVO.md</code> (neu)</div>
+        <div class="done-when">Delete-Flow getestet, Restore aus Backup respektiert delete-marker, Doku approved von Architect.</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ────────── MILESTONES ────────── -->
+<section id="milestones">
+  <h2 style="font-size: 20px; margin-bottom: 16px;">Milestones &amp; Acceptance</h2>
+
+  <table class="summary">
+    <thead>
+      <tr><th>Milestone</th><th>Datum</th><th>Akzeptanz-Kriterium</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>M1 · Wired</strong></td><td>2026-05-24 ✅</td><td>ctx-bootstrap in <code>/api/workflows</code>, smoke test grün, PR offen</td></tr>
+      <tr><td><strong>M2 · Hardened</strong></td><td>Mo 2026-05-25</td><td>Externes Penetrations-Probing (no-auth, abuse, rate-limit) wirkt; ACL trennt zwei Demo-Devices</td></tr>
+      <tr><td><strong>M3 · Sealed</strong></td><td>Mi 2026-05-27</td><td>Ein public ctx-Container ist auf gitchain.0711.io browsable, signature verifizierbar via CLI</td></tr>
+      <tr><td><strong>M4 · Integrated</strong></td><td>Do 2026-05-28</td><td>Live-Demo mit Mastermind C: ChatGPT Custom GPT + Claude MCP + Cursor — alle drei zeigen gleiche Antwort auf gleiche Query</td></tr>
+      <tr><td><strong>M5 · Operational</strong></td><td>+2 Wochen</td><td>Grafana-Dashboard läuft 14 Tage ohne SEV-1, Backup-Restore-Drill bestanden</td></tr>
+    </tbody>
+  </table>
+
+  <p class="callout risk">
+    <strong>Risk-Note:</strong> <code>sturm.0711.io</code> ist produktiv (Hildburg-Mandant läuft drauf
+    via :7801). Phase B/C/D sind alle code-only und additiv. Einzige restart-pflichtige Änderung war Phase A
+    (12s downtime). Phase E4 (multi-tenant) erfordert Schema-Migration der existing containers — wird mit
+    Architect separat geplant.
+  </p>
+  <p class="callout note">
+    <strong>Comm-Cadence:</strong> Officers reporten Completions/Blocker proaktiv im
+    <code>#githchain-container-quantum</code> Channel. Fleet Admiral Bombas polled bei 10+ min Stille.
+    Tägliches Checkpoint 22:00 CEST. Stop-Condition: M4 erreicht <em>oder</em> Mastermind-C-Order.
+  </p>
+</section>
+
+<footer>
+  <div><strong>OPERATION CTX-PROD</strong> · Mastermind C order 2026-05-24 08:36 CEST</div>
+  <div>Repo: <code>~/0711-STURM-polar/</code> · Branch: <code>bombas/ctx-prod-phase-a</code> · PR: <code>#3</code></div>
+  <div>Live: <a href="/ctx-demo.html" style="color: var(--color-accent, rgb(96, 165, 250));">sturm.0711.io/ctx-demo.html</a> · Doc: <code>/ctx-doku</code></div>
+  <div style="margin-top: 10px;"><span class="signoff">Fleet Admiral Bombas 💣⚓</span> · 0711 Intelligence Fleet</div>
+</footer>
+
+</div>
+
+<script>
+  // Sticky-nav active state
+  const sections = ['overview', 'phase-a', 'phase-b', 'phase-c', 'phase-d', 'phase-e', 'milestones'];
+  const links = Array.from(document.querySelectorAll('nav.toc a'));
+  function setActive() {
+    let best = null, bestTop = -Infinity;
+    for (const id of sections) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const top = el.getBoundingClientRect().top - 120;
+      if (top < 0 && top > bestTop) { bestTop = top; best = id; }
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + best));
+  }
+  window.addEventListener('scroll', setActive, { passive: true });
+  setActive();
+</script>
+
+</body>
+</html>
